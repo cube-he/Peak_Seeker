@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+out/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+
+# Prisma
+prisma/migrations/*_migration_lock.toml
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Claude flow (开发工具)
+.claude-flow/
+
+# 参考资料文件（不需要上传）
+*.xlsx
+*.docx
+*_files/
+优志愿*.html
+掌上高考*.html
+阳光高考*.html

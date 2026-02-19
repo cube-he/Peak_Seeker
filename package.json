@@ -1,0 +1,28 @@
+{
+  "name": "volunteer-helper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "高考志愿填报助手",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:server": "pnpm --filter server dev",
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter web build",
+    "build:server": "pnpm --filter server build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter server prisma migrate dev",
+    "db:generate": "pnpm --filter server prisma generate",
+    "db:studio": "pnpm --filter server prisma studio",
+    "import:data": "pnpm --filter scripts import"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

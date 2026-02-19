@@ -1,0 +1,43 @@
+FROM node:20-alpine AS base
+RUN npm install -g pnpm
+
+# 依赖安装阶段
+FROM base AS deps
+WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY apps/server/package.json ./apps/server/
+COPY packages/shared/package.json ./packages/shared/
+RUN pnpm install --frozen-lockfile
+
+# 构建阶段
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY . .
+
+# 生成 Prisma Client
+WORKDIR /app/apps/server
+RUN pnpm prisma generate
+RUN pnpm build
+
+# 生产阶段
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nestjs
+
+COPY --from=builder /app/apps/server/dist ./dist
+COPY --from=builder /app/apps/server/node_modules ./node_modules
+COPY --from=builder /app/apps/server/prisma ./prisma
+COPY --from=builder /app/apps/server/package.json ./
+
+USER nestjs
+
+EXPOSE 3001
+
+CMD ["node", "dist/main.js"]

@@ -1,0 +1,423 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 院校相关 ====================
+
+model University {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 基本信息
+  name     String  @db.VarChar(200)
+  code     String? @unique @db.VarChar(50)
+  province String? @db.VarChar(50)
+  city     String? @db.VarChar(100)
+
+  // 院校属性
+  type          String? @map("university_type") @db.VarChar(50)
+  level         String? @map("university_level") @db.VarChar(50)
+  runningLevel  String? @map("running_level") @db.VarChar(50)
+  runningNature String? @map("running_nature") @db.VarChar(50)
+
+  // 院校标签
+  isDoubleFirstClass Boolean  @default(false) @map("is_double_first_class")
+  is985              Boolean  @default(false) @map("is_985")
+  is211              Boolean  @default(false) @map("is_211")
+  tags               String[] @map("university_tags")
+  grade              String?  @map("university_grade") @db.VarChar(50)
+
+  // 学科建设
+  disciplineEvaluationLevel String?  @map("discipline_evaluation_level") @db.VarChar(50)
+  hasMasterProgram          Boolean  @default(false) @map("has_master_program")
+  hasDoctoralProgram        Boolean  @default(false) @map("has_doctoral_program")
+  masterProgramCount        Int?     @map("master_program_count")
+  masterPrograms            String[] @map("master_programs")
+  doctoralProgramCount      Int?     @map("doctoral_program_count")
+  doctoralPrograms          String[] @map("doctoral_programs")
+
+  // 其他属性
+  campusArea               Decimal? @map("campus_area") @db.Decimal(10, 2)
+  transferDifficulty       String?  @map("transfer_difficulty") @db.VarChar(50)
+  militaryTrainingDuration String?  @map("military_training_duration") @db.VarChar(50)
+  isFeatured               Boolean  @default(false) @map("is_featured")
+
+  // 备注
+  notes String? @db.Text
+
+  // 关联
+  enrollmentPlans  EnrollmentPlan[]
+  admissionRecords AdmissionRecord[]
+  favorites        Favorite[]
+
+  @@index([province])
+  @@index([city])
+  @@index([type])
+  @@index([isDoubleFirstClass])
+  @@index([is985])
+  @@index([is211])
+  @@map("universities")
+}
+
+// ==================== 专业相关 ====================
+
+model Major {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 基本信息
+  name String  @db.VarChar(200)
+  code String? @db.VarChar(50)
+
+  // 专业分类
+  category   String? @map("major_category") @db.VarChar(100)
+  level      String? @map("major_level") @db.VarChar(50)
+  discipline String? @db.VarChar(100)
+  type       String? @map("major_type") @db.VarChar(50)
+
+  // 专业属性
+  notes        String?  @map("major_notes") @db.Text
+  isRestricted Boolean  @default(false) @map("is_restricted")
+
+  // 就业信息
+  employmentRate      Decimal? @map("employment_rate") @db.Decimal(5, 2)
+  avgSalary           Int?     @map("avg_salary")
+  employmentDirection String?  @map("employment_direction") @db.Text
+
+  // 关联
+  enrollmentPlans  EnrollmentPlan[]
+  admissionRecords AdmissionRecord[]
+  favorites        Favorite[]
+
+  @@index([category])
+  @@index([level])
+  @@index([discipline])
+  @@map("majors")
+}
+
+// ==================== 招生计划 ====================
+
+model EnrollmentPlan {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联
+  universityId Int        @map("university_id")
+  university   University @relation(fields: [universityId], references: [id])
+  majorId      Int        @map("major_id")
+  major        Major      @relation(fields: [majorId], references: [id])
+
+  // 招生年份和省份
+  year     Int    @db.SmallInt
+  province String @db.VarChar(50)
+
+  // 招生计划
+  planCount Int?    @map("plan_count")
+  planNotes String? @map("plan_notes") @db.Text
+
+  // 招生要求
+  batch               String?  @db.VarChar(50)
+  level               String?  @db.VarChar(50)
+  subjects            String?  @db.VarChar(100)
+  subjectRequirements String?  @map("subject_requirements") @db.Text
+  duration            String?  @db.VarChar(20)
+  tuition             Int?
+  isSinoForeign       Boolean  @default(false) @map("is_sino_foreign")
+
+  @@unique([universityId, majorId, year, province])
+  @@index([year])
+  @@index([province])
+  @@index([universityId])
+  @@index([majorId])
+  @@index([batch])
+  @@map("enrollment_plans")
+}
+
+// ==================== 录取数据 ====================
+
+model AdmissionRecord {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联
+  universityId Int        @map("university_id")
+  university   University @relation(fields: [universityId], references: [id])
+  majorId      Int        @map("major_id")
+  major        Major      @relation(fields: [majorId], references: [id])
+
+  // 年份和省份
+  year     Int    @db.SmallInt
+  province String @db.VarChar(50)
+
+  // 专业录取数据
+  majorMinScore       Int? @map("major_min_score")
+  majorMinRank        Int? @map("major_min_rank")
+  majorAdmissionCount Int? @map("major_admission_count")
+
+  // 院校整体录取数据
+  universityMinScore       Int? @map("university_min_score")
+  universityMinRank        Int? @map("university_min_rank")
+  universityAvgScore       Int? @map("university_avg_score")
+  universityAvgRank        Int? @map("university_avg_rank")
+  universityMaxScore       Int? @map("university_max_score")
+  universityMaxRank        Int? @map("university_max_rank")
+  universityAdmissionCount Int? @map("university_admission_count")
+
+  @@unique([universityId, majorId, year, province])
+  @@index([year])
+  @@index([province])
+  @@index([universityId])
+  @@index([majorId])
+  @@index([majorMinScore])
+  @@index([majorMinRank])
+  @@map("admission_records")
+}
+
+// ==================== 用户相关 ====================
+
+model User {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 账号信息
+  username     String  @unique @db.VarChar(50)
+  email        String? @unique @db.VarChar(100)
+  phone        String? @unique @db.VarChar(20)
+  passwordHash String  @map("password_hash") @db.VarChar(255)
+
+  // 个人信息
+  realName  String?   @map("real_name") @db.VarChar(100)
+  gender    String?   @db.VarChar(10)
+  birthDate DateTime? @map("birth_date") @db.Date
+  avatar    String?   @db.VarChar(500)
+
+  // 考生信息
+  province String?  @db.VarChar(50)
+  city     String?  @db.VarChar(100)
+  examType String?  @map("exam_type") @db.VarChar(50)
+  examYear Int?     @map("exam_year") @db.SmallInt
+  score    Int?     @db.SmallInt
+  rank     Int?
+  subjects Json?
+  batch    String?  @db.VarChar(50)
+
+  // 兴趣偏好
+  preferredProvinces       String[] @map("preferred_provinces")
+  preferredCities          String[] @map("preferred_cities")
+  preferredMajors          String[] @map("preferred_majors")
+  preferredUniversityTypes String[] @map("preferred_university_types")
+  careerDirection          String?  @map("career_direction") @db.Text
+
+  // 会员信息
+  vipLevel    VipLevel  @default(FREE) @map("vip_level")
+  vipExpireAt DateTime? @map("vip_expire_at")
+
+  // 角色
+  role UserRole @default(USER)
+
+  // 登录信息
+  lastLoginAt DateTime? @map("last_login_at")
+  lastLoginIp String?   @map("last_login_ip") @db.VarChar(50)
+
+  // 关联
+  volunteerPlans  VolunteerPlan[]
+  searchHistories SearchHistory[]
+  favorites       Favorite[]
+  comparisons     Comparison[]
+  orders          Order[]
+
+  @@index([province])
+  @@index([examYear])
+  @@index([vipLevel])
+  @@map("users")
+}
+
+enum VipLevel {
+  FREE
+  BASIC
+  PREMIUM
+  EXPERT
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// ==================== 志愿方案 ====================
+
+model VolunteerPlan {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
+
+  // 方案信息
+  name     String  @db.VarChar(200)
+  year     Int     @db.SmallInt
+  province String? @db.VarChar(50)
+
+  // 方案内容 - JSON结构
+  items    Json
+  strategy String? @db.VarChar(50)
+
+  // 方案状态
+  status     PlanStatus @default(DRAFT)
+  isFavorite Boolean    @default(false) @map("is_favorite")
+
+  // AI分析
+  aiScore    Decimal? @map("ai_score") @db.Decimal(5, 2)
+  aiAnalysis Json?    @map("ai_analysis")
+  riskLevel  String?  @map("risk_level") @db.VarChar(20)
+
+  // 备注
+  notes String? @db.Text
+
+  @@index([userId])
+  @@index([year])
+  @@index([status])
+  @@map("volunteer_plans")
+}
+
+enum PlanStatus {
+  DRAFT
+  SUBMITTED
+  ARCHIVED
+}
+
+// ==================== 查询历史 ====================
+
+model SearchHistory {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 关联
+  userId Int?  @map("user_id")
+  user   User? @relation(fields: [userId], references: [id])
+
+  // 查询信息
+  searchType   String @map("search_type") @db.VarChar(50)
+  searchParams Json   @map("search_params")
+  resultCount  Int?   @map("result_count")
+
+  @@index([userId])
+  @@index([searchType])
+  @@index([createdAt])
+  @@map("search_histories")
+}
+
+// ==================== 收藏 ====================
+
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 关联
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
+
+  // 收藏对象 - 多态关联
+  favoriteType String @map("favorite_type") @db.VarChar(50)
+
+  // 可选关联
+  universityId Int?        @map("university_id")
+  university   University? @relation(fields: [universityId], references: [id])
+  majorId      Int?        @map("major_id")
+  major        Major?      @relation(fields: [majorId], references: [id])
+
+  // 备注
+  notes String? @db.Text
+
+  @@unique([userId, favoriteType, universityId, majorId])
+  @@index([userId])
+  @@index([favoriteType])
+  @@map("favorites")
+}
+
+// ==================== 对比记录 ====================
+
+model Comparison {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 关联
+  userId Int?  @map("user_id")
+  user   User? @relation(fields: [userId], references: [id])
+
+  // 对比信息
+  comparisonType String @map("comparison_type") @db.VarChar(50)
+  itemIds        Int[]  @map("item_ids")
+
+  @@index([userId])
+  @@index([comparisonType])
+  @@map("comparisons")
+}
+
+// ==================== 支付订单 ====================
+
+model Order {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
+
+  // 订单信息
+  orderNo     String  @unique @map("order_no") @db.VarChar(50)
+  productType String  @map("product_type") @db.VarChar(50)
+  amount      Decimal @db.Decimal(10, 2)
+
+  // 支付信息
+  paymentMethod String?       @map("payment_method") @db.VarChar(50)
+  paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
+  paidAt        DateTime?     @map("paid_at")
+
+  // 第三方支付信息
+  transactionId String? @map("transaction_id") @db.VarChar(100)
+
+  @@index([userId])
+  @@index([orderNo])
+  @@index([paymentStatus])
+  @@map("orders")
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+// ==================== 系统配置 ====================
+
+model SystemConfig {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  key   String @unique @db.VarChar(100)
+  value Json
+  desc  String? @db.VarChar(500)
+
+  @@map("system_configs")
+}
