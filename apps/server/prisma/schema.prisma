@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -30,20 +30,20 @@ model University {
   runningNature String? @map("running_nature") @db.VarChar(50)
 
   // 院校标签
-  isDoubleFirstClass Boolean  @default(false) @map("is_double_first_class")
-  is985              Boolean  @default(false) @map("is_985")
-  is211              Boolean  @default(false) @map("is_211")
-  tags               String[] @map("university_tags")
-  grade              String?  @map("university_grade") @db.VarChar(50)
+  isDoubleFirstClass Boolean @default(false) @map("is_double_first_class")
+  is985              Boolean @default(false) @map("is_985")
+  is211              Boolean @default(false) @map("is_211")
+  tags               Json?   @map("university_tags")
+  grade              String? @map("university_grade") @db.VarChar(50)
 
   // 学科建设
   disciplineEvaluationLevel String?  @map("discipline_evaluation_level") @db.VarChar(50)
   hasMasterProgram          Boolean  @default(false) @map("has_master_program")
   hasDoctoralProgram        Boolean  @default(false) @map("has_doctoral_program")
   masterProgramCount        Int?     @map("master_program_count")
-  masterPrograms            String[] @map("master_programs")
+  masterPrograms            Json?    @map("master_programs")
   doctoralProgramCount      Int?     @map("doctoral_program_count")
-  doctoralPrograms          String[] @map("doctoral_programs")
+  doctoralPrograms          Json?    @map("doctoral_programs")
 
   // 其他属性
   campusArea               Decimal? @map("campus_area") @db.Decimal(10, 2)
@@ -205,21 +205,21 @@ model User {
   avatar    String?   @db.VarChar(500)
 
   // 考生信息
-  province String?  @db.VarChar(50)
-  city     String?  @db.VarChar(100)
-  examType String?  @map("exam_type") @db.VarChar(50)
-  examYear Int?     @map("exam_year") @db.SmallInt
-  score    Int?     @db.SmallInt
+  province String? @db.VarChar(50)
+  city     String? @db.VarChar(100)
+  examType String? @map("exam_type") @db.VarChar(50)
+  examYear Int?    @map("exam_year") @db.SmallInt
+  score    Int?    @db.SmallInt
   rank     Int?
   subjects Json?
-  batch    String?  @db.VarChar(50)
+  batch    String? @db.VarChar(50)
 
   // 兴趣偏好
-  preferredProvinces       String[] @map("preferred_provinces")
-  preferredCities          String[] @map("preferred_cities")
-  preferredMajors          String[] @map("preferred_majors")
-  preferredUniversityTypes String[] @map("preferred_university_types")
-  careerDirection          String?  @map("career_direction") @db.Text
+  preferredProvinces       Json?   @map("preferred_provinces")
+  preferredCities          Json?   @map("preferred_cities")
+  preferredMajors          Json?   @map("preferred_majors")
+  preferredUniversityTypes Json?   @map("preferred_university_types")
+  careerDirection          String? @map("career_direction") @db.Text
 
   // 会员信息
   vipLevel    VipLevel  @default(FREE) @map("vip_level")
@@ -363,7 +363,7 @@ model Comparison {
 
   // 对比信息
   comparisonType String @map("comparison_type") @db.VarChar(50)
-  itemIds        Int[]  @map("item_ids")
+  itemIds        Json   @map("item_ids")
 
   @@index([userId])
   @@index([comparisonType])
@@ -415,7 +415,7 @@ model SystemConfig {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  key   String @unique @db.VarChar(100)
+  key   String  @unique @db.VarChar(100)
   value Json
   desc  String? @db.VarChar(500)
 
