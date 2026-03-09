@@ -18,6 +18,7 @@ import json
 import hashlib
 import logging
 from typing import Optional, List, Tuple, Dict
+from enum import Enum
 from contextlib import asynccontextmanager
 
 import requests as http_requests
@@ -155,6 +156,7 @@ class SaveSupplementaryRequest(BaseModel):
 class AiVerifySingleRequest(BaseModel):
     """单张图片 AI 验证请求"""
     image_url: str = Field(..., description="图片 URL")
+    ocr_data: List[SupplementaryRow] = Field(default=[], description="该图片的 OCR 识别数据")
     year: int = Field(..., description="年份")
     province: str = Field("四川", description="省份")
     exam_type: str = Field("物理类", description="考试类型")
@@ -162,6 +164,32 @@ class AiVerifySingleRequest(BaseModel):
     ai_api_key: str = Field("", description="AI API 密钥")
     ai_base_url: str = Field("", description="AI API 基础 URL")
     ai_model: str = Field("", description="AI 模型名称")
+
+
+class VerifyStatus(str, Enum):
+    """校验状态"""
+    MATCHED = "matched"          # AI 与 OCR 一致
+    CONFLICT = "conflict"        # AI 与 OCR 冲突
+    AI_ONLY = "ai_only"          # 仅 AI 识别到
+    OCR_ONLY = "ocr_only"        # 仅 OCR 识别到
+    TIMEOUT = "timeout"          # AI 超时
+    ERROR = "error"              # AI 错误
+
+
+class VerifiedRow(BaseModel):
+    """带校验状态的数据行"""
+    data: SupplementaryRow
+    status: VerifyStatus
+    ai_data: Optional[SupplementaryRow] = None  # 冲突时的 AI 数据
+    diff_fields: List[str] = []  # 冲突的字段
+
+
+class AiVerifySingleResponse(BaseModel):
+    """单张图片 AI 验证响应"""
+    verified_rows: List[VerifiedRow]
+    summary: Dict[str, int]  # 各状态的数量统计
+    ai_raw_count: int  # AI 原始识别数量
+    error_message: str = ""  # 错误信息（超时等）
 
 
 class SaveResponse(BaseModel):
@@ -295,6 +323,12 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
     if not result:
         return []
 
+    # 获取图片宽度，用于计算 X 坐标的相对位置
+    # 通过所有文本框的最大 x_right 来估算图片宽度
+    max_x_right = max(box[2][0] for box, _, _ in result)
+    img_width = max_x_right * 1.05  # 留一点边距
+    logger.info(f"估算图片宽度: {img_width:.0f}px")
+
     # 收集识别结果，按 y 坐标分组为行
     items = []
     for box, text, confidence in result:
@@ -357,8 +391,9 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
         # 注意：只匹配独立的招生类型行，格式必须是 (数字) 开头
         # 不能匹配专业行如 "19德语"
         # 支持中文括号（）和英文括号()
-        enroll_match = re.match(r'^[（(](\d)[）)]\s*(.*)$', first_text.strip())
-        if enroll_match and len(first_text) < 15:
+        # 支持 1-2 位数字序号，如 (1)、(10)
+        enroll_match = re.match(r'^[（(](\d{1,2})[）)]\s*(.*)$', first_text.strip())
+        if enroll_match and len(first_text) < 20:
             enrollment_name = enroll_match.group(2).strip()
             # 如果括号后没有文字，尝试从同行其他文本获取
             if not enrollment_name and len(group) > 1:
@@ -425,11 +460,26 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
             continue
 
         # 6. 检测专业行: "18特殊教育（国家公费师范生）" + 计划数 + 收费
-        # 专业代码: 1-2位数字，可能带字母
-        major_match = re.match(r'^(\d{1,2}[A-Z]?)([一-鿿][一-鿿\w（()）)、]+)', first_text)
+        # 专业代码格式多样：
+        # - 纯数字: 18, 72
+        # - 数字+字母: 7S, 4E
+        # - 字母+字母: BL, BG (省级公费师范生常见)
+        # - 字母+数字: K1, J4
+        # - 带[V]标记: G7[V], H3[V] (农村订单定向医学生)
+
+        # 先排除续行数据格式：数字+收费信息（如 "2免费"、"1 6000"）
+        # 这些是上一行专业的计划数和学费，不是新专业
+        is_continuation_line = re.match(r'^\d{1,2}(免费|元|\d{4,})?\s*$', first_text.strip())
+
+        major_match = None
+        if not is_continuation_line:
+            major_match = re.match(r'^([A-Z0-9]{1,2}[A-Z0-9]?)(\[V\])?([一-鿿]{2,}[一-鿿\w（()）)、]*)', first_text)
+
         if major_match and current_university.get("code"):
             major_code = major_match.group(1)
-            major_full = major_match.group(2)
+            if major_match.group(2):  # 有[V]标记
+                major_code += major_match.group(2)
+            major_full = major_match.group(3)
 
             # 检查是否有未闭合的括号（跨行情况）
             # 如果专业名称以未闭合的括号结尾，需要从下一行获取计划数
@@ -453,16 +503,24 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
                 continue
 
             # 提取计划数和收费
-            # 策略：收集所有数字，按 X 坐标排序
-            # - 如果有两个数字：左边是计划数，右边是收费
-            # - 如果只有一个数字：>100 是收费，<=100 是计划数
+            # 策略：使用 X 坐标的相对位置来定位右侧区域的数据
+            # - 右侧 30% 区域（x > 70% 图片宽度）通常是计划数和收费
+            # - 计划数在左，收费在右
             plan_count = 1  # 默认计划数为1
             tuition = ""
 
-            numbers = []  # (x, value, text)
+            # 定义右侧区域阈值（图片宽度的 60%）
+            right_zone_threshold = img_width * 0.60
+
+            # 收集右侧区域的数据
+            right_zone_items = []  # (x, text, value_or_none)
             for item in group[1:]:  # 跳过第一个（专业名称）
                 txt = item["text"]
                 x = item["x_left"]
+
+                # 只处理右侧区域的数据
+                if x < right_zone_threshold:
+                    continue
 
                 # "数字免费" 格式（如 "2免费"）
                 num_free_match = re.match(r'^(\d+)(免费)$', txt)
@@ -473,27 +531,44 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
 
                 # 纯收费信息
                 if txt == "免费":
-                    tuition = "免费"
+                    right_zone_items.append((x, txt, None))
                     continue
                 if "元" in txt:
-                    tuition = txt
+                    right_zone_items.append((x, txt, None))
                     continue
 
                 # 纯数字
                 num_match = re.match(r'^(\d+)$', txt)
                 if num_match:
                     val = int(num_match.group(1))
-                    numbers.append((x, val, txt))
+                    right_zone_items.append((x, txt, val))
+
+            # 按 X 坐标排序右侧区域的数据
+            right_zone_items.sort(key=lambda item: item[0])
+
+            # 解析右侧区域数据
+            numbers = [(x, val, txt) for x, txt, val in right_zone_items if val is not None]
+            tuition_items = [(x, txt) for x, txt, val in right_zone_items if val is None]
+
+            # 处理收费信息
+            for _, txt in tuition_items:
+                if txt == "免费":
+                    tuition = "免费"
+                elif "元" in txt:
+                    tuition = txt
 
             # 根据数字数量决定如何解析
             if len(numbers) >= 2:
                 # 有两个或更多数字，按 X 坐标排序
                 numbers.sort(key=lambda n: n[0])
                 plan_count = numbers[0][1]  # 左边是计划数
-                tuition = f"{numbers[-1][1]}元"  # 右边是收费
+                if not tuition:  # 如果还没有收费信息
+                    tuition = f"{numbers[-1][1]}元"  # 右边是收费
             elif len(numbers) == 1:
                 val = numbers[0][1]
                 txt = numbers[0][2]
+                x = numbers[0][0]
+
                 # 检查是否是 OCR 把 "计划数+学费" 识别成了一个数字
                 # 例如 "1 6875" 被识别为 "16875"
                 if len(txt) == 5 and val >= 10000:
@@ -519,7 +594,8 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
                         tuition = f"{val}元"
                 elif val > 100:
                     # 大数字是收费
-                    tuition = f"{val}元"
+                    if not tuition:
+                        tuition = f"{val}元"
                 else:
                     # 小数字是计划数
                     plan_count = val
@@ -556,10 +632,16 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
         # 7. 处理跨行专业的续行（包含计划数和收费）
         # 如果上一条记录标记为 incomplete，尝试从当前行提取计划数
         if rows and rows[-1].get("_incomplete"):
-            numbers = []  # (x, value)
+            # 使用 X 坐标的相对位置来定位右侧区域的数据
+            right_zone_items = []  # (x, text, value_or_none)
+
             for item in group:
                 txt = item["text"]
                 x = item["x_left"]
+
+                # 只处理右侧区域的数据（图片宽度的 60% 以右）
+                if x < img_width * 0.60:
+                    continue
 
                 # "数字免费" 格式
                 num_free_match = re.match(r'^(\d+)(免费)$', txt)
@@ -572,23 +654,38 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
 
                 # 纯收费信息
                 if txt == "免费":
-                    rows[-1]["tuition"] = "免费"
+                    right_zone_items.append((x, txt, None))
                     continue
                 if "元" in txt:
-                    rows[-1]["tuition"] = txt
+                    right_zone_items.append((x, txt, None))
                     continue
 
                 # 纯数字
                 num_match = re.match(r'^(\d+)$', txt)
                 if num_match:
                     val = int(num_match.group(1))
-                    numbers.append((x, val, txt))
+                    right_zone_items.append((x, txt, val))
+
+            # 按 X 坐标排序
+            right_zone_items.sort(key=lambda item: item[0])
+
+            # 解析右侧区域数据
+            numbers = [(x, val, txt) for x, txt, val in right_zone_items if val is not None]
+            tuition_items = [(x, txt) for x, txt, val in right_zone_items if val is None]
+
+            # 处理收费信息
+            for _, txt in tuition_items:
+                if txt == "免费":
+                    rows[-1]["tuition"] = "免费"
+                elif "元" in txt:
+                    rows[-1]["tuition"] = txt
 
             # 根据数字数量决定如何解析
             if len(numbers) >= 2:
                 numbers.sort(key=lambda n: n[0])
                 rows[-1]["plan_count"] = numbers[0][1]
-                rows[-1]["tuition"] = f"{numbers[-1][1]}元"
+                if not rows[-1].get("tuition"):
+                    rows[-1]["tuition"] = f"{numbers[-1][1]}元"
                 rows[-1]["_incomplete"] = False
                 logger.info(f"      续行: 计划数={rows[-1]['plan_count']} 收费={rows[-1]['tuition']}")
             elif len(numbers) == 1:
@@ -614,7 +711,8 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
                     else:
                         rows[-1]["tuition"] = f"{val}元"
                 elif val > 100:
-                    rows[-1]["tuition"] = f"{val}元"
+                    if not rows[-1].get("tuition"):
+                        rows[-1]["tuition"] = f"{val}元"
                 else:
                     rows[-1]["plan_count"] = val
                 rows[-1]["_incomplete"] = False
@@ -1060,20 +1158,73 @@ async def run_ocr_with_ai(req: OcrRequest):
         raise HTTPException(status_code=500, detail=f"OCR+AI 识别失败: {str(e)}")
 
 
-@app.post("/ai-verify-single")
+@app.post("/ai-verify-single", response_model=AiVerifySingleResponse)
 async def ai_verify_single(req: AiVerifySingleRequest):
-    """单张图片 AI 验证（用于逐张校验）"""
+    """
+    单张图片 AI 验证（用于逐张校验）
+
+    对比 AI 识别结果与 OCR 数据，返回带状态标记的结果：
+    - matched: AI 与 OCR 一致
+    - conflict: AI 与 OCR 冲突（需人工审核）
+    - ai_only: 仅 AI 识别到（OCR 可能漏识别）
+    - ocr_only: 仅 OCR 识别到（AI 可能漏识别）
+    - timeout: AI 请求超时
+    - error: AI 请求错误
+    """
+    from ai_parser import parse_image_with_ai, normalize_tuition
+
+    verified_rows: List[VerifiedRow] = []
+    summary = {
+        "matched": 0,
+        "conflict": 0,
+        "ai_only": 0,
+        "ocr_only": 0,
+        "timeout": 0,
+        "error": 0
+    }
+    ai_raw_count = 0
+    error_message = ""
+
+    # OCR 数据转为字典列表
+    ocr_rows = [row.model_dump() for row in req.ocr_data]
+
+    # 如果没有 AI 密钥，所有 OCR 数据标记为 ocr_only
+    if not req.ai_api_key:
+        for ocr_row in req.ocr_data:
+            verified_rows.append(VerifiedRow(
+                data=ocr_row,
+                status=VerifyStatus.OCR_ONLY
+            ))
+        summary["ocr_only"] = len(req.ocr_data)
+        return AiVerifySingleResponse(
+            verified_rows=verified_rows,
+            summary=summary,
+            ai_raw_count=0,
+            error_message="AI API 密钥未提供"
+        )
+
+    # 下载图片
+    logger.info(f"AI 验证单张图片: {req.image_url}")
     try:
-        from ai_parser import parse_image_with_ai
-
-        if not req.ai_api_key:
-            raise HTTPException(status_code=400, detail="AI API 密钥未提供")
-
-        # 下载图片
-        logger.info(f"AI 验证单张图片: {req.image_url}")
         img_path = download_image(req.image_url)
+    except Exception as e:
+        logger.error(f"下载图片失败: {e}")
+        for ocr_row in req.ocr_data:
+            verified_rows.append(VerifiedRow(
+                data=ocr_row,
+                status=VerifyStatus.ERROR
+            ))
+        summary["error"] = len(req.ocr_data)
+        return AiVerifySingleResponse(
+            verified_rows=verified_rows,
+            summary=summary,
+            ai_raw_count=0,
+            error_message=f"下载图片失败: {str(e)}"
+        )
 
-        # 调用 AI 解析
+    # 调用 AI 解析
+    ai_rows = []
+    try:
         ai_rows = await parse_image_with_ai(
             img_path,
             api_key=req.ai_api_key,
@@ -1081,39 +1232,152 @@ async def ai_verify_single(req: AiVerifySingleRequest):
             model=req.ai_model or None,
             context={}
         )
-
-        logger.info(f"AI 识别 {len(ai_rows)} 行")
-
-        # 转换为 SupplementaryRow 格式
-        data = []
-        for row in ai_rows:
-            data.append(SupplementaryRow(
-                exam_type=row.get("exam_type", ""),
-                enrollment_type=row.get("enrollment_type", ""),
-                university_code=row.get("university_code", ""),
-                university_name=row.get("university_name", ""),
-                university_location=row.get("university_location", ""),
-                university_note=row.get("university_note", ""),
-                major_group_code=row.get("major_group_code", ""),
-                major_group_subject=row.get("major_group_subject", ""),
-                major_group_plan=row.get("major_group_plan", 0),
-                major_code=row.get("major_code", ""),
-                major_name=row.get("major_name", ""),
-                major_note=row.get("major_note", ""),
-                plan_count=row.get("plan_count", 0),
-                tuition=row.get("tuition", ""),
-            ))
-
-        return {
-            "data": data,
-            "errors": []
-        }
-
-    except HTTPException:
-        raise
+        ai_raw_count = len(ai_rows)
+        logger.info(f"AI 识别 {ai_raw_count} 行")
     except Exception as e:
-        logger.error(f"AI 验证失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"AI 验证失败: {str(e)}")
+        error_type = type(e).__name__
+        logger.error(f"AI 解析失败: {error_type}: {e}")
+
+        # 判断是超时还是其他错误
+        is_timeout = "timeout" in error_type.lower() or "timeout" in str(e).lower()
+        status = VerifyStatus.TIMEOUT if is_timeout else VerifyStatus.ERROR
+
+        for ocr_row in req.ocr_data:
+            verified_rows.append(VerifiedRow(
+                data=ocr_row,
+                status=status
+            ))
+        summary["timeout" if is_timeout else "error"] = len(req.ocr_data)
+        return AiVerifySingleResponse(
+            verified_rows=verified_rows,
+            summary=summary,
+            ai_raw_count=0,
+            error_message=f"AI {'超时' if is_timeout else '错误'}: {str(e)}"
+        )
+
+    # AI 返回空结果，标记所有 OCR 数据为 ocr_only
+    if not ai_rows:
+        for ocr_row in req.ocr_data:
+            verified_rows.append(VerifiedRow(
+                data=ocr_row,
+                status=VerifyStatus.OCR_ONLY
+            ))
+        summary["ocr_only"] = len(req.ocr_data)
+        return AiVerifySingleResponse(
+            verified_rows=verified_rows,
+            summary=summary,
+            ai_raw_count=0,
+            error_message="AI 未识别到任何数据"
+        )
+
+    # 对比 OCR 和 AI 结果
+    def make_key(row: Dict) -> str:
+        """生成唯一键：院校代码 + 专业组代码 + 专业代码"""
+        return f"{row.get('university_code', '')}_{row.get('major_group_code', '')}_{row.get('major_code', '')}"
+
+    ocr_map = {make_key(r): r for r in ocr_rows}
+    ai_map = {make_key(r): r for r in ai_rows}
+
+    all_keys = set(ocr_map.keys()) | set(ai_map.keys())
+
+    for key in all_keys:
+        ocr_row = ocr_map.get(key)
+        ai_row = ai_map.get(key)
+
+        if ocr_row and ai_row:
+            # 两者都有，检查关键字段是否一致
+            diff_fields = []
+
+            # 比较计划数
+            ocr_plan = ocr_row.get("plan_count", 0)
+            ai_plan = ai_row.get("plan_count", 0)
+            if ocr_plan != ai_plan:
+                diff_fields.append(f"plan_count(OCR:{ocr_plan}, AI:{ai_plan})")
+
+            # 比较学费
+            ocr_tuition = normalize_tuition(ocr_row.get("tuition", ""))
+            ai_tuition = normalize_tuition(ai_row.get("tuition", ""))
+            if ocr_tuition != ai_tuition:
+                diff_fields.append(f"tuition(OCR:{ocr_tuition}, AI:{ai_tuition})")
+
+            # 比较专业名称（模糊匹配）
+            ocr_name = ocr_row.get("major_name", "")[:10]
+            ai_name = ai_row.get("major_name", "")[:10]
+            if ocr_name != ai_name:
+                diff_fields.append(f"major_name(OCR:{ocr_name}, AI:{ai_name})")
+
+            if diff_fields:
+                # 有冲突
+                verified_rows.append(VerifiedRow(
+                    data=SupplementaryRow(**ocr_row),
+                    status=VerifyStatus.CONFLICT,
+                    ai_data=SupplementaryRow(**{
+                        "exam_type": ai_row.get("exam_type", ""),
+                        "enrollment_type": ai_row.get("enrollment_type", ""),
+                        "university_code": ai_row.get("university_code", ""),
+                        "university_name": ai_row.get("university_name", ""),
+                        "university_location": ai_row.get("university_location", ""),
+                        "university_note": ai_row.get("university_note", ""),
+                        "major_group_code": ai_row.get("major_group_code", ""),
+                        "major_group_subject": ai_row.get("major_group_subject", ""),
+                        "major_group_plan": ai_row.get("major_group_plan", 0),
+                        "major_code": ai_row.get("major_code", ""),
+                        "major_name": ai_row.get("major_name", ""),
+                        "major_note": ai_row.get("major_note", ""),
+                        "plan_count": ai_row.get("plan_count", 0),
+                        "tuition": ai_row.get("tuition", ""),
+                    }),
+                    diff_fields=diff_fields
+                ))
+                summary["conflict"] += 1
+            else:
+                # 一致
+                verified_rows.append(VerifiedRow(
+                    data=SupplementaryRow(**ocr_row),
+                    status=VerifyStatus.MATCHED
+                ))
+                summary["matched"] += 1
+
+        elif ocr_row:
+            # 仅 OCR 有
+            verified_rows.append(VerifiedRow(
+                data=SupplementaryRow(**ocr_row),
+                status=VerifyStatus.OCR_ONLY
+            ))
+            summary["ocr_only"] += 1
+
+        else:
+            # 仅 AI 有
+            verified_rows.append(VerifiedRow(
+                data=SupplementaryRow(**{
+                    "exam_type": ai_row.get("exam_type", ""),
+                    "enrollment_type": ai_row.get("enrollment_type", ""),
+                    "university_code": ai_row.get("university_code", ""),
+                    "university_name": ai_row.get("university_name", ""),
+                    "university_location": ai_row.get("university_location", ""),
+                    "university_note": ai_row.get("university_note", ""),
+                    "major_group_code": ai_row.get("major_group_code", ""),
+                    "major_group_subject": ai_row.get("major_group_subject", ""),
+                    "major_group_plan": ai_row.get("major_group_plan", 0),
+                    "major_code": ai_row.get("major_code", ""),
+                    "major_name": ai_row.get("major_name", ""),
+                    "major_note": ai_row.get("major_note", ""),
+                    "plan_count": ai_row.get("plan_count", 0),
+                    "tuition": ai_row.get("tuition", ""),
+                }),
+                status=VerifyStatus.AI_ONLY
+            ))
+            summary["ai_only"] += 1
+
+    logger.info(f"AI 校验完成: matched={summary['matched']}, conflict={summary['conflict']}, "
+                f"ocr_only={summary['ocr_only']}, ai_only={summary['ai_only']}")
+
+    return AiVerifySingleResponse(
+        verified_rows=verified_rows,
+        summary=summary,
+        ai_raw_count=ai_raw_count,
+        error_message=error_message
+    )
 
 
 def run_score_segment_ocr(req: OcrRequest) -> OcrResponse:
