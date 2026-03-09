@@ -119,9 +119,26 @@ export async function runOcr(params: {
   province?: string;
   examType?: string;
   batch?: string;
-}): Promise<OcrResult | SupplementaryOcrResult> {
+}): Promise<OcrResult | (SupplementaryOcrResult & { image_data_counts?: number[] })> {
   return api.post('/data-import/ocr', params, {
     timeout: 5 * 60 * 1000, // OCR 识别最多等 5 分钟
+  });
+}
+
+/** 单张图片 AI 验证（用于逐张校验） */
+export async function runAiVerifySingle(params: {
+  imageUrl: string;
+  year: number;
+  province?: string;
+  examType?: string;
+  batch?: string;
+  aiConfigId?: string;
+  aiApiKey?: string;
+  aiBaseUrl?: string;
+  aiModel?: string;
+}): Promise<{ data: SupplementaryRow[]; errors: string[] }> {
+  return api.post('/data-import/ai-verify-single', params, {
+    timeout: 2 * 60 * 1000, // 单张图片 AI 验证最多 2 分钟
   });
 }
 

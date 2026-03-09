@@ -163,4 +163,39 @@ export class DataImportController {
   async getStats() {
     return this.dataImportService.getImportStats();
   }
+
+  @Post('ai-verify-single')
+  async aiVerifySingle(
+    @Body()
+    dto: {
+      imageUrl: string;
+      year: number;
+      province?: string;
+      examType?: string;
+      batch?: string;
+      aiConfigId?: string;
+      aiApiKey?: string;
+      aiBaseUrl?: string;
+      aiModel?: string;
+    },
+  ) {
+    try {
+      return await this.dataImportService.aiVerifySingle(
+        dto.imageUrl,
+        dto.year,
+        dto.province ?? '四川',
+        dto.examType ?? '物理类',
+        dto.batch ?? '本科一批',
+        dto.aiConfigId,
+        dto.aiApiKey,
+        dto.aiBaseUrl,
+        dto.aiModel,
+      );
+    } catch (e: any) {
+      throw new HttpException(
+        e?.message || 'AI 验证失败',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
