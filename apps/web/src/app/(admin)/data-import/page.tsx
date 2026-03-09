@@ -22,8 +22,6 @@ import {
   Divider,
   Result,
   Radio,
-  Switch,
-  Collapse,
   Tag,
   Tooltip,
 } from 'antd';
