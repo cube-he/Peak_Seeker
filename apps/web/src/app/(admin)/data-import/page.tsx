@@ -48,7 +48,7 @@ import {
   checkImportHealth,
   fetchPage,
   runOcr,
-  runOcrWithAI,
+  runAiVerifySingle,
   saveImportData,
   saveSupplementaryData,
   getImportStats,
@@ -56,11 +56,9 @@ import {
   type FetchPageResult,
   type OcrResult,
   type SupplementaryOcrResult,
-  type SupplementaryOcrWithAIResult,
   type ScoreRow,
   type SupplementaryRow,
   type ImportStats,
-  type ConflictItem,
   type AiConfig,
 } from '@/services/dataImport';
 
@@ -108,19 +106,23 @@ export default function DataImportPage() {
   // 征集志愿数据
   const [supplementaryData, setSupplementaryData] = useState<SupplementaryRow[]>([]);
 
-  // AI 配置
-  const [enableAI, setEnableAI] = useState(false);
+  // AI 校验相关
   const [aiConfigMode, setAiConfigMode] = useState<'manual' | 'saved'>('saved');
   const [aiApiKey, setAiApiKey] = useState('');
   const [aiBaseUrl, setAiBaseUrl] = useState('https://api.deepseek.com/v1');
   const [aiModel, setAiModel] = useState('deepseek-chat');
-  const [aiResult, setAiResult] = useState<SupplementaryOcrWithAIResult | null>(null);
-  const [showConflicts, setShowConflicts] = useState(false);
+  const [aiVerifying, setAiVerifying] = useState(false);
+  const [aiVerifyProgress, setAiVerifyProgress] = useState({ current: 0, total: 0 });
+  const [aiDiffs, setAiDiffs] = useState<Map<string, { field: string; ocrValue: any; aiValue: any }[]>>(new Map());
+  const [showAiConfig, setShowAiConfig] = useState(false);
 
   // 本地 AI 配置
   const [aiConfigs, setAiConfigs] = useState<AiConfig[]>([]);
   const [selectedAiConfig, setSelectedAiConfig] = useState<string>('');
   const [loadingAiConfigs, setLoadingAiConfigs] = useState(false);
+
+  // 记录每张图片识别的数据行数（用于筛选有数据的图片）
+  const [imageDataCounts, setImageDataCounts] = useState<number[]>([]);
 
   // 权限检查
   const isAdmin =
@@ -156,12 +158,6 @@ export default function DataImportPage() {
       setLoadingAiConfigs(false);
     }
   };
-
-  useEffect(() => {
-    if (enableAI && aiConfigMode === 'saved' && aiConfigs.length === 0) {
-      loadAiConfigs();
-    }
-  }, [enableAI, aiConfigMode]);
 
   if (!isLoggedIn || !isAdmin) {
     return (
@@ -287,53 +283,12 @@ export default function DataImportPage() {
     }
   };
 
-  // Step 2: OCR 识别
+  // Step 2: OCR 识别（纯 OCR，不含 AI）
   const handleOcr = async () => {
     if (!fetchResult) return;
     setLoading(true);
+    setAiDiffs(new Map()); // 清空之前的 AI 差异标记
     try {
-      // 征集志愿 + 启用 AI 校验
-      if (dataType === 'supplementary' && enableAI) {
-        const aiParams: Parameters<typeof runOcrWithAI>[0] = {
-          imageUrls: fetchResult.image_urls,
-          year,
-          province,
-          examType,
-          batch,
-        };
-
-        if (aiConfigMode === 'saved' && selectedAiConfig) {
-          // 使用已保存的配置
-          aiParams.aiConfigId = selectedAiConfig;
-        } else if (aiConfigMode === 'manual' && aiApiKey) {
-          // 手动输入配置
-          aiParams.aiApiKey = aiApiKey;
-          aiParams.aiBaseUrl = aiBaseUrl;
-          aiParams.aiModel = aiModel;
-        } else {
-          message.error('请配置 AI 参数');
-          setLoading(false);
-          return;
-        }
-
-        const result = await runOcrWithAI(aiParams);
-        setAiResult(result);
-        setOcrResult(result);
-        setSupplementaryData([...result.data]);
-        setCurrentStep(2);
-
-        if (result.needs_review) {
-          message.warning(`识别完成，有 ${result.conflicts_count} 条冲突需要人工审核`);
-          setShowConflicts(true);
-        } else if (result.is_valid) {
-          message.success(`OCR + AI 双重识别成功: ${result.total_rows} 条数据`);
-        } else {
-          message.warning(`识别完成，但有 ${result.errors.length} 个问题`);
-        }
-        return;
-      }
-
-      // 普通 OCR 识别
       const result = await runOcr({
         imageUrls: fetchResult.image_urls,
         dataType,
@@ -343,7 +298,6 @@ export default function DataImportPage() {
         batch,
       });
       setOcrResult(result);
-      setAiResult(null);
 
       if (dataType === 'score_segment') {
         const scoreResult = result as OcrResult;
@@ -352,11 +306,15 @@ export default function DataImportPage() {
       } else {
         const suppResult = result as SupplementaryOcrResult;
         setSupplementaryData([...suppResult.data]);
+        // 记录每张图片的数据行数（后端需要返回这个信息）
+        if ((suppResult as any).image_data_counts) {
+          setImageDataCounts((suppResult as any).image_data_counts);
+        }
       }
 
       setCurrentStep(2);
       if (result.is_valid) {
-        message.success(`识别成功: ${result.total_rows} 条数据`);
+        message.success(`OCR 识别成功: ${result.total_rows} 条数据`);
       } else {
         message.warning(`识别完成，但有 ${result.errors.length} 个问题`);
       }
@@ -365,6 +323,154 @@ export default function DataImportPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // AI 校验（在 OCR 结果基础上逐张验证）
+  const handleAiVerify = async () => {
+    if (!fetchResult || supplementaryData.length === 0) return;
+
+    // 检查 AI 配置
+    if (aiConfigMode === 'saved' && !selectedAiConfig) {
+      message.error('请先选择 AI 配置');
+      return;
+    }
+    if (aiConfigMode === 'manual' && !aiApiKey) {
+      message.error('请先输入 API Key');
+      return;
+    }
+
+    // 筛选有数据的图片（根据 imageDataCounts，只传有数据的图片）
+    const imagesWithData: { url: string; index: number }[] = [];
+    fetchResult.image_urls.forEach((url, index) => {
+      // 如果有 imageDataCounts 信息，只选择有数据的图片
+      // 否则跳过前几张（通常是标题/说明页）
+      if (imageDataCounts.length > 0) {
+        if (imageDataCounts[index] > 0) {
+          imagesWithData.push({ url, index });
+        }
+      } else {
+        // 没有详细信息时，假设从第2张开始有数据
+        if (index >= 1) {
+          imagesWithData.push({ url, index });
+        }
+      }
+    });
+
+    if (imagesWithData.length === 0) {
+      message.warning('没有找到包含数据的图片');
+      return;
+    }
+
+    setAiVerifying(true);
+    setAiVerifyProgress({ current: 0, total: imagesWithData.length });
+
+    // 使用本地变量累积差异，避免 React 状态异步更新问题
+    const allDiffs = new Map<string, { field: string; ocrValue: any; aiValue: any }[]>();
+    setAiDiffs(allDiffs);
+
+    try {
+      // 逐张调用 AI 验证
+      for (let i = 0; i < imagesWithData.length; i++) {
+        const { url } = imagesWithData[i];
+        setAiVerifyProgress({ current: i + 1, total: imagesWithData.length });
+
+        // 调用单张图片的 AI 验证
+        const aiParams: Parameters<typeof runAiVerifySingle>[0] = {
+          imageUrl: url,
+          year,
+          province,
+          examType,
+          batch,
+        };
+
+        if (aiConfigMode === 'saved' && selectedAiConfig) {
+          aiParams.aiConfigId = selectedAiConfig;
+        } else {
+          aiParams.aiApiKey = aiApiKey;
+          aiParams.aiBaseUrl = aiBaseUrl;
+          aiParams.aiModel = aiModel;
+        }
+
+        const aiResult = await runAiVerifySingle(aiParams);
+
+        // 比对 AI 结果与 OCR 结果，标记差异
+        if (aiResult.data && aiResult.data.length > 0) {
+          for (const aiRow of aiResult.data) {
+            // 在 OCR 数据中查找匹配的行
+            const ocrRow = supplementaryData.find(
+              (r) =>
+                r.university_code === aiRow.university_code &&
+                r.major_group_code === aiRow.major_group_code &&
+                r.major_code === aiRow.major_code
+            );
+
+            if (ocrRow) {
+              const rowKey = `${aiRow.university_code}_${aiRow.major_group_code}_${aiRow.major_code}`;
+              const diffs: { field: string; ocrValue: any; aiValue: any }[] = [];
+
+              // 比较关键字段
+              if (ocrRow.plan_count !== aiRow.plan_count) {
+                diffs.push({ field: 'plan_count', ocrValue: ocrRow.plan_count, aiValue: aiRow.plan_count });
+              }
+              if (ocrRow.tuition !== aiRow.tuition) {
+                diffs.push({ field: 'tuition', ocrValue: ocrRow.tuition, aiValue: aiRow.tuition });
+              }
+              if (ocrRow.major_name !== aiRow.major_name) {
+                diffs.push({ field: 'major_name', ocrValue: ocrRow.major_name, aiValue: aiRow.major_name });
+              }
+
+              if (diffs.length > 0) {
+                allDiffs.set(rowKey, diffs);
+              }
+            }
+          }
+
+          // 每处理完一张图片，更新 UI 显示差异
+          setAiDiffs(new Map(allDiffs));
+        }
+      }
+
+      const diffCount = allDiffs.size;
+      if (diffCount > 0) {
+        message.warning(`AI 校验完成，发现 ${diffCount} 处差异，请人工复核`);
+      } else {
+        message.success('AI 校验完成，未发现差异');
+      }
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e?.message || 'AI 校验失败');
+    } finally {
+      setAiVerifying(false);
+    }
+  };
+
+  // 应用 AI 结果到指定行
+  const handleApplyAiValue = (rowKey: string, field: string, aiValue: any) => {
+    setSupplementaryData((prev) =>
+      prev.map((row) => {
+        const key = `${row.university_code}_${row.major_group_code}_${row.major_code}`;
+        if (key === rowKey) {
+          return { ...row, [field]: aiValue };
+        }
+        return row;
+      })
+    );
+
+    // 从差异列表中移除该字段
+    setAiDiffs((prev) => {
+      const newDiffs = new Map(prev);
+      const rowDiffs = newDiffs.get(rowKey);
+      if (rowDiffs) {
+        const updatedDiffs = rowDiffs.filter((d) => d.field !== field);
+        if (updatedDiffs.length === 0) {
+          newDiffs.delete(rowKey);
+        } else {
+          newDiffs.set(rowKey, updatedDiffs);
+        }
+      }
+      return newDiffs;
+    });
+
+    message.success('已应用 AI 结果');
   };
 
   // Step 3: 保存
@@ -421,29 +527,11 @@ export default function DataImportPage() {
     setDataErrors(new Set());
     setDataErrorMessages([]);
     setEditingKey(null);
-    setAiResult(null);
-    setShowConflicts(false);
-  };
-
-  // 处理冲突：选择 OCR 结果
-  const handleUseOcrResult = (_conflict: ConflictItem) => {
-    // 已经使用的是 OCR 结果，无需操作
-    message.info('已使用 OCR 结果');
-  };
-
-  // 处理冲突：选择 AI 结果
-  const handleUseAiResult = (conflict: ConflictItem) => {
-    const key = `${conflict.ocr.university_code}_${conflict.ocr.major_group_code}_${conflict.ocr.major_code}`;
-    setSupplementaryData(prev =>
-      prev.map(row => {
-        const rowKey = `${row.university_code}_${row.major_group_code}_${row.major_code}`;
-        if (rowKey === key) {
-          return { ...row, plan_count: conflict.ai.plan_count, tuition: conflict.ai.tuition };
-        }
-        return row;
-      })
-    );
-    message.success('已切换为 AI 结果');
+    setAiDiffs(new Map());
+    setAiVerifying(false);
+    setAiVerifyProgress({ current: 0, total: 0 });
+    setImageDataCounts([]);
+    setShowAiConfig(false);
   };
 
   // OCR 数据表格列（可编辑）
@@ -693,134 +781,6 @@ export default function DataImportPage() {
                   )}
                 </Row>
 
-                {/* AI 配置（仅征集志愿） */}
-                {dataType === 'supplementary' && (
-                  <Collapse
-                    items={[
-                      {
-                        key: 'ai',
-                        label: (
-                          <Space>
-                            <RobotOutlined />
-                            <span>AI 校验配置</span>
-                            {enableAI && <Tag color="blue">已启用</Tag>}
-                          </Space>
-                        ),
-                        children: (
-                          <Space direction="vertical" style={{ width: '100%' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <Text strong>启用 AI 校验</Text>
-                              <Switch checked={enableAI} onChange={setEnableAI} />
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                OCR + AI 双重识别，自动比对结果，冲突处人工审核
-                              </Text>
-                            </div>
-                            {enableAI && (
-                              <>
-                                <Radio.Group
-                                  value={aiConfigMode}
-                                  onChange={(e) => setAiConfigMode(e.target.value)}
-                                  style={{ marginBottom: 12 }}
-                                >
-                                  <Radio.Button value="saved">使用已保存配置</Radio.Button>
-                                  <Radio.Button value="manual">手动输入</Radio.Button>
-                                </Radio.Group>
-
-                                {aiConfigMode === 'saved' ? (
-                                  <Row gutter={16}>
-                                    <Col span={16}>
-                                      <Text strong>选择 AI 配置</Text>
-                                      <Select
-                                        value={selectedAiConfig}
-                                        onChange={setSelectedAiConfig}
-                                        loading={loadingAiConfigs}
-                                        style={{ width: '100%', marginTop: 4 }}
-                                        placeholder="选择已保存的 AI 配置"
-                                        options={aiConfigs.map(c => ({
-                                          value: c.id,
-                                          label: `${c.name}${c.isDefault ? ' (默认)' : ''}`,
-                                        }))}
-                                      />
-                                    </Col>
-                                    <Col span={8}>
-                                      <Button
-                                        style={{ marginTop: 24 }}
-                                        onClick={loadAiConfigs}
-                                        loading={loadingAiConfigs}
-                                      >
-                                        刷新配置
-                                      </Button>
-                                    </Col>
-                                    {aiConfigs.length === 0 && !loadingAiConfigs && (
-                                      <Col span={24}>
-                                        <Alert
-                                          message="未找到 AI 配置"
-                                          description={
-                                            <span>
-                                              请先在 <Link href="/admin/ai-config">AI 配置管理</Link> 中添加配置，或切换到手动输入模式
-                                            </span>
-                                          }
-                                          type="warning"
-                                          showIcon
-                                          style={{ marginTop: 8 }}
-                                        />
-                                      </Col>
-                                    )}
-                                  </Row>
-                                ) : (
-                                  <>
-                                    <Row gutter={16}>
-                                      <Col span={12}>
-                                        <Text strong>API Key</Text>
-                                        <Input.Password
-                                          value={aiApiKey}
-                                          onChange={(e) => setAiApiKey(e.target.value)}
-                                          placeholder="sk-xxx..."
-                                          style={{ marginTop: 4 }}
-                                        />
-                                      </Col>
-                                      <Col span={12}>
-                                        <Text strong>API Base URL</Text>
-                                        <Select
-                                          value={aiBaseUrl}
-                                          onChange={setAiBaseUrl}
-                                          style={{ width: '100%', marginTop: 4 }}
-                                          options={[
-                                            { value: 'https://api.deepseek.com/v1', label: 'DeepSeek' },
-                                            { value: 'https://api.openai.com/v1', label: 'OpenAI' },
-                                            { value: 'https://api.moonshot.cn/v1', label: 'Moonshot (Kimi)' },
-                                            { value: 'https://dashscope.aliyuncs.com/compatible-mode/v1', label: '阿里云百炼' },
-                                          ]}
-                                        />
-                                      </Col>
-                                    </Row>
-                                    <Row gutter={16}>
-                                      <Col span={12}>
-                                        <Text strong>模型</Text>
-                                        <Input
-                                          value={aiModel}
-                                          onChange={(e) => setAiModel(e.target.value)}
-                                          placeholder="deepseek-chat"
-                                          style={{ marginTop: 4 }}
-                                        />
-                                      </Col>
-                                      <Col span={12}>
-                                        <Text type="secondary" style={{ display: 'block', marginTop: 24 }}>
-                                          推荐: DeepSeek (deepseek-chat) 或 GPT-4o-mini
-                                        </Text>
-                                      </Col>
-                                    </Row>
-                                  </>
-                                )}
-                              </>
-                            )}
-                          </Space>
-                        ),
-                      },
-                    ]}
-                  />
-                )}
-
                 <Divider>图片预览（前 6 张）</Divider>
                 <Image.PreviewGroup>
                   <Row gutter={[8, 8]}>
@@ -846,20 +806,11 @@ export default function DataImportPage() {
                   <Button onClick={() => setCurrentStep(0)}>上一步</Button>
                   <Button
                     type="primary"
-                    icon={enableAI && dataType === 'supplementary' ? <RobotOutlined /> : <ScanOutlined />}
+                    icon={<ScanOutlined />}
                     onClick={handleOcr}
-                    disabled={enableAI && dataType === 'supplementary' && (
-                      aiConfigMode === 'manual' ? !aiApiKey : !selectedAiConfig
-                    )}
                   >
-                    {enableAI && dataType === 'supplementary' ? '开始 OCR + AI 识别' : '开始 OCR 识别'}
+                    开始 OCR 识别
                   </Button>
-                  {enableAI && dataType === 'supplementary' && aiConfigMode === 'manual' && !aiApiKey && (
-                    <Text type="warning">请先配置 AI API Key</Text>
-                  )}
-                  {enableAI && dataType === 'supplementary' && aiConfigMode === 'saved' && !selectedAiConfig && (
-                    <Text type="warning">请先选择 AI 配置</Text>
-                  )}
                 </Space>
               </Space>
             </Card>
@@ -947,16 +898,16 @@ export default function DataImportPage() {
                   <>
                     {/* 征集志愿预览 */}
                     <Row gutter={16}>
-                      <Col span={3}>
+                      <Col span={4}>
                         <Statistic title="识别行数" value={supplementaryData.length} />
                       </Col>
-                      <Col span={3}>
+                      <Col span={4}>
                         <Statistic title="院校数" value={(ocrResult as SupplementaryOcrResult).university_count} />
                       </Col>
-                      <Col span={3}>
+                      <Col span={4}>
                         <Statistic title="专业组数" value={(ocrResult as SupplementaryOcrResult).major_group_count} />
                       </Col>
-                      <Col span={3}>
+                      <Col span={4}>
                         <Statistic
                           title="数据状态"
                           value={ocrResult.is_valid ? '校验通过' : `${ocrResult.errors.length} 个问题`}
@@ -966,138 +917,156 @@ export default function DataImportPage() {
                           }}
                         />
                       </Col>
-                      {aiResult && (
-                        <>
-                          <Col span={3}>
-                            <Statistic
-                              title="AI 校验"
-                              value={aiResult.ai_enabled ? '已启用' : '未启用'}
-                              prefix={<RobotOutlined />}
-                              valueStyle={{ color: aiResult.ai_enabled ? '#1890ff' : '#999' }}
-                            />
-                          </Col>
-                          <Col span={3}>
-                            <Statistic
-                              title="冲突数"
-                              value={aiResult.conflicts_count}
-                              prefix={aiResult.conflicts_count > 0 ? <ExclamationCircleOutlined /> : <CheckCircleOutlined />}
-                              valueStyle={{ color: aiResult.conflicts_count > 0 ? '#ff4d4f' : '#52c41a' }}
-                            />
-                          </Col>
-                        </>
-                      )}
-                      <Col span={aiResult ? 6 : 12}>
+                      <Col span={4}>
+                        <Statistic
+                          title="AI 差异"
+                          value={aiDiffs.size > 0 ? `${aiDiffs.size} 处` : (aiVerifying ? '校验中...' : '未校验')}
+                          prefix={aiDiffs.size > 0 ? <ExclamationCircleOutlined /> : <RobotOutlined />}
+                          valueStyle={{ color: aiDiffs.size > 0 ? '#ff4d4f' : '#999' }}
+                        />
+                      </Col>
+                      <Col span={4}>
                         <Statistic
                           title="目标"
-                          value={`${year} ${province} ${batch}`}
+                          value={`${year} ${province}`}
                         />
                       </Col>
                     </Row>
 
-                    {/* AI 比对结果摘要 */}
-                    {aiResult?.comparison && (
-                      <Alert
-                        message="OCR + AI 双重识别结果"
-                        description={
-                          <Space direction="vertical" size="small">
-                            <div>
-                              <Tag color="green">一致: {aiResult.comparison.summary.matched_count}</Tag>
-                              <Tag color="red">冲突: {aiResult.comparison.summary.conflict_count}</Tag>
-                              <Tag color="orange">仅OCR: {aiResult.comparison.summary.ocr_only_count}</Tag>
-                              <Tag color="blue">仅AI: {aiResult.comparison.summary.ai_only_count}</Tag>
-                            </div>
-                            {aiResult.conflicts_count > 0 && (
-                              <Button
-                                type="link"
-                                size="small"
-                                icon={<SettingOutlined />}
-                                onClick={() => setShowConflicts(!showConflicts)}
-                              >
-                                {showConflicts ? '隐藏冲突详情' : '查看冲突详情'}
-                              </Button>
-                            )}
+                    {/* AI 校验区域 */}
+                    <Card size="small" style={{ marginTop: 16, background: '#f6f8fa' }}>
+                      <Row align="middle" gutter={16}>
+                        <Col flex="auto">
+                          <Space>
+                            <RobotOutlined style={{ fontSize: 18, color: '#1890ff' }} />
+                            <Text strong>AI 校验</Text>
+                            <Text type="secondary">使用 AI 对 OCR 结果进行二次验证，标记差异</Text>
                           </Space>
-                        }
-                        type={aiResult.conflicts_count > 0 ? 'warning' : 'success'}
-                        showIcon
-                        icon={<RobotOutlined />}
-                      />
-                    )}
+                        </Col>
+                        <Col>
+                          <Space>
+                            <Button
+                              size="small"
+                              icon={<SettingOutlined />}
+                              onClick={() => {
+                                setShowAiConfig(!showAiConfig);
+                                if (!showAiConfig && aiConfigs.length === 0) {
+                                  loadAiConfigs();
+                                }
+                              }}
+                            >
+                              配置
+                            </Button>
+                            <Button
+                              type="primary"
+                              icon={<RobotOutlined />}
+                              loading={aiVerifying}
+                              onClick={handleAiVerify}
+                              disabled={aiVerifying}
+                            >
+                              {aiVerifying
+                                ? `校验中 ${aiVerifyProgress.current}/${aiVerifyProgress.total}`
+                                : '开始 AI 校验'}
+                            </Button>
+                          </Space>
+                        </Col>
+                      </Row>
 
-                    {/* 冲突详情 */}
-                    {showConflicts && aiResult?.comparison?.conflicts && aiResult.comparison.conflicts.length > 0 && (
-                      <Card title="冲突数据（需人工审核）" size="small" style={{ background: '#fffbe6' }}>
-                        <Table
-                          dataSource={aiResult.comparison.conflicts}
-                          rowKey={(r) => `${r.ocr.university_code}_${r.ocr.major_group_code}_${r.ocr.major_code}`}
-                          size="small"
-                          pagination={false}
-                          scroll={{ x: 900 }}
-                          columns={[
-                            { title: '院校', dataIndex: ['ocr', 'university_name'], width: 120 },
-                            { title: '专业组', dataIndex: ['ocr', 'major_group_code'], width: 60 },
-                            { title: '专业', dataIndex: ['ocr', 'major_name'], width: 150 },
-                            {
-                              title: 'OCR 计划数',
-                              dataIndex: ['ocr', 'plan_count'],
-                              width: 80,
-                              render: (v, r: ConflictItem) => (
-                                <span style={{ color: r.diff.plan_count ? '#ff4d4f' : undefined, fontWeight: r.diff.plan_count ? 'bold' : undefined }}>
-                                  {v}
-                                </span>
-                              ),
-                            },
-                            {
-                              title: 'AI 计划数',
-                              dataIndex: ['ai', 'plan_count'],
-                              width: 80,
-                              render: (v, r: ConflictItem) => (
-                                <span style={{ color: r.diff.plan_count ? '#52c41a' : undefined, fontWeight: r.diff.plan_count ? 'bold' : undefined }}>
-                                  {v}
-                                </span>
-                              ),
-                            },
-                            {
-                              title: 'OCR 学费',
-                              dataIndex: ['ocr', 'tuition'],
-                              width: 80,
-                              render: (v, r: ConflictItem) => (
-                                <span style={{ color: r.diff.tuition ? '#ff4d4f' : undefined, fontWeight: r.diff.tuition ? 'bold' : undefined }}>
-                                  {v}
-                                </span>
-                              ),
-                            },
-                            {
-                              title: 'AI 学费',
-                              dataIndex: ['ai', 'tuition'],
-                              width: 80,
-                              render: (v, r: ConflictItem) => (
-                                <span style={{ color: r.diff.tuition ? '#52c41a' : undefined, fontWeight: r.diff.tuition ? 'bold' : undefined }}>
-                                  {v}
-                                </span>
-                              ),
-                            },
-                            {
-                              title: '操作',
-                              width: 150,
-                              render: (_: any, r: ConflictItem) => (
-                                <Space size="small">
-                                  <Tooltip title="使用 OCR 结果">
-                                    <Button size="small" onClick={() => handleUseOcrResult(r)}>OCR</Button>
-                                  </Tooltip>
-                                  <Tooltip title="使用 AI 结果">
-                                    <Button size="small" type="primary" onClick={() => handleUseAiResult(r)}>AI</Button>
-                                  </Tooltip>
+                      {/* AI 配置面板 */}
+                      {showAiConfig && (
+                        <div style={{ marginTop: 16, padding: 16, background: '#fff', borderRadius: 4 }}>
+                          <Radio.Group
+                            value={aiConfigMode}
+                            onChange={(e) => setAiConfigMode(e.target.value)}
+                            style={{ marginBottom: 12 }}
+                          >
+                            <Radio.Button value="saved">使用已保存配置</Radio.Button>
+                            <Radio.Button value="manual">手动输入</Radio.Button>
+                          </Radio.Group>
+
+                          {aiConfigMode === 'saved' ? (
+                            <Row gutter={16}>
+                              <Col span={16}>
+                                <Select
+                                  value={selectedAiConfig}
+                                  onChange={setSelectedAiConfig}
+                                  loading={loadingAiConfigs}
+                                  style={{ width: '100%' }}
+                                  placeholder="选择已保存的 AI 配置"
+                                  options={aiConfigs.map(c => ({
+                                    value: c.id,
+                                    label: `${c.name}${c.isDefault ? ' (默认)' : ''}`,
+                                  }))}
+                                />
+                              </Col>
+                              <Col span={8}>
+                                <Space>
+                                  <Button onClick={loadAiConfigs} loading={loadingAiConfigs}>
+                                    刷新
+                                  </Button>
+                                  <Link href="/ai-config">
+                                    <Button type="link" size="small">管理配置</Button>
+                                  </Link>
                                 </Space>
-                              ),
-                            },
-                          ]}
+                              </Col>
+                            </Row>
+                          ) : (
+                            <Row gutter={16}>
+                              <Col span={8}>
+                                <Input.Password
+                                  value={aiApiKey}
+                                  onChange={(e) => setAiApiKey(e.target.value)}
+                                  placeholder="API Key: sk-xxx..."
+                                />
+                              </Col>
+                              <Col span={8}>
+                                <Select
+                                  value={aiBaseUrl}
+                                  onChange={setAiBaseUrl}
+                                  style={{ width: '100%' }}
+                                  options={[
+                                    { value: 'https://api.deepseek.com/v1', label: 'DeepSeek' },
+                                    { value: 'https://api.openai.com/v1', label: 'OpenAI' },
+                                    { value: 'https://api.moonshot.cn/v1', label: 'Moonshot' },
+                                  ]}
+                                />
+                              </Col>
+                              <Col span={8}>
+                                <Input
+                                  value={aiModel}
+                                  onChange={(e) => setAiModel(e.target.value)}
+                                  placeholder="模型: deepseek-chat"
+                                />
+                              </Col>
+                            </Row>
+                          )}
+                        </div>
+                      )}
+
+                      {/* AI 校验进度 */}
+                      {aiVerifying && (
+                        <div style={{ marginTop: 12 }}>
+                          <Text type="secondary">
+                            正在校验第 {aiVerifyProgress.current} / {aiVerifyProgress.total} 张图片...
+                          </Text>
+                        </div>
+                      )}
+
+                      {/* AI 差异摘要 */}
+                      {aiDiffs.size > 0 && !aiVerifying && (
+                        <Alert
+                          style={{ marginTop: 12 }}
+                          message={`发现 ${aiDiffs.size} 处差异`}
+                          description="表格中已用颜色标记差异字段，点击 AI 值可应用"
+                          type="warning"
+                          showIcon
                         />
-                      </Card>
-                    )}
+                      )}
+                    </Card>
 
                     {ocrResult.errors.length > 0 && (
                       <Alert
+                        style={{ marginTop: 16 }}
                         message={`发现 ${ocrResult.errors.length} 个问题`}
                         description={
                           <ul style={{ margin: 0, paddingLeft: 20 }}>
@@ -1112,12 +1081,75 @@ export default function DataImportPage() {
                     )}
 
                     <Table
+                      style={{ marginTop: 16 }}
                       dataSource={supplementaryData}
-                      columns={supplementaryColumns}
+                      columns={[
+                        ...supplementaryColumns.slice(0, -2), // 除了计划数和收费
+                        {
+                          title: '计划数',
+                          dataIndex: 'plan_count',
+                          key: 'plan_count',
+                          width: 100,
+                          render: (val: number, record: SupplementaryRow) => {
+                            const rowKey = `${record.university_code}_${record.major_group_code}_${record.major_code}`;
+                            const diffs = aiDiffs.get(rowKey);
+                            const diff = diffs?.find(d => d.field === 'plan_count');
+                            if (diff) {
+                              return (
+                                <Space size={4}>
+                                  <span style={{ color: '#ff4d4f', textDecoration: 'line-through' }}>{diff.ocrValue}</span>
+                                  <Tooltip title="点击应用 AI 结果">
+                                    <Tag
+                                      color="green"
+                                      style={{ cursor: 'pointer' }}
+                                      onClick={() => handleApplyAiValue(rowKey, 'plan_count', diff.aiValue)}
+                                    >
+                                      {diff.aiValue}
+                                    </Tag>
+                                  </Tooltip>
+                                </Space>
+                              );
+                            }
+                            return val;
+                          },
+                        },
+                        {
+                          title: '收费',
+                          dataIndex: 'tuition',
+                          key: 'tuition',
+                          width: 100,
+                          render: (val: string, record: SupplementaryRow) => {
+                            const rowKey = `${record.university_code}_${record.major_group_code}_${record.major_code}`;
+                            const diffs = aiDiffs.get(rowKey);
+                            const diff = diffs?.find(d => d.field === 'tuition');
+                            if (diff) {
+                              return (
+                                <Space size={4}>
+                                  <span style={{ color: '#ff4d4f', textDecoration: 'line-through' }}>{diff.ocrValue}</span>
+                                  <Tooltip title="点击应用 AI 结果">
+                                    <Tag
+                                      color="green"
+                                      style={{ cursor: 'pointer' }}
+                                      onClick={() => handleApplyAiValue(rowKey, 'tuition', diff.aiValue)}
+                                    >
+                                      {diff.aiValue}
+                                    </Tag>
+                                  </Tooltip>
+                                </Space>
+                              );
+                            }
+                            return val;
+                          },
+                        },
+                      ]}
                       rowKey={(r) => `${r.university_code}_${r.major_group_code}_${r.major_code}_${r.major_name}`}
                       size="small"
                       pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
-                      scroll={{ x: 1100, y: 400 }}
+                      scroll={{ x: 1200, y: 400 }}
+                      rowClassName={(record) => {
+                        const rowKey = `${record.university_code}_${record.major_group_code}_${record.major_code}`;
+                        return aiDiffs.has(rowKey) ? 'row-diff' : '';
+                      }}
                     />
                   </>
                 )}

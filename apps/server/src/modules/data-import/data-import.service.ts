@@ -317,4 +317,61 @@ export class DataImportService {
       return false;
     }
   }
+
+  /**
+   * 单张图片 AI 验证（用于逐张校验）
+   */
+  async aiVerifySingle(
+    imageUrl: string,
+    year: number,
+    province: string,
+    examType: string,
+    batch: string,
+    aiConfigId?: string,
+    aiApiKey?: string,
+    aiBaseUrl?: string,
+    aiModel?: string,
+  ) {
+    let finalApiKey = aiApiKey || '';
+    let finalBaseUrl = aiBaseUrl || '';
+    let finalModel = aiModel || '';
+
+    // 如果提供了本地配置 ID，从本地获取配置
+    if (aiConfigId && !aiApiKey) {
+      const fullConfig = await this.aiConfigService.getFullConfig(aiConfigId);
+      if (fullConfig) {
+        finalApiKey = fullConfig.apiKey;
+        finalBaseUrl = fullConfig.baseUrl;
+        finalModel = fullConfig.model;
+        this.logger.log(`AI 验证使用本地配置: ${fullConfig.name}`);
+      }
+    }
+
+    if (!finalApiKey) {
+      throw new Error('AI API 密钥未配置');
+    }
+
+    const resp = await fetch(`${this.ocrServiceUrl}/ai-verify-single`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_url: imageUrl,
+        year,
+        province,
+        exam_type: examType,
+        batch: batch || '本科一批',
+        ai_api_key: finalApiKey,
+        ai_base_url: finalBaseUrl,
+        ai_model: finalModel,
+      }),
+      signal: AbortSignal.timeout(2 * 60_000), // 单张图片 AI 验证最多 2 分钟
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `AI 验证失败: ${resp.status}`);
+    }
+
+    return resp.json();
+  }
 }

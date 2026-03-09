@@ -152,6 +152,18 @@ class SaveSupplementaryRequest(BaseModel):
     db_url: str = Field(..., description="MySQL 连接字符串")
 
 
+class AiVerifySingleRequest(BaseModel):
+    """单张图片 AI 验证请求"""
+    image_url: str = Field(..., description="图片 URL")
+    year: int = Field(..., description="年份")
+    province: str = Field("四川", description="省份")
+    exam_type: str = Field("物理类", description="考试类型")
+    batch: str = Field("本科一批", description="批次")
+    ai_api_key: str = Field("", description="AI API 密钥")
+    ai_base_url: str = Field("", description="AI API 基础 URL")
+    ai_model: str = Field("", description="AI 模型名称")
+
+
 class SaveResponse(BaseModel):
     success: bool
     affected_rows: int
@@ -1048,6 +1060,62 @@ async def run_ocr_with_ai(req: OcrRequest):
         raise HTTPException(status_code=500, detail=f"OCR+AI 识别失败: {str(e)}")
 
 
+@app.post("/ai-verify-single")
+async def ai_verify_single(req: AiVerifySingleRequest):
+    """单张图片 AI 验证（用于逐张校验）"""
+    try:
+        from ai_parser import parse_image_with_ai
+
+        if not req.ai_api_key:
+            raise HTTPException(status_code=400, detail="AI API 密钥未提供")
+
+        # 下载图片
+        logger.info(f"AI 验证单张图片: {req.image_url}")
+        img_path = download_image(req.image_url)
+
+        # 调用 AI 解析
+        ai_rows = await parse_image_with_ai(
+            img_path,
+            api_key=req.ai_api_key,
+            base_url=req.ai_base_url or None,
+            model=req.ai_model or None,
+            context={}
+        )
+
+        logger.info(f"AI 识别 {len(ai_rows)} 行")
+
+        # 转换为 SupplementaryRow 格式
+        data = []
+        for row in ai_rows:
+            data.append(SupplementaryRow(
+                exam_type=row.get("exam_type", ""),
+                enrollment_type=row.get("enrollment_type", ""),
+                university_code=row.get("university_code", ""),
+                university_name=row.get("university_name", ""),
+                university_location=row.get("university_location", ""),
+                university_note=row.get("university_note", ""),
+                major_group_code=row.get("major_group_code", ""),
+                major_group_subject=row.get("major_group_subject", ""),
+                major_group_plan=row.get("major_group_plan", 0),
+                major_code=row.get("major_code", ""),
+                major_name=row.get("major_name", ""),
+                major_note=row.get("major_note", ""),
+                plan_count=row.get("plan_count", 0),
+                tuition=row.get("tuition", ""),
+            ))
+
+        return {
+            "data": data,
+            "errors": []
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI 验证失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"AI 验证失败: {str(e)}")
+
+
 def run_score_segment_ocr(req: OcrRequest) -> OcrResponse:
     """一分一段表 OCR"""
     all_rows = []
@@ -1084,6 +1152,7 @@ def run_score_segment_ocr(req: OcrRequest) -> OcrResponse:
 def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
     """征集志愿 OCR（纯 OCR 模式）"""
     all_rows = []
+    image_data_counts = []  # 记录每张图片识别的数据行数
     # 跨图片传递状态
     last_exam_type = ""
     last_enrollment_type = ""
@@ -1093,6 +1162,9 @@ def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
         img_path = download_image(url)
         rows = extract_supplementary_rows(img_path)
         logger.info(f"  识别 {len(rows)} 行")
+
+        # 记录这张图片的数据行数
+        image_data_counts.append(len(rows))
 
         # 填充空的 exam_type 和 enrollment_type（使用上一张图片的状态）
         for row in rows:
@@ -1122,14 +1194,18 @@ def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
     # 校验
     is_valid, errors = validate_supplementary_data(rows)
 
-    return SupplementaryOcrResponse(
-        total_rows=len(rows),
-        university_count=len(university_codes),
-        major_group_count=len(major_group_codes),
-        is_valid=is_valid,
-        errors=errors,
-        data=[SupplementaryRow(**r) for r in rows],
-    )
+    # 构建响应，包含 image_data_counts
+    response_data = {
+        "total_rows": len(rows),
+        "university_count": len(university_codes),
+        "major_group_count": len(major_group_codes),
+        "is_valid": is_valid,
+        "errors": errors,
+        "data": [SupplementaryRow(**r) for r in rows],
+        "image_data_counts": image_data_counts,  # 新增：每张图片的数据行数
+    }
+
+    return response_data
 
 
 async def run_supplementary_ocr_with_ai(req: OcrRequest) -> SupplementaryOcrWithAIResponse:
