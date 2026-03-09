@@ -53,14 +53,14 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, ip?: string) {
     const user = await this.validateUser(dto.username, dto.password);
     if (!user) {
       throw new UnauthorizedException('用户名或密码错误');
     }
 
     // 更新最后登录时间
-    await this.userService.updateLastLogin(user.id);
+    await this.userService.updateLastLogin(user.id, ip);
 
     // 生成 token
     const tokens = await this.generateTokens(user);
@@ -86,7 +86,7 @@ export class AuthService {
   async refreshToken(refreshToken: string) {
     try {
       const payload = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get('JWT_SECRET'),
+        secret: this.configService.get('JWT_REFRESH_SECRET', 'refresh-default-secret'),
       });
 
       const user = await this.userService.findById(payload.sub);
@@ -125,6 +125,7 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
     const refreshToken = this.jwtService.sign(payload, {
       expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN', '7d'),
+      secret: this.configService.get('JWT_REFRESH_SECRET', 'refresh-default-secret'),
     });
 
     return {

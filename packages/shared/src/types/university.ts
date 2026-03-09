@@ -1,3 +1,5 @@
+import type { EnrollmentPlan, AdmissionRecord } from './admission';
+
 // 院校相关类型
 export interface University {
   id: number;

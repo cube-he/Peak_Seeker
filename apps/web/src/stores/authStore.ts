@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 interface User {
   id: number;
@@ -11,6 +11,7 @@ interface User {
   score?: number;
   rank?: number;
   vipLevel: string;
+  role?: string;
 }
 
 interface AuthState {
@@ -18,13 +19,15 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   isLoggedIn: boolean;
-  setAuth: (data: { user: User; accessToken: string; refreshToken: string }) => void;
+  setAuth: (data: { user: User; accessToken: string; refreshToken: string; expiresIn?: string }) => void;
+  setAccessToken: (token: string) => void;
+  updateUser: (data: Partial<User>) => void;
   logout: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       accessToken: null,
       refreshToken: null,
@@ -38,6 +41,16 @@ export const useAuthStore = create<AuthState>()(
           isLoggedIn: true,
         }),
 
+      setAccessToken: (token) =>
+        set({ accessToken: token }),
+
+      updateUser: (data) => {
+        const currentUser = get().user;
+        if (currentUser) {
+          set({ user: { ...currentUser, ...data } });
+        }
+      },
+
       logout: () =>
         set({
           user: null,
@@ -48,6 +61,17 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
+      storage: createJSONStorage(() => {
+        if (typeof window !== 'undefined') {
+          return sessionStorage;
+        }
+        // SSR fallback
+        return {
+          getItem: () => null,
+          setItem: () => {},
+          removeItem: () => {},
+        };
+      }),
     }
   )
 );

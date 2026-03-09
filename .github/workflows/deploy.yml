@@ -1,0 +1,79 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Generate Prisma Client
+        run: cd apps/server && npx prisma generate
+
+      - name: Build backend
+        run: pnpm run build:server
+
+      - name: Build frontend
+        run: pnpm run build:web
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy backend to server
+        run: |
+          # Upload backend dist
+          rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key" \
+            apps/server/dist/ \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/hcz/apps/volunteer-helper/apps/server/dist/
+
+          # Upload Prisma schema
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key" \
+            apps/server/prisma/ \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/hcz/apps/volunteer-helper/apps/server/prisma/
+
+      - name: Deploy frontend to server
+        run: |
+          rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key" \
+            apps/web/.next/ \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/hcz/apps/volunteer-helper/apps/web/.next/
+
+          # Upload public assets
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key" \
+            apps/web/public/ \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/hcz/apps/volunteer-helper/apps/web/public/
+
+      - name: Run migrations and restart
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            cd /home/hcz/apps/volunteer-helper/apps/server
+            npx prisma migrate deploy 2>&1 || npx prisma db push 2>&1
+            pm2 restart vh-server vh-web || pm2 restart all
+          EOF
+
+      - name: Verify deployment
+        run: |
+          sleep 5
+          curl -f http://volunteer.teach-helper.cn/api/v1/health || echo "Health check endpoint not available yet"

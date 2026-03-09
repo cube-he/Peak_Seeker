@@ -7,7 +7,6 @@ generator client {
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 // ==================== 院校相关 ====================
@@ -47,9 +46,16 @@ model University {
 
   // 其他属性
   campusArea               Decimal? @map("campus_area") @db.Decimal(10, 2)
-  transferDifficulty       String?  @map("transfer_difficulty") @db.VarChar(50)
+  transferDifficulty       String?  @map("transfer_difficulty") @db.Text
   militaryTrainingDuration String?  @map("military_training_duration") @db.VarChar(50)
   isFeatured               Boolean  @default(false) @map("is_featured")
+
+  // 新增字段
+  department    String? @db.VarChar(200)
+  ranking       String? @db.VarChar(50)
+  admissionGuide String? @map("admission_guide") @db.Text
+  renameHistory String? @map("rename_history") @db.Text
+  postgradRate  String? @map("postgrad_rate") @db.VarChar(50)
 
   // 备注
   notes String? @db.Text
@@ -88,6 +94,10 @@ model Major {
   // 专业属性
   notes        String?  @map("major_notes") @db.Text
   isRestricted Boolean  @default(false) @map("is_restricted")
+
+  // 本地学位点
+  localMasterPoint   Boolean @default(false) @map("local_master_point")
+  localDoctoralPoint Boolean @default(false) @map("local_doctoral_point")
 
   // 就业信息
   employmentRate      Decimal? @map("employment_rate") @db.Decimal(5, 2)
@@ -134,6 +144,22 @@ model EnrollmentPlan {
   duration            String?  @db.VarChar(20)
   tuition             Int?
   isSinoForeign       Boolean  @default(false) @map("is_sino_foreign")
+
+  // 专业组信息
+  groupCode      String? @map("group_code") @db.VarChar(50)
+  groupName      String? @map("group_name") @db.VarChar(200)
+  groupMajors    String? @map("group_majors") @db.Text
+  groupPlanCount Int?    @map("group_plan_count")
+
+  // 招生属性
+  isNew    Boolean @default(false) @map("is_new")
+  oldBatch String? @map("old_batch") @db.VarChar(50)
+
+  // 院校+专业维度评价
+  disciplineEval    String?  @map("discipline_eval") @db.VarChar(50)
+  isNationalFeature Boolean  @default(false) @map("is_national_feature")
+  majorRanking      String?  @map("major_ranking") @db.VarChar(100)
+  majorHonor        String?  @map("major_honor") @db.Text
 
   @@unique([universityId, majorId, year, province])
   @@index([year])
@@ -406,6 +432,31 @@ enum PaymentStatus {
   FAILED
   REFUNDED
   CANCELLED
+}
+
+// ==================== 一分一段表 ====================
+
+model ScoreSegment {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 基本维度
+  year     Int    @db.SmallInt
+  province String @db.VarChar(50)
+  examType String @map("exam_type") @db.VarChar(50) // 物理��/历史类/理科/文科
+
+  // 分数数据
+  score           Int @db.SmallInt          // 分数
+  count           Int @default(0)           // 该分人数
+  cumulativeCount Int @map("cumulative_count") // 累计人数
+
+  @@unique([year, province, examType, score])
+  @@index([year])
+  @@index([province])
+  @@index([examType])
+  @@index([score])
+  @@map("score_segments")
 }
 
 // ==================== 系统配置 ====================

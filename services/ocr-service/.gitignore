@@ -1,0 +1,7 @@
+# OCR Service
+__pycache__/
+*.pyc
+cache/
+venv/
+*.egg-info/
+

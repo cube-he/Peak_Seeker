@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { QueryUniversityDto } from './dto/query-university.dto';
@@ -19,6 +19,7 @@ export class UniversityService {
       city,
       type,
       level,
+      grade,
       nature,
       isDoubleFirstClass,
       is985,
@@ -41,6 +42,7 @@ export class UniversityService {
     if (type) where.type = type;
     if (level) where.level = level;
     if (nature) where.runningNature = nature;
+    if (grade) where.grade = grade;
     if (isDoubleFirstClass !== undefined) where.isDoubleFirstClass = isDoubleFirstClass;
     if (is985 !== undefined) where.is985 = is985;
     if (is211 !== undefined) where.is211 = is211;
@@ -96,9 +98,11 @@ export class UniversityService {
       },
     });
 
-    if (university) {
-      await this.redis.setCache(cacheKey, university, 3600);
+    if (!university) {
+      throw new NotFoundException('院校不存在');
     }
+
+    await this.redis.setCache(cacheKey, university, 3600);
 
     return university;
   }
@@ -132,7 +136,7 @@ export class UniversityService {
   }
 
   async getHotUniversities(limit = 10) {
-    const cacheKey = 'hot-universities';
+    const cacheKey = `hot-universities:${limit}`;
     const cached = await this.redis.getCache<any[]>(cacheKey);
     if (cached) return cached;
 
@@ -157,7 +161,7 @@ export class UniversityService {
     const cached = await this.redis.getCache(cacheKey);
     if (cached) return cached;
 
-    const [provinces, types, levels] = await Promise.all([
+    const [provinces, types, levels, cities, grades] = await Promise.all([
       this.prisma.university.groupBy({
         by: ['province'],
         _count: true,
@@ -173,12 +177,25 @@ export class UniversityService {
         _count: true,
         where: { level: { not: null } },
       }),
+      this.prisma.university.groupBy({
+        by: ['city'],
+        _count: true,
+        where: { city: { not: null } },
+        orderBy: { _count: { city: 'desc' } },
+      }),
+      this.prisma.university.groupBy({
+        by: ['grade'],
+        _count: true,
+        where: { grade: { not: null } },
+      }),
     ]);
 
     const filters = {
       provinces: provinces.map((p) => ({ value: p.province, count: p._count })),
       types: types.map((t) => ({ value: t.type, count: t._count })),
       levels: levels.map((l) => ({ value: l.level, count: l._count })),
+      cities: cities.map((c) => ({ value: c.city, count: c._count })),
+      grades: grades.map((g) => ({ value: g.grade, count: g._count })),
     };
 
     await this.redis.setCache(cacheKey, filters, 86400);

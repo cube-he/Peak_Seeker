@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, Form, Input, Button, message, Typography, Divider, Select } from 'antd';
+import { Card, Form, Input, Button, message, Divider, Select } from 'antd';
 import { UserOutlined, LockOutlined, PhoneOutlined } from '@ant-design/icons';
 import { useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -9,7 +9,6 @@ import { authService, RegisterParams } from '@/services/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { PROVINCES } from '@volunteer-helper/shared';
 
-const { Title, Text } = Typography;
 const { Option } = Select;
 
 export default function RegisterPage() {
@@ -37,86 +36,110 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-8">
-      <Card className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <Title level={2}>注册</Title>
-          <Text type="secondary">创建账号，开始智能填报</Text>
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-8"
+      style={{
+        background: 'linear-gradient(135deg, #EFF6FF 0%, #F8FAFC 50%, #F5F3FF 100%)',
+      }}
+    >
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-flex items-center gap-2 no-underline mb-6">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold"
+              style={{ background: 'linear-gradient(135deg, #2563EB, #3B82F6)' }}
+            >
+              志
+            </div>
+            <span className="text-xl font-semibold" style={{ color: '#0F172A' }}>
+              志愿填报助手
+            </span>
+          </Link>
         </div>
 
-        <Form layout="vertical" onFinish={handleRegister} size="large">
-          <Form.Item
-            name="username"
-            rules={[
-              { required: true, message: '请输入用户名' },
-              { min: 3, message: '用户名至少3个字符' },
-            ]}
-          >
-            <Input prefix={<UserOutlined />} placeholder="用户名" />
-          </Form.Item>
+        <Card styles={{ body: { padding: '36px 32px' } }}>
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-bold mb-1" style={{ color: '#0F172A' }}>
+              创建账号
+            </h2>
+            <p className="text-sm" style={{ color: '#64748B' }}>
+              注册后开始智能填报之旅
+            </p>
+          </div>
 
-          <Form.Item
-            name="password"
-            rules={[
-              { required: true, message: '请输入密码' },
-              { min: 6, message: '密码至少6个字符' },
-            ]}
-          >
-            <Input.Password prefix={<LockOutlined />} placeholder="密码" />
-          </Form.Item>
-
-          <Form.Item
-            name="confirmPassword"
-            dependencies={['password']}
-            rules={[
-              { required: true, message: '请确认密码' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (!value || getFieldValue('password') === value) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(new Error('两次密码不一致'));
-                },
-              }),
-            ]}
-          >
-            <Input.Password prefix={<LockOutlined />} placeholder="确认密码" />
-          </Form.Item>
-
-          <Form.Item name="phone">
-            <Input prefix={<PhoneOutlined />} placeholder="手机号（选填）" />
-          </Form.Item>
-
-          <Form.Item name="province">
-            <Select placeholder="所在省份（选填）">
-              {PROVINCES.map((p) => (
-                <Option key={p} value={p}>
-                  {p}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={registerMutation.isPending}
-              block
+          <Form layout="vertical" onFinish={handleRegister} size="large">
+            <Form.Item
+              name="username"
+              rules={[
+                { required: true, message: '请输入用户名' },
+                { min: 3, message: '用户名至少3个字符' },
+              ]}
             >
-              注册
-            </Button>
-          </Form.Item>
-        </Form>
+              <Input prefix={<UserOutlined style={{ color: '#94A3B8' }} />} placeholder="用户名" />
+            </Form.Item>
 
-        <Divider>
-          <Text type="secondary">已有账号？</Text>
-        </Divider>
+            <Form.Item
+              name="password"
+              rules={[
+                { required: true, message: '请输入密码' },
+                { min: 6, message: '密码至少6个字符' },
+              ]}
+            >
+              <Input.Password prefix={<LockOutlined style={{ color: '#94A3B8' }} />} placeholder="密码" />
+            </Form.Item>
 
-        <Link href="/login">
-          <Button block>立即登录</Button>
-        </Link>
-      </Card>
+            <Form.Item
+              name="confirmPassword"
+              dependencies={['password']}
+              rules={[
+                { required: true, message: '请确认密码' },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('password') === value) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error('两次密码不一致'));
+                  },
+                }),
+              ]}
+            >
+              <Input.Password prefix={<LockOutlined style={{ color: '#94A3B8' }} />} placeholder="确认密码" />
+            </Form.Item>
+
+            <Form.Item name="phone">
+              <Input prefix={<PhoneOutlined style={{ color: '#94A3B8' }} />} placeholder="手机号（选填）" />
+            </Form.Item>
+
+            <Form.Item name="province">
+              <Select placeholder="所在省份（选填）" allowClear>
+                {PROVINCES.map((p) => (
+                  <Option key={p.code} value={p.name}>
+                    {p.name}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item className="mb-4">
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={registerMutation.isPending}
+                block
+                style={{ height: 44, fontWeight: 600 }}
+              >
+                注册
+              </Button>
+            </Form.Item>
+          </Form>
+
+          <Divider style={{ color: '#94A3B8', fontSize: 13 }}>已有账号？</Divider>
+
+          <Link href="/login">
+            <Button block style={{ height: 40 }}>立即登录</Button>
+          </Link>
+        </Card>
+      </div>
     </div>
   );
 }
