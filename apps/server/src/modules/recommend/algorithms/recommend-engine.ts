@@ -1,6 +1,9 @@
+import { Injectable } from '@nestjs/common';
+
 /**
  * 推荐引擎 - 冲稳保策略计算
  */
+@Injectable()
 export class RecommendEngine {
   /**
    * 计算位次差
@@ -49,10 +52,12 @@ export class RecommendEngine {
         is985?: boolean;
         is211?: boolean;
         isDoubleFirstClass?: boolean;
-        province?: string;
+        province?: string | null;
+        [key: string]: any;
       };
       major: {
-        category?: string;
+        category?: string | null;
+        [key: string]: any;
       };
     },
     preferences?: {

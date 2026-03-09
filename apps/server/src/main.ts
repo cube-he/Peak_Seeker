@@ -1,9 +1,10 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
   // 全局前缀
@@ -21,10 +22,15 @@ async function bootstrap() {
     }),
   );
 
-  // CORS 配置
+  // CORS 配置 - 支持多个来源
+  const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim());
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: corsOrigins,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
   // Swagger 文档
@@ -39,10 +45,15 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document);
   }
 
+  // 优雅关闭
+  app.enableShutdownHooks();
+
   const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`Server is running on http://localhost:${port}`);
-  console.log(`API docs: http://localhost:${port}/api/docs`);
+  logger.log(`Server is running on http://localhost:${port}`);
+  if (process.env.NODE_ENV !== 'production') {
+    logger.log(`API docs: http://localhost:${port}/api/docs`);
+  }
 }
 
 bootstrap();

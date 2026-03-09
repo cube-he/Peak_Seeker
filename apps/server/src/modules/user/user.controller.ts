@@ -24,6 +24,7 @@ export class UserController {
   @ApiOperation({ summary: '获取当前用户信息' })
   async getMe(@Request() req: any) {
     const user = await this.userService.findById(req.user.id);
+    if (!user) return null;
     const { passwordHash, ...result } = user;
     return result;
   }

@@ -23,11 +23,11 @@ export interface RecommendPlanParams {
 }
 
 export const recommendService = {
-  generatePlan: (params: RecommendPlanParams) => api.post('/recommend/plan', params),
+  generatePlan: (params: RecommendPlanParams): Promise<any> => api.post('/recommend/plan', params) as any,
   recommendUniversities: (params: {
     score: number;
     rank: number;
     province: string;
     limit?: number;
-  }) => api.post('/recommend/universities', params),
+  }): Promise<any> => api.post('/recommend/universities', params) as any,
 };

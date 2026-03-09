@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -12,6 +13,7 @@ import { PlanModule } from './modules/plan/plan.module';
 import { RecommendModule } from './modules/recommend/recommend.module';
 import { FavoriteModule } from './modules/favorite/favorite.module';
 import { HistoryModule } from './modules/history/history.module';
+import { DataImportModule } from './modules/data-import/data-import.module';
 
 @Module({
   imports: [
@@ -43,6 +45,14 @@ import { HistoryModule } from './modules/history/history.module';
     RecommendModule,
     FavoriteModule,
     HistoryModule,
+    DataImportModule,
+  ],
+  providers: [
+    // 全局应用限流守卫
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

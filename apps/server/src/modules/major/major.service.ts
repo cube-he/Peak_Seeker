@@ -54,6 +54,16 @@ export class MajorService {
   async findById(id: number) {
     return this.prisma.major.findUnique({
       where: { id },
+      include: {
+        enrollmentPlans: {
+          include: { university: true },
+          orderBy: { year: 'desc' },
+        },
+        admissionRecords: {
+          include: { university: true },
+          orderBy: { year: 'desc' },
+        },
+      },
     });
   }
 

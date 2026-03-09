@@ -41,6 +41,11 @@ export class QueryUniversityDto {
   @IsString()
   level?: string;
 
+  @ApiPropertyOptional({ description: '城市档次' })
+  @IsOptional()
+  @IsString()
+  grade?: string;
+
   @ApiPropertyOptional({ description: '办学性质' })
   @IsOptional()
   @IsString()

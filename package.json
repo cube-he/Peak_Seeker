@@ -15,14 +15,28 @@
     "db:migrate": "pnpm --filter server prisma migrate dev",
     "db:generate": "pnpm --filter server prisma generate",
     "db:studio": "pnpm --filter server prisma studio",
-    "import:data": "pnpm --filter scripts import"
+    "import:data": "cd scripts/import-data && tsx index.ts",
+    "db:deploy": "pnpm --filter server prisma migrate deploy",
+    "db:push": "pnpm --filter server prisma db push"
   },
   "devDependencies": {
-    "typescript": "^5.3.3",
-    "@types/node": "^20.11.0"
+    "@types/node": "^20.11.0",
+    "prisma": "^7.4.0",
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=8.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.4.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "prisma",
+      "@prisma/client",
+      "@prisma/engines",
+      "bcrypt"
+    ]
   }
 }

@@ -1,0 +1,24 @@
+{
+  "description": "高分段补充数据（OCR 图片未覆盖的分数段）",
+  "note": "这些数据来自官网页面文字部分或手动核实，OCR 图片从 691 分开始",
+  "data": [
+    {"score": 709, "count": 1, "cumulativeCount": 1},
+    {"score": 708, "count": 1, "cumulativeCount": 2},
+    {"score": 707, "count": 0, "cumulativeCount": 2},
+    {"score": 706, "count": 1, "cumulativeCount": 3},
+    {"score": 705, "count": 1, "cumulativeCount": 4},
+    {"score": 704, "count": 2, "cumulativeCount": 6},
+    {"score": 703, "count": 0, "cumulativeCount": 6},
+    {"score": 702, "count": 2, "cumulativeCount": 8},
+    {"score": 701, "count": 2, "cumulativeCount": 10},
+    {"score": 700, "count": 1, "cumulativeCount": 11},
+    {"score": 699, "count": 3, "cumulativeCount": 14},
+    {"score": 698, "count": 2, "cumulativeCount": 16},
+    {"score": 697, "count": 3, "cumulativeCount": 19},
+    {"score": 696, "count": 3, "cumulativeCount": 22},
+    {"score": 695, "count": 3, "cumulativeCount": 25},
+    {"score": 694, "count": 5, "cumulativeCount": 30},
+    {"score": 693, "count": 6, "cumulativeCount": 36},
+    {"score": 692, "count": 24, "cumulativeCount": 60}
+  ]
+}

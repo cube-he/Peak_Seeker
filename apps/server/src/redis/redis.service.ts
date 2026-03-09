@@ -11,6 +11,14 @@ export class RedisService implements OnModuleDestroy {
       host: this.configService.get('REDIS_HOST', 'localhost'),
       port: this.configService.get('REDIS_PORT', 6379),
       password: this.configService.get('REDIS_PASSWORD') || undefined,
+      retryStrategy: (times) => {
+        if (times > 3) return null; // Stop retrying after 3 attempts
+        return Math.min(times * 200, 2000);
+      },
+    });
+
+    this.client.on('error', (err) => {
+      console.error('Redis connection error:', err.message);
     });
   }
 
@@ -55,7 +63,14 @@ export class RedisService implements OnModuleDestroy {
   // 缓存管理
   async getCache<T>(key: string): Promise<T | null> {
     const data = await this.get(`cache:${key}`);
-    return data ? JSON.parse(data) : null;
+    if (!data) return null;
+    try {
+      return JSON.parse(data) as T;
+    } catch {
+      // Corrupted cache data, delete it and return null
+      await this.del(`cache:${key}`);
+      return null;
+    }
   }
 
   async setCache<T>(key: string, value: T, ttl = 3600): Promise<void> {

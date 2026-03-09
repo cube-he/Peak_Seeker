@@ -9,6 +9,7 @@ export interface UniversityQueryParams {
   type?: string;
   level?: string;
   nature?: string;
+  grade?: string;
   isDoubleFirstClass?: boolean;
   is985?: boolean;
   is211?: boolean;
@@ -17,11 +18,11 @@ export interface UniversityQueryParams {
 }
 
 export const universityService = {
-  getList: (params: UniversityQueryParams) => api.get('/universities', { params }),
-  getById: (id: number) => api.get(`/universities/${id}`),
-  getMajors: (id: number, year?: number) =>
-    api.get(`/universities/${id}/majors`, { params: { year } }),
-  getAdmissions: (id: number) => api.get(`/universities/${id}/admissions`),
-  getHot: (limit?: number) => api.get('/universities/hot', { params: { limit } }),
-  getFilters: () => api.get('/universities/filters'),
+  getList: (params: UniversityQueryParams): Promise<any> => api.get('/universities', { params }) as any,
+  getById: (id: number): Promise<any> => api.get(`/universities/${id}`) as any,
+  getMajors: (id: number, year?: number): Promise<any> =>
+    api.get(`/universities/${id}/majors`, { params: { year } }) as any,
+  getAdmissions: (id: number): Promise<any> => api.get(`/universities/${id}/admissions`) as any,
+  getHot: (limit?: number): Promise<any> => api.get('/universities/hot', { params: { limit } }) as any,
+  getFilters: (): Promise<any> => api.get('/universities/filters') as any,
 };

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MinLength, MaxLength, Matches } from 'class-validator';
+import { IsString, IsOptional, MinLength, MaxLength, Matches, IsEmail } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -12,6 +12,7 @@ export class RegisterDto {
   @IsString()
   @MinLength(6)
   @MaxLength(50)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{6,}$/, { message: '密码必须包含大小写字母和数字' })
   password: string;
 
   @ApiPropertyOptional({ description: '手机号', example: '13800138000' })
@@ -22,7 +23,7 @@ export class RegisterDto {
 
   @ApiPropertyOptional({ description: '邮箱', example: 'zhangsan@example.com' })
   @IsOptional()
-  @IsString()
+  @IsEmail({}, { message: '邮箱格式不正确' })
   email?: string;
 
   @ApiPropertyOptional({ description: '真实姓名', example: '张三' })

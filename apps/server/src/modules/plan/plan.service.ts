@@ -47,16 +47,17 @@ export class PlanService {
   async update(id: number, userId: number, dto: UpdatePlanDto) {
     await this.findById(id, userId);
 
+    const data: Record<string, any> = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.items !== undefined) data.items = dto.items;
+    if (dto.strategy !== undefined) data.strategy = dto.strategy;
+    if (dto.notes !== undefined) data.notes = dto.notes;
+    if (dto.status !== undefined) data.status = dto.status;
+    if (dto.isFavorite !== undefined) data.isFavorite = dto.isFavorite;
+
     return this.prisma.volunteerPlan.update({
       where: { id },
-      data: {
-        name: dto.name,
-        items: dto.items,
-        strategy: dto.strategy,
-        notes: dto.notes,
-        status: dto.status,
-        isFavorite: dto.isFavorite,
-      },
+      data,
     });
   }
 

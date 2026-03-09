@@ -12,7 +12,6 @@ export class RecommendService {
 
   async generatePlan(dto: RecommendPlanDto) {
     const {
-      score,
       rank,
       province,
       preferences,
@@ -26,7 +25,10 @@ export class RecommendService {
     } = dto;
 
     // 获取候选院校专业
-    const candidates = await this.getCandidates(rank, province, strategy);
+    const candidates = await this.getCandidates(rank, province, {
+      rushRange: strategy.rushRange ?? 10000,
+      safeRange: strategy.safeRange ?? 5000,
+    });
 
     // 计算每个候选的录取概率和策略分类
     const items = candidates.map((c) => {
@@ -91,8 +93,10 @@ export class RecommendService {
       stableCount: stableItems.length,
       safeCount: safeItems.length,
       avgAcceptRate:
-        planItems.reduce((sum, i) => sum + i.prediction.acceptRate, 0) /
-        planItems.length,
+        planItems.length > 0
+          ? planItems.reduce((sum, i) => sum + i.prediction.acceptRate, 0) /
+            planItems.length
+          : 0,
     };
 
     return {
