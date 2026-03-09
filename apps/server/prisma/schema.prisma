@@ -472,3 +472,44 @@ model SystemConfig {
 
   @@map("system_configs")
 }
+
+// ==================== AI 配置 ====================
+
+model AiConfig {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 配置信息
+  name            String  @db.VarChar(100)
+  provider        String  @db.VarChar(50) // openai, deepseek, qwen, custom
+  apiKeyEncrypted String  @map("api_key_encrypted") @db.Text
+  apiBaseUrl      String? @map("api_base_url") @db.VarChar(500)
+  modelName       String? @map("model_name") @db.VarChar(100)
+
+  // 状态
+  isDefault Boolean @default(false) @map("is_default")
+  isActive  Boolean @default(true) @map("is_active")
+
+  // 子模型
+  models AiConfigModel[]
+
+  @@map("ai_configs")
+}
+
+model AiConfigModel {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 关联
+  configId String   @map("config_id") @db.VarChar(36)
+  config   AiConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  // 模型信息
+  modelName   String  @map("model_name") @db.VarChar(100)
+  displayName String? @map("display_name") @db.VarChar(100)
+  isDefault   Boolean @default(false) @map("is_default")
+
+  @@index([configId])
+  @@map("ai_config_models")
+}

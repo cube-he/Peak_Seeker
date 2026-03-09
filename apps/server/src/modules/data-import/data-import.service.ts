@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AiConfigService } from '../ai-config/ai-config.service';
 
 @Injectable()
 export class DataImportService {
@@ -10,6 +11,7 @@ export class DataImportService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private aiConfigService: AiConfigService,
   ) {
     this.ocrServiceUrl =
       this.config.get('OCR_SERVICE_URL') || 'http://127.0.0.1:8100';
@@ -76,11 +78,26 @@ export class DataImportService {
     province: string,
     examType: string,
     batch?: string,
-    aiApiKey?: string,
+    aiConfigId?: string,  // 本地 AI 配置 ID
+    aiApiKey?: string,    // 手动输入的 API Key
     aiBaseUrl?: string,
     aiModel?: string,
-    caConfigId?: string,
   ) {
+    let finalApiKey = aiApiKey || '';
+    let finalBaseUrl = aiBaseUrl || '';
+    let finalModel = aiModel || '';
+
+    // 如果提供了本地配置 ID，从本地获取配置
+    if (aiConfigId && !aiApiKey) {
+      const fullConfig = await this.aiConfigService.getFullConfig(aiConfigId);
+      if (fullConfig) {
+        finalApiKey = fullConfig.apiKey;
+        finalBaseUrl = fullConfig.baseUrl;
+        finalModel = fullConfig.model;
+        this.logger.log(`使用本地 AI 配置: ${fullConfig.name}`);
+      }
+    }
+
     const resp = await fetch(`${this.ocrServiceUrl}/ocr-with-ai`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -91,11 +108,10 @@ export class DataImportService {
         province,
         exam_type: examType,
         batch: batch || '本科一批',
-        enable_ai: !!(aiApiKey || caConfigId),
-        ai_api_key: aiApiKey || '',
-        ai_base_url: aiBaseUrl || '',
-        ai_model: aiModel || '',
-        ca_config_id: caConfigId || '',
+        enable_ai: !!finalApiKey,
+        ai_api_key: finalApiKey,
+        ai_base_url: finalBaseUrl,
+        ai_model: finalModel,
       }),
       signal: AbortSignal.timeout(10 * 60_000), // AI 校验需要更长时间
     });

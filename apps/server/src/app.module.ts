@@ -14,6 +14,7 @@ import { RecommendModule } from './modules/recommend/recommend.module';
 import { FavoriteModule } from './modules/favorite/favorite.module';
 import { HistoryModule } from './modules/history/history.module';
 import { DataImportModule } from './modules/data-import/data-import.module';
+import { AiConfigModule } from './modules/ai-config/ai-config.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { DataImportModule } from './modules/data-import/data-import.module';
     FavoriteModule,
     HistoryModule,
     DataImportModule,
+    AiConfigModule,
   ],
   providers: [
     // 全局应用限流守卫

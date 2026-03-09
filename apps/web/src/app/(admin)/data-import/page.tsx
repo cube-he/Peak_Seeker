@@ -52,6 +52,7 @@ import {
   saveImportData,
   saveSupplementaryData,
   getImportStats,
+  getAiConfigs,
   type FetchPageResult,
   type OcrResult,
   type SupplementaryOcrResult,
@@ -60,6 +61,7 @@ import {
   type SupplementaryRow,
   type ImportStats,
   type ConflictItem,
+  type AiConfig,
 } from '@/services/dataImport';
 
 const { Content } = Layout;
@@ -108,17 +110,17 @@ export default function DataImportPage() {
 
   // AI 配置
   const [enableAI, setEnableAI] = useState(false);
-  const [aiConfigMode, setAiConfigMode] = useState<'manual' | 'courseassistant'>('courseassistant');
+  const [aiConfigMode, setAiConfigMode] = useState<'manual' | 'saved'>('saved');
   const [aiApiKey, setAiApiKey] = useState('');
   const [aiBaseUrl, setAiBaseUrl] = useState('https://api.deepseek.com/v1');
   const [aiModel, setAiModel] = useState('deepseek-chat');
   const [aiResult, setAiResult] = useState<SupplementaryOcrWithAIResult | null>(null);
   const [showConflicts, setShowConflicts] = useState(false);
 
-  // CourseAssistant AI 配置
-  const [caConfigs, setCaConfigs] = useState<{ id: string; name: string; provider: string; isDefault: boolean }[]>([]);
-  const [selectedCaConfig, setSelectedCaConfig] = useState<string>('');
-  const [loadingCaConfigs, setLoadingCaConfigs] = useState(false);
+  // 本地 AI 配置
+  const [aiConfigs, setAiConfigs] = useState<AiConfig[]>([]);
+  const [selectedAiConfig, setSelectedAiConfig] = useState<string>('');
+  const [loadingAiConfigs, setLoadingAiConfigs] = useState(false);
 
   // 权限检查
   const isAdmin =
@@ -135,35 +137,29 @@ export default function DataImportPage() {
     }
   }, [isAdmin]);
 
-  // 加载 CourseAssistant AI 配置
-  const loadCaConfigs = async () => {
-    setLoadingCaConfigs(true);
+  // 加载本地 AI 配置
+  const loadAiConfigs = async () => {
+    setLoadingAiConfigs(true);
     try {
-      // CourseAssistant 后端运行在同一服务器的 3001 端口
-      const resp = await fetch('/api/ca-proxy/ai/configs', {
-        credentials: 'include',
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        setCaConfigs(data.configs || []);
-        // 自动选择默认配置
-        const defaultConfig = data.configs?.find((c: any) => c.isDefault);
-        if (defaultConfig) {
-          setSelectedCaConfig(defaultConfig.id);
-        } else if (data.configs?.length > 0) {
-          setSelectedCaConfig(data.configs[0].id);
-        }
+      const data = await getAiConfigs();
+      setAiConfigs(data.configs || []);
+      // 自动选择默认配置
+      const defaultConfig = data.configs?.find((c) => c.isDefault);
+      if (defaultConfig) {
+        setSelectedAiConfig(defaultConfig.id);
+      } else if (data.configs?.length > 0) {
+        setSelectedAiConfig(data.configs[0].id);
       }
     } catch (e) {
-      console.error('加载 CourseAssistant AI 配置失败:', e);
+      console.error('加载 AI 配置失败:', e);
     } finally {
-      setLoadingCaConfigs(false);
+      setLoadingAiConfigs(false);
     }
   };
 
   useEffect(() => {
-    if (enableAI && aiConfigMode === 'courseassistant' && caConfigs.length === 0) {
-      loadCaConfigs();
+    if (enableAI && aiConfigMode === 'saved' && aiConfigs.length === 0) {
+      loadAiConfigs();
     }
   }, [enableAI, aiConfigMode]);
 
@@ -304,12 +300,11 @@ export default function DataImportPage() {
           province,
           examType,
           batch,
-          aiApiKey: '',
         };
 
-        if (aiConfigMode === 'courseassistant' && selectedCaConfig) {
-          // 使用 CourseAssistant 配置
-          aiParams.caConfigId = selectedCaConfig;
+        if (aiConfigMode === 'saved' && selectedAiConfig) {
+          // 使用已保存的配置
+          aiParams.aiConfigId = selectedAiConfig;
         } else if (aiConfigMode === 'manual' && aiApiKey) {
           // 手动输入配置
           aiParams.aiApiKey = aiApiKey;
@@ -727,40 +722,44 @@ export default function DataImportPage() {
                                   onChange={(e) => setAiConfigMode(e.target.value)}
                                   style={{ marginBottom: 12 }}
                                 >
-                                  <Radio.Button value="courseassistant">使用 CourseAssistant 配置</Radio.Button>
+                                  <Radio.Button value="saved">使用已保存配置</Radio.Button>
                                   <Radio.Button value="manual">手动输入</Radio.Button>
                                 </Radio.Group>
 
-                                {aiConfigMode === 'courseassistant' ? (
+                                {aiConfigMode === 'saved' ? (
                                   <Row gutter={16}>
                                     <Col span={16}>
                                       <Text strong>选择 AI 配置</Text>
                                       <Select
-                                        value={selectedCaConfig}
-                                        onChange={setSelectedCaConfig}
-                                        loading={loadingCaConfigs}
+                                        value={selectedAiConfig}
+                                        onChange={setSelectedAiConfig}
+                                        loading={loadingAiConfigs}
                                         style={{ width: '100%', marginTop: 4 }}
                                         placeholder="选择已保存的 AI 配置"
-                                        options={caConfigs.map(c => ({
+                                        options={aiConfigs.map(c => ({
                                           value: c.id,
-                                          label: `${c.name || c.provider}${c.isDefault ? ' (默认)' : ''}`,
+                                          label: `${c.name}${c.isDefault ? ' (默认)' : ''}`,
                                         }))}
                                       />
                                     </Col>
                                     <Col span={8}>
                                       <Button
                                         style={{ marginTop: 24 }}
-                                        onClick={loadCaConfigs}
-                                        loading={loadingCaConfigs}
+                                        onClick={loadAiConfigs}
+                                        loading={loadingAiConfigs}
                                       >
                                         刷新配置
                                       </Button>
                                     </Col>
-                                    {caConfigs.length === 0 && !loadingCaConfigs && (
+                                    {aiConfigs.length === 0 && !loadingAiConfigs && (
                                       <Col span={24}>
                                         <Alert
                                           message="未找到 AI 配置"
-                                          description="请先在 CourseAssistant 中配置 AI，或切换到手动输入模式"
+                                          description={
+                                            <span>
+                                              请先在 <Link href="/admin/ai-config">AI 配置管理</Link> 中添加配置，或切换到手动输入模式
+                                            </span>
+                                          }
                                           type="warning"
                                           showIcon
                                           style={{ marginTop: 8 }}
@@ -850,7 +849,7 @@ export default function DataImportPage() {
                     icon={enableAI && dataType === 'supplementary' ? <RobotOutlined /> : <ScanOutlined />}
                     onClick={handleOcr}
                     disabled={enableAI && dataType === 'supplementary' && (
-                      aiConfigMode === 'manual' ? !aiApiKey : !selectedCaConfig
+                      aiConfigMode === 'manual' ? !aiApiKey : !selectedAiConfig
                     )}
                   >
                     {enableAI && dataType === 'supplementary' ? '开始 OCR + AI 识别' : '开始 OCR 识别'}
@@ -858,7 +857,7 @@ export default function DataImportPage() {
                   {enableAI && dataType === 'supplementary' && aiConfigMode === 'manual' && !aiApiKey && (
                     <Text type="warning">请先配置 AI API Key</Text>
                   )}
-                  {enableAI && dataType === 'supplementary' && aiConfigMode === 'courseassistant' && !selectedCaConfig && (
+                  {enableAI && dataType === 'supplementary' && aiConfigMode === 'saved' && !selectedAiConfig && (
                     <Text type="warning">请先选择 AI 配置</Text>
                   )}
                 </Space>
