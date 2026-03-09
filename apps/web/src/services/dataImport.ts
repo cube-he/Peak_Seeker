@@ -132,10 +132,10 @@ export async function runOcrWithAI(params: {
   province?: string;
   examType?: string;
   batch?: string;
+  aiConfigId?: string;  // 本地 AI 配置 ID
   aiApiKey?: string;
   aiBaseUrl?: string;
   aiModel?: string;
-  caConfigId?: string;  // CourseAssistant AI 配置 ID
 }): Promise<SupplementaryOcrWithAIResult> {
   return api.post('/data-import/ocr-with-ai', {
     ...params,
@@ -171,4 +171,66 @@ export async function saveSupplementaryData(params: {
 /** 获取导入统计 */
 export async function getImportStats(): Promise<ImportStats[]> {
   return api.get('/data-import/stats');
+}
+
+// ==================== AI 配置管理 ====================
+
+export interface AiConfig {
+  id: string;
+  name: string;
+  provider: string;
+  apiBaseUrl?: string;
+  modelName?: string;
+  isDefault: boolean;
+  isActive: boolean;
+  models: {
+    id: string;
+    modelName: string;
+    displayName?: string;
+    isDefault: boolean;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 获取所有 AI 配置 */
+export async function getAiConfigs(): Promise<{ configs: AiConfig[] }> {
+  return api.get('/ai-config');
+}
+
+/** 获取默认 AI 配置 */
+export async function getDefaultAiConfig(): Promise<AiConfig> {
+  return api.get('/ai-config/default');
+}
+
+/** 创建 AI 配置 */
+export async function createAiConfig(data: {
+  name: string;
+  provider: string;
+  apiKey: string;
+  apiBaseUrl?: string;
+  modelName?: string;
+  isDefault?: boolean;
+}): Promise<AiConfig> {
+  return api.post('/ai-config', data);
+}
+
+/** 更新 AI 配置 */
+export async function updateAiConfig(
+  id: string,
+  data: {
+    name?: string;
+    apiKey?: string;
+    apiBaseUrl?: string;
+    modelName?: string;
+    isDefault?: boolean;
+    isActive?: boolean;
+  },
+): Promise<AiConfig> {
+  return api.put(`/ai-config/${id}`, data);
+}
+
+/** 删除 AI 配置 */
+export async function deleteAiConfig(id: string): Promise<{ success: boolean }> {
+  return api.delete(`/ai-config/${id}`);
 }

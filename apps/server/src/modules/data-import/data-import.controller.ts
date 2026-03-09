@@ -64,10 +64,10 @@ export class DataImportController {
     @Body()
     dto: RunOcrDto & {
       enableAi?: boolean;
+      aiConfigId?: string;  // 本地 AI 配置 ID
       aiApiKey?: string;
       aiBaseUrl?: string;
       aiModel?: string;
-      caConfigId?: string;  // CourseAssistant AI 配置 ID
     },
   ) {
     try {
@@ -77,10 +77,10 @@ export class DataImportController {
         dto.province ?? '四川',
         dto.examType ?? '物理类',
         dto.batch,
+        dto.aiConfigId,
         dto.aiApiKey ?? '',
         dto.aiBaseUrl,
         dto.aiModel,
-        dto.caConfigId,
       );
     } catch (e: any) {
       throw new HttpException(

@@ -61,7 +61,6 @@ class OcrRequest(BaseModel):
     ai_api_key: str = Field("", description="AI API 密钥")
     ai_base_url: str = Field("", description="AI API 基础 URL")
     ai_model: str = Field("", description="AI 模型名称")
-    ca_config_id: str = Field("", description="CourseAssistant AI 配置 ID")
 
 class ScoreRow(BaseModel):
     score: int
@@ -157,34 +156,6 @@ class SaveResponse(BaseModel):
     success: bool
     affected_rows: int
     message: str
-
-
-# ==================== CourseAssistant AI Config ====================
-
-# CourseAssistant 后端地址
-CA_BACKEND_URL = os.environ.get("CA_BACKEND_URL", "http://127.0.0.1:3000")
-
-async def fetch_ca_ai_config(config_id: str) -> Optional[Dict]:
-    """从 CourseAssistant 获取 AI 配置（包含解密后的 API Key）"""
-    import httpx
-
-    try:
-        # 调用 CourseAssistant 内部 API 获取配置
-        # 注意：这需要 CourseAssistant 提供一个内部 API 来获取解密后的配置
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                f"{CA_BACKEND_URL}/api/internal/ai-config/{config_id}",
-                headers={"X-Internal-Key": os.environ.get("CA_INTERNAL_KEY", "")}
-            )
-
-            if response.status_code == 200:
-                return response.json()
-            else:
-                logger.warning(f"获取 CourseAssistant AI 配置失败: {response.status_code}")
-                return None
-    except Exception as e:
-        logger.error(f"获取 CourseAssistant AI 配置异常: {e}")
-        return None
 
 
 # ==================== OCR Engine ====================
@@ -1205,15 +1176,6 @@ async def run_supplementary_ocr_with_ai(req: OcrRequest) -> SupplementaryOcrWith
     ai_api_key = req.ai_api_key
     ai_base_url = req.ai_base_url
     ai_model = req.ai_model
-
-    # 如果提供了 CourseAssistant 配置 ID，从 CourseAssistant 获取配置
-    if req.ca_config_id and not ai_api_key:
-        ca_config = await fetch_ca_ai_config(req.ca_config_id)
-        if ca_config:
-            ai_api_key = ca_config.get("api_key", "")
-            ai_base_url = ca_config.get("base_url", "")
-            ai_model = ca_config.get("model", "")
-            logger.info(f"使用 CourseAssistant 配置: {ca_config.get('name', req.ca_config_id)}")
 
     # 第二步：AI 解析所有图片
     if req.enable_ai and ai_api_key:
