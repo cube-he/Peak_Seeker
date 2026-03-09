@@ -1,27 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 // CourseAssistant 后端地址
 const CA_BACKEND_URL = process.env.CA_BACKEND_URL || 'http://127.0.0.1:3000';
+const CA_INTERNAL_KEY = process.env.CA_INTERNAL_KEY || 'course-assistant-internal-key';
 
 /**
- * 代理请求到 CourseAssistant 后端获取 AI 配置列表
+ * 通过内部 API 获取 CourseAssistant AI 配置列表
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // 转发 cookie 以保持会话
-    const cookie = request.headers.get('cookie') || '';
-
-    const response = await fetch(`${CA_BACKEND_URL}/api/ai/configs`, {
+    const response = await fetch(`${CA_BACKEND_URL}/api/internal/ai-configs`, {
       headers: {
-        'Cookie': cookie,
+        'X-Internal-Key': CA_INTERNAL_KEY,
         'Content-Type': 'application/json',
       },
-      credentials: 'include',
     });
 
     if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
       return NextResponse.json(
-        { error: '获取 AI 配置失败', configs: [] },
+        { error: err.error || '获取 AI 配置失败', configs: [] },
         { status: response.status }
       );
     }
