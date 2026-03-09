@@ -366,78 +366,126 @@ export default function DataImportPage() {
     const allDiffs = new Map<string, { field: string; ocrValue: any; aiValue: any }[]>();
     setAiDiffs(allDiffs);
 
-    try {
-      // 逐张调用 AI 验证
-      for (let i = 0; i < imagesWithData.length; i++) {
-        const { url } = imagesWithData[i];
-        setAiVerifyProgress({ current: i + 1, total: imagesWithData.length });
+    let successCount = 0;
+    let failCount = 0;
 
-        // 调用单张图片的 AI 验证
-        const aiParams: Parameters<typeof runAiVerifySingle>[0] = {
-          imageUrl: url,
-          year,
-          province,
-          examType,
-          batch,
-        };
+    // 逐张调用 AI 验证
+    for (let i = 0; i < imagesWithData.length; i++) {
+      const { url } = imagesWithData[i];
+      setAiVerifyProgress({ current: i + 1, total: imagesWithData.length });
 
-        if (aiConfigMode === 'saved' && selectedAiConfig) {
-          aiParams.aiConfigId = selectedAiConfig;
-        } else {
-          aiParams.aiApiKey = aiApiKey;
-          aiParams.aiBaseUrl = aiBaseUrl;
-          aiParams.aiModel = aiModel;
-        }
+      // 调用单张图片的 AI 验证
+      const aiParams: Parameters<typeof runAiVerifySingle>[0] = {
+        imageUrl: url,
+        year,
+        province,
+        examType,
+        batch,
+      };
 
+      if (aiConfigMode === 'saved' && selectedAiConfig) {
+        aiParams.aiConfigId = selectedAiConfig;
+      } else {
+        aiParams.aiApiKey = aiApiKey;
+        aiParams.aiBaseUrl = aiBaseUrl;
+        aiParams.aiModel = aiModel;
+      }
+
+      try {
         const aiResult = await runAiVerifySingle(aiParams);
 
-        // 比对 AI 结果与 OCR 结果，标记差异
-        if (aiResult.data && aiResult.data.length > 0) {
-          for (const aiRow of aiResult.data) {
-            // 在 OCR 数据中查找匹配的行
-            const ocrRow = supplementaryData.find(
-              (r) =>
-                r.university_code === aiRow.university_code &&
-                r.major_group_code === aiRow.major_group_code &&
-                r.major_code === aiRow.major_code
+        // 检查 AI 是否返回了数据
+        if (!aiResult.data || aiResult.data.length === 0) {
+          failCount++;
+          // 第一张图片就失败，提示用户并询问是否继续
+          if (i === 0) {
+            message.error(`第 ${i + 1} 张图片 AI 识别返回空数据，可能是模型不支持图片识别或 API 配置有误`);
+            const shouldContinue = window.confirm(
+              'AI 校验第一张图片就失败了，可能是配置问题。\n\n' +
+              '常见原因：\n' +
+              '1. 模型不支持图片识别（如 qwen-turbo 不支持，需要用 qwen-vl-plus）\n' +
+              '2. API Key 无效或过期\n' +
+              '3. API 调用超时\n\n' +
+              '是否继续尝试其他图片？'
             );
+            if (!shouldContinue) {
+              setAiVerifying(false);
+              return;
+            }
+          } else {
+            message.warning(`第 ${i + 1} 张图片 AI 识别返回空数据`);
+          }
+          continue;
+        }
 
-            if (ocrRow) {
-              const rowKey = `${aiRow.university_code}_${aiRow.major_group_code}_${aiRow.major_code}`;
-              const diffs: { field: string; ocrValue: any; aiValue: any }[] = [];
+        successCount++;
 
-              // 比较关键字段
-              if (ocrRow.plan_count !== aiRow.plan_count) {
-                diffs.push({ field: 'plan_count', ocrValue: ocrRow.plan_count, aiValue: aiRow.plan_count });
-              }
-              if (ocrRow.tuition !== aiRow.tuition) {
-                diffs.push({ field: 'tuition', ocrValue: ocrRow.tuition, aiValue: aiRow.tuition });
-              }
-              if (ocrRow.major_name !== aiRow.major_name) {
-                diffs.push({ field: 'major_name', ocrValue: ocrRow.major_name, aiValue: aiRow.major_name });
-              }
+        // 比对 AI 结果与 OCR 结果，标记差异
+        for (const aiRow of aiResult.data) {
+          // 在 OCR 数据中查找匹配的行
+          const ocrRow = supplementaryData.find(
+            (r) =>
+              r.university_code === aiRow.university_code &&
+              r.major_group_code === aiRow.major_group_code &&
+              r.major_code === aiRow.major_code
+          );
 
-              if (diffs.length > 0) {
-                allDiffs.set(rowKey, diffs);
-              }
+          if (ocrRow) {
+            const rowKey = `${aiRow.university_code}_${aiRow.major_group_code}_${aiRow.major_code}`;
+            const diffs: { field: string; ocrValue: any; aiValue: any }[] = [];
+
+            // 比较关键字段
+            if (ocrRow.plan_count !== aiRow.plan_count) {
+              diffs.push({ field: 'plan_count', ocrValue: ocrRow.plan_count, aiValue: aiRow.plan_count });
+            }
+            if (ocrRow.tuition !== aiRow.tuition) {
+              diffs.push({ field: 'tuition', ocrValue: ocrRow.tuition, aiValue: aiRow.tuition });
+            }
+            if (ocrRow.major_name !== aiRow.major_name) {
+              diffs.push({ field: 'major_name', ocrValue: ocrRow.major_name, aiValue: aiRow.major_name });
+            }
+
+            if (diffs.length > 0) {
+              allDiffs.set(rowKey, diffs);
             }
           }
+        }
 
-          // 每处理完一张图片，更新 UI 显示差异
-          setAiDiffs(new Map(allDiffs));
+        // 每处理完一张图片，更新 UI 显示差异
+        setAiDiffs(new Map(allDiffs));
+
+        // 实时提示进度
+        if (allDiffs.size > 0) {
+          message.info(`第 ${i + 1} 张图片校验完成，当前发现 ${allDiffs.size} 处差异`);
+        }
+
+      } catch (e: any) {
+        failCount++;
+        const errMsg = e?.response?.data?.message || e?.message || '未知错误';
+        message.error(`第 ${i + 1} 张图片 AI 校验失败: ${errMsg}`);
+
+        // 第一张就失败，询问是否继续
+        if (i === 0) {
+          const shouldContinue = window.confirm(
+            `AI 校验第一张图片就出错了: ${errMsg}\n\n是否继续尝试其他图片？`
+          );
+          if (!shouldContinue) {
+            setAiVerifying(false);
+            return;
+          }
         }
       }
+    }
 
-      const diffCount = allDiffs.size;
-      if (diffCount > 0) {
-        message.warning(`AI 校验完成，发现 ${diffCount} 处差异，请人工复核`);
-      } else {
-        message.success('AI 校验完成，未发现差异');
-      }
-    } catch (e: any) {
-      message.error(e?.response?.data?.message || e?.message || 'AI 校验失败');
-    } finally {
-      setAiVerifying(false);
+    // 最终汇总
+    setAiVerifying(false);
+    const diffCount = allDiffs.size;
+    if (failCount === imagesWithData.length) {
+      message.error('所有图片 AI 校验都失败了，请检查 AI 配置');
+    } else if (diffCount > 0) {
+      message.warning(`AI 校验完成（成功 ${successCount}/${imagesWithData.length}），发现 ${diffCount} 处差异，请人工复核`);
+    } else if (successCount > 0) {
+      message.success(`AI 校验完成（成功 ${successCount}/${imagesWithData.length}），未发现差异`);
     }
   };
 
