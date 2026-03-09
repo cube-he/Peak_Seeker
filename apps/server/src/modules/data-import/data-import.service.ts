@@ -152,10 +152,11 @@ export class DataImportService {
       major_code: string;
       major_name: string;
       plan_count: number;
+      exam_type?: string;  // 每条数据可能有自己的考试类型
     }[],
     year: number,
     province: string,
-    examType: string,
+    examType: string,  // 默认考试类型（如果数据中没有指定）
     batch: string,
   ) {
     let newUniversities = 0;
@@ -163,6 +164,9 @@ export class DataImportService {
     let newPlans = 0;
 
     for (const row of data) {
+      // 使用数据中的考试类型，如果没有则使用默认值
+      const rowExamType = row.exam_type || examType;
+
       // 1. 查找或创建院校
       let university = await this.prisma.university.findFirst({
         where: { code: row.university_code },

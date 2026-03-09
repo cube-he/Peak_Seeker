@@ -222,7 +222,8 @@ def deduplicate_and_sort(rows: List[tuple]) -> List[tuple]:
 def extract_supplementary_rows(img_path: str) -> List[Dict]:
     """
     OCR 识别四川省考试院征集志愿格式
-    格式特点（每行一个信息，不是传统表格）：
+    格式特点（每行一���信息，不是传统表格）：
+    - 类型标记行: "一、历史类" 或 "二、物理类"
     - 院校行: "0048华中师范大学（湖北省武汉市）"
     - 专业组行: "专业组101（再选科目：不限）" + 右侧计划数
     - 专业行: "18特殊教育（国家公费师范生）" + 右侧计划数 + 收费
@@ -246,12 +247,13 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
     rows = []
     current_university_code = ""
     current_university_name = ""
+    current_exam_type = ""  # 当前考试类型：历史类/物理类
 
-    # 跳过的关键词
+    # 跳过的关键词（不包含历史类/物理类，因为需要识别它们）
     skip_keywords = [
-        "附件", "普通高校", "征集志愿", "请考生", "填报志愿", "相关内容",
-        "院校代号、名称", "计划收费", "特别提醒", "院校备注", "历史类",
-        "物理类", "地方优师", "定向医学", "再选科目",
+        "���件", "普通高校", "征集志愿", "请考生", "填报志愿", "相关内容",
+        "院校代号、名称", "计划收费", "特别提醒", "院校备注",
+        "地方优师", "定向医学", "再选科目",
         "专业组", "切忌盲目", "后果自负", "服务县", "招考机构",
         "教育部", "有关规", "通知如", "填报时间", "填报对象",
         "考试院", "录取照顾", "控制分数", "自由可投", "合格考生",
@@ -263,6 +265,16 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
 
         # 跳过纯数字（计划数）、"免费"、短文本
         if re.match(r'^[\d免费]+$', text) or len(text) < 4:
+            continue
+
+        # 检测考试类型标记: "一、历史类" 或 "二、物理类" 或单独的 "历史类"/"物理类"
+        if "历史类" in text and "物理类" not in text:
+            current_exam_type = "历史类"
+            logger.info(f"  切换到: 历史类")
+            continue
+        if "物理类" in text and "历史类" not in text:
+            current_exam_type = "物理类"
+            logger.info(f"  切换到: 物理类")
             continue
 
         # 先尝试匹配专业行（优先级最高）
@@ -277,12 +289,13 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
                     "university_name": current_university_name,
                     "major_code": major_code,
                     "major_name": major_name,
-                    "plan_count": 1
+                    "plan_count": 1,
+                    "exam_type": current_exam_type  # 添加考试类型
                 })
-                logger.info(f"    专业: {major_code} {major_name}")
+                logger.info(f"    专业: {major_code} {major_name} ({current_exam_type})")
             continue
 
-        # 跳过标题、说明等
+        # 跳过标���、说明等
         if any(kw in text for kw in skip_keywords):
             continue
 
