@@ -19,6 +19,7 @@ export interface SupplementaryRow {
   major_code: string;
   major_name: string;
   plan_count: number;
+  exam_type?: string;  // 考试类型：历史类/物理类
 }
 
 export interface OcrResult {

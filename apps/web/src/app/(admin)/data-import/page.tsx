@@ -74,7 +74,7 @@ export default function DataImportPage() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [province, setProvince] = useState('四川');
   const [examType, setExamType] = useState('物理类');
-  const [batch, setBatch] = useState('本科一批');
+  const [batch, setBatch] = useState('本科提前批B段');
   const [ocrResult, setOcrResult] = useState<OcrResult | SupplementaryOcrResult | null>(null);
 
   // Step 3: 保存结果
@@ -399,11 +399,12 @@ export default function DataImportPage() {
 
   // 征集志愿表格列
   const supplementaryColumns = [
-    { title: '院校代码', dataIndex: 'university_code', key: 'university_code', width: 100 },
-    { title: '院校名称', dataIndex: 'university_name', key: 'university_name', width: 200 },
-    { title: '专业代码', dataIndex: 'major_code', key: 'major_code', width: 100 },
-    { title: '专业名称', dataIndex: 'major_name', key: 'major_name', width: 200 },
-    { title: '计划数', dataIndex: 'plan_count', key: 'plan_count', width: 80 },
+    { title: '考试类型', dataIndex: 'exam_type', key: 'exam_type', width: 90 },
+    { title: '院校代码', dataIndex: 'university_code', key: 'university_code', width: 90 },
+    { title: '院校名称', dataIndex: 'university_name', key: 'university_name', width: 180 },
+    { title: '专业代码', dataIndex: 'major_code', key: 'major_code', width: 80 },
+    { title: '专业名称', dataIndex: 'major_name', key: 'major_name', width: 180 },
+    { title: '计划数', dataIndex: 'plan_count', key: 'plan_count', width: 70 },
   ];
 
   return (
@@ -555,10 +556,14 @@ export default function DataImportPage() {
                         onChange={setBatch}
                         style={{ width: '100%', marginTop: 4 }}
                         options={[
-                          { value: '本科一批', label: '本科一批' },
-                          { value: '本科二批', label: '本科二批' },
+                          { value: '本科提前批A段', label: '本科提前批A段' },
+                          { value: '本科提前批B段', label: '本科提前批B段' },
+                          { value: '本科批A段(国家专项)', label: '本科批A段(国家专项)' },
+                          { value: '本科批A段(地方专项)', label: '本科批A段(地方专项)' },
+                          { value: '本科批B段', label: '本科批B段' },
+                          { value: '本科批(高校专项)', label: '本科批(高校专项)' },
                           { value: '专科批', label: '专科批' },
-                          { value: '提前批', label: '提前批' },
+                          { value: '专科提前批', label: '专科提前批' },
                         ]}
                       />
                     </Col>
