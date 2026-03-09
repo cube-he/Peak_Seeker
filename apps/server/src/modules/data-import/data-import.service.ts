@@ -68,6 +68,47 @@ export class DataImportService {
   }
 
   /**
+   * 调用 OCR + AI 双重识别（仅支持征集志愿）
+   */
+  async runOcrWithAI(
+    imageUrls: string[],
+    year: number,
+    province: string,
+    examType: string,
+    batch?: string,
+    aiApiKey?: string,
+    aiBaseUrl?: string,
+    aiModel?: string,
+    caConfigId?: string,
+  ) {
+    const resp = await fetch(`${this.ocrServiceUrl}/ocr-with-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_urls: imageUrls,
+        data_type: 'supplementary',
+        year,
+        province,
+        exam_type: examType,
+        batch: batch || '本科一批',
+        enable_ai: !!(aiApiKey || caConfigId),
+        ai_api_key: aiApiKey || '',
+        ai_base_url: aiBaseUrl || '',
+        ai_model: aiModel || '',
+        ca_config_id: caConfigId || '',
+      }),
+      signal: AbortSignal.timeout(10 * 60_000), // AI 校验需要更长时间
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `OCR+AI 识别失败: ${resp.status}`);
+    }
+
+    return resp.json();
+  }
+
+  /**
    * 将一分一段表数据保存到数据库
    */
   async saveScoreSegments(
@@ -162,6 +203,8 @@ export class DataImportService {
     let newUniversities = 0;
     let newMajors = 0;
     let newPlans = 0;
+    const involvedUniversities = new Set<string>();
+    const involvedMajors = new Set<string>();
 
     for (const row of data) {
       // 使用数据中的考试类型，如果没有则使用默认值
@@ -182,6 +225,7 @@ export class DataImportService {
         });
         newUniversities++;
       }
+      involvedUniversities.add(row.university_code);
 
       // 2. 查找或创建专业
       let major = await this.prisma.major.findFirst({
@@ -200,6 +244,7 @@ export class DataImportService {
         });
         newMajors++;
       }
+      involvedMajors.add(`${row.major_code}_${row.major_name}`);
 
       // 3. 插入或更新招生计划
       await this.prisma.enrollmentPlan.upsert({
@@ -229,14 +274,17 @@ export class DataImportService {
       newPlans++;
     }
 
+    const totalUniversities = involvedUniversities.size;
+    const totalMajors = involvedMajors.size;
+
     this.logger.log(
-      `保存征集志愿: ${year} ${province} ${batch}, 院校 ${newUniversities}, 专业 ${newMajors}, 计划 ${newPlans}`,
+      `保存征集志愿: ${year} ${province} ${batch}, 涉及院校 ${totalUniversities} (新增 ${newUniversities}), 专业 ${totalMajors} (新增 ${newMajors}), 计划 ${newPlans}`,
     );
 
     return {
       success: true,
       affectedRows: newPlans,
-      message: `成功导入: ${newUniversities} 所院校, ${newMajors} 个专业, ${newPlans} 条招生计划`,
+      message: `成功导入: ${totalUniversities} 所院校, ${totalMajors} 个专业, ${newPlans} 条招生计划`,
     };
   }
 

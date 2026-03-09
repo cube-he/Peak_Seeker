@@ -59,6 +59,37 @@ export class DataImportController {
     }
   }
 
+  @Post('ocr-with-ai')
+  async runOcrWithAI(
+    @Body()
+    dto: RunOcrDto & {
+      enableAi?: boolean;
+      aiApiKey?: string;
+      aiBaseUrl?: string;
+      aiModel?: string;
+      caConfigId?: string;  // CourseAssistant AI 配置 ID
+    },
+  ) {
+    try {
+      return await this.dataImportService.runOcrWithAI(
+        dto.imageUrls,
+        dto.year,
+        dto.province ?? '四川',
+        dto.examType ?? '物理类',
+        dto.batch,
+        dto.aiApiKey ?? '',
+        dto.aiBaseUrl,
+        dto.aiModel,
+        dto.caConfigId,
+      );
+    } catch (e: any) {
+      throw new HttpException(
+        e?.message || 'OCR+AI 识别失败',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Post('save')
   async saveData(@Body() dto: SaveDataDto) {
     try {
@@ -94,11 +125,20 @@ export class DataImportController {
       examType?: string;
       batch?: string;
       data: {
+        exam_type: string;
+        enrollment_type: string;
         university_code: string;
         university_name: string;
+        university_location: string;
+        university_note: string;
+        major_group_code: string;
+        major_group_subject: string;
+        major_group_plan: number;
         major_code: string;
         major_name: string;
+        major_note: string;
         plan_count: number;
+        tuition: string;
       }[];
     },
   ) {
