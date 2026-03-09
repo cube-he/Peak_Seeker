@@ -22,6 +22,10 @@ import {
   Divider,
   Result,
   Radio,
+  Switch,
+  Collapse,
+  Tag,
+  Tooltip,
 } from 'antd';
 import {
   CloudDownloadOutlined,
@@ -34,6 +38,9 @@ import {
   ToolOutlined,
   EditOutlined,
   CheckCircleOutlined,
+  RobotOutlined,
+  ExclamationCircleOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
@@ -41,15 +48,18 @@ import {
   checkImportHealth,
   fetchPage,
   runOcr,
+  runOcrWithAI,
   saveImportData,
   saveSupplementaryData,
   getImportStats,
   type FetchPageResult,
   type OcrResult,
   type SupplementaryOcrResult,
+  type SupplementaryOcrWithAIResult,
   type ScoreRow,
   type SupplementaryRow,
   type ImportStats,
+  type ConflictItem,
 } from '@/services/dataImport';
 
 const { Content } = Layout;
@@ -96,6 +106,20 @@ export default function DataImportPage() {
   // 征集志愿数据
   const [supplementaryData, setSupplementaryData] = useState<SupplementaryRow[]>([]);
 
+  // AI 配置
+  const [enableAI, setEnableAI] = useState(false);
+  const [aiConfigMode, setAiConfigMode] = useState<'manual' | 'courseassistant'>('courseassistant');
+  const [aiApiKey, setAiApiKey] = useState('');
+  const [aiBaseUrl, setAiBaseUrl] = useState('https://api.deepseek.com/v1');
+  const [aiModel, setAiModel] = useState('deepseek-chat');
+  const [aiResult, setAiResult] = useState<SupplementaryOcrWithAIResult | null>(null);
+  const [showConflicts, setShowConflicts] = useState(false);
+
+  // CourseAssistant AI 配置
+  const [caConfigs, setCaConfigs] = useState<{ id: string; name: string; provider: string; isDefault: boolean }[]>([]);
+  const [selectedCaConfig, setSelectedCaConfig] = useState<string>('');
+  const [loadingCaConfigs, setLoadingCaConfigs] = useState(false);
+
   // 权限检查
   const isAdmin =
     user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
@@ -110,6 +134,38 @@ export default function DataImportPage() {
         .catch(() => {});
     }
   }, [isAdmin]);
+
+  // 加载 CourseAssistant AI 配置
+  const loadCaConfigs = async () => {
+    setLoadingCaConfigs(true);
+    try {
+      // CourseAssistant 后端运行在同一服务器的 3001 端口
+      const resp = await fetch('/api/ca-proxy/ai/configs', {
+        credentials: 'include',
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setCaConfigs(data.configs || []);
+        // 自动选择默认配置
+        const defaultConfig = data.configs?.find((c: any) => c.isDefault);
+        if (defaultConfig) {
+          setSelectedCaConfig(defaultConfig.id);
+        } else if (data.configs?.length > 0) {
+          setSelectedCaConfig(data.configs[0].id);
+        }
+      }
+    } catch (e) {
+      console.error('加载 CourseAssistant AI 配置失败:', e);
+    } finally {
+      setLoadingCaConfigs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (enableAI && aiConfigMode === 'courseassistant' && caConfigs.length === 0) {
+      loadCaConfigs();
+    }
+  }, [enableAI, aiConfigMode]);
 
   if (!isLoggedIn || !isAdmin) {
     return (
@@ -240,6 +296,49 @@ export default function DataImportPage() {
     if (!fetchResult) return;
     setLoading(true);
     try {
+      // 征集志愿 + 启用 AI 校验
+      if (dataType === 'supplementary' && enableAI) {
+        const aiParams: Parameters<typeof runOcrWithAI>[0] = {
+          imageUrls: fetchResult.image_urls,
+          year,
+          province,
+          examType,
+          batch,
+          aiApiKey: '',
+        };
+
+        if (aiConfigMode === 'courseassistant' && selectedCaConfig) {
+          // 使用 CourseAssistant 配置
+          aiParams.caConfigId = selectedCaConfig;
+        } else if (aiConfigMode === 'manual' && aiApiKey) {
+          // 手动输入配置
+          aiParams.aiApiKey = aiApiKey;
+          aiParams.aiBaseUrl = aiBaseUrl;
+          aiParams.aiModel = aiModel;
+        } else {
+          message.error('请配置 AI 参数');
+          setLoading(false);
+          return;
+        }
+
+        const result = await runOcrWithAI(aiParams);
+        setAiResult(result);
+        setOcrResult(result);
+        setSupplementaryData([...result.data]);
+        setCurrentStep(2);
+
+        if (result.needs_review) {
+          message.warning(`识别完成，有 ${result.conflicts_count} 条冲突需要人工审核`);
+          setShowConflicts(true);
+        } else if (result.is_valid) {
+          message.success(`OCR + AI 双重识别成功: ${result.total_rows} 条数据`);
+        } else {
+          message.warning(`识别完成，但有 ${result.errors.length} 个问题`);
+        }
+        return;
+      }
+
+      // 普通 OCR 识别
       const result = await runOcr({
         imageUrls: fetchResult.image_urls,
         dataType,
@@ -249,6 +348,7 @@ export default function DataImportPage() {
         batch,
       });
       setOcrResult(result);
+      setAiResult(null);
 
       if (dataType === 'score_segment') {
         const scoreResult = result as OcrResult;
@@ -326,6 +426,29 @@ export default function DataImportPage() {
     setDataErrors(new Set());
     setDataErrorMessages([]);
     setEditingKey(null);
+    setAiResult(null);
+    setShowConflicts(false);
+  };
+
+  // 处理冲突：选择 OCR 结果
+  const handleUseOcrResult = (_conflict: ConflictItem) => {
+    // 已经使用的是 OCR 结果，无需操作
+    message.info('已使用 OCR 结果');
+  };
+
+  // 处理冲突：选择 AI 结果
+  const handleUseAiResult = (conflict: ConflictItem) => {
+    const key = `${conflict.ocr.university_code}_${conflict.ocr.major_group_code}_${conflict.ocr.major_code}`;
+    setSupplementaryData(prev =>
+      prev.map(row => {
+        const rowKey = `${row.university_code}_${row.major_group_code}_${row.major_code}`;
+        if (rowKey === key) {
+          return { ...row, plan_count: conflict.ai.plan_count, tuition: conflict.ai.tuition };
+        }
+        return row;
+      })
+    );
+    message.success('已切换为 AI 结果');
   };
 
   // OCR 数据表格列（可编辑）
@@ -399,12 +522,17 @@ export default function DataImportPage() {
 
   // 征集志愿表格列
   const supplementaryColumns = [
-    { title: '考试类型', dataIndex: 'exam_type', key: 'exam_type', width: 90 },
-    { title: '院校代码', dataIndex: 'university_code', key: 'university_code', width: 90 },
-    { title: '院校名称', dataIndex: 'university_name', key: 'university_name', width: 180 },
-    { title: '专业代码', dataIndex: 'major_code', key: 'major_code', width: 80 },
-    { title: '专业名称', dataIndex: 'major_name', key: 'major_name', width: 180 },
-    { title: '计划数', dataIndex: 'plan_count', key: 'plan_count', width: 70 },
+    { title: '考试类型', dataIndex: 'exam_type', key: 'exam_type', width: 80, fixed: 'left' as const },
+    { title: '招生类型', dataIndex: 'enrollment_type', key: 'enrollment_type', width: 120 },
+    { title: '院校代码', dataIndex: 'university_code', key: 'university_code', width: 80 },
+    { title: '院校名称', dataIndex: 'university_name', key: 'university_name', width: 150 },
+    { title: '专业组', dataIndex: 'major_group_code', key: 'major_group_code', width: 70 },
+    { title: '组计划', dataIndex: 'major_group_plan', key: 'major_group_plan', width: 60 },
+    { title: '专业代码', dataIndex: 'major_code', key: 'major_code', width: 70 },
+    { title: '专业名称', dataIndex: 'major_name', key: 'major_name', width: 150 },
+    { title: '专业备注', dataIndex: 'major_note', key: 'major_note', width: 120 },
+    { title: '计划数', dataIndex: 'plan_count', key: 'plan_count', width: 60 },
+    { title: '收费', dataIndex: 'tuition', key: 'tuition', width: 60 },
   ];
 
   return (
@@ -570,6 +698,130 @@ export default function DataImportPage() {
                   )}
                 </Row>
 
+                {/* AI 配置（仅征集志愿） */}
+                {dataType === 'supplementary' && (
+                  <Collapse
+                    items={[
+                      {
+                        key: 'ai',
+                        label: (
+                          <Space>
+                            <RobotOutlined />
+                            <span>AI 校验配置</span>
+                            {enableAI && <Tag color="blue">已启用</Tag>}
+                          </Space>
+                        ),
+                        children: (
+                          <Space direction="vertical" style={{ width: '100%' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <Text strong>启用 AI 校验</Text>
+                              <Switch checked={enableAI} onChange={setEnableAI} />
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                OCR + AI 双重识别，自动比对结果，冲突处人工审核
+                              </Text>
+                            </div>
+                            {enableAI && (
+                              <>
+                                <Radio.Group
+                                  value={aiConfigMode}
+                                  onChange={(e) => setAiConfigMode(e.target.value)}
+                                  style={{ marginBottom: 12 }}
+                                >
+                                  <Radio.Button value="courseassistant">使用 CourseAssistant 配置</Radio.Button>
+                                  <Radio.Button value="manual">手动输入</Radio.Button>
+                                </Radio.Group>
+
+                                {aiConfigMode === 'courseassistant' ? (
+                                  <Row gutter={16}>
+                                    <Col span={16}>
+                                      <Text strong>选择 AI 配置</Text>
+                                      <Select
+                                        value={selectedCaConfig}
+                                        onChange={setSelectedCaConfig}
+                                        loading={loadingCaConfigs}
+                                        style={{ width: '100%', marginTop: 4 }}
+                                        placeholder="选择已保存的 AI 配置"
+                                        options={caConfigs.map(c => ({
+                                          value: c.id,
+                                          label: `${c.name || c.provider}${c.isDefault ? ' (默认)' : ''}`,
+                                        }))}
+                                      />
+                                    </Col>
+                                    <Col span={8}>
+                                      <Button
+                                        style={{ marginTop: 24 }}
+                                        onClick={loadCaConfigs}
+                                        loading={loadingCaConfigs}
+                                      >
+                                        刷新配置
+                                      </Button>
+                                    </Col>
+                                    {caConfigs.length === 0 && !loadingCaConfigs && (
+                                      <Col span={24}>
+                                        <Alert
+                                          message="未找到 AI 配置"
+                                          description="请先在 CourseAssistant 中配置 AI，或切换到手动输入模式"
+                                          type="warning"
+                                          showIcon
+                                          style={{ marginTop: 8 }}
+                                        />
+                                      </Col>
+                                    )}
+                                  </Row>
+                                ) : (
+                                  <>
+                                    <Row gutter={16}>
+                                      <Col span={12}>
+                                        <Text strong>API Key</Text>
+                                        <Input.Password
+                                          value={aiApiKey}
+                                          onChange={(e) => setAiApiKey(e.target.value)}
+                                          placeholder="sk-xxx..."
+                                          style={{ marginTop: 4 }}
+                                        />
+                                      </Col>
+                                      <Col span={12}>
+                                        <Text strong>API Base URL</Text>
+                                        <Select
+                                          value={aiBaseUrl}
+                                          onChange={setAiBaseUrl}
+                                          style={{ width: '100%', marginTop: 4 }}
+                                          options={[
+                                            { value: 'https://api.deepseek.com/v1', label: 'DeepSeek' },
+                                            { value: 'https://api.openai.com/v1', label: 'OpenAI' },
+                                            { value: 'https://api.moonshot.cn/v1', label: 'Moonshot (Kimi)' },
+                                            { value: 'https://dashscope.aliyuncs.com/compatible-mode/v1', label: '阿里云百炼' },
+                                          ]}
+                                        />
+                                      </Col>
+                                    </Row>
+                                    <Row gutter={16}>
+                                      <Col span={12}>
+                                        <Text strong>模型</Text>
+                                        <Input
+                                          value={aiModel}
+                                          onChange={(e) => setAiModel(e.target.value)}
+                                          placeholder="deepseek-chat"
+                                          style={{ marginTop: 4 }}
+                                        />
+                                      </Col>
+                                      <Col span={12}>
+                                        <Text type="secondary" style={{ display: 'block', marginTop: 24 }}>
+                                          推荐: DeepSeek (deepseek-chat) 或 GPT-4o-mini
+                                        </Text>
+                                      </Col>
+                                    </Row>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </Space>
+                        ),
+                      },
+                    ]}
+                  />
+                )}
+
                 <Divider>图片预览（前 6 张）</Divider>
                 <Image.PreviewGroup>
                   <Row gutter={[8, 8]}>
@@ -595,11 +847,20 @@ export default function DataImportPage() {
                   <Button onClick={() => setCurrentStep(0)}>上一步</Button>
                   <Button
                     type="primary"
-                    icon={<ScanOutlined />}
+                    icon={enableAI && dataType === 'supplementary' ? <RobotOutlined /> : <ScanOutlined />}
                     onClick={handleOcr}
+                    disabled={enableAI && dataType === 'supplementary' && (
+                      aiConfigMode === 'manual' ? !aiApiKey : !selectedCaConfig
+                    )}
                   >
-                    开始 OCR 识别
+                    {enableAI && dataType === 'supplementary' ? '开始 OCR + AI 识别' : '开始 OCR 识别'}
                   </Button>
+                  {enableAI && dataType === 'supplementary' && aiConfigMode === 'manual' && !aiApiKey && (
+                    <Text type="warning">请先配置 AI API Key</Text>
+                  )}
+                  {enableAI && dataType === 'supplementary' && aiConfigMode === 'courseassistant' && !selectedCaConfig && (
+                    <Text type="warning">请先选择 AI 配置</Text>
+                  )}
                 </Space>
               </Space>
             </Card>
@@ -687,13 +948,16 @@ export default function DataImportPage() {
                   <>
                     {/* 征集志愿预览 */}
                     <Row gutter={16}>
-                      <Col span={6}>
+                      <Col span={3}>
                         <Statistic title="识别行数" value={supplementaryData.length} />
                       </Col>
-                      <Col span={6}>
+                      <Col span={3}>
                         <Statistic title="院校数" value={(ocrResult as SupplementaryOcrResult).university_count} />
                       </Col>
-                      <Col span={6}>
+                      <Col span={3}>
+                        <Statistic title="专业组数" value={(ocrResult as SupplementaryOcrResult).major_group_count} />
+                      </Col>
+                      <Col span={3}>
                         <Statistic
                           title="数据状态"
                           value={ocrResult.is_valid ? '校验通过' : `${ocrResult.errors.length} 个问题`}
@@ -703,13 +967,135 @@ export default function DataImportPage() {
                           }}
                         />
                       </Col>
-                      <Col span={6}>
+                      {aiResult && (
+                        <>
+                          <Col span={3}>
+                            <Statistic
+                              title="AI 校验"
+                              value={aiResult.ai_enabled ? '已启用' : '未启用'}
+                              prefix={<RobotOutlined />}
+                              valueStyle={{ color: aiResult.ai_enabled ? '#1890ff' : '#999' }}
+                            />
+                          </Col>
+                          <Col span={3}>
+                            <Statistic
+                              title="冲突数"
+                              value={aiResult.conflicts_count}
+                              prefix={aiResult.conflicts_count > 0 ? <ExclamationCircleOutlined /> : <CheckCircleOutlined />}
+                              valueStyle={{ color: aiResult.conflicts_count > 0 ? '#ff4d4f' : '#52c41a' }}
+                            />
+                          </Col>
+                        </>
+                      )}
+                      <Col span={aiResult ? 6 : 12}>
                         <Statistic
                           title="目标"
                           value={`${year} ${province} ${batch}`}
                         />
                       </Col>
                     </Row>
+
+                    {/* AI 比对结果摘要 */}
+                    {aiResult?.comparison && (
+                      <Alert
+                        message="OCR + AI 双重识别结果"
+                        description={
+                          <Space direction="vertical" size="small">
+                            <div>
+                              <Tag color="green">一致: {aiResult.comparison.summary.matched_count}</Tag>
+                              <Tag color="red">冲突: {aiResult.comparison.summary.conflict_count}</Tag>
+                              <Tag color="orange">仅OCR: {aiResult.comparison.summary.ocr_only_count}</Tag>
+                              <Tag color="blue">仅AI: {aiResult.comparison.summary.ai_only_count}</Tag>
+                            </div>
+                            {aiResult.conflicts_count > 0 && (
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<SettingOutlined />}
+                                onClick={() => setShowConflicts(!showConflicts)}
+                              >
+                                {showConflicts ? '隐藏冲突详情' : '查看冲突详情'}
+                              </Button>
+                            )}
+                          </Space>
+                        }
+                        type={aiResult.conflicts_count > 0 ? 'warning' : 'success'}
+                        showIcon
+                        icon={<RobotOutlined />}
+                      />
+                    )}
+
+                    {/* 冲突详情 */}
+                    {showConflicts && aiResult?.comparison?.conflicts && aiResult.comparison.conflicts.length > 0 && (
+                      <Card title="冲突数据（需人工审核）" size="small" style={{ background: '#fffbe6' }}>
+                        <Table
+                          dataSource={aiResult.comparison.conflicts}
+                          rowKey={(r) => `${r.ocr.university_code}_${r.ocr.major_group_code}_${r.ocr.major_code}`}
+                          size="small"
+                          pagination={false}
+                          scroll={{ x: 900 }}
+                          columns={[
+                            { title: '院校', dataIndex: ['ocr', 'university_name'], width: 120 },
+                            { title: '专业组', dataIndex: ['ocr', 'major_group_code'], width: 60 },
+                            { title: '专业', dataIndex: ['ocr', 'major_name'], width: 150 },
+                            {
+                              title: 'OCR 计划数',
+                              dataIndex: ['ocr', 'plan_count'],
+                              width: 80,
+                              render: (v, r: ConflictItem) => (
+                                <span style={{ color: r.diff.plan_count ? '#ff4d4f' : undefined, fontWeight: r.diff.plan_count ? 'bold' : undefined }}>
+                                  {v}
+                                </span>
+                              ),
+                            },
+                            {
+                              title: 'AI 计划数',
+                              dataIndex: ['ai', 'plan_count'],
+                              width: 80,
+                              render: (v, r: ConflictItem) => (
+                                <span style={{ color: r.diff.plan_count ? '#52c41a' : undefined, fontWeight: r.diff.plan_count ? 'bold' : undefined }}>
+                                  {v}
+                                </span>
+                              ),
+                            },
+                            {
+                              title: 'OCR 学费',
+                              dataIndex: ['ocr', 'tuition'],
+                              width: 80,
+                              render: (v, r: ConflictItem) => (
+                                <span style={{ color: r.diff.tuition ? '#ff4d4f' : undefined, fontWeight: r.diff.tuition ? 'bold' : undefined }}>
+                                  {v}
+                                </span>
+                              ),
+                            },
+                            {
+                              title: 'AI 学费',
+                              dataIndex: ['ai', 'tuition'],
+                              width: 80,
+                              render: (v, r: ConflictItem) => (
+                                <span style={{ color: r.diff.tuition ? '#52c41a' : undefined, fontWeight: r.diff.tuition ? 'bold' : undefined }}>
+                                  {v}
+                                </span>
+                              ),
+                            },
+                            {
+                              title: '操作',
+                              width: 150,
+                              render: (_: any, r: ConflictItem) => (
+                                <Space size="small">
+                                  <Tooltip title="使用 OCR 结果">
+                                    <Button size="small" onClick={() => handleUseOcrResult(r)}>OCR</Button>
+                                  </Tooltip>
+                                  <Tooltip title="使用 AI 结果">
+                                    <Button size="small" type="primary" onClick={() => handleUseAiResult(r)}>AI</Button>
+                                  </Tooltip>
+                                </Space>
+                              ),
+                            },
+                          ]}
+                        />
+                      </Card>
+                    )}
 
                     {ocrResult.errors.length > 0 && (
                       <Alert
@@ -729,10 +1115,10 @@ export default function DataImportPage() {
                     <Table
                       dataSource={supplementaryData}
                       columns={supplementaryColumns}
-                      rowKey={(r) => `${r.university_code}_${r.major_code}_${r.major_name}`}
+                      rowKey={(r) => `${r.university_code}_${r.major_group_code}_${r.major_code}_${r.major_name}`}
                       size="small"
                       pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
-                      scroll={{ y: 400 }}
+                      scroll={{ x: 1100, y: 400 }}
                     />
                   </>
                 )}
