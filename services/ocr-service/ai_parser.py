@@ -170,6 +170,7 @@ async def parse_image_with_ai(
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
+            logger.info(f"调用 AI API: {base_url}/chat/completions, model={model}")
             response = await client.post(
                 f"{base_url}/chat/completions",
                 headers={
@@ -184,18 +185,20 @@ async def parse_image_with_ai(
                 }
             )
 
+            logger.info(f"AI API 响应状态: {response.status_code}")
             if response.status_code != 200:
-                logger.error(f"AI API 请求失败: {response.status_code} {response.text}")
+                logger.error(f"AI API 请求失败: {response.status_code} {response.text[:500]}")
                 return []
 
             result = response.json()
             content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            logger.info(f"AI 返回内容长度: {len(content)}, 前200字符: {content[:200]}")
 
             # 解析 JSON 输出
             return parse_ai_response(content)
 
     except Exception as e:
-        logger.error(f"AI 解析失败: {e}")
+        logger.error(f"AI 解析失败: {type(e).__name__}: {e}")
         return []
 
 
