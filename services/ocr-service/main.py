@@ -302,18 +302,312 @@ def deduplicate_and_sort(rows: List[tuple]) -> List[tuple]:
     return result
 
 
+# ==================== 四川省行政区划字典（用于地名校验）====================
+
+SICHUAN_DISTRICTS = {
+    # 成都市
+    "锦江区", "青羊区", "金牛区", "武侯区", "成华区", "龙泉驿区", "青白江区", "新都区",
+    "温江区", "双流区", "郫都区", "新津区", "简阳市", "都江堰市", "彭州市", "邛崃市",
+    "崇州市", "金堂县", "大邑县", "蒲江县",
+    # 自贡市
+    "自流井区", "贡井区", "大安区", "沿滩区", "荣县", "富顺县",
+    # 攀枝花市
+    "东区", "西区", "仁和区", "米易县", "盐边县",
+    # 泸州市
+    "江阳区", "纳溪区", "龙马潭区", "泸县", "合江县", "叙永县", "古蔺县",
+    # 德阳市
+    "旌阳区", "罗江区", "广汉市", "什邡市", "绵竹市", "中江县",
+    # 绵阳市
+    "涪城区", "游仙区", "安州区", "江油市", "三台县", "盐亭县", "梓潼县", "北川羌族自治县", "平武县",
+    # 广元市
+    "利州区", "昭化区", "朝天区", "旺苍县", "青川县", "剑阁县", "苍溪县",
+    # 遂宁市
+    "船山区", "安居区", "蓬溪县", "大英县", "射洪市",
+    # 内江市
+    "市中区", "东兴区", "威远县", "资中县", "隆昌市",
+    # 乐山市
+    "市中区", "沙湾区", "五通桥区", "金口河区", "峨眉山市", "犍为县", "井研县", "夹江县",
+    "沐川县", "峨边彝族自治县", "马边彝族自治县",
+    # 南充市
+    "顺庆区", "高坪区", "嘉陵区", "阆中市", "南部县", "营山县", "蓬安县", "仪陇县", "西充县",
+    # 眉山市
+    "东坡区", "彭山区", "仁寿县", "洪雅县", "丹棱县", "青神县",
+    # 宜宾市
+    "翠屏区", "南溪区", "叙州区", "江安县", "长宁县", "高县", "珙县", "筠连县", "兴文县", "屏山县",
+    # 广安市
+    "广安区", "前锋区", "华蓥市", "岳池县", "武胜县", "邻水县",
+    # 达州市
+    "通川区", "达川区", "万源市", "宣汉县", "开江县", "大竹县", "渠县",
+    # 雅安市
+    "雨城区", "名山区", "荥经县", "汉源县", "石棉县", "天全县", "芦山县", "宝兴县",
+    # 巴中市
+    "巴州区", "恩阳区", "通江县", "南江县", "平昌县",
+    # 资阳市
+    "雁江区", "安岳县", "乐至县",
+    # 阿坝藏族羌族自治州
+    "马尔康市", "汶川县", "理县", "茂县", "松潘县", "九寨沟县", "金川县", "小金县",
+    "黑水县", "壤塘县", "阿坝县", "若尔盖县", "红原县",
+    # 甘孜藏族自治州
+    "康定市", "泸定县", "丹巴县", "九龙县", "雅江县", "道孚县", "炉霍县", "甘孜县",
+    "新龙县", "德格县", "白玉县", "石渠县", "色达县", "理塘县", "巴塘县", "乡城县", "稻城县", "得荣县",
+    # 凉山彝族自治州
+    "西昌市", "木里藏族自治县", "盐源县", "德昌县", "会理市", "会东县", "宁南县", "普格县",
+    "布拖县", "金阳县", "昭觉县", "喜德县", "冕宁县", "越西县", "甘洛县", "美姑县", "雷波县",
+    # 市级
+    "成都市", "自贡市", "攀枝花市", "泸州市", "德阳市", "绵阳市", "广元市", "遂宁市",
+    "内江市", "乐山市", "南充市", "眉山市", "宜宾市", "广安市", "达州市", "雅安市",
+    "巴中市", "资阳市", "阿坝州", "甘孜州", "凉山州",
+}
+
+# 常见 OCR 形近字错误映射
+OCR_SIMILAR_CHAR_MAP = {
+    "闻": "阆",  # 阆中市
+    "朗": "阆",
+    "间": "阆",
+    "闵": "阆",
+    "闰": "阆",
+    "闸": "阆",
+    "闽": "阆",  # 闽(min) -> 阆(lang)
+    "阑": "阆",
+    "兰": "阆",  # 可能的简化字错误
+}
+
+
+def correct_district_name(text: str) -> str:
+    """校正地名中的 OCR 形近字错误"""
+    # 先尝试直接替换已知的错误字符
+    corrected = text
+    for wrong, right in OCR_SIMILAR_CHAR_MAP.items():
+        corrected = corrected.replace(wrong, right)
+
+    # 如果替换后的地名在字典中，返回校正后的结果
+    # 提取可能的地名部分（县/市/区）
+    for district in SICHUAN_DISTRICTS:
+        if district in corrected:
+            return corrected
+
+    # 如果没有匹配，返回原文本
+    return text
+
+
+def extract_plan_and_tuition(group: List[Dict], img_width: float) -> Tuple[int, str]:
+    """
+    从行数据中提取计划数和学费
+
+    改进版本：
+    1. 处理 "数字免费" 连写格式（如 "2免费"、"4免费"）
+    2. 处理计划数在专业名称之前出现的情况
+    3. 更智能地区分计划数和学费
+
+    Args:
+        group: 同一行的所有文本项
+        img_width: 图片宽度
+
+    Returns:
+        (plan_count, tuition)
+    """
+    plan_count = 0
+    tuition = ""
+
+    # 定义右侧区域阈值（图片宽度的 50%，放宽一点以捕获更多数据）
+    right_zone_threshold = img_width * 0.50
+
+    # 收集所有可能的计划数和学费数据
+    all_items = []
+
+    for item in group:
+        txt = item["text"].strip()
+        x = item["x_left"]
+
+        # 跳过左侧的专业名称区域（但不要太严格）
+        if x < right_zone_threshold:
+            # 检查是否是独立的数字或学费（可能是计划数在专业名称之前）
+            if not re.match(r'^[\d免费元]+$', txt):
+                continue
+
+        # "数字免费" 格式（如 "2免费"、"4免费"、"6免费"）
+        num_free_match = re.match(r'^(\d{1,2})(免费)$', txt)
+        if num_free_match:
+            plan_count = int(num_free_match.group(1))
+            tuition = "免费"
+            return plan_count, tuition
+
+        # "数字元" 格式（如 "6000元"）
+        num_yuan_match = re.match(r'^(\d+)(元)$', txt)
+        if num_yuan_match:
+            all_items.append((x, txt, int(num_yuan_match.group(1)), "tuition_with_yuan"))
+            continue
+
+        # 纯 "免费"
+        if txt == "免费":
+            all_items.append((x, txt, None, "tuition_free"))
+            continue
+
+        # 包含 "元" 的学费信息
+        if "元" in txt:
+            all_items.append((x, txt, None, "tuition"))
+            continue
+
+        # 纯数字
+        num_match = re.match(r'^(\d+)$', txt)
+        if num_match:
+            val = int(num_match.group(1))
+            all_items.append((x, txt, val, "number"))
+
+    # 按 X 坐标排序
+    all_items.sort(key=lambda item: item[0])
+
+    # 分类处理
+    numbers = [(x, val, txt) for x, txt, val, typ in all_items if typ == "number"]
+    tuition_free = [item for item in all_items if item[3] == "tuition_free"]
+    tuition_yuan = [item for item in all_items if item[3] in ("tuition", "tuition_with_yuan")]
+
+    # 确定学费
+    if tuition_free:
+        tuition = "免费"
+    elif tuition_yuan:
+        # 取最右边的学费信息
+        tuition_yuan.sort(key=lambda x: x[0], reverse=True)
+        txt = tuition_yuan[0][1]
+        if tuition_yuan[0][3] == "tuition_with_yuan":
+            tuition = f"{tuition_yuan[0][2]}元"
+        else:
+            tuition = txt
+
+    # 确定计划数
+    if numbers:
+        numbers.sort(key=lambda n: n[0])
+
+        if len(numbers) >= 2:
+            # 多个数字：左边是计划数，右边可能是学费
+            plan_count = numbers[0][1]
+            if not tuition and numbers[-1][1] > 100:
+                tuition = f"{numbers[-1][1]}元"
+        else:
+            # 单个数字
+            val = numbers[0][1]
+            txt = numbers[0][2]
+
+            # 检查是否是 OCR 把 "计划数+学费" 识别成了一个数字
+            if len(txt) == 5 and val >= 10000:
+                # 如 "16875" -> 计划数 1, 学费 6875
+                first_digit = int(txt[0])
+                last_four = int(txt[1:])
+                if 1 <= first_digit <= 9 and 3000 <= last_four <= 9999:
+                    plan_count = first_digit
+                    if not tuition:
+                        tuition = f"{last_four}元"
+                elif not tuition:
+                    tuition = f"{val}元"
+            elif len(txt) == 6 and val >= 100000:
+                # 如 "126875" -> 计划数 12, 学费 6875
+                first_two = int(txt[:2])
+                last_four = int(txt[2:])
+                if 1 <= first_two <= 99 and 3000 <= last_four <= 9999:
+                    plan_count = first_two
+                    if not tuition:
+                        tuition = f"{last_four}元"
+                elif not tuition:
+                    tuition = f"{val}元"
+            elif val > 1000:
+                # 大于 1000 的数字通常是学费
+                if not tuition:
+                    tuition = f"{val}元"
+            elif val <= 100:
+                # 小于等于 100 的数字通常是计划数
+                plan_count = val
+
+    return plan_count, tuition
+
+
+def extract_plan_and_tuition_from_row(row_items: List[Dict], img_width: float, major_x_right: float = 0) -> Tuple[int, str]:
+    """
+    从整行数据中提取计划数和学费（改进版）
+
+    专门处理计划数在专业名称之前出现的情况
+
+    Args:
+        row_items: 整行的所有文本项
+        img_width: 图片宽度
+        major_x_right: 专业名称的右边界 X 坐��
+
+    Returns:
+        (plan_count, tuition)
+    """
+    plan_count = 0
+    tuition = ""
+
+    # 收集专业名称右侧的所有数字和学费信息
+    right_items = []
+
+    for item in row_items:
+        txt = item["text"].strip()
+        x = item["x_left"]
+
+        # 只处理专业名称右侧的内容
+        if major_x_right > 0 and x < major_x_right - 20:
+            continue
+
+        # "数字免费" 格式
+        num_free_match = re.match(r'^(\d{1,2})(免费)$', txt)
+        if num_free_match:
+            return int(num_free_match.group(1)), "免费"
+
+        if txt == "免费":
+            tuition = "免费"
+            continue
+
+        if "元" in txt:
+            match = re.search(r'(\d+)', txt)
+            if match:
+                tuition = f"{match.group(1)}元"
+            else:
+                tuition = txt
+            continue
+
+        # 纯数字
+        num_match = re.match(r'^(\d+)$', txt)
+        if num_match:
+            val = int(num_match.group(1))
+            right_items.append((x, val, txt))
+
+    # 处理数字
+    if right_items:
+        right_items.sort(key=lambda x: x[0])
+
+        if len(right_items) >= 2:
+            plan_count = right_items[0][1]
+            if not tuition and right_items[-1][1] > 100:
+                tuition = f"{right_items[-1][1]}元"
+        else:
+            val = right_items[0][1]
+            if val <= 100:
+                plan_count = val
+            elif not tuition:
+                tuition = f"{val}元"
+
+    return plan_count, tuition
+
+
 # ==================== 征集志愿 OCR ====================
 
-def extract_supplementary_rows(img_path: str) -> List[Dict]:
+def extract_supplementary_rows(img_path: str, context: Dict = None) -> List[Dict]:
     """
-    OCR 识别四川省考试院征集志愿格式
+    OCR 识别四川省考试院征集志愿格式 - 重构版本
 
-    数据层级结构：
-    1. 考试类型: "一、历史类" / "二、物理类"
-    2. 招生类型: "(1)国家公费师范生" / "(2)地方优师专项"
-    3. 院校: "0048华中师范大学（湖北省武汉市）" + 院校备注
-    4. 专业组: "专业组101（再选科目：不限）" + 专业组计划数
-    5. 专业: "18特殊教育（国家公费师范生）" + 计划数 + 收费
+    采用"状态机 + 块累加"机制，解决以下问题：
+    1. 括号解析逻辑崩塌 - 专门定位 (专业备注: 进行靶向切割
+    2. 折行与跨页数据丢失 - 块累加器机制
+    3. 数字错位 - 组计划数校验
+    4. 全局状态跨页串台 - 实时更新全局 Context
+    5. 形近字错误 - 地名字典校验
+
+    Args:
+        img_path: 图片路径
+        context: 上一张图片的上下文状态（用于跨页延续）
+
+    Returns:
+        解析出的专业数据列表
     """
     ocr = get_ocr()
     result, _ = ocr(img_path)
@@ -324,12 +618,11 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
         return []
 
     # 获取图片宽度，用于计算 X 坐标的相对位置
-    # 通过所有文本框的最大 x_right 来估算图片宽度
     max_x_right = max(box[2][0] for box, _, _ in result)
-    img_width = max_x_right * 1.05  # 留一点边距
+    img_width = max_x_right * 1.05
     logger.info(f"估算图片宽度: {img_width:.0f}px")
 
-    # 收集识别结果，按 y 坐标分组为行
+    # 收集识别结果
     items = []
     for box, text, confidence in result:
         y_center = (box[0][1] + box[2][1]) / 2
@@ -339,21 +632,66 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
             "y": y_center,
             "x_left": x_left,
             "x_right": x_right,
-            "text": text.strip()
+            "text": text.strip(),
+            "confidence": confidence
         })
 
-    # 按 y 坐标分组为行（同行 y 差 < 12px，更精确的阈值）
+    # 按 y 坐标分组为行
+    # 改进：使用更小的阈值 (10px) 来避免将不同行合并
+    # 同时考虑文本内容：如果是院校行或专业组行，应该单独成行
     items.sort(key=lambda x: x["y"])
     row_groups = []
     current_group = [items[0]]
 
+    ROW_Y_THRESHOLD = 10  # 减小阈值，避免将不同行合并
+
     for item in items[1:]:
-        if abs(item["y"] - current_group[-1]["y"]) < 12:
+        y_diff = abs(item["y"] - current_group[-1]["y"])
+
+        # 如果 y 差距小于阈值，可能是同一行
+        if y_diff < ROW_Y_THRESHOLD:
             current_group.append(item)
         else:
             row_groups.append(current_group)
             current_group = [item]
     row_groups.append(current_group)
+
+    # 后处理：检查是否有行被错误合并
+    # 如果一行中同时包含院校信息和专业组信息，需要拆分
+    final_row_groups = []
+    for group in row_groups:
+        group.sort(key=lambda x: x["x_left"])
+        texts = [item["text"] for item in group]
+        all_text = " ".join(texts)
+
+        # 检查是否需要拆分
+        has_university = any(re.match(r'^\d{4}[一-鿿]+', t) for t in texts)
+        has_major_group = any("专业组" in t for t in texts)
+
+        if has_university and has_major_group:
+            # 需要拆分：院校行和专业组行
+            uni_items = []
+            group_items = []
+            for item in group:
+                if re.match(r'^\d{4}[一-鿿]+', item["text"]):
+                    uni_items.append(item)
+                elif "专业组" in item["text"] or re.match(r'^\d{1,3}$', item["text"]):
+                    group_items.append(item)
+                else:
+                    # 根据 y 坐标决定归属
+                    if uni_items and abs(item["y"] - uni_items[0]["y"]) < 5:
+                        uni_items.append(item)
+                    else:
+                        group_items.append(item)
+
+            if uni_items:
+                final_row_groups.append(uni_items)
+            if group_items:
+                final_row_groups.append(group_items)
+        else:
+            final_row_groups.append(group)
+
+    row_groups = final_row_groups
 
     # 调试：打印分组结果
     for i, group in enumerate(row_groups):
@@ -362,51 +700,122 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
         logger.info(f"[{i:2d}] {texts}")
 
     rows = []
-    # 当前上下文
-    current_exam_type = ""        # 历史类/物理类
-    current_enrollment_type = ""  # 国家公费师范生/地方优师专项
-    current_university = {}       # 院校信息
-    current_major_group = {}      # 专业组信息
 
+    # ========== 状态机：从上下文恢复或初始化 ==========
+    current_exam_type = context.get("exam_type", "") if context else ""
+    current_enrollment_type = context.get("enrollment_type", "") if context else ""
+    current_university = context.get("university", {}) if context else {}
+    current_major_group = context.get("major_group", {}) if context else {}
+
+    # 核心：专业区块累加器（用于处理跨行专业）
+    current_major_block = None
+
+    def save_major_block():
+        """保存当前累加的专业区块"""
+        nonlocal current_major_block
+        if not current_major_block:
+            return
+
+        block = current_major_block
+        current_major_block = None
+
+        # 解析专业名称和备注
+        full_text = block["text"]
+
+        # 校正地名中的 OCR 形近字错误
+        full_text = correct_district_name(full_text)
+
+        # 策略：定位 (专业备注: 或 (包含专业: 进行靶向切割
+        major_name = ""
+        major_note = ""
+
+        # 查找专业备注的位置
+        note_patterns = [
+            r'[（(]专业备注[：:]\s*([^）)]+)[）)]?',
+            r'[（(]包含专业[：:]\s*([^）)]+)[）)]?',
+        ]
+
+        note_match = None
+        for pattern in note_patterns:
+            note_match = re.search(pattern, full_text)
+            if note_match:
+                major_note = note_match.group(1).strip()
+                # 专业名称是备注之前的部分
+                major_name = full_text[:note_match.start()].strip()
+                break
+
+        if not note_match:
+            # 没有找到专业备注，尝试提取第一个括号内的内容作为备注
+            paren_match = re.match(r'^([^（(]+)[（(]([^）)]+)[）)]', full_text)
+            if paren_match:
+                major_name = paren_match.group(1).strip()
+                major_note = paren_match.group(2).strip()
+            else:
+                # 没有括号，整个文本作为专业名称
+                major_name = re.split(r'[（(]', full_text)[0].strip()
+
+        # 跳过无效专业名
+        if len(major_name) < 2:
+            logger.warning(f"    跳过无效专业: {full_text[:50]}")
+            return
+
+        row = {
+            "exam_type": current_exam_type,
+            "enrollment_type": current_enrollment_type,
+            "university_code": current_university.get("code", ""),
+            "university_name": current_university.get("name", ""),
+            "university_location": current_university.get("location", ""),
+            "university_note": current_university.get("note", ""),
+            "major_group_code": current_major_group.get("code", ""),
+            "major_group_subject": current_major_group.get("subject", ""),
+            "major_group_plan": current_major_group.get("plan", 0),
+            "major_code": block["code"],
+            "major_name": major_name,
+            "major_note": major_note,
+            "plan_count": block.get("plan", 1),
+            "tuition": block.get("tuition", ""),
+        }
+
+        rows.append(row)
+        logger.info(f"    专业: {block['code']} {major_name} 计划:{block.get('plan', 1)} {block.get('tuition', '')}")
+
+    # ========== 主循环：逐行处理 ==========
     for group in row_groups:
         group.sort(key=lambda x: x["x_left"])
         first_text = group[0]["text"] if group else ""
         all_text = " ".join([item["text"] for item in group])
 
         # 1. 检测考试类型: "一、历史类" 或 "二、物理类"
+        # 优先级最高，必须在处理任何其他内容之前检测
         if re.search(r'[一二三]、\s*历史类', all_text) or (
-            "历史类" in all_text and "物理类" not in all_text and len(all_text) < 20
+            "历史类" in all_text and "物理类" not in all_text and len(all_text) < 25
         ):
+            save_major_block()  # 保存之前的专业
             current_exam_type = "历史类"
-            logger.info(f">>> 考试类型: 历史类")
+            logger.info(f">>> 考试类型切换: 历史类")
             continue
         if re.search(r'[一二三]、\s*物理类', all_text) or (
-            "物理类" in all_text and "历史类" not in all_text and len(all_text) < 20
+            "物理类" in all_text and "历史类" not in all_text and len(all_text) < 25
         ):
+            save_major_block()  # 保存之前的专业
             current_exam_type = "物理类"
-            logger.info(f">>> 考试类型: 物理类")
+            logger.info(f">>> 考试类型切换: 物理类")
             continue
 
         # 2. 检测招生类型: "(1)国家公费师范生" 或 "(5)其他"
-        # 注意：只匹配独立的招生类型行，格式必须是 (数字) 开头
-        # 不能匹配专业行如 "19德语"
-        # 支持中文括号（）和英文括号()
-        # 支持 1-2 位数字序号，如 (1)、(10)
         enroll_match = re.match(r'^[（(](\d{1,2})[）)]\s*(.*)$', first_text.strip())
-        if enroll_match and len(first_text) < 20:
+        if enroll_match and len(first_text) < 25:
             enrollment_name = enroll_match.group(2).strip()
-            # 如果括号后没有文字，尝试从同行其他文本获取
             if not enrollment_name and len(group) > 1:
                 for item in group[1:]:
                     txt = item["text"].strip()
                     if txt and not re.match(r'^\d+$', txt):
                         enrollment_name = txt
                         break
-            # 如果还是空，用序号作为标识
             if not enrollment_name:
                 enrollment_name = f"类型{enroll_match.group(1)}"
-            # 跳过不是招生类型的行
             if enrollment_name and not any(kw in enrollment_name for kw in ["院校", "专业", "计划收费"]):
+                save_major_block()  # 保存之前的专业
                 current_enrollment_type = enrollment_name
                 logger.info(f">>> 招生类型: {current_enrollment_type}")
                 continue
@@ -428,6 +837,7 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
         # 4. 检测院校行: "0048华中师范大学（湖北省武汉市）"
         uni_match = re.match(r'^(\d{4})([一-鿿]+(?:大学|学院|学校)[一-鿿]*)[（(]([^）)]+)[）)]', first_text)
         if uni_match:
+            save_major_block()  # 保存之前的专业
             current_university = {
                 "code": uni_match.group(1),
                 "name": uni_match.group(2),
@@ -441,289 +851,171 @@ def extract_supplementary_rows(img_path: str) -> List[Dict]:
         # 5. 检测专业组行: "专业组101（再选科目：不限）" + 右侧计划数
         group_match = re.search(r'专业组\s*(\d{3})[（(]再选科目[：:]\s*([^）)]+)[）)]', all_text)
         if group_match:
+            save_major_block()  # 保存之前的���业
             group_plan = 0
             # 提取专业组计划数（通常在行末尾的数字）
             for item in reversed(group):
                 num_match = re.match(r'^(\d+)$', item["text"])
                 if num_match:
                     val = int(num_match.group(1))
-                    if 1 <= val <= 100:  # 合理的计划数范围
+                    if 1 <= val <= 200:  # 合理的计划数范围
                         group_plan = val
                         break
 
             current_major_group = {
                 "code": group_match.group(1),
                 "subject": group_match.group(2),
-                "plan": group_plan
+                "plan": group_plan,
+                "majors_plan_sum": 0  # 用于校验
             }
-            logger.info(f"  >> 专业组: {current_major_group['code']} 计划:{current_major_group['plan']}")
+            logger.info(f"  >> 专业组: {current_major_group['code']} 计划:{group_plan}")
             continue
 
-        # 6. 检测专业行: "18特殊教育（国家公费师范生）" + 计划数 + 收费
-        # 专业代码格式多样：
-        # - 纯数字: 18, 72
-        # - 数字+字母: 7S, 4E
-        # - 字母+字母: BL, BG (省级公费师范生常见)
-        # - 字母+数字: K1, J4
-        # - 带[V]标记: G7[V], H3[V] (农村订单定向医学生)
+        # 6. 检测新专业行
+        # 专业代码格式：纯数字(18)、数字+字母(7S)、字母+字母(BL)、字母+数字(K1)、带[V]标记(G7[V])
+        #
+        # 改进：不仅检查 first_text，还要检查整行是否包含专业代码
+        # 因为有时计划数和学费会出现在专业名称之前（OCR 识别顺序问题）
 
-        # 先排除续行数据格式：数字+收费信息（如 "2免费"、"1 6000"）
-        # 这些是上一行专业的计划数和学费，不是新专业
-        is_continuation_line = re.match(r'^\d{1,2}(免费|元|\d{4,})?\s*$', first_text.strip())
+        is_new_major = False
+        major_code = ""
+        major_text = ""
+        major_item = None  # 记录专业名称所在的 item
 
-        major_match = None
-        if not is_continuation_line:
-            major_match = re.match(r'^([A-Z0-9]{1,2}[A-Z0-9]?)(\[V\])?([一-鿿]{2,}[一-鿿\w（()）)、]*)', first_text)
+        # 首先尝试从 first_text 检测
+        if not re.match(r'^\d{1,2}(免费|元|\d{4,})?\s*$', first_text.strip()):
+            major_match = re.match(r'^([A-Z0-9]{1,2}[A-Z0-9]?)(\[V\])?([一-鿿]{2,}.*)', first_text)
+            if major_match and current_university.get("code"):
+                is_new_major = True
+                major_code = major_match.group(1)
+                if major_match.group(2):
+                    major_code += major_match.group(2)
+                major_text = major_match.group(3)
+                major_item = group[0]
 
-        if major_match and current_university.get("code"):
-            major_code = major_match.group(1)
-            if major_match.group(2):  # 有[V]标记
-                major_code += major_match.group(2)
-            major_full = major_match.group(3)
-
-            # 检查是否有未闭合的括号（跨行情况）
-            # 如果专业名称以未闭合的括号结尾，需要从下一行获取计划数
-            open_parens = major_full.count('（') + major_full.count('(')
-            close_parens = major_full.count('）') + major_full.count(')')
-            is_incomplete = open_parens > close_parens
-
-            # 分离专业名称和备注
-            # 匹配第一个完整的括号对作为备注
-            name_note_match = re.match(r'^([^（(]+)[（(]([^）)]+)[）)]', major_full)
-            if name_note_match:
-                major_name = name_note_match.group(1).strip()
-                major_note = name_note_match.group(2).strip()
-            else:
-                # 如果没有完整括号，取括号前的部分作为名称
-                major_name = re.split(r'[（(]', major_full)[0].strip()
-                major_note = ""
-
-            # 跳过无效专业名
-            if len(major_name) < 2:
-                continue
-
-            # 提取计划数和收费
-            # 策略：使用 X 坐标的相对位置来定位右侧区域的数据
-            # - 右侧 30% 区域（x > 70% 图片宽度）通常是计划数和收费
-            # - 计划数在左，收费在右
-            plan_count = 1  # 默认计划数为1
-            tuition = ""
-
-            # 定义右侧区域阈值（图片宽度的 60%）
-            right_zone_threshold = img_width * 0.60
-
-            # 收集右侧区域的数据
-            right_zone_items = []  # (x, text, value_or_none)
-            for item in group[1:]:  # 跳过第一个（专业名称）
-                txt = item["text"]
-                x = item["x_left"]
-
-                # 只处理右侧区域的数据
-                if x < right_zone_threshold:
-                    continue
-
-                # "数字免费" 格式（如 "2免费"）
-                num_free_match = re.match(r'^(\d+)(免费)$', txt)
-                if num_free_match:
-                    plan_count = int(num_free_match.group(1))
-                    tuition = "免费"
-                    continue
-
-                # 纯收费信息
-                if txt == "免费":
-                    right_zone_items.append((x, txt, None))
-                    continue
-                if "元" in txt:
-                    right_zone_items.append((x, txt, None))
-                    continue
-
-                # 纯数字
-                num_match = re.match(r'^(\d+)$', txt)
-                if num_match:
-                    val = int(num_match.group(1))
-                    right_zone_items.append((x, txt, val))
-
-            # 按 X 坐标排序右侧区域的数据
-            right_zone_items.sort(key=lambda item: item[0])
-
-            # 解析右侧区域数据
-            numbers = [(x, val, txt) for x, txt, val in right_zone_items if val is not None]
-            tuition_items = [(x, txt) for x, txt, val in right_zone_items if val is None]
-
-            # 处理收费信息
-            for _, txt in tuition_items:
-                if txt == "免费":
-                    tuition = "免费"
-                elif "元" in txt:
-                    tuition = txt
-
-            # 根据数字数量决定如何解析
-            if len(numbers) >= 2:
-                # 有两个或更多数字，按 X 坐标排序
-                numbers.sort(key=lambda n: n[0])
-                plan_count = numbers[0][1]  # 左边是计划数
-                if not tuition:  # 如果还没有收费信息
-                    tuition = f"{numbers[-1][1]}元"  # 右边是收费
-            elif len(numbers) == 1:
-                val = numbers[0][1]
-                txt = numbers[0][2]
-                x = numbers[0][0]
-
-                # 检查是否是 OCR 把 "计划数+学费" 识别成了一个数字
-                # 例如 "1 6875" 被识别为 "16875"
-                if len(txt) == 5 and val >= 10000:
-                    # 5位数字，尝试拆分：第1位是计划数，后4位是学费
-                    first_digit = int(txt[0])
-                    last_four = int(txt[1:])
-                    # 常见学费范围：3000-9999
-                    if 1 <= first_digit <= 9 and 3000 <= last_four <= 9999:
-                        plan_count = first_digit
-                        tuition = f"{last_four}元"
-                        logger.info(f"      拆分数字: {txt} -> 计划数={plan_count}, 学费={tuition}")
-                    else:
-                        tuition = f"{val}元"
-                elif len(txt) == 6 and val >= 100000:
-                    # 6位数字，尝试拆分：前2位是计划数，后4位是学费
-                    first_two = int(txt[:2])
-                    last_four = int(txt[2:])
-                    if 1 <= first_two <= 99 and 3000 <= last_four <= 9999:
-                        plan_count = first_two
-                        tuition = f"{last_four}元"
-                        logger.info(f"      拆分数字: {txt} -> 计划数={plan_count}, 学费={tuition}")
-                    else:
-                        tuition = f"{val}元"
-                elif val > 100:
-                    # 大数字是收费
-                    if not tuition:
-                        tuition = f"{val}元"
-                else:
-                    # 小数字是计划数
-                    plan_count = val
-
-            row = {
-                "exam_type": current_exam_type,
-                "enrollment_type": current_enrollment_type,
-                "university_code": current_university.get("code", ""),
-                "university_name": current_university.get("name", ""),
-                "university_location": current_university.get("location", ""),
-                "university_note": current_university.get("note", ""),
-                "major_group_code": current_major_group.get("code", ""),
-                "major_group_subject": current_major_group.get("subject", ""),
-                "major_group_plan": current_major_group.get("plan", 0),
-                "major_code": major_code,
-                "major_name": major_name,
-                "major_note": major_note,
-                "plan_count": plan_count,
-                "tuition": tuition,
-                "_incomplete": is_incomplete  # 标记是否需要从下一行获取计划数
-            }
-
-            # 如果专业组计划数为0但专业计划数有值，更新专业组计划数
-            # （有些格式下专业组计划数在专业行而不是专业组行）
-            if current_major_group.get("plan", 0) == 0 and plan_count > 0:
-                current_major_group["plan"] = plan_count
-                row["major_group_plan"] = plan_count
-
-            rows.append(row)
-            logger.info(f"    专业: {major_code} {major_name} 计划:{plan_count} {tuition}" +
-                       (" [跨行]" if is_incomplete else ""))
-            continue
-
-        # 7. 处理跨行专业的续行（包含计划数和收费）
-        # 如果上一条记录标记为 incomplete，尝试从当前行提取计划数
-        if rows and rows[-1].get("_incomplete"):
-            # 使用 X 坐标的相对位置来定位右侧区域的数据
-            right_zone_items = []  # (x, text, value_or_none)
-
+        # 如果 first_text 不是专业，检查整行其他元素
+        # 这处理了计划数/学费出现在专业名称之前的情况
+        if not is_new_major and current_university.get("code"):
             for item in group:
-                txt = item["text"]
-                x = item["x_left"]
-
-                # 只处理右侧区域的数据（图片宽度的 60% 以右）
-                if x < img_width * 0.60:
+                txt = item["text"].strip()
+                # 跳过纯数字、免费、学费等
+                if re.match(r'^[\d免费元]+$', txt):
+                    continue
+                if re.match(r'^\d+元$', txt):
                     continue
 
-                # "数字免费" 格式
-                num_free_match = re.match(r'^(\d+)(免费)$', txt)
-                if num_free_match:
-                    rows[-1]["plan_count"] = int(num_free_match.group(1))
-                    rows[-1]["tuition"] = "免费"
-                    rows[-1]["_incomplete"] = False
-                    logger.info(f"      续行: 计划数={rows[-1]['plan_count']} 收费={rows[-1]['tuition']}")
-                    continue
+                # 尝试匹配专业代码+名称
+                major_match = re.match(r'^([A-Z0-9]{1,2}[A-Z0-9]?)(\[V\])?([一-鿿]{2,}.*)', txt)
+                if major_match:
+                    is_new_major = True
+                    major_code = major_match.group(1)
+                    if major_match.group(2):
+                        major_code += major_match.group(2)
+                    major_text = major_match.group(3)
+                    major_item = item
+                    break
 
-                # 纯收费信息
-                if txt == "免费":
-                    right_zone_items.append((x, txt, None))
-                    continue
-                if "元" in txt:
-                    right_zone_items.append((x, txt, None))
-                    continue
+        if is_new_major:
+            # 遇到新专业代码，先保存上一个专业
+            save_major_block()
 
-                # 纯数字
-                num_match = re.match(r'^(\d+)$', txt)
-                if num_match:
-                    val = int(num_match.group(1))
-                    right_zone_items.append((x, txt, val))
+            # 提取计划数和学费
+            # 使用改进版函数，传入专业名称的位置信息
+            if major_item:
+                plan_count, tuition = extract_plan_and_tuition_from_row(group, img_width, major_item.get("x_right", 0))
+            else:
+                plan_count, tuition = extract_plan_and_tuition(group, img_width)
 
-            # 按 X 坐标排序
-            right_zone_items.sort(key=lambda item: item[0])
+            # 如果没有提取到计划数，尝试从行首的数字获取
+            if plan_count == 0:
+                for item in group:
+                    txt = item["text"].strip()
+                    if item == major_item:
+                        break
+                    num_match = re.match(r'^(\d{1,2})$', txt)
+                    if num_match:
+                        plan_count = int(num_match.group(1))
+                        break
 
-            # 解析右侧区域数据
-            numbers = [(x, val, txt) for x, txt, val in right_zone_items if val is not None]
-            tuition_items = [(x, txt) for x, txt, val in right_zone_items if val is None]
+            # 开启新的专业区块
+            current_major_block = {
+                "code": major_code,
+                "text": major_text,
+                "plan": plan_count if plan_count > 0 else 1,
+                "tuition": tuition
+            }
+            logger.info(f"    新专业: {major_code} {major_text[:30]}... 计划:{plan_count} {tuition}")
+            continue
 
-            # 处理收费信息
-            for _, txt in tuition_items:
-                if txt == "免费":
-                    rows[-1]["tuition"] = "免费"
-                elif "元" in txt:
-                    rows[-1]["tuition"] = txt
+        # 7. 折行累加：不是特殊标题、学校、专业组、新专业时
+        if current_major_block:
+            # 检查是否是纯数字行（可能是计划数和学费）
+            all_nums = all(re.match(r'^[\d免费元]+$', item["text"]) for item in group)
 
-            # 根据数字数量决定如何解析
-            if len(numbers) >= 2:
-                numbers.sort(key=lambda n: n[0])
-                rows[-1]["plan_count"] = numbers[0][1]
-                if not rows[-1].get("tuition"):
-                    rows[-1]["tuition"] = f"{numbers[-1][1]}元"
-                rows[-1]["_incomplete"] = False
-                logger.info(f"      续行: 计划数={rows[-1]['plan_count']} 收费={rows[-1]['tuition']}")
-            elif len(numbers) == 1:
-                val = numbers[0][1]
-                txt = numbers[0][2]
-                # 检查是否是 OCR 把 "计划数+学费" 识别成了一个数字
-                if len(txt) == 5 and val >= 10000:
-                    first_digit = int(txt[0])
-                    last_four = int(txt[1:])
-                    if 1 <= first_digit <= 9 and 3000 <= last_four <= 9999:
-                        rows[-1]["plan_count"] = first_digit
-                        rows[-1]["tuition"] = f"{last_four}元"
-                        logger.info(f"      续行拆分: {txt} -> 计划数={first_digit}, 学费={last_four}元")
-                    else:
-                        rows[-1]["tuition"] = f"{val}元"
-                elif len(txt) == 6 and val >= 100000:
-                    first_two = int(txt[:2])
-                    last_four = int(txt[2:])
-                    if 1 <= first_two <= 99 and 3000 <= last_four <= 9999:
-                        rows[-1]["plan_count"] = first_two
-                        rows[-1]["tuition"] = f"{last_four}元"
-                        logger.info(f"      续行拆分: {txt} -> 计划数={first_two}, 学费={last_four}元")
-                    else:
-                        rows[-1]["tuition"] = f"{val}元"
-                elif val > 100:
-                    if not rows[-1].get("tuition"):
-                        rows[-1]["tuition"] = f"{val}元"
-                else:
-                    rows[-1]["plan_count"] = val
-                rows[-1]["_incomplete"] = False
-                logger.info(f"      续行: 计划数={rows[-1]['plan_count']} 收费={rows[-1]['tuition']}")
+            if all_nums:
+                # 纯数字行，尝试提取计划数和学费
+                plan, tuition = extract_plan_and_tuition(group, img_width)
+                if plan > 0 and current_major_block.get("plan", 0) <= 1:
+                    current_major_block["plan"] = plan
+                if tuition and not current_major_block.get("tuition"):
+                    current_major_block["tuition"] = tuition
+                logger.info(f"      续行数字: 计划={plan} 学费={tuition}")
+            else:
+                # 文本行，拼接到专业名称
+                continuation_text = " ".join([item["text"] for item in group if not re.match(r'^[\d免费元]+$', item["text"])])
+                current_major_block["text"] += continuation_text
+                # 同时检查是否有计划数和学费
+                plan, tuition = extract_plan_and_tuition(group, img_width)
+                if plan > 0 and current_major_block.get("plan", 0) <= 1:
+                    current_major_block["plan"] = plan
+                if tuition and not current_major_block.get("tuition"):
+                    current_major_block["tuition"] = tuition
+                logger.info(f"      续行文本: {continuation_text[:30]}...")
 
-    # 清理临时字段
-    for row in rows:
-        row.pop("_incomplete", None)
+    # 循环结束后，保存最后一个专业
+    save_major_block()
+
+    # 专业组计划数校验
+    validate_group_plans(rows)
 
     logger.info(f"解析完成，共 {len(rows)} 条记录")
     return rows
+
+
+def validate_group_plans(rows: List[Dict]) -> None:
+    """
+    校验专业组计划数 = 该组各专业计划数之和
+    如果不匹配，记录警告日志
+
+    注意：同一专业组代码在不同考试类型（历史类/物理类）下是独立的，
+    需要按 院校代码 + 考试类型 + 专业组代码 进行分组校验
+    """
+    # 按 院校+考试类型+专业组 分组
+    groups = {}
+    for row in rows:
+        # 使用 exam_type 区分同一专业组在不同考试类型下的情况
+        key = f"{row.get('university_code', '')}_{row.get('exam_type', '')}_{row.get('major_group_code', '')}"
+        if key not in groups:
+            groups[key] = {
+                "group_plan": row.get("major_group_plan", 0),
+                "majors": [],
+                "exam_type": row.get("exam_type", "")
+            }
+        groups[key]["majors"].append(row)
+
+    # 校验每个专业组
+    for key, data in groups.items():
+        group_plan = data["group_plan"]
+        majors_sum = sum(m.get("plan_count", 0) for m in data["majors"])
+
+        if group_plan > 0 and majors_sum != group_plan:
+            uni_code = data["majors"][0].get("university_code", "") if data["majors"] else ""
+            group_code = data["majors"][0].get("major_group_code", "") if data["majors"] else ""
+            exam_type = data.get("exam_type", "")
+            logger.warning(
+                f"⚠️ 计划数��验失败: 院校{uni_code} [{exam_type}] 专业组{group_code} "
+                f"组计划={group_plan} 专业计划之和={majors_sum}"
+            )
 
 
 def parse_supplementary_row(group: List[Dict]) -> Optional[Dict]:
@@ -817,13 +1109,17 @@ def merge_supplementary_rows(rows: List[Dict]) -> List[Dict]:
     合并和去重征集志愿数据
     处理同一院校多个专业的情况
     保持原始顺序，不排序
+
+    注意：同一专业在不同考试类型（历史类/物理类）下是不同的记录，
+    需要包含 exam_type 在去重 key 中
     """
-    # 按院校代码+专业代码去重，保持原始顺序
+    # 按院校代码+考试类型+专业组+专业代码去重，保持原始顺序
     seen = set()
     unique_rows = []
 
     for row in rows:
-        key = f"{row['university_code']}_{row['major_code']}_{row['major_name']}"
+        # 包含 exam_type 和 major_group_code 以区分不同考试类型和专业组的同名专业
+        key = f"{row.get('university_code', '')}_{row.get('exam_type', '')}_{row.get('major_group_code', '')}_{row.get('major_code', '')}_{row.get('major_name', '')}"
         if key not in seen:
             seen.add(key)
             unique_rows.append(row)
@@ -1420,12 +1716,32 @@ def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
     # 跨图片传递状态
     last_exam_type = ""
     last_enrollment_type = ""
+    context = {}  # 用于跨图片传递上下文
 
     for i, url in enumerate(req.image_urls):
         logger.info(f"征集志愿 OCR {i+1}/{len(req.image_urls)}: {url}")
         img_path = download_image(url)
-        rows = extract_supplementary_rows(img_path)
+        rows = extract_supplementary_rows(img_path, context)
         logger.info(f"  识别 {len(rows)} 行")
+
+        # 更新上下文（用于下一张图片）
+        if rows:
+            last_row = rows[-1]
+            context = {
+                "exam_type": last_row.get("exam_type", ""),
+                "enrollment_type": last_row.get("enrollment_type", ""),
+                "university": {
+                    "code": last_row.get("university_code", ""),
+                    "name": last_row.get("university_name", ""),
+                    "location": last_row.get("university_location", ""),
+                    "note": last_row.get("university_note", ""),
+                },
+                "major_group": {
+                    "code": last_row.get("major_group_code", ""),
+                    "subject": last_row.get("major_group_subject", ""),
+                    "plan": last_row.get("major_group_plan", 0),
+                }
+            }
 
         # 记录这张图片的数据行数
         image_data_counts.append(len(rows))
@@ -1491,8 +1807,27 @@ async def run_supplementary_ocr_with_ai(req: OcrRequest) -> SupplementaryOcrWith
         img_path = download_image(url)
         image_paths.append(img_path)
 
-        rows = extract_supplementary_rows(img_path)
+        rows = extract_supplementary_rows(img_path, context)
         logger.info(f"  OCR 识别 {len(rows)} 行")
+
+        # 更新上下文（用于下一张图片）
+        if rows:
+            last_row = rows[-1]
+            context = {
+                "exam_type": last_row.get("exam_type", ""),
+                "enrollment_type": last_row.get("enrollment_type", ""),
+                "university": {
+                    "code": last_row.get("university_code", ""),
+                    "name": last_row.get("university_name", ""),
+                    "location": last_row.get("university_location", ""),
+                    "note": last_row.get("university_note", ""),
+                },
+                "major_group": {
+                    "code": last_row.get("major_group_code", ""),
+                    "subject": last_row.get("major_group_subject", ""),
+                    "plan": last_row.get("major_group_plan", 0),
+                }
+            }
 
         # 填充空的 exam_type 和 enrollment_type
         for row in rows:
