@@ -878,7 +878,8 @@ def extract_page_number(ocr_result: List[Tuple], img_height: float = None) -> in
     # 取最底部的 15 个元素
     bottom_items = all_items[:15]
 
-    logger.info(f"页码提取: 最底部15个文本 {[(item['text'], f'x={item[\"x\"]:.0f}', f'y={item[\"y\"]:.0f}', 'L' if item['is_left'] else 'R' if item['is_right'] else 'M', 'B' if item['is_bottom'] else '') for item in bottom_items]}")
+    bottom_info = [(item['text'], f"x={item['x']:.0f}", f"y={item['y']:.0f}", 'L' if item['is_left'] else 'R' if item['is_right'] else 'M', 'B' if item['is_bottom'] else '') for item in bottom_items]
+    logger.info(f"页码提取: 最底部15个文本 {bottom_info}")
 
     # 第一轮：在底部左右两侧查找 "- X -" 格式（页码交替出现在左下或右下）
     for item in bottom_items:
