@@ -42,6 +42,7 @@ import {
   CloseCircleOutlined,
   ClockCircleOutlined,
   QuestionCircleOutlined,
+  LinkOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
@@ -840,6 +841,7 @@ export default function DataImportPage() {
 
   // 征集志愿表格列
   const supplementaryColumns = [
+    { title: '页码', dataIndex: 'page_number', key: 'page_number', width: 50, fixed: 'left' as const },
     { title: '考试类型', dataIndex: 'exam_type', key: 'exam_type', width: 80, fixed: 'left' as const },
     { title: '招生类型', dataIndex: 'enrollment_type', key: 'enrollment_type', width: 120 },
     { title: '院校代码', dataIndex: 'university_code', key: 'university_code', width: 80 },
@@ -851,11 +853,24 @@ export default function DataImportPage() {
     { title: '专业备注', dataIndex: 'major_note', key: 'major_note', width: 120 },
     { title: '计划数', dataIndex: 'plan_count', key: 'plan_count', width: 60 },
     { title: '收费', dataIndex: 'tuition', key: 'tuition', width: 60 },
+    {
+      title: '来源',
+      dataIndex: 'source_url',
+      key: 'source_url',
+      width: 60,
+      render: (val: string) => val ? (
+        <Tooltip title={val}>
+          <a href={val} target="_blank" rel="noopener noreferrer">
+            <LinkOutlined />
+          </a>
+        </Tooltip>
+      ) : '-',
+    },
   ];
 
   return (
     <Layout style={{ minHeight: '100vh', background: '#F8FAFC' }}>
-      <Content style={{ padding: 24, maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+      <Content style={{ padding: 24, maxWidth: 1600, margin: '0 auto', width: '100%' }}>
         <div style={{ marginBottom: 24 }}>
           <Link href="/">
             <Button type="text" icon={<ArrowLeftOutlined />}>
