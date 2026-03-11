@@ -15,10 +15,10 @@ import subprocess
 import argparse
 
 # Server configuration
-HOST = '47.109.156.104'
-USER = 'hcz'
-REMOTE_PATH = '/home/hcz/apps/volunteer-helper'
-SSH_KEY_PATH = os.path.expanduser('~/.ssh/volunteer_helper_deploy')
+HOST = '132.232.245.53'
+USER = 'ubuntu'
+REMOTE_PATH = '/home/ubuntu/apps/volunteer-helper'
+SSH_KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cube.pem')
 
 # Local paths
 LOCAL_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -190,7 +190,7 @@ def deploy(ssh):
     print('\n[5/8] Uploading OCR service...')
     local_ocr = os.path.join(LOCAL_ROOT, 'services', 'ocr-service')
     remote_ocr = f'{REMOTE_PATH}/services/ocr-service'
-    for f in ['main.py', 'ai_parser.py', 'requirements.txt', 'setup.sh', 'FORMAT_ANALYSIS.md']:
+    for f in ['main.py', 'ai_parser.py', 'multi_engine_validator.py', 'requirements.txt', 'setup.sh', 'FORMAT_ANALYSIS.md']:
         local_file = os.path.join(local_ocr, f)
         if os.path.exists(local_file):
             print(f'    {f}')
