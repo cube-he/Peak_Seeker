@@ -847,8 +847,10 @@ def extract_page_number(ocr_result: List[Tuple], img_height: float = None) -> in
     # 估算图片宽度
     img_width = max(box[2][0] for box, _, _ in ocr_result) * 1.1
 
-    # 只查找底部 15% 区域的文本
-    bottom_threshold = img_height * 0.85
+    logger.info(f"页码提取: 图片尺寸估算 {img_width:.0f}x{img_height:.0f}")
+
+    # 只查找底部 20% 区域的文本（扩大搜索范���）
+    bottom_threshold = img_height * 0.80
 
     # 收集底部区域的文本
     bottom_items = []
@@ -865,13 +867,20 @@ def extract_page_number(ocr_result: List[Tuple], img_height: float = None) -> in
                 "is_right": x_center > img_width * 0.7,  # 右侧 30%
             })
 
-    # 页码匹配模式
+    logger.info(f"页码提取: 底部区域文本 {[item['text'] for item in bottom_items]}")
+
+    # 页码匹配模式（扩展更多格式）
     page_patterns = [
         r'^-\s*(\d+)\s*-$',           # "- 1 -"
+        r'^一\s*(\d+)\s*一$',          # "一 1 一"
+        r'^—\s*(\d+)\s*—$',           # "— 1 —"
         r'^第\s*(\d+)\s*页',           # "第 1 页"
         r'^(\d+)\s*/\s*\d+$',          # "1/10"
         r'^(\d+)$',                     # 纯数字
-        r'^[—一]\s*(\d+)\s*[—一]$',    # "— 1 —" 或 "一 1 一"
+        r'^\s*(\d+)\s*$',              # 带空格的数字
+        r'^[—一-]\s*(\d+)\s*[—一-]$',  # 各种横线包围的数字
+        r'^共\s*\d+\s*页.*第\s*(\d+)\s*页',  # "共 10 页 第 1 页"
+        r'第\s*(\d+)\s*页.*共\s*\d+\s*页',   # "第 1 页 共 10 页"
     ]
 
     # 优先查找左下角和右下角
@@ -881,26 +890,37 @@ def extract_page_number(ocr_result: List[Tuple], img_height: float = None) -> in
 
         text = item["text"]
         for pattern in page_patterns:
-            match = re.match(pattern, text)
+            match = re.search(pattern, text)
             if match:
                 page_num = int(match.group(1))
                 # 页码通常在 1-999 范围内
                 if 1 <= page_num <= 999:
-                    logger.info(f"提取到页码: {page_num} (来自: '{text}')")
+                    logger.info(f"提取到页码: {page_num} (来自角落: '{text}')")
                     return page_num
 
     # 如果左下角和右下角没找到，查找底部中间区域
     for item in bottom_items:
         text = item["text"]
         for pattern in page_patterns:
-            match = re.match(pattern, text)
+            match = re.search(pattern, text)
             if match:
                 page_num = int(match.group(1))
                 if 1 <= page_num <= 999:
                     logger.info(f"提取到页码: {page_num} (来自底部中间: '{text}')")
                     return page_num
 
-    logger.debug(f"未找到页码，底部文本: {[item['text'] for item in bottom_items]}")
+    # 最后尝试：在底部文本中查找任何独立的数字
+    for item in bottom_items:
+        text = item["text"]
+        # 查找独立的 1-3 位数字
+        numbers = re.findall(r'\b(\d{1,3})\b', text)
+        for num_str in numbers:
+            num = int(num_str)
+            if 1 <= num <= 200:  # 页码通常不超过 200
+                logger.info(f"提取到页码(宽松匹配): {num} (来自: '{text}')")
+                return num
+
+    logger.warning(f"未找到页码，底部文本: {[item['text'] for item in bottom_items]}")
     return 0
 
 
