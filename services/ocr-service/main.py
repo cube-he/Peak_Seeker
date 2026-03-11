@@ -2547,14 +2547,33 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
     for i, img_path in enumerate(image_paths):
         logger.info(f"处理图片 {i+1}/{len(image_paths)}: {img_path}")
 
-        # 先用一个引擎获取 OCR 结果来提取页码
+        # 尝试从多个 OCR 引擎结果中提取页码
         page_number = 0
-        try:
-            ocr_result = run_ocr(img_path)
-            page_number = extract_page_number(ocr_result)
-            logger.info(f"  图片 {i+1} 页码: {page_number}")
-        except Exception as e:
-            logger.warning(f"  提取页码失败: {e}")
+        ocr_engines_for_page = ["baidu", "paddleocr", "rapid"]  # 按优先级排序
+
+        for ocr_engine in ocr_engines_for_page:
+            if page_number > 0:
+                break
+            try:
+                # 临时切换引擎获取 OCR 结果
+                if ocr_engine == "baidu" and BAIDU_OCR_API_KEY:
+                    ocr_result = run_baidu_ocr(img_path)
+                elif ocr_engine == "paddleocr":
+                    ocr_result = run_paddleocr_docker(img_path)
+                elif ocr_engine == "rapid":
+                    ocr_result = run_ocr(img_path)  # 默认引擎
+                else:
+                    continue
+
+                if ocr_result:
+                    page_number = extract_page_number(ocr_result)
+                    if page_number > 0:
+                        logger.info(f"  图片 {i+1} 页码: {page_number} (来自 {ocr_engine})")
+            except Exception as e:
+                logger.debug(f"  {ocr_engine} 提取页码失败: {e}")
+
+        if page_number == 0:
+            logger.warning(f"  图片 {i+1} 未找到页码")
         image_page_numbers.append(page_number)
 
         engines = validator.get_enabled_engines()
