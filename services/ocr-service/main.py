@@ -2549,12 +2549,23 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
     all_engine_results: Dict[str, List[Dict]] = {}  # engine -> all rows
     engines_success = set()
     engines_failed = {}
+    image_page_numbers = []  # 每张图片的页码
 
     context = {}
 
     # 对每张图片运行所有引擎
     for i, img_path in enumerate(image_paths):
         logger.info(f"处理图片 {i+1}/{len(image_paths)}: {img_path}")
+
+        # 先用一个引擎获取 OCR 结果来提取页码
+        page_number = 0
+        try:
+            ocr_result = run_ocr(img_path)
+            page_number = extract_page_number(ocr_result)
+            logger.info(f"  图片 {i+1} 页码: {page_number}")
+        except Exception as e:
+            logger.warning(f"  提取页码失败: {e}")
+        image_page_numbers.append(page_number)
 
         engines = validator.get_enabled_engines()
 
@@ -2568,6 +2579,10 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
                     engines_success.add(engine)
                     if engine not in all_engine_results:
                         all_engine_results[engine] = []
+                    # 为每条数据添加来源 URL 和页码
+                    for row in result.data:
+                        row["source_url"] = req.source_url
+                        row["page_number"] = page_number
                     all_engine_results[engine].extend(result.data)
                     logger.info(f"  {engine}: 识别 {len(result.data)} 条")
                 else:
@@ -2674,6 +2689,8 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
                 "major_note": validation.merged_data.get("major_note", ""),
                 "plan_count": validation.merged_data.get("plan_count", 0),
                 "tuition": validation.merged_data.get("tuition", ""),
+                "source_url": validation.merged_data.get("source_url", ""),
+                "page_number": validation.merged_data.get("page_number", 0),
             }))
         else:
             stats["pending_review"] += 1
