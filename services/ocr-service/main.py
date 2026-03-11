@@ -30,12 +30,29 @@ import mysql.connector
 
 # OCR 延迟导入（模型加载较慢）
 _ocr_instance = None
+_ocr_engine = None  # "paddle" or "rapid"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
+
+# OCR 引擎选择：
+# - "baidu": 百度云 OCR API，识别精度最高，需要 API Key
+# - "paddleocr": PaddleOCR Docker 服务，本地高精度方案
+# - "paddle": PaddleOCR (ppocr-onnx)，本地运行
+# - "rapid": RapidOCR，轻量级本地方案
+OCR_ENGINE = os.environ.get("OCR_ENGINE", "baidu")  # 默认使用百度云 OCR
+
+# PaddleOCR Docker 服务地址
+PADDLEOCR_SERVICE_URL = os.environ.get("PADDLEOCR_SERVICE_URL", "http://localhost:8101")
+
+# 百度云 OCR 配置
+BAIDU_OCR_API_KEY = os.environ.get("BAIDU_OCR_API_KEY", "")
+BAIDU_OCR_SECRET_KEY = os.environ.get("BAIDU_OCR_SECRET_KEY", "")
+_baidu_access_token = None
+_baidu_token_expires = 0
 
 
 # ==================== Pydantic Models ====================
@@ -198,16 +215,228 @@ class SaveResponse(BaseModel):
     message: str
 
 
+# ==================== 百度云 OCR ====================
+
+def get_baidu_access_token() -> str:
+    """
+    获取百度云 OCR 的 access_token
+    token 有效期 30 天，会自动缓存
+    """
+    global _baidu_access_token, _baidu_token_expires
+    import time
+
+    # 检查缓存的 token 是否有效（提前 1 小时刷新）
+    if _baidu_access_token and time.time() < _baidu_token_expires - 3600:
+        return _baidu_access_token
+
+    if not BAIDU_OCR_API_KEY or not BAIDU_OCR_SECRET_KEY:
+        raise ValueError("百度云 OCR API Key 或 Secret Key 未配置")
+
+    url = "https://aip.baidubce.com/oauth/2.0/token"
+    params = {
+        "grant_type": "client_credentials",
+        "client_id": BAIDU_OCR_API_KEY,
+        "client_secret": BAIDU_OCR_SECRET_KEY
+    }
+
+    response = http_requests.post(url, params=params, timeout=10)
+    result = response.json()
+
+    if "access_token" not in result:
+        raise ValueError(f"获取百度 access_token 失败: {result}")
+
+    _baidu_access_token = result["access_token"]
+    # token 有效期 30 天
+    _baidu_token_expires = time.time() + result.get("expires_in", 2592000)
+    logger.info("百度云 OCR access_token 获取成功")
+
+    return _baidu_access_token
+
+
+def run_baidu_ocr(img_path: str) -> List[Tuple]:
+    """
+    调用百度云 OCR API 识别图片
+
+    使用通用文字识别（高精度含位置版）接口
+    https://aip.baidubce.com/rest/2.0/ocr/v1/accurate
+
+    Returns:
+        List of (box, text, confidence)
+    """
+    import base64
+
+    access_token = get_baidu_access_token()
+
+    # 读取图片并 base64 编码
+    with open(img_path, "rb") as f:
+        img_data = base64.b64encode(f.read()).decode("utf-8")
+
+    # 调用高精度含位置版 API
+    url = f"https://aip.baidubce.com/rest/2.0/ocr/v1/accurate?access_token={access_token}"
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    data = {
+        "image": img_data,
+        "recognize_granularity": "small",  # 定位单字符位置
+        "detect_direction": "true",        # 检测图像朝向
+        "paragraph": "false",              # 不输出段落信息
+        "probability": "true",             # 返回置信度
+    }
+
+    response = http_requests.post(url, headers=headers, data=data, timeout=30)
+    result = response.json()
+
+    if "error_code" in result:
+        logger.error(f"百度 OCR 错误: {result}")
+        raise ValueError(f"百度 OCR 错误: {result.get('error_msg', 'Unknown error')}")
+
+    # 解析结果
+    items = []
+    for word in result.get("words_result", []):
+        text = word.get("words", "")
+        location = word.get("location", {})
+        probability = word.get("probability", {})
+
+        # 构造 box: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+        left = location.get("left", 0)
+        top = location.get("top", 0)
+        width = location.get("width", 0)
+        height = location.get("height", 0)
+
+        box = [
+            [left, top],
+            [left + width, top],
+            [left + width, top + height],
+            [left, top + height]
+        ]
+
+        confidence = probability.get("average", 0.9)
+        items.append((box, text, confidence))
+
+    logger.info(f"百度 OCR 识别完成: {len(items)} 行")
+    return items
+
+
+def run_paddleocr_docker(img_path: str) -> List[Tuple]:
+    """
+    调用 PaddleOCR Docker 服务识别图片
+
+    Returns:
+        List of (box, text, confidence)
+    """
+    # 将本地路径转换为 Docker 容器内路径
+    # 本地 cache 目录映射到容器的 /data
+    filename = os.path.basename(img_path)
+    docker_path = f"/data/{filename}"
+
+    response = http_requests.post(
+        f"{PADDLEOCR_SERVICE_URL}/ocr",
+        json={"image_path": docker_path},
+        timeout=60
+    )
+    response.raise_for_status()
+    result = response.json()
+
+    if "error" in result:
+        raise ValueError(result["error"])
+
+    items = []
+    for item in result.get("items", []):
+        box = item["box"]
+        text = item["text"]
+        confidence = item["confidence"]
+        items.append((box, text, confidence))
+
+    logger.info(f"PaddleOCR Docker 识别完成: {len(items)} 行")
+    return items
+
+
 # ==================== OCR Engine ====================
 
 def get_ocr():
-    global _ocr_instance
+    """
+    获取本地 OCR 实例（用于非百度云模式）
+    """
+    global _ocr_instance, _ocr_engine
+
     if _ocr_instance is None:
+        if OCR_ENGINE == "paddle":
+            try:
+                logger.info("正在加载 ppocr-onnx 模型...")
+                from ppocronnx import TextSystem
+                _ocr_instance = TextSystem()
+                _ocr_engine = "paddle"
+                logger.info("ppocr-onnx 模型加载完成")
+                return _ocr_instance
+            except ImportError:
+                logger.warning("ppocr-onnx 未安装，回退到 RapidOCR")
+            except Exception as e:
+                logger.warning(f"ppocr-onnx 加载失败: {e}，回退到 RapidOCR")
+
+        # 回退到 RapidOCR
         logger.info("正在加载 RapidOCR 模型...")
         from rapidocr_onnxruntime import RapidOCR
         _ocr_instance = RapidOCR()
+        _ocr_engine = "rapid"
         logger.info("RapidOCR 模型加载完成")
+
     return _ocr_instance
+
+
+def run_ocr(img_path: str) -> List[Tuple]:
+    """
+    统一的 OCR 调用接口
+
+    Returns:
+        List of (box, text, confidence)
+        - box: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]] 四个角点坐标
+        - text: 识别的文字
+        - confidence: 置信度
+    """
+    global _ocr_engine
+
+    # 优先使用百度云 OCR
+    if OCR_ENGINE == "baidu" and BAIDU_OCR_API_KEY:
+        try:
+            result = run_baidu_ocr(img_path)
+            _ocr_engine = "baidu"
+            return result
+        except Exception as e:
+            logger.warning(f"百度云 OCR 失败: {e}，回退到本地 OCR")
+
+    # PaddleOCR Docker 服务
+    if OCR_ENGINE == "paddleocr" or (OCR_ENGINE == "baidu" and not BAIDU_OCR_API_KEY):
+        try:
+            result = run_paddleocr_docker(img_path)
+            _ocr_engine = "paddleocr"
+            return result
+        except Exception as e:
+            logger.warning(f"PaddleOCR Docker 失败: {e}，回退到 RapidOCR")
+
+    # 本地 OCR
+    import cv2
+    ocr = get_ocr()
+
+    if _ocr_engine == "paddle":
+        img = cv2.imread(img_path)
+        if img is None:
+            logger.error(f"无法读取图片: {img_path}")
+            return []
+
+        result = ocr.detect_and_ocr(img)
+        if not result:
+            return []
+
+        items = []
+        for item in result:
+            box = item.box.tolist()
+            text = item.ocr_text
+            confidence = item.score
+            items.append((box, text, confidence))
+        return items
+    else:
+        # RapidOCR
+        result, _ = ocr(img_path)
+        return result if result else []
 
 
 def download_image(url: str) -> str:
@@ -232,8 +461,7 @@ def download_image(url: str) -> str:
 
 def extract_score_rows(img_path: str) -> List[Tuple[int, int, int]]:
     """OCR 识别单张图片，提取一分一段表数据"""
-    ocr = get_ocr()
-    result, _ = ocr(img_path)
+    result = run_ocr(img_path)
 
     if not result:
         return []
@@ -591,7 +819,7 @@ def extract_plan_and_tuition_from_row(row_items: List[Dict], img_width: float, m
 
 # ==================== 征集志愿 OCR ====================
 
-def extract_supplementary_rows(img_path: str, context: Dict = None) -> List[Dict]:
+def extract_supplementary_rows(img_path: str, context: Dict = None, ocr_result: List = None) -> List[Dict]:
     """
     OCR 识别四川省考试院征集志愿格式 - 重构版本
 
@@ -605,14 +833,18 @@ def extract_supplementary_rows(img_path: str, context: Dict = None) -> List[Dict
     Args:
         img_path: 图片路径
         context: 上一张图片的上下文状态（用于跨页延续）
+        ocr_result: 可选，已有的 OCR 结果（用于多引擎校验时避免重复调用 OCR）
 
     Returns:
         解析出的专业数据列表
     """
-    ocr = get_ocr()
-    result, _ = ocr(img_path)
-
-    logger.info(f"OCR 原始结果数量: {len(result) if result else 0}")
+    # 如果提供了 OCR 结果，直接使用；否则调用 OCR
+    if ocr_result is not None:
+        result = ocr_result
+        logger.info(f"使用已有 OCR 结果，数量: {len(result) if result else 0}")
+    else:
+        result = run_ocr(img_path)
+        logger.info(f"OCR 引擎: {_ocr_engine}, 原始结果数量: {len(result) if result else 0}")
 
     if not result:
         return []
@@ -873,6 +1105,7 @@ def extract_supplementary_rows(img_path: str, context: Dict = None) -> List[Dict
 
         # 6. 检测新专业行
         # 专业代码格式：纯数字(18)、数字+字母(7S)、字母+字母(BL)、字母+数字(K1)、带[V]标记(G7[V])
+        # 注意：OCR 可能将 [V] 识别为各种变体：【V】、【V]、［V]、[V］、【VJ 等
         #
         # 改进：不仅检查 first_text，还要检查整行是否包含专业代码
         # 因为有时计划数和学费会出现在专业名称之前（OCR 识别顺序问题）
@@ -882,14 +1115,18 @@ def extract_supplementary_rows(img_path: str, context: Dict = None) -> List[Dict
         major_text = ""
         major_item = None  # 记录专业名称所在的 item
 
+        # [V] 标记的正则：兼容各种中英文方括号变体
+        # 包括：[V]、【V】、【V]、［V]、[V］、【VJ、[VJ 等
+        v_mark_pattern = r'[\[【［][VvＶ][\]】］J]?'
+
         # 首先尝试从 first_text 检测
         if not re.match(r'^\d{1,2}(免费|元|\d{4,})?\s*$', first_text.strip()):
-            major_match = re.match(r'^([A-Z0-9]{1,2}[A-Z0-9]?)(\[V\])?([一-鿿]{2,}.*)', first_text)
+            major_match = re.match(rf'^([A-Z0-9]{{1,2}}[A-Z0-9]?)({v_mark_pattern})?([一-鿿]{{2,}}.*)', first_text)
             if major_match and current_university.get("code"):
                 is_new_major = True
                 major_code = major_match.group(1)
                 if major_match.group(2):
-                    major_code += major_match.group(2)
+                    major_code += "[V]"  # 统一标准化为 [V]
                 major_text = major_match.group(3)
                 major_item = group[0]
 
@@ -905,12 +1142,12 @@ def extract_supplementary_rows(img_path: str, context: Dict = None) -> List[Dict
                     continue
 
                 # 尝试匹配专业代码+名称
-                major_match = re.match(r'^([A-Z0-9]{1,2}[A-Z0-9]?)(\[V\])?([一-鿿]{2,}.*)', txt)
+                major_match = re.match(rf'^([A-Z0-9]{{1,2}}[A-Z0-9]?)({v_mark_pattern})?([一-鿿]{{2,}}.*)', txt)
                 if major_match:
                     is_new_major = True
                     major_code = major_match.group(1)
                     if major_match.group(2):
-                        major_code += major_match.group(2)
+                        major_code += "[V]"  # 统一标准化为 [V]
                     major_text = major_match.group(3)
                     major_item = item
                     break
@@ -1408,7 +1645,26 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "ocr_loaded": _ocr_instance is not None}
+    engine = OCR_ENGINE
+    if engine == "baidu":
+        engine_status = "baidu" if BAIDU_OCR_API_KEY else "baidu (no key)"
+    elif engine == "paddleocr":
+        # 检查 PaddleOCR Docker 服务是否可用
+        try:
+            resp = http_requests.get(f"{PADDLEOCR_SERVICE_URL}/health", timeout=5)
+            engine_status = "paddleocr" if resp.status_code == 200 else "paddleocr (unavailable)"
+        except:
+            engine_status = "paddleocr (unavailable)"
+    else:
+        engine_status = _ocr_engine or "not_loaded"
+
+    return {
+        "status": "ok",
+        "ocr_engine": engine_status,
+        "ocr_loaded": engine == "baidu" or engine == "paddleocr" or _ocr_instance is not None,
+        "baidu_configured": bool(BAIDU_OCR_API_KEY and BAIDU_OCR_SECRET_KEY),
+        "paddleocr_url": PADDLEOCR_SERVICE_URL if engine == "paddleocr" else None
+    }
 
 
 @app.post("/fetch", response_model=FetchResponse)
@@ -1428,7 +1684,7 @@ def fetch_page(req: FetchRequest):
 
 
 @app.post("/ocr")
-def run_ocr(req: OcrRequest):
+def handle_ocr(req: OcrRequest):
     """下载图片并执行 OCR 识别，支持一分一段表和征集志愿"""
     try:
         if req.data_type == "supplementary":
@@ -2020,6 +2276,381 @@ def test_local_image(file_path: str, data_type: str = "supplementary"):
     except Exception as e:
         logger.error(f"测试失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"OCR 测试失败: {str(e)}")
+
+
+# ==================== 多引擎交叉校验 API ====================
+
+class MultiEngineOcrRequest(BaseModel):
+    """多引擎 OCR 请求"""
+    image_urls: List[str] = Field(..., description="图片 URL 列表")
+    data_type: str = Field("supplementary", description="数据类型: score_segment / supplementary")
+    year: int = Field(..., description="年份")
+    province: str = Field("四川", description="省份")
+    exam_type: str = Field("物理类", description="考试类型")
+    batch: str = Field("本科一批", description="批次")
+    # 引擎开关
+    enable_baidu: bool = Field(True, description="启用百度云 OCR")
+    enable_paddleocr: bool = Field(True, description="启用 PaddleOCR")
+    enable_rapid: bool = Field(True, description="启用 RapidOCR")
+    enable_ai: bool = Field(True, description="启用 AI 视觉模型")
+    # AI 配置
+    ai_api_key: str = Field("", description="AI API 密钥")
+    ai_base_url: str = Field("", description="AI API 基础 URL")
+    ai_model: str = Field("", description="AI 模型名称")
+
+
+class EngineResultSummary(BaseModel):
+    """单引擎结果摘要"""
+    engine: str
+    success: bool
+    record_count: int
+    error: str = ""
+
+
+class FieldDiff(BaseModel):
+    """字段差异"""
+    field_name: str
+    values: Dict[str, str]  # engine -> value
+    is_consistent: bool
+    majority_value: str = ""
+
+
+class RecordValidationResult(BaseModel):
+    """单条记录校验结果"""
+    record_key: str
+    confidence: str  # high / medium / low / conflict / single
+    review_status: str  # auto_approved / pending_review
+    merged_data: Dict
+    engine_sources: List[str]  # 哪些引擎识别到了这条记录
+    conflict_fields: List[str] = []
+    field_diffs: List[FieldDiff] = []
+    review_note: str = ""
+
+
+class MultiEngineValidationResponse(BaseModel):
+    """多引擎校验响应"""
+    # 引擎执行情况
+    engines_used: List[str]
+    engines_success: List[str]
+    engines_failed: Dict[str, str]
+    engine_results: List[EngineResultSummary]
+
+    # 统计
+    total_records: int
+    high_confidence: int
+    medium_confidence: int
+    low_confidence: int
+    conflicts: int
+    auto_approved_count: int
+    pending_review_count: int
+
+    # 数据
+    approved_data: List[SupplementaryRow]  # 自动通过的数据
+    pending_review_data: List[RecordValidationResult]  # 待审核的数据
+
+    # 校验结果
+    is_valid: bool
+    errors: List[str]
+
+
+@app.post("/ocr-multi-engine", response_model=MultiEngineValidationResponse)
+async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
+    """
+    多引擎交叉校验 OCR
+
+    使用多个 OCR 引擎（百度云、PaddleOCR、RapidOCR、AI视觉模型）同时识别，
+    通过交叉比对确保数据准确性。
+
+    校验策略：
+    - 所有引擎一致：高置信度，自动通过
+    - 多数引擎一致：中置信度，自动通过
+    - 引擎结果分歧：标记待人工审核
+    """
+    from multi_engine_validator import (
+        MultiEngineValidator,
+        SupplementaryValidator,
+        ScoreSegmentValidator,
+        VerifyConfidence,
+        ReviewStatus
+    )
+
+    logger.info(f"开始多引擎���验，图片数量: {len(req.image_urls)}")
+
+    # 创建校验器
+    ai_config = {
+        "api_key": req.ai_api_key,
+        "base_url": req.ai_base_url,
+        "model": req.ai_model
+    } if req.ai_api_key else None
+
+    validator = MultiEngineValidator(
+        enable_baidu=req.enable_baidu,
+        enable_paddleocr=req.enable_paddleocr,
+        enable_rapid=req.enable_rapid,
+        enable_ai=req.enable_ai and bool(req.ai_api_key),
+        ai_config=ai_config
+    )
+
+    # 下载所有图片
+    image_paths = []
+    for url in req.image_urls:
+        try:
+            img_path = download_image(url)
+            image_paths.append(img_path)
+        except Exception as e:
+            logger.error(f"下载图片失败: {url}, {e}")
+
+    if not image_paths:
+        raise HTTPException(status_code=400, detail="没有成功下载任何图片")
+
+    # 汇总所有图片的校验结果
+    all_engine_results: Dict[str, List[Dict]] = {}  # engine -> all rows
+    engines_success = set()
+    engines_failed = {}
+
+    context = {}
+
+    # 对每张图片运行所有引擎
+    for i, img_path in enumerate(image_paths):
+        logger.info(f"处理图片 {i+1}/{len(image_paths)}: {img_path}")
+
+        engines = validator.get_enabled_engines()
+
+        for engine in engines:
+            try:
+                result = await validator.run_single_engine(
+                    engine, img_path, req.data_type, context
+                )
+
+                if result.success:
+                    engines_success.add(engine)
+                    if engine not in all_engine_results:
+                        all_engine_results[engine] = []
+                    all_engine_results[engine].extend(result.data)
+                    logger.info(f"  {engine}: 识别 {len(result.data)} 条")
+                else:
+                    if engine not in engines_failed:
+                        engines_failed[engine] = result.error
+                    logger.warning(f"  {engine}: 失败 - {result.error}")
+
+            except Exception as e:
+                logger.error(f"  {engine}: 异常 - {e}")
+                if engine not in engines_failed:
+                    engines_failed[engine] = str(e)
+
+        # 更新上下文（使用第一个成功引擎的结果）
+        for engine in engines_success:
+            if engine in all_engine_results and all_engine_results[engine]:
+                last_row = all_engine_results[engine][-1]
+                context = {
+                    "exam_type": last_row.get("exam_type", ""),
+                    "enrollment_type": last_row.get("enrollment_type", ""),
+                    "university": {
+                        "code": last_row.get("university_code", ""),
+                        "name": last_row.get("university_name", ""),
+                    }
+                }
+                break
+
+    # 构建引擎结果摘要
+    engine_results = []
+    for engine in validator.get_enabled_engines():
+        if engine in engines_success:
+            engine_results.append(EngineResultSummary(
+                engine=engine,
+                success=True,
+                record_count=len(all_engine_results.get(engine, []))
+            ))
+        else:
+            engine_results.append(EngineResultSummary(
+                engine=engine,
+                success=False,
+                record_count=0,
+                error=engines_failed.get(engine, "未知错误")
+            ))
+
+    if not engines_success:
+        raise HTTPException(status_code=500, detail="所有 OCR 引擎都失败了")
+
+    # 去重各引擎结果
+    for engine in all_engine_results:
+        all_engine_results[engine] = merge_supplementary_rows(all_engine_results[engine])
+
+    # 按记录 key 分组比对
+    from multi_engine_validator import make_record_key, validate_record
+
+    all_records: Dict[str, Dict[str, Dict]] = {}  # key -> {engine -> row}
+
+    for engine, rows in all_engine_results.items():
+        for row in rows:
+            key = make_record_key(row)
+            if key not in all_records:
+                all_records[key] = {}
+            all_records[key][engine] = row
+
+    # 校验每条记录
+    approved_data = []
+    pending_review_data = []
+
+    stats = {
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "conflict": 0,
+        "auto_approved": 0,
+        "pending_review": 0
+    }
+
+    for record_key, engine_data in all_records.items():
+        validation = validate_record(record_key, engine_data)
+
+        # 统计
+        if validation.confidence == VerifyConfidence.HIGH:
+            stats["high"] += 1
+        elif validation.confidence == VerifyConfidence.MEDIUM:
+            stats["medium"] += 1
+        elif validation.confidence == VerifyConfidence.LOW:
+            stats["low"] += 1
+        elif validation.confidence == VerifyConfidence.CONFLICT:
+            stats["conflict"] += 1
+
+        if validation.review_status == ReviewStatus.AUTO_APPROVED:
+            stats["auto_approved"] += 1
+            # 转换为 SupplementaryRow
+            approved_data.append(SupplementaryRow(**{
+                "exam_type": validation.merged_data.get("exam_type", ""),
+                "enrollment_type": validation.merged_data.get("enrollment_type", ""),
+                "university_code": validation.merged_data.get("university_code", ""),
+                "university_name": validation.merged_data.get("university_name", ""),
+                "university_location": validation.merged_data.get("university_location", ""),
+                "university_note": validation.merged_data.get("university_note", ""),
+                "major_group_code": validation.merged_data.get("major_group_code", ""),
+                "major_group_subject": validation.merged_data.get("major_group_subject", ""),
+                "major_group_plan": validation.merged_data.get("major_group_plan", 0),
+                "major_code": validation.merged_data.get("major_code", ""),
+                "major_name": validation.merged_data.get("major_name", ""),
+                "major_note": validation.merged_data.get("major_note", ""),
+                "plan_count": validation.merged_data.get("plan_count", 0),
+                "tuition": validation.merged_data.get("tuition", ""),
+            }))
+        else:
+            stats["pending_review"] += 1
+            # 构建字段差异
+            field_diffs = []
+            for field_name, comparison in validation.field_comparisons.items():
+                if not comparison.is_consistent:
+                    field_diffs.append(FieldDiff(
+                        field_name=field_name,
+                        values={k: str(v) for k, v in comparison.values.items()},
+                        is_consistent=False,
+                        majority_value=str(comparison.majority_value) if comparison.majority_value else ""
+                    ))
+
+            pending_review_data.append(RecordValidationResult(
+                record_key=record_key,
+                confidence=validation.confidence.value,
+                review_status=validation.review_status.value,
+                merged_data=validation.merged_data,
+                engine_sources=list(engine_data.keys()),
+                conflict_fields=validation.conflict_fields,
+                field_diffs=field_diffs,
+                review_note=validation.review_note
+            ))
+
+    # 校验
+    all_data = [r.model_dump() for r in approved_data]
+    is_valid, errors = validate_supplementary_data(all_data) if all_data else (True, [])
+
+    logger.info(
+        f"多引擎校验完成: 总计 {len(all_records)} 条, "
+        f"高置信 {stats['high']}, 中置信 {stats['medium']}, "
+        f"冲突 {stats['conflict']}, 待审核 {stats['pending_review']}"
+    )
+
+    return MultiEngineValidationResponse(
+        engines_used=validator.get_enabled_engines(),
+        engines_success=list(engines_success),
+        engines_failed=engines_failed,
+        engine_results=engine_results,
+        total_records=len(all_records),
+        high_confidence=stats["high"],
+        medium_confidence=stats["medium"],
+        low_confidence=stats["low"],
+        conflicts=stats["conflict"],
+        auto_approved_count=stats["auto_approved"],
+        pending_review_count=stats["pending_review"],
+        approved_data=approved_data,
+        pending_review_data=pending_review_data,
+        is_valid=is_valid,
+        errors=errors
+    )
+
+
+@app.post("/validate-single-image")
+async def validate_single_image(
+    image_url: str,
+    data_type: str = "supplementary",
+    enable_baidu: bool = True,
+    enable_paddleocr: bool = True,
+    enable_rapid: bool = True,
+    enable_ai: bool = False,
+    ai_api_key: str = "",
+    ai_base_url: str = "",
+    ai_model: str = ""
+):
+    """
+    单张图片多引擎校验（用于调试和测试）
+    """
+    from multi_engine_validator import (
+        MultiEngineValidator,
+        VerifyConfidence,
+        ReviewStatus
+    )
+
+    # 下载图片
+    img_path = download_image(image_url)
+
+    # 创建校验器
+    ai_config = {
+        "api_key": ai_api_key,
+        "base_url": ai_base_url,
+        "model": ai_model
+    } if ai_api_key else None
+
+    validator = MultiEngineValidator(
+        enable_baidu=enable_baidu,
+        enable_paddleocr=enable_paddleocr,
+        enable_rapid=enable_rapid,
+        enable_ai=enable_ai and bool(ai_api_key),
+        ai_config=ai_config
+    )
+
+    # 运行校验
+    report = await validator.validate_image(img_path, data_type)
+
+    return {
+        "image_url": image_url,
+        "engines_used": report.engines_used,
+        "engines_success": report.engines_success,
+        "engines_failed": report.engines_failed,
+        "total_records": report.total_records,
+        "high_confidence": report.high_confidence,
+        "medium_confidence": report.medium_confidence,
+        "conflicts": report.conflicts,
+        "auto_approved": report.auto_approved_count,
+        "pending_review": report.pending_review_count,
+        "records": [
+            {
+                "key": r.record_key,
+                "confidence": r.confidence.value,
+                "status": r.review_status.value,
+                "data": r.merged_data,
+                "engines": list(r.engine_data.keys()),
+                "conflicts": r.conflict_fields
+            }
+            for r in report.records
+        ]
+    }
 
 
 if __name__ == "__main__":
