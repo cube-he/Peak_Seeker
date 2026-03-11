@@ -33,4 +33,8 @@ export class RunOcrDto {
   @IsOptional()
   @IsString()
   batch?: string = '本科一批';
+
+  @IsOptional()
+  @IsString()
+  sourceUrl?: string = '';  // 数据来源网页 URL
 }

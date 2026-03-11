@@ -50,6 +50,7 @@ export class DataImportController {
         dto.province ?? '四川',
         dto.examType ?? '物理类',
         dto.batch,
+        dto.sourceUrl ?? '',
       );
     } catch (e: any) {
       throw new HttpException(
@@ -77,6 +78,7 @@ export class DataImportController {
         dto.province ?? '四川',
         dto.examType ?? '物理类',
         dto.batch,
+        dto.sourceUrl ?? '',
         dto.aiConfigId,
         dto.aiApiKey ?? '',
         dto.aiBaseUrl,
@@ -169,6 +171,7 @@ export class DataImportController {
     @Body()
     dto: {
       imageUrl: string;
+      ocrData?: any[];  // 该图片的 OCR 识别数据
       year: number;
       province?: string;
       examType?: string;
@@ -182,6 +185,7 @@ export class DataImportController {
     try {
       return await this.dataImportService.aiVerifySingle(
         dto.imageUrl,
+        dto.ocrData ?? [],
         dto.year,
         dto.province ?? '四川',
         dto.examType ?? '物理类',
@@ -194,6 +198,51 @@ export class DataImportController {
     } catch (e: any) {
       throw new HttpException(
         e?.message || 'AI 验证失败',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('ocr-multi-engine')
+  async runMultiEngineOcr(
+    @Body()
+    dto: {
+      imageUrls: string[];
+      dataType?: string;
+      year: number;
+      province?: string;
+      examType?: string;
+      batch?: string;
+      enableBaidu?: boolean;
+      enablePaddleocr?: boolean;
+      enableRapid?: boolean;
+      enableAi?: boolean;
+      aiApiKey?: string;
+      aiBaseUrl?: string;
+      aiModel?: string;
+    },
+  ) {
+    try {
+      return await this.dataImportService.runMultiEngineOcr(
+        dto.imageUrls,
+        dto.dataType ?? 'supplementary',
+        dto.year,
+        dto.province ?? '四川',
+        dto.examType ?? '物理类',
+        dto.batch ?? '本科一批',
+        {
+          enableBaidu: dto.enableBaidu ?? true,
+          enablePaddleocr: dto.enablePaddleocr ?? true,
+          enableRapid: dto.enableRapid ?? true,
+          enableAi: dto.enableAi ?? false,
+          aiApiKey: dto.aiApiKey,
+          aiBaseUrl: dto.aiBaseUrl,
+          aiModel: dto.aiModel,
+        },
+      );
+    } catch (e: any) {
+      throw new HttpException(
+        e?.message || '多引擎 OCR 校验失败',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

@@ -28,6 +28,8 @@ export interface SupplementaryRow {
   major_note: string;          // 专业备注
   plan_count: number;          // 专业计划数
   tuition: string;             // 收费标准
+  source_url?: string;         // 数据来源网页 URL
+  page_number?: number;        // 数据所在页码
 }
 
 export interface OcrResult {
@@ -119,15 +121,36 @@ export async function runOcr(params: {
   province?: string;
   examType?: string;
   batch?: string;
+  sourceUrl?: string;  // 数据来源网页 URL
 }): Promise<OcrResult | (SupplementaryOcrResult & { image_data_counts?: number[] })> {
   return api.post('/data-import/ocr', params, {
     timeout: 5 * 60 * 1000, // OCR 识别最多等 5 分钟
   });
 }
 
+/** AI 校验状态 */
+export type VerifyStatus = 'matched' | 'conflict' | 'ai_only' | 'ocr_only' | 'timeout' | 'error';
+
+/** 带校验状态的数据行 */
+export interface VerifiedRow {
+  data: SupplementaryRow;
+  status: VerifyStatus;
+  ai_data?: SupplementaryRow;  // 冲突时的 AI 数据
+  diff_fields?: string[];  // 冲突的字段
+}
+
+/** AI 校验响应 */
+export interface AiVerifyResponse {
+  verified_rows: VerifiedRow[];
+  summary: Record<VerifyStatus, number>;
+  ai_raw_count: number;
+  error_message: string;
+}
+
 /** 单张图片 AI 验证（用于逐张校验） */
 export async function runAiVerifySingle(params: {
   imageUrl: string;
+  ocrData?: SupplementaryRow[];  // 该图片的 OCR 识别数据
   year: number;
   province?: string;
   examType?: string;
@@ -136,9 +159,9 @@ export async function runAiVerifySingle(params: {
   aiApiKey?: string;
   aiBaseUrl?: string;
   aiModel?: string;
-}): Promise<{ data: SupplementaryRow[]; errors: string[] }> {
+}): Promise<AiVerifyResponse> {
   return api.post('/data-import/ai-verify-single', params, {
-    timeout: 2 * 60 * 1000, // 单张图片 AI 验证最多 2 分钟
+    timeout: 3 * 60 * 1000, // 单张图片 AI 验证最多 3 分钟
   });
 }
 
@@ -149,6 +172,7 @@ export async function runOcrWithAI(params: {
   province?: string;
   examType?: string;
   batch?: string;
+  sourceUrl?: string;  // 数据来源网页 URL
   aiConfigId?: string;  // 本地 AI 配置 ID
   aiApiKey?: string;
   aiBaseUrl?: string;
@@ -250,4 +274,74 @@ export async function updateAiConfig(
 /** 删除 AI 配置 */
 export async function deleteAiConfig(id: string): Promise<{ success: boolean }> {
   return api.delete(`/ai-config/${id}`);
+}
+
+// ==================== 多引擎交叉校验 ====================
+
+/** 引擎结果摘要 */
+export interface EngineResultSummary {
+  engine: string;
+  success: boolean;
+  record_count: number;
+  error: string;
+}
+
+/** 字段差异 */
+export interface FieldDiff {
+  field_name: string;
+  values: Record<string, string>;
+  is_consistent: boolean;
+  majority_value: string;
+}
+
+/** 单条记录校验结果 */
+export interface RecordValidationResult {
+  record_key: string;
+  confidence: 'high' | 'medium' | 'low' | 'conflict' | 'single';
+  review_status: 'auto_approved' | 'pending_review';
+  merged_data: Record<string, unknown>;
+  engine_sources: string[];
+  conflict_fields: string[];
+  field_diffs: FieldDiff[];
+  review_note: string;
+}
+
+/** 多引擎校验响应 */
+export interface MultiEngineValidationResponse {
+  engines_used: string[];
+  engines_success: string[];
+  engines_failed: Record<string, string>;
+  engine_results: EngineResultSummary[];
+  total_records: number;
+  high_confidence: number;
+  medium_confidence: number;
+  low_confidence: number;
+  conflicts: number;
+  auto_approved_count: number;
+  pending_review_count: number;
+  approved_data: SupplementaryRow[];
+  pending_review_data: RecordValidationResult[];
+  is_valid: boolean;
+  errors: string[];
+}
+
+/** 多引擎交叉校验 OCR */
+export async function runMultiEngineOcr(params: {
+  imageUrls: string[];
+  dataType?: string;
+  year: number;
+  province?: string;
+  examType?: string;
+  batch?: string;
+  enableBaidu?: boolean;
+  enablePaddleocr?: boolean;
+  enableRapid?: boolean;
+  enableAi?: boolean;
+  aiApiKey?: string;
+  aiBaseUrl?: string;
+  aiModel?: string;
+}): Promise<MultiEngineValidationResponse> {
+  return api.post('/data-import/ocr-multi-engine', params, {
+    timeout: 10 * 60 * 1000, // 多引擎校验需要更长时间
+  });
 }

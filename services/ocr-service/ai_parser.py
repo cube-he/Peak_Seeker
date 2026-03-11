@@ -169,7 +169,9 @@ async def parse_image_with_ai(
     ]
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # 设置更长的超时时间：连接 30 秒，读取 180 秒
+        timeout = httpx.Timeout(connect=30.0, read=180.0, write=30.0, pool=30.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             logger.info(f"调用 AI API: {base_url}/chat/completions, model={model}")
             response = await client.post(
                 f"{base_url}/chat/completions",
@@ -192,6 +194,11 @@ async def parse_image_with_ai(
 
             result = response.json()
             content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+            # 如果 content 为空，记录完整响应以便调试
+            if not content:
+                logger.warning(f"AI 返回空内容，完整响应: {json.dumps(result, ensure_ascii=False)[:1000]}")
+
             logger.info(f"AI 返回内容长度: {len(content)}, 前200字符: {content[:200]}")
 
             # 解析 JSON 输出

@@ -39,6 +39,9 @@ import {
   RobotOutlined,
   ExclamationCircleOutlined,
   SettingOutlined,
+  CloseCircleOutlined,
+  ClockCircleOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
@@ -47,6 +50,7 @@ import {
   fetchPage,
   runOcr,
   runAiVerifySingle,
+  runMultiEngineOcr,
   saveImportData,
   saveSupplementaryData,
   getImportStats,
@@ -58,6 +62,9 @@ import {
   type SupplementaryRow,
   type ImportStats,
   type AiConfig,
+  type VerifyStatus,
+  type MultiEngineValidationResponse,
+  type RecordValidationResult,
 } from '@/services/dataImport';
 
 const { Content } = Layout;
@@ -112,6 +119,8 @@ export default function DataImportPage() {
   const [aiVerifying, setAiVerifying] = useState(false);
   const [aiVerifyProgress, setAiVerifyProgress] = useState({ current: 0, total: 0 });
   const [aiDiffs, setAiDiffs] = useState<Map<string, { field: string; ocrValue: any; aiValue: any }[]>>(new Map());
+  // 新增：跟踪每行的校验状态
+  const [aiVerifyStatus, setAiVerifyStatus] = useState<Map<string, VerifyStatus>>(new Map());
   const [showAiConfig, setShowAiConfig] = useState(false);
 
   // 本地 AI 配置
@@ -121,6 +130,18 @@ export default function DataImportPage() {
 
   // 记录每张图片识别的数据行数（用于筛选有数据的图片）
   const [imageDataCounts, setImageDataCounts] = useState<number[]>([]);
+
+  // 多引擎校验相关
+  const [multiEngineMode, setMultiEngineMode] = useState(false);
+  const [multiEngineResult, setMultiEngineResult] = useState<MultiEngineValidationResponse | null>(null);
+  const [multiEngineLoading, setMultiEngineLoading] = useState(false);
+  const [engineOptions, setEngineOptions] = useState({
+    enableBaidu: true,
+    enablePaddleocr: true,
+    enableRapid: true,
+    enableAi: false,
+  });
+  const [pendingReviewData, setPendingReviewData] = useState<RecordValidationResult[]>([]);
 
   // 权限检查
   const isAdmin =
@@ -294,6 +315,7 @@ export default function DataImportPage() {
         province,
         examType,
         batch,
+        sourceUrl: url,  // 传递来源 URL
       });
       setOcrResult(result);
 
@@ -337,19 +359,31 @@ export default function DataImportPage() {
       return;
     }
 
-    // 筛选有数据的图片（根据 imageDataCounts，只传有数据的图片）
-    const imagesWithData: { url: string; index: number }[] = [];
+    // 根据 imageDataCounts 把 OCR 数据按图片分组
+    const imageOcrDataMap: Map<number, typeof supplementaryData> = new Map();
+    if (imageDataCounts.length > 0) {
+      let dataIndex = 0;
+      for (let imgIdx = 0; imgIdx < imageDataCounts.length; imgIdx++) {
+        const count = imageDataCounts[imgIdx];
+        if (count > 0) {
+          imageOcrDataMap.set(imgIdx, supplementaryData.slice(dataIndex, dataIndex + count));
+        }
+        dataIndex += count;
+      }
+    }
+
+    // 筛选有数据的图片
+    const imagesWithData: { url: string; index: number; ocrData: typeof supplementaryData }[] = [];
     fetchResult.image_urls.forEach((url, index) => {
-      // 如果有 imageDataCounts 信息，只选择有数据的图片
-      // 否则跳过前几张（通常是标题/说明页）
       if (imageDataCounts.length > 0) {
-        if (imageDataCounts[index] > 0) {
-          imagesWithData.push({ url, index });
+        const ocrData = imageOcrDataMap.get(index);
+        if (ocrData && ocrData.length > 0) {
+          imagesWithData.push({ url, index, ocrData });
         }
       } else {
-        // 没有详细信息时，假设从第2张开始有数据
+        // 没有详细信息时，假设从第2张开始有数据，传入全部数据
         if (index >= 1) {
-          imagesWithData.push({ url, index });
+          imagesWithData.push({ url, index, ocrData: supplementaryData });
         }
       }
     });
@@ -362,21 +396,27 @@ export default function DataImportPage() {
     setAiVerifying(true);
     setAiVerifyProgress({ current: 0, total: imagesWithData.length });
 
-    // 使用本地变量累积差异，避免 React 状态异步更新问题
+    // 使用本地变量累积差异和状态，避免 React 状态异步更新问题
     const allDiffs = new Map<string, { field: string; ocrValue: any; aiValue: any }[]>();
+    const allStatus = new Map<string, VerifyStatus>();
     setAiDiffs(allDiffs);
+    setAiVerifyStatus(allStatus);
 
     let successCount = 0;
     let failCount = 0;
+    let timeoutCount = 0;
+    let matchedCount = 0;
+    let conflictCount = 0;
 
     // 逐张调用 AI 验证
     for (let i = 0; i < imagesWithData.length; i++) {
-      const { url } = imagesWithData[i];
+      const { url, ocrData } = imagesWithData[i];
       setAiVerifyProgress({ current: i + 1, total: imagesWithData.length });
 
-      // 调用单张图片的 AI 验证
+      // 调用单张图片的 AI 验证，传入该图片的 OCR 数据
       const aiParams: Parameters<typeof runAiVerifySingle>[0] = {
         imageUrl: url,
+        ocrData,
         year,
         province,
         examType,
@@ -394,12 +434,18 @@ export default function DataImportPage() {
       try {
         const aiResult = await runAiVerifySingle(aiParams);
 
-        // 检查 AI 是否返回了数据
-        if (!aiResult.data || aiResult.data.length === 0) {
-          failCount++;
+        // 检查是否有错误（超时等）
+        if (aiResult.error_message) {
+          if (aiResult.error_message.includes('超时')) {
+            timeoutCount++;
+            message.warning(`第 ${i + 1} 张图片 AI 校验超时`);
+          } else {
+            failCount++;
+            message.warning(`第 ${i + 1} 张图片: ${aiResult.error_message}`);
+          }
+
           // 第一张图片就失败，提示用户并询问是否继续
-          if (i === 0) {
-            message.error(`第 ${i + 1} 张图片 AI 识别返回空数据，可能是模型不支持图片识别或 API 配置有误`);
+          if (i === 0 && (aiResult.summary.timeout > 0 || aiResult.summary.error > 0)) {
             const shouldContinue = window.confirm(
               'AI 校验第一张图片就失败了，可能是配置问题。\n\n' +
               '常见原因：\n' +
@@ -412,37 +458,33 @@ export default function DataImportPage() {
               setAiVerifying(false);
               return;
             }
-          } else {
-            message.warning(`第 ${i + 1} 张图片 AI 识别返回空数据`);
           }
-          continue;
+        } else {
+          successCount++;
         }
 
-        successCount++;
+        // 统计校验结果
+        matchedCount += aiResult.summary.matched || 0;
+        conflictCount += aiResult.summary.conflict || 0;
 
-        // 比对 AI 结果与 OCR 结果，标记差异
-        for (const aiRow of aiResult.data) {
-          // 在 OCR 数据中查找匹配的行
-          const ocrRow = supplementaryData.find(
-            (r) =>
-              r.university_code === aiRow.university_code &&
-              r.major_group_code === aiRow.major_group_code &&
-              r.major_code === aiRow.major_code
-          );
+        // 处理校验结果，记录每行状态和冲突
+        for (const row of aiResult.verified_rows) {
+          const rowKey = `${row.data.university_code}_${row.data.major_group_code}_${row.data.major_code}`;
 
-          if (ocrRow) {
-            const rowKey = `${aiRow.university_code}_${aiRow.major_group_code}_${aiRow.major_code}`;
+          // 记录状态
+          allStatus.set(rowKey, row.status);
+
+          // 如果是冲突，提取差异详情
+          if (row.status === 'conflict' && row.diff_fields && row.diff_fields.length > 0) {
             const diffs: { field: string; ocrValue: any; aiValue: any }[] = [];
 
-            // 比较关键字段
-            if (ocrRow.plan_count !== aiRow.plan_count) {
-              diffs.push({ field: 'plan_count', ocrValue: ocrRow.plan_count, aiValue: aiRow.plan_count });
-            }
-            if (ocrRow.tuition !== aiRow.tuition) {
-              diffs.push({ field: 'tuition', ocrValue: ocrRow.tuition, aiValue: aiRow.tuition });
-            }
-            if (ocrRow.major_name !== aiRow.major_name) {
-              diffs.push({ field: 'major_name', ocrValue: ocrRow.major_name, aiValue: aiRow.major_name });
+            for (const diffField of row.diff_fields) {
+              // 解析 diff_fields 格式: "plan_count(OCR:1, AI:2)"
+              const match = diffField.match(/^(\w+)\(OCR:(.+), AI:(.+)\)$/);
+              if (match) {
+                const [, field, ocrValue, aiValue] = match;
+                diffs.push({ field, ocrValue, aiValue });
+              }
             }
 
             if (diffs.length > 0) {
@@ -451,13 +493,16 @@ export default function DataImportPage() {
           }
         }
 
-        // 每处理完一张图片，更新 UI 显示差异
+        // 每处理完一张图片，更新 UI 显示
         setAiDiffs(new Map(allDiffs));
+        setAiVerifyStatus(new Map(allStatus));
 
         // 实时提示进度
-        if (allDiffs.size > 0) {
-          message.info(`第 ${i + 1} 张图片校验完成，当前发现 ${allDiffs.size} 处差异`);
-        }
+        const imgSummary = aiResult.summary;
+        message.info(
+          `第 ${i + 1} 张: 一致 ${imgSummary.matched || 0}, 冲突 ${imgSummary.conflict || 0}, ` +
+          `仅OCR ${imgSummary.ocr_only || 0}, 仅AI ${imgSummary.ai_only || 0}`
+        );
 
       } catch (e: any) {
         failCount++;
@@ -480,12 +525,24 @@ export default function DataImportPage() {
     // 最终汇总
     setAiVerifying(false);
     const diffCount = allDiffs.size;
-    if (failCount === imagesWithData.length) {
+    const totalImages = imagesWithData.length;
+
+    if (failCount + timeoutCount === totalImages) {
       message.error('所有图片 AI 校验都失败了，请检查 AI 配置');
-    } else if (diffCount > 0) {
-      message.warning(`AI 校验完成（成功 ${successCount}/${imagesWithData.length}），发现 ${diffCount} 处差异，请人工复核`);
-    } else if (successCount > 0) {
-      message.success(`AI 校验完成（成功 ${successCount}/${imagesWithData.length}），未发现差异`);
+    } else {
+      const statusParts = [];
+      if (successCount > 0) statusParts.push(`成功 ${successCount}`);
+      if (timeoutCount > 0) statusParts.push(`超时 ${timeoutCount}`);
+      if (failCount > 0) statusParts.push(`失败 ${failCount}`);
+
+      if (diffCount > 0) {
+        message.warning(
+          `AI 校验完成（${statusParts.join(', ')}），` +
+          `一致 ${matchedCount} 条，冲突 ${conflictCount} 条，请人工复核`
+        );
+      } else if (successCount > 0) {
+        message.success(`AI 校验完成（${statusParts.join(', ')}），全部一致，无冲突`);
+      }
     }
   };
 
@@ -517,6 +574,133 @@ export default function DataImportPage() {
     });
 
     message.success('已应用 AI 结果');
+  };
+
+  // 多引擎交叉校验
+  const handleMultiEngineOcr = async () => {
+    if (!fetchResult) return;
+
+    // 检查是否至少启用了 2 个引擎
+    const enabledCount = Object.values(engineOptions).filter(Boolean).length;
+    if (enabledCount < 2) {
+      message.warning('请至少启用 2 个 OCR 引擎进行交叉校验');
+      return;
+    }
+
+    // 如果启用 AI，检查配置
+    if (engineOptions.enableAi) {
+      if (aiConfigMode === 'saved' && !selectedAiConfig) {
+        message.error('启用 AI 校验需要先选择 AI 配置');
+        return;
+      }
+      if (aiConfigMode === 'manual' && !aiApiKey) {
+        message.error('启用 AI 校验需要先输入 API Key');
+        return;
+      }
+    }
+
+    setMultiEngineLoading(true);
+    setMultiEngineResult(null);
+    setPendingReviewData([]);
+
+    try {
+      const params: Parameters<typeof runMultiEngineOcr>[0] = {
+        imageUrls: fetchResult.image_urls,
+        dataType,
+        year,
+        province,
+        examType,
+        batch,
+        ...engineOptions,
+      };
+
+      // AI 配置
+      if (engineOptions.enableAi) {
+        if (aiConfigMode === 'saved' && selectedAiConfig) {
+          // 从已保存配置获取
+          const config = aiConfigs.find(c => c.id === selectedAiConfig);
+          if (config) {
+            params.aiApiKey = ''; // 后端会从配置 ID 获取
+            params.aiBaseUrl = config.apiBaseUrl;
+            params.aiModel = config.modelName;
+          }
+        } else {
+          params.aiApiKey = aiApiKey;
+          params.aiBaseUrl = aiBaseUrl;
+          params.aiModel = aiModel;
+        }
+      }
+
+      const result = await runMultiEngineOcr(params);
+      setMultiEngineResult(result);
+
+      // 设置数据
+      if (result.approved_data.length > 0) {
+        setSupplementaryData(result.approved_data);
+      }
+      if (result.pending_review_data.length > 0) {
+        setPendingReviewData(result.pending_review_data);
+      }
+
+      setCurrentStep(2);
+      setOcrResult({
+        total_rows: result.total_records,
+        university_count: new Set(result.approved_data.map(r => r.university_code)).size,
+        major_group_count: 0,
+        is_valid: result.is_valid,
+        errors: result.errors,
+        data: result.approved_data,
+      } as SupplementaryOcrResult);
+
+      // 显示结果摘要
+      if (result.pending_review_count > 0) {
+        message.warning(
+          `多引擎校验完成: ${result.auto_approved_count} 条自动通过, ${result.pending_review_count} 条待人工审核`
+        );
+      } else {
+        message.success(
+          `多引擎校验完成: ${result.total_records} 条数据全部通过校验`
+        );
+      }
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e?.message || '多引擎校验失败');
+    } finally {
+      setMultiEngineLoading(false);
+    }
+  };
+
+  // 审核通过待审核数据
+  const handleApproveReviewItem = (recordKey: string) => {
+    const item = pendingReviewData.find(r => r.record_key === recordKey);
+    if (!item) return;
+
+    // 将待审核数据添加到已通过数据
+    const newRow: SupplementaryRow = {
+      exam_type: (item.merged_data.exam_type as string) || '',
+      enrollment_type: (item.merged_data.enrollment_type as string) || '',
+      university_code: (item.merged_data.university_code as string) || '',
+      university_name: (item.merged_data.university_name as string) || '',
+      university_location: (item.merged_data.university_location as string) || '',
+      university_note: (item.merged_data.university_note as string) || '',
+      major_group_code: (item.merged_data.major_group_code as string) || '',
+      major_group_subject: (item.merged_data.major_group_subject as string) || '',
+      major_group_plan: (item.merged_data.major_group_plan as number) || 0,
+      major_code: (item.merged_data.major_code as string) || '',
+      major_name: (item.merged_data.major_name as string) || '',
+      major_note: (item.merged_data.major_note as string) || '',
+      plan_count: (item.merged_data.plan_count as number) || 0,
+      tuition: (item.merged_data.tuition as string) || '',
+    };
+
+    setSupplementaryData(prev => [...prev, newRow]);
+    setPendingReviewData(prev => prev.filter(r => r.record_key !== recordKey));
+    message.success('已通过审核');
+  };
+
+  // 拒绝待审核数据
+  const handleRejectReviewItem = (recordKey: string) => {
+    setPendingReviewData(prev => prev.filter(r => r.record_key !== recordKey));
+    message.info('已拒绝该条数据');
   };
 
   // Step 3: 保存
@@ -578,6 +762,11 @@ export default function DataImportPage() {
     setAiVerifyProgress({ current: 0, total: 0 });
     setImageDataCounts([]);
     setShowAiConfig(false);
+    // 多引擎相关
+    setMultiEngineMode(false);
+    setMultiEngineResult(null);
+    setMultiEngineLoading(false);
+    setPendingReviewData([]);
   };
 
   // OCR 数据表格列（可编辑）
@@ -848,15 +1037,164 @@ export default function DataImportPage() {
                   </Text>
                 )}
 
+                {/* 多引擎校验选项（仅征集志愿） */}
+                {dataType === 'supplementary' && (
+                  <Card size="small" style={{ marginTop: 16, background: '#f0f5ff' }}>
+                    <Row align="middle" gutter={16}>
+                      <Col flex="auto">
+                        <Space>
+                          <ScanOutlined style={{ fontSize: 18, color: '#1890ff' }} />
+                          <Text strong>多引擎交叉校验</Text>
+                          <Tag color="blue">推荐</Tag>
+                          <Text type="secondary">使用多个 OCR 引擎同时识别，交叉比对确保数据准确</Text>
+                        </Space>
+                      </Col>
+                      <Col>
+                        <Radio.Group
+                          value={multiEngineMode}
+                          onChange={(e) => setMultiEngineMode(e.target.value)}
+                          optionType="button"
+                          size="small"
+                        >
+                          <Radio.Button value={false}>单引擎</Radio.Button>
+                          <Radio.Button value={true}>多引擎</Radio.Button>
+                        </Radio.Group>
+                      </Col>
+                    </Row>
+
+                    {multiEngineMode && (
+                      <div style={{ marginTop: 16, padding: 12, background: '#fff', borderRadius: 4 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8 }}>选择 OCR 引擎（至少 2 个）</Text>
+                        <Space wrap>
+                          <Tag.CheckableTag
+                            checked={engineOptions.enableBaidu}
+                            onChange={(checked) => setEngineOptions(prev => ({ ...prev, enableBaidu: checked }))}
+                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                          >
+                            百度云 OCR
+                          </Tag.CheckableTag>
+                          <Tag.CheckableTag
+                            checked={engineOptions.enablePaddleocr}
+                            onChange={(checked) => setEngineOptions(prev => ({ ...prev, enablePaddleocr: checked }))}
+                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                          >
+                            PaddleOCR
+                          </Tag.CheckableTag>
+                          <Tag.CheckableTag
+                            checked={engineOptions.enableRapid}
+                            onChange={(checked) => setEngineOptions(prev => ({ ...prev, enableRapid: checked }))}
+                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                          >
+                            RapidOCR
+                          </Tag.CheckableTag>
+                          <Tag.CheckableTag
+                            checked={engineOptions.enableAi}
+                            onChange={(checked) => {
+                              setEngineOptions(prev => ({ ...prev, enableAi: checked }));
+                              if (checked && aiConfigs.length === 0) {
+                                loadAiConfigs();
+                              }
+                            }}
+                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                          >
+                            AI 视觉模型
+                          </Tag.CheckableTag>
+                        </Space>
+
+                        {engineOptions.enableAi && (
+                          <div style={{ marginTop: 12, padding: 8, background: '#fafafa', borderRadius: 4 }}>
+                            <Radio.Group
+                              value={aiConfigMode}
+                              onChange={(e) => setAiConfigMode(e.target.value)}
+                              size="small"
+                              style={{ marginBottom: 8 }}
+                            >
+                              <Radio.Button value="saved">已保存配置</Radio.Button>
+                              <Radio.Button value="manual">手动输入</Radio.Button>
+                            </Radio.Group>
+
+                            {aiConfigMode === 'saved' ? (
+                              <Select
+                                value={selectedAiConfig}
+                                onChange={setSelectedAiConfig}
+                                loading={loadingAiConfigs}
+                                style={{ width: '100%' }}
+                                placeholder="选择 AI 配置"
+                                size="small"
+                                options={aiConfigs.map(c => ({
+                                  value: c.id,
+                                  label: `${c.name}${c.isDefault ? ' (默认)' : ''}`,
+                                }))}
+                              />
+                            ) : (
+                              <Row gutter={8}>
+                                <Col span={8}>
+                                  <Input.Password
+                                    value={aiApiKey}
+                                    onChange={(e) => setAiApiKey(e.target.value)}
+                                    placeholder="API Key"
+                                    size="small"
+                                  />
+                                </Col>
+                                <Col span={8}>
+                                  <Input
+                                    value={aiBaseUrl}
+                                    onChange={(e) => setAiBaseUrl(e.target.value)}
+                                    placeholder="API URL"
+                                    size="small"
+                                  />
+                                </Col>
+                                <Col span={8}>
+                                  <Input
+                                    value={aiModel}
+                                    onChange={(e) => setAiModel(e.target.value)}
+                                    placeholder="模型名称"
+                                    size="small"
+                                  />
+                                </Col>
+                              </Row>
+                            )}
+                          </div>
+                        )}
+
+                        <Alert
+                          style={{ marginTop: 12 }}
+                          message="多引擎校验说明"
+                          description={
+                            <ul style={{ margin: 0, paddingLeft: 16 }}>
+                              <li>多个引擎结果一致的数据自动通过</li>
+                              <li>结果不一致的数据标记待人工审核</li>
+                              <li>启用的引擎越多，校验越准确，但耗时也越长</li>
+                            </ul>
+                          }
+                          type="info"
+                          showIcon
+                        />
+                      </div>
+                    )}
+                  </Card>
+                )}
+
                 <Space>
                   <Button onClick={() => setCurrentStep(0)}>上一步</Button>
-                  <Button
-                    type="primary"
-                    icon={<ScanOutlined />}
-                    onClick={handleOcr}
-                  >
-                    开始 OCR 识别
-                  </Button>
+                  {dataType === 'supplementary' && multiEngineMode ? (
+                    <Button
+                      type="primary"
+                      icon={<ScanOutlined />}
+                      onClick={handleMultiEngineOcr}
+                      loading={multiEngineLoading}
+                    >
+                      {multiEngineLoading ? '多引擎校验中...' : '开始多引擎校验'}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="primary"
+                      icon={<ScanOutlined />}
+                      onClick={handleOcr}
+                    >
+                      开始 OCR 识别
+                    </Button>
+                  )}
                 </Space>
               </Space>
             </Card>
@@ -944,14 +1282,27 @@ export default function DataImportPage() {
                   <>
                     {/* 征集志愿预览 */}
                     <Row gutter={16}>
-                      <Col span={4}>
-                        <Statistic title="识别行数" value={supplementaryData.length} />
+                      <Col span={3}>
+                        <Statistic title="识别行数" value={supplementaryData.length + pendingReviewData.length} />
                       </Col>
-                      <Col span={4}>
+                      <Col span={3}>
                         <Statistic title="院校数" value={(ocrResult as SupplementaryOcrResult).university_count} />
                       </Col>
-                      <Col span={4}>
-                        <Statistic title="专业组数" value={(ocrResult as SupplementaryOcrResult).major_group_count} />
+                      <Col span={3}>
+                        <Statistic
+                          title="自动通过"
+                          value={supplementaryData.length}
+                          valueStyle={{ color: '#52c41a' }}
+                          prefix={<CheckCircleOutlined />}
+                        />
+                      </Col>
+                      <Col span={3}>
+                        <Statistic
+                          title="待审核"
+                          value={pendingReviewData.length}
+                          valueStyle={{ color: pendingReviewData.length > 0 ? '#faad14' : '#999' }}
+                          prefix={<ExclamationCircleOutlined />}
+                        />
                       </Col>
                       <Col span={4}>
                         <Statistic
@@ -979,7 +1330,160 @@ export default function DataImportPage() {
                       </Col>
                     </Row>
 
-                    {/* AI 校验区域 */}
+                    {/* 多引擎校验结果摘要 */}
+                    {multiEngineResult && (
+                      <Card size="small" style={{ marginTop: 16, background: '#f0f5ff' }}>
+                        <Row align="middle" gutter={16}>
+                          <Col flex="auto">
+                            <Space wrap>
+                              <Text strong>多引擎校验结果</Text>
+                              <Divider type="vertical" />
+                              <Text type="secondary">使用引擎:</Text>
+                              {multiEngineResult.engines_success.map(engine => (
+                                <Tag key={engine} color="green">{engine}</Tag>
+                              ))}
+                              {Object.entries(multiEngineResult.engines_failed).map(([engine, error]) => (
+                                <Tooltip key={engine} title={error}>
+                                  <Tag color="red">{engine} (失败)</Tag>
+                                </Tooltip>
+                              ))}
+                            </Space>
+                          </Col>
+                          <Col>
+                            <Space>
+                              <Tag color="green">高置信: {multiEngineResult.high_confidence}</Tag>
+                              <Tag color="blue">中置信: {multiEngineResult.medium_confidence}</Tag>
+                              <Tag color="orange">冲突: {multiEngineResult.conflicts}</Tag>
+                            </Space>
+                          </Col>
+                        </Row>
+                      </Card>
+                    )}
+
+                    {/* 待审核数据区域 */}
+                    {pendingReviewData.length > 0 && (
+                      <Card
+                        size="small"
+                        title={
+                          <Space>
+                            <ExclamationCircleOutlined style={{ color: '#faad14' }} />
+                            <span>待人工审核 ({pendingReviewData.length} 条)</span>
+                          </Space>
+                        }
+                        style={{ marginTop: 16, borderColor: '#faad14' }}
+                      >
+                        <Alert
+                          message="以下数据在多个 OCR 引擎间存在差异，请人工确认"
+                          type="warning"
+                          showIcon
+                          style={{ marginBottom: 12 }}
+                        />
+                        <Table
+                          dataSource={pendingReviewData}
+                          rowKey="record_key"
+                          size="small"
+                          pagination={{ pageSize: 10 }}
+                          columns={[
+                            {
+                              title: '置信度',
+                              dataIndex: 'confidence',
+                              width: 80,
+                              render: (val: string) => {
+                                const colors: Record<string, string> = {
+                                  high: 'green',
+                                  medium: 'blue',
+                                  low: 'orange',
+                                  conflict: 'red',
+                                  single: 'default',
+                                };
+                                return <Tag color={colors[val] || 'default'}>{val}</Tag>;
+                              },
+                            },
+                            {
+                              title: '院校',
+                              key: 'university',
+                              width: 150,
+                              render: (_: any, record: RecordValidationResult) => (
+                                <span>{String(record.merged_data.university_code || '')} {String(record.merged_data.university_name || '')}</span>
+                              ),
+                            },
+                            {
+                              title: '专业',
+                              key: 'major',
+                              width: 200,
+                              render: (_: any, record: RecordValidationResult) => (
+                                <span>{String(record.merged_data.major_code || '')} {String(record.merged_data.major_name || '')}</span>
+                              ),
+                            },
+                            {
+                              title: '计划数',
+                              key: 'plan_count',
+                              width: 80,
+                              render: (_: any, record: RecordValidationResult) => String(record.merged_data.plan_count ?? ''),
+                            },
+                            {
+                              title: '冲突字段',
+                              dataIndex: 'conflict_fields',
+                              width: 150,
+                              render: (fields: string[]) => (
+                                <Space wrap size={4}>
+                                  {fields.map(f => <Tag key={f} color="red">{f}</Tag>)}
+                                </Space>
+                              ),
+                            },
+                            {
+                              title: '各引擎值',
+                              dataIndex: 'field_diffs',
+                              width: 200,
+                              render: (diffs: any[]) => (
+                                <Space direction="vertical" size={2}>
+                                  {diffs?.slice(0, 2).map((d, i) => (
+                                    <Text key={i} type="secondary" style={{ fontSize: 12 }}>
+                                      {d.field_name}: {Object.entries(d.values).map(([k, v]) => `${k}=${v}`).join(', ')}
+                                    </Text>
+                                  ))}
+                                </Space>
+                              ),
+                            },
+                            {
+                              title: '来源',
+                              dataIndex: 'engine_sources',
+                              width: 120,
+                              render: (sources: string[]) => (
+                                <Space wrap size={4}>
+                                  {sources.map(s => <Tag key={s} color="blue">{s}</Tag>)}
+                                </Space>
+                              ),
+                            },
+                            {
+                              title: '操作',
+                              key: 'action',
+                              width: 120,
+                              fixed: 'right' as const,
+                              render: (_: any, record: RecordValidationResult) => (
+                                <Space>
+                                  <Button
+                                    type="primary"
+                                    size="small"
+                                    onClick={() => handleApproveReviewItem(record.record_key)}
+                                  >
+                                    通过
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    danger
+                                    onClick={() => handleRejectReviewItem(record.record_key)}
+                                  >
+                                    拒绝
+                                  </Button>
+                                </Space>
+                              ),
+                            },
+                          ]}
+                          scroll={{ x: 1100 }}
+                        />
+                      </Card>
+                    )}
                     <Card size="small" style={{ marginTop: 16, background: '#f6f8fa' }}>
                       <Row align="middle" gutter={16}>
                         <Col flex="auto">
@@ -1130,6 +1634,36 @@ export default function DataImportPage() {
                       style={{ marginTop: 16 }}
                       dataSource={supplementaryData}
                       columns={[
+                        // AI 校验状态列
+                        {
+                          title: 'AI校验',
+                          key: 'ai_status',
+                          width: 70,
+                          fixed: 'left' as const,
+                          render: (_: any, record: SupplementaryRow) => {
+                            const rowKey = `${record.university_code}_${record.major_group_code}_${record.major_code}`;
+                            const status = aiVerifyStatus.get(rowKey);
+                            if (!status) {
+                              return <Tag color="default"><QuestionCircleOutlined /> 未校验</Tag>;
+                            }
+                            switch (status) {
+                              case 'matched':
+                                return <Tag color="success"><CheckCircleOutlined /> 一致</Tag>;
+                              case 'conflict':
+                                return <Tag color="error"><ExclamationCircleOutlined /> 冲突</Tag>;
+                              case 'ocr_only':
+                                return <Tag color="warning"><WarningOutlined /> 仅OCR</Tag>;
+                              case 'ai_only':
+                                return <Tag color="blue"><RobotOutlined /> 仅AI</Tag>;
+                              case 'timeout':
+                                return <Tag color="orange"><ClockCircleOutlined /> 超时</Tag>;
+                              case 'error':
+                                return <Tag color="red"><CloseCircleOutlined /> 错误</Tag>;
+                              default:
+                                return <Tag color="default">{status}</Tag>;
+                            }
+                          },
+                        },
                         ...supplementaryColumns.slice(0, -2), // 除了计划数和收费
                         {
                           title: '计划数',

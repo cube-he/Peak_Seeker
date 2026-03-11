@@ -46,6 +46,7 @@ export class DataImportService {
     province: string,
     examType: string,
     batch?: string,
+    sourceUrl?: string,
   ) {
     const resp = await fetch(`${this.ocrServiceUrl}/ocr`, {
       method: 'POST',
@@ -57,6 +58,7 @@ export class DataImportService {
         province,
         exam_type: examType,
         batch: batch || '本科一批',
+        source_url: sourceUrl || '',
       }),
       signal: AbortSignal.timeout(5 * 60_000), // OCR 识别最多 5 分钟
     });
@@ -78,6 +80,7 @@ export class DataImportService {
     province: string,
     examType: string,
     batch?: string,
+    sourceUrl?: string,
     aiConfigId?: string,  // 本地 AI 配置 ID
     aiApiKey?: string,    // 手动输入的 API Key
     aiBaseUrl?: string,
@@ -108,6 +111,7 @@ export class DataImportService {
         province,
         exam_type: examType,
         batch: batch || '本科一批',
+        source_url: sourceUrl || '',
         enable_ai: !!finalApiKey,
         ai_api_key: finalApiKey,
         ai_base_url: finalBaseUrl,
@@ -320,9 +324,18 @@ export class DataImportService {
 
   /**
    * 单张图片 AI 验证（用于逐张校验）
+   *
+   * 对比 AI 识别结果与 OCR 数据，返回带状态标记的结果：
+   * - matched: AI 与 OCR 一致
+   * - conflict: AI 与 OCR 冲突（需人工审核）
+   * - ai_only: 仅 AI 识别到（OCR 可能漏识别）
+   * - ocr_only: 仅 OCR 识别到（AI 可能漏识别）
+   * - timeout: AI 请求超时
+   * - error: AI 请求错误
    */
   async aiVerifySingle(
     imageUrl: string,
+    ocrData: any[],
     year: number,
     province: string,
     examType: string,
@@ -356,6 +369,7 @@ export class DataImportService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         image_url: imageUrl,
+        ocr_data: ocrData,
         year,
         province,
         exam_type: examType,
@@ -364,7 +378,7 @@ export class DataImportService {
         ai_base_url: finalBaseUrl,
         ai_model: finalModel,
       }),
-      signal: AbortSignal.timeout(2 * 60_000), // 单张图片 AI 验证最多 2 分钟
+      signal: AbortSignal.timeout(3 * 60_000), // 单张图片 AI 验证最多 3 分钟
     });
 
     if (!resp.ok) {
@@ -373,5 +387,71 @@ export class DataImportService {
     }
 
     return resp.json();
+  }
+
+  /**
+   * 多引擎交叉校验 OCR
+   *
+   * 使用多个 OCR 引擎（百度云、PaddleOCR、RapidOCR、AI视觉模型）同时识别，
+   * 通过交叉比对确保数据准确性。
+   */
+  async runMultiEngineOcr(
+    imageUrls: string[],
+    dataType: string,
+    year: number,
+    province: string,
+    examType: string,
+    batch: string,
+    options: {
+      enableBaidu?: boolean;
+      enablePaddleocr?: boolean;
+      enableRapid?: boolean;
+      enableAi?: boolean;
+      aiApiKey?: string;
+      aiBaseUrl?: string;
+      aiModel?: string;
+    },
+  ) {
+    this.logger.log(
+      `多引擎校验: ${imageUrls.length} 张图片, 引擎: ` +
+        `baidu=${options.enableBaidu}, paddleocr=${options.enablePaddleocr}, ` +
+        `rapid=${options.enableRapid}, ai=${options.enableAi}`,
+    );
+
+    const resp = await fetch(`${this.ocrServiceUrl}/ocr-multi-engine`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_urls: imageUrls,
+        data_type: dataType,
+        year,
+        province,
+        exam_type: examType,
+        batch: batch || '本科一批',
+        enable_baidu: options.enableBaidu ?? true,
+        enable_paddleocr: options.enablePaddleocr ?? true,
+        enable_rapid: options.enableRapid ?? true,
+        enable_ai: options.enableAi ?? false,
+        ai_api_key: options.aiApiKey || '',
+        ai_base_url: options.aiBaseUrl || '',
+        ai_model: options.aiModel || '',
+      }),
+      signal: AbortSignal.timeout(10 * 60_000), // 多引擎校验需要更长时间
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `多引擎 OCR 校验失败: ${resp.status}`);
+    }
+
+    const result = await resp.json();
+
+    this.logger.log(
+      `多引擎校验完成: 总计 ${result.total_records} 条, ` +
+        `高置信 ${result.high_confidence}, 中置信 ${result.medium_confidence}, ` +
+        `冲突 ${result.conflicts}, 待审核 ${result.pending_review_count}`,
+    );
+
+    return result;
   }
 }

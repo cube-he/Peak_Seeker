@@ -74,6 +74,7 @@ class OcrRequest(BaseModel):
     province: str = Field("四川", description="省份")
     exam_type: str = Field("物理类", description="考试类型")
     batch: str = Field("本科一批", description="批次（征集志愿用）")
+    source_url: str = Field("", description="数据来源网页 URL")
     # AI 校验选项
     enable_ai: bool = Field(False, description="是否启用 AI 校验")
     ai_api_key: str = Field("", description="AI API 密钥")
@@ -102,6 +103,8 @@ class SupplementaryRow(BaseModel):
     major_note: str = ""          # 专业备注（如：国家公费师范生）
     plan_count: int               # 专业计划数
     tuition: str = ""             # 收费标准
+    source_url: str = ""          # 数据来源网页 URL
+    page_number: int = 0          # 数据所在页码
 
 
 class OcrResponse(BaseModel):
@@ -815,6 +818,90 @@ def extract_plan_and_tuition_from_row(row_items: List[Dict], img_width: float, m
                 tuition = f"{val}元"
 
     return plan_count, tuition
+
+
+def extract_page_number(ocr_result: List[Tuple], img_height: float = None) -> int:
+    """
+    从 OCR 结果中提取页码
+
+    页码通常位于图片的左下角或右下角，格式如：
+    - "- 1 -"
+    - "第 1 页"
+    - "1"
+    - "1/10"
+
+    Args:
+        ocr_result: OCR 识别结果 [(box, text, confidence), ...]
+        img_height: 图片高度（可选，用于确定底部区域）
+
+    Returns:
+        页码数字，如果未找到返回 0
+    """
+    if not ocr_result:
+        return 0
+
+    # 估算图片高度（取所有 box 的最大 y 坐标）
+    if img_height is None:
+        img_height = max(box[2][1] for box, _, _ in ocr_result) * 1.1
+
+    # 估算图片宽度
+    img_width = max(box[2][0] for box, _, _ in ocr_result) * 1.1
+
+    # 只查找底部 15% 区域的文本
+    bottom_threshold = img_height * 0.85
+
+    # 收集底部区域的文本
+    bottom_items = []
+    for box, text, confidence in ocr_result:
+        y_center = (box[0][1] + box[2][1]) / 2
+        x_center = (box[0][0] + box[2][0]) / 2
+
+        if y_center > bottom_threshold:
+            bottom_items.append({
+                "text": text.strip(),
+                "x": x_center,
+                "y": y_center,
+                "is_left": x_center < img_width * 0.3,  # 左侧 30%
+                "is_right": x_center > img_width * 0.7,  # 右侧 30%
+            })
+
+    # 页码匹配模式
+    page_patterns = [
+        r'^-\s*(\d+)\s*-$',           # "- 1 -"
+        r'^第\s*(\d+)\s*页',           # "第 1 页"
+        r'^(\d+)\s*/\s*\d+$',          # "1/10"
+        r'^(\d+)$',                     # 纯数字
+        r'^[—一]\s*(\d+)\s*[—一]$',    # "— 1 —" 或 "一 1 一"
+    ]
+
+    # 优先查找左下角和右下角
+    for item in bottom_items:
+        if not (item["is_left"] or item["is_right"]):
+            continue
+
+        text = item["text"]
+        for pattern in page_patterns:
+            match = re.match(pattern, text)
+            if match:
+                page_num = int(match.group(1))
+                # 页码通常在 1-999 范围内
+                if 1 <= page_num <= 999:
+                    logger.info(f"提取到页码: {page_num} (来自: '{text}')")
+                    return page_num
+
+    # 如果左下角和右下角没找到，查找底部中间区域
+    for item in bottom_items:
+        text = item["text"]
+        for pattern in page_patterns:
+            match = re.match(pattern, text)
+            if match:
+                page_num = int(match.group(1))
+                if 1 <= page_num <= 999:
+                    logger.info(f"提取到页码: {page_num} (来自底部中间: '{text}')")
+                    return page_num
+
+    logger.debug(f"未找到页码，底部文本: {[item['text'] for item in bottom_items]}")
+    return 0
 
 
 # ==================== 征集志愿 OCR ====================
@@ -1977,8 +2064,22 @@ def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
     for i, url in enumerate(req.image_urls):
         logger.info(f"征集志愿 OCR {i+1}/{len(req.image_urls)}: {url}")
         img_path = download_image(url)
-        rows = extract_supplementary_rows(img_path, context)
+
+        # 先运行 OCR 获取原始结果
+        ocr_result = run_ocr(img_path)
+
+        # 从 OCR 结果中提取页码
+        page_number = extract_page_number(ocr_result)
+        logger.info(f"  图片 {i+1} 页码: {page_number}")
+
+        # 解析数据行
+        rows = extract_supplementary_rows(img_path, context, ocr_result)
         logger.info(f"  识别 {len(rows)} 行")
+
+        # 为每条数据添加来源 URL 和页码
+        for row in rows:
+            row["source_url"] = req.source_url
+            row["page_number"] = page_number
 
         # 更新上下文（用于下一张图片）
         if rows:
@@ -2051,6 +2152,7 @@ async def run_supplementary_ocr_with_ai(req: OcrRequest) -> SupplementaryOcrWith
     all_ocr_rows = []
     all_ai_rows = []
     image_paths = []
+    image_page_numbers = []  # 记录每张图片的页码
 
     # 跨图片传递状态
     last_exam_type = ""
@@ -2063,8 +2165,21 @@ async def run_supplementary_ocr_with_ai(req: OcrRequest) -> SupplementaryOcrWith
         img_path = download_image(url)
         image_paths.append(img_path)
 
-        rows = extract_supplementary_rows(img_path, context)
+        # 先运行 OCR 获取原始结果
+        ocr_result = run_ocr(img_path)
+
+        # 从 OCR 结果中提取页码
+        page_number = extract_page_number(ocr_result)
+        image_page_numbers.append(page_number)
+        logger.info(f"  图片 {i+1} 页码: {page_number}")
+
+        rows = extract_supplementary_rows(img_path, context, ocr_result)
         logger.info(f"  OCR 识别 {len(rows)} 行")
+
+        # 为每条数据添加来源 URL 和页码
+        for row in rows:
+            row["source_url"] = req.source_url
+            row["page_number"] = page_number
 
         # 更新上下文（用于下一张图片）
         if rows:
@@ -2123,6 +2238,12 @@ async def run_supplementary_ocr_with_ai(req: OcrRequest) -> SupplementaryOcrWith
                 context=context
             )
             logger.info(f"  AI 识别 {len(ai_rows)} 行")
+
+            # 为 AI 识别的数据也添加来源 URL 和页码
+            page_number = image_page_numbers[i] if i < len(image_page_numbers) else 0
+            for row in ai_rows:
+                row["source_url"] = req.source_url
+                row["page_number"] = page_number
 
             # 更新上下文
             if ai_rows:
@@ -2288,6 +2409,7 @@ class MultiEngineOcrRequest(BaseModel):
     province: str = Field("四川", description="省份")
     exam_type: str = Field("物理类", description="考试类型")
     batch: str = Field("本科一批", description="批次")
+    source_url: str = Field("", description="数据来源网页 URL")
     # 引擎开关
     enable_baidu: bool = Field(True, description="启用百度云 OCR")
     enable_paddleocr: bool = Field(True, description="启用 PaddleOCR")
