@@ -910,6 +910,20 @@ def extract_page_number(ocr_result: List[Tuple], img_height: float = None) -> in
                     logger.info(f"提取到页码: {page_num} (来自{side}: '{text}')")
                     return page_num
 
+    # 第三轮：在底部左右两侧查找纯数字（仅限最底部的元素）
+    # 只有当该数字是底部区域最靠下的元素时才认为是页码
+    if bottom_items:
+        first_item = bottom_items[0]  # 最底部的元素
+        text = first_item["text"].strip()
+        # 检查是否是纯数字且在左下或右下角
+        if (first_item["is_left"] or first_item["is_right"]) and first_item["is_bottom"]:
+            if re.match(r'^\d{1,3}$', text):
+                num = int(text)
+                if 1 <= num <= 200:
+                    side = "左下角" if first_item["is_left"] else "右下角"
+                    logger.info(f"提取到页码: {num} (来自{side}纯数字: '{text}')")
+                    return num
+
     logger.warning(f"未找到页码")
     return 0
 
