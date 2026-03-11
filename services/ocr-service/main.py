@@ -824,7 +824,7 @@ def extract_page_number(ocr_result: List[Tuple], img_height: float = None) -> in
     """
     从 OCR 结果中提取页码
 
-    四川省考试院征集志愿 PDF 页码格式为 "- X -"，位于页面底部左右两侧交替出现：
+    四川省考试院征集志愿 PDF 页码格式为 "- X -" 或 "—X—"，位于页面底部左右两侧交替出现：
     - 奇数页：右下角
     - 偶数页：左下角
 
@@ -838,6 +838,27 @@ def extract_page_number(ocr_result: List[Tuple], img_height: float = None) -> in
     if not ocr_result:
         return 0
 
+    # 页码匹配模式（"- X -" 格式，优先级最高）
+    page_patterns = [
+        r'^[—一-]\s*(\d+)\s*[—一-]$',  # "—9—" "- 1 -" 等（完全匹配）
+        r'^-\s*(\d+)\s*-$',             # "- 1 -"
+        r'^—\s*(\d+)\s*—$',             # "— 1 —"
+        r'[—一-]\s*(\d+)\s*[—一-]',     # 宽松匹配：文本中包含 "- X -"
+    ]
+
+    # 第一轮：在所有 OCR 结果中查找 "- X -" 格式（不限位置）
+    # 这是最可靠的页码格式
+    for box, text, confidence in ocr_result:
+        text = text.strip()
+        for pattern in page_patterns:
+            match = re.search(pattern, text)
+            if match:
+                page_num = int(match.group(1))
+                if 1 <= page_num <= 999:
+                    logger.info(f"提取到页码: {page_num} (来自格式匹配: '{text}')")
+                    return page_num
+
+    # 如果没有找到 "- X -" 格式，再按位置查找
     # 估算图片高度（取所有 box 的最大 y 坐标）
     if img_height is None:
         img_height = max(box[2][1] for box, _, _ in ocr_result) * 1.1
@@ -864,45 +885,23 @@ def extract_page_number(ocr_result: List[Tuple], img_height: float = None) -> in
     # 按 y 坐标降序排序（最底部的在前）
     all_items.sort(key=lambda x: x["y"], reverse=True)
 
-    # 页码匹配模式（"- X -" 格式）
-    page_patterns = [
-        r'^-\s*(\d+)\s*-$',           # "- 1 -" (最常见格式)
-        r'^一\s*(\d+)\s*一$',          # "一 1 一"
-        r'^—\s*(\d+)\s*—$',           # "— 1 —"
-        r'^[—一-]\s*(\d+)\s*[—一-]$',  # 各种横线包围的数字
-        r'[-—一]\s*(\d+)\s*[-—一]',    # 宽松匹配：文本中包含 "- X -"
-        r'^第\s*(\d+)\s*页',           # "第 1 页"
-        r'^(\d+)\s*/\s*\d+$',          # "1/10"
-    ]
-
     # 取最底部的 15 个元素
     bottom_items = all_items[:15]
 
     bottom_info = [(item['text'], f"x={item['x']:.0f}", f"y={item['y']:.0f}", 'L' if item['is_left'] else 'R' if item['is_right'] else 'M', 'B' if item['is_bottom'] else '') for item in bottom_items]
     logger.info(f"页码提取: 最底部15个文本 {bottom_info}")
 
-    # 第一轮：在底部左右两侧查找 "- X -" 格式（页码交替出现在左下或右下）
-    for item in bottom_items:
-        if not item["is_bottom"]:
-            continue
-        if not (item["is_left"] or item["is_right"]):
-            continue
-        text = item["text"]
-        for pattern in page_patterns[:5]:  # 横线包围的模式
-            match = re.search(pattern, text)
-            if match:
-                page_num = int(match.group(1))
-                if 1 <= page_num <= 999:
-                    side = "左下角" if item["is_left"] else "右下角"
-                    logger.info(f"提取到页码: {page_num} (来自{side}: '{text}')")
-                    return page_num
+    # 第二轮：在底部左右两侧查找 "第 X 页" 或 "X/Y" 格式
+    other_patterns = [
+        r'^第\s*(\d+)\s*页',           # "第 1 页"
+        r'^(\d+)\s*/\s*\d+$',          # "1/10"
+    ]
 
-    # 第二轮：放宽底部限制，在左右两侧查找
     for item in bottom_items:
         if not (item["is_left"] or item["is_right"]):
             continue
         text = item["text"]
-        for pattern in page_patterns[:5]:
+        for pattern in other_patterns:
             match = re.search(pattern, text)
             if match:
                 page_num = int(match.group(1))
@@ -911,30 +910,7 @@ def extract_page_number(ocr_result: List[Tuple], img_height: float = None) -> in
                     logger.info(f"提取到页码: {page_num} (来自{side}: '{text}')")
                     return page_num
 
-    # 第三轮：在所有底部元素中查找页码格式
-    for item in bottom_items:
-        text = item["text"]
-        for pattern in page_patterns:
-            match = re.search(pattern, text)
-            if match:
-                page_num = int(match.group(1))
-                if 1 <= page_num <= 999:
-                    logger.info(f"提取到页码: {page_num} (来自底部: '{text}')")
-                    return page_num
-
-    # 第四轮：在左右两侧查找纯数字
-    for item in bottom_items:
-        if not (item["is_left"] or item["is_right"]):
-            continue
-        text = item["text"]
-        if re.match(r'^\d{1,3}$', text):
-            num = int(text)
-            if 1 <= num <= 200:
-                side = "左侧" if item["is_left"] else "右侧"
-                logger.info(f"提取到页码({side}数字): {num} (来自: '{text}')")
-                return num
-
-    logger.warning(f"未找到页码，底部文本: {[item['text'] for item in bottom_items]}")
+    logger.warning(f"未找到页码")
     return 0
 
 
