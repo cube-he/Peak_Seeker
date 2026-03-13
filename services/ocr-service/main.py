@@ -80,6 +80,8 @@ class OcrRequest(BaseModel):
     ai_api_key: str = Field("", description="AI API 密钥")
     ai_base_url: str = Field("", description="AI API 基础 URL")
     ai_model: str = Field("", description="AI 模型名称")
+    # 图像预处理增强选项
+    enable_preprocess: bool = Field(False, description="是否启用图像预处理增强（多变体投票）")
 
 class ScoreRow(BaseModel):
     score: int
@@ -2077,7 +2079,7 @@ def run_score_segment_ocr(req: OcrRequest) -> OcrResponse:
 
 
 def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
-    """征集志愿 OCR（纯 OCR 模式）"""
+    """征集志愿 OCR（纯 OCR 模式，支持图像预处理增强）"""
     all_rows = []
     image_data_counts = []  # 记录每张图片识别的数据行数
     # 跨图片传递状态
@@ -2085,11 +2087,17 @@ def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
     last_enrollment_type = ""
     context = {}  # 用于跨图片传递上下文
 
+    # 是否启用预处理增强
+    use_preprocess = getattr(req, 'enable_preprocess', False)
+    if use_preprocess:
+        from image_preprocessor import run_ocr_with_preprocessing
+        logger.info("启用图像预处理增强模式")
+
     for i, url in enumerate(req.image_urls):
         logger.info(f"征集志愿 OCR {i+1}/{len(req.image_urls)}: {url}")
         img_path = download_image(url)
 
-        # 先运行 OCR 获取原始结果
+        # 先运行 OCR 获取原始结果（用于提取页码）
         ocr_result = run_ocr(img_path)
 
         # 从 OCR 结果中提取页码
@@ -2097,13 +2105,28 @@ def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
         logger.info(f"  图片 {i+1} 页码: {page_number}")
 
         # 解析数据行
-        rows = extract_supplementary_rows(img_path, context, ocr_result)
+        if use_preprocess:
+            # 使用预处理增强模式：多变体 + 投票
+            rows, preprocess_stats = run_ocr_with_preprocessing(
+                img_path,
+                ocr_func=run_ocr,
+                parse_func=extract_supplementary_rows,
+                context=context
+            )
+            logger.info(f"  预处理增强: {preprocess_stats.get('variant_results', {})}")
+        else:
+            # 普通模式
+            rows = extract_supplementary_rows(img_path, context, ocr_result)
+
         logger.info(f"  识别 {len(rows)} 行")
 
         # 为每条数据添加来源 URL 和页码
         for row in rows:
             row["source_url"] = req.source_url
             row["page_number"] = page_number
+            # 移除预处理模块添加的内部字段
+            row.pop("_sources", None)
+            row.pop("_source_count", None)
 
         # 更新上下文（用于下一张图片）
         if rows:
@@ -2277,7 +2300,14 @@ async def run_supplementary_ocr_with_ai(req: OcrRequest) -> SupplementaryOcrWith
                     "enrollment_type": last_row.get("enrollment_type", ""),
                     "university": {
                         "code": last_row.get("university_code", ""),
-                        "name": last_row.get("university_name", "")
+                        "name": last_row.get("university_name", ""),
+                        "location": last_row.get("university_location", ""),
+                        "note": last_row.get("university_note", ""),
+                    },
+                    "major_group": {
+                        "code": last_row.get("major_group_code", ""),
+                        "subject": last_row.get("major_group_subject", ""),
+                        "plan": last_row.get("major_group_plan", 0),
                     }
                 }
 
@@ -2592,6 +2622,9 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
 
         engines = validator.get_enabled_engines()
 
+        # 记录当前图片每个引擎识别的结果，用于更新上下文
+        current_image_results: Dict[str, List[Dict]] = {}
+
         for engine in engines:
             try:
                 result = await validator.run_single_engine(
@@ -2607,6 +2640,7 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
                         row["source_url"] = req.source_url
                         row["page_number"] = page_number
                     all_engine_results[engine].extend(result.data)
+                    current_image_results[engine] = result.data  # 保存当前图片的结果
                     logger.info(f"  {engine}: 识别 {len(result.data)} 条")
                 else:
                     if engine not in engines_failed:
@@ -2618,16 +2652,23 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
                 if engine not in engines_failed:
                     engines_failed[engine] = str(e)
 
-        # 更新上下文（使用第一个成功引擎的结果）
+        # 更新上下文（使用当前图片第一个成功引擎的最后一条结果）
         for engine in engines_success:
-            if engine in all_engine_results and all_engine_results[engine]:
-                last_row = all_engine_results[engine][-1]
+            if engine in current_image_results and current_image_results[engine]:
+                last_row = current_image_results[engine][-1]
                 context = {
                     "exam_type": last_row.get("exam_type", ""),
                     "enrollment_type": last_row.get("enrollment_type", ""),
                     "university": {
                         "code": last_row.get("university_code", ""),
                         "name": last_row.get("university_name", ""),
+                        "location": last_row.get("university_location", ""),
+                        "note": last_row.get("university_note", ""),
+                    },
+                    "major_group": {
+                        "code": last_row.get("major_group_code", ""),
+                        "subject": last_row.get("major_group_subject", ""),
+                        "plan": last_row.get("major_group_plan", 0),
                     }
                 }
                 break

@@ -113,7 +113,8 @@ async def parse_image_with_ai(
     api_key: str = None,
     base_url: str = None,
     model: str = None,
-    context: Dict = None
+    context: Dict = None,
+    max_retries: int = 2
 ) -> List[Dict]:
     """
     使用 AI 视觉模型解析征集志愿图片
@@ -124,6 +125,7 @@ async def parse_image_with_ai(
         base_url: AI API 基础 URL
         model: AI 模型名称
         context: 上下文信息（上一张图片的状态）
+        max_retries: 最大重试次数
 
     Returns:
         解析出的专业数据列表
@@ -168,45 +170,80 @@ async def parse_image_with_ai(
         }
     ]
 
-    try:
-        # 设置更长的超时时间：连接 30 秒，读取 180 秒
-        timeout = httpx.Timeout(connect=30.0, read=180.0, write=30.0, pool=30.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            logger.info(f"调用 AI API: {base_url}/chat/completions, model={model}")
-            response = await client.post(
-                f"{base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "max_tokens": 8192,
-                    "temperature": 0.1  # 低温度以获得更稳定的输出
-                }
-            )
+    last_error = None
+    for attempt in range(max_retries + 1):
+        try:
+            # 设置更长的超时时间：连接 30 秒，读取 180 秒
+            timeout = httpx.Timeout(connect=30.0, read=180.0, write=30.0, pool=30.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                logger.info(f"调用 AI API (尝试 {attempt + 1}/{max_retries + 1}): {base_url}/chat/completions, model={model}")
+                response = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": model,
+                        "messages": messages,
+                        "max_tokens": 8192,
+                        "temperature": 0.1  # 低温度以获得更稳定的输出
+                    }
+                )
 
-            logger.info(f"AI API 响应状态: {response.status_code}")
-            if response.status_code != 200:
-                logger.error(f"AI API 请求失败: {response.status_code} {response.text[:500]}")
-                return []
+                logger.info(f"AI API 响应状态: {response.status_code}")
+                if response.status_code != 200:
+                    logger.error(f"AI API 请求失败: {response.status_code} {response.text[:500]}")
+                    last_error = f"HTTP {response.status_code}"
+                    if attempt < max_retries:
+                        import asyncio
+                        await asyncio.sleep(2 ** attempt)  # 指数退避
+                        continue
+                    return []
 
-            result = response.json()
-            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                result = response.json()
+                content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
 
-            # 如果 content 为空，记录完整响应以便调试
-            if not content:
-                logger.warning(f"AI 返回空内容，完整响应: {json.dumps(result, ensure_ascii=False)[:1000]}")
+                # 如果 content 为空，记录完整响应以便调试
+                if not content:
+                    logger.warning(f"AI 返回空内容，完整响应: {json.dumps(result, ensure_ascii=False)[:1000]}")
+                    last_error = "Empty response"
+                    if attempt < max_retries:
+                        import asyncio
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    return []
 
-            logger.info(f"AI 返回内容长度: {len(content)}, 前200字符: {content[:200]}")
+                logger.info(f"AI 返回内容长度: {len(content)}, 前200字符: {content[:200]}")
 
-            # 解析 JSON 输出
-            return parse_ai_response(content)
+                # 解析 JSON 输出
+                parsed = parse_ai_response(content)
+                if not parsed and attempt < max_retries:
+                    logger.warning(f"AI 返回内容无法解析，重试...")
+                    last_error = "Parse failed"
+                    import asyncio
+                    await asyncio.sleep(2 ** attempt)
+                    continue
 
-    except Exception as e:
-        logger.error(f"AI 解析失败: {type(e).__name__}: {e}")
-        return []
+                return parsed
+
+        except httpx.TimeoutException as e:
+            logger.warning(f"AI API 超时 (尝试 {attempt + 1}): {e}")
+            last_error = f"Timeout: {e}"
+            if attempt < max_retries:
+                import asyncio
+                await asyncio.sleep(2 ** attempt)
+                continue
+        except Exception as e:
+            logger.error(f"AI 解析失败 (尝试 {attempt + 1}): {type(e).__name__}: {e}")
+            last_error = str(e)
+            if attempt < max_retries:
+                import asyncio
+                await asyncio.sleep(2 ** attempt)
+                continue
+
+    logger.error(f"AI 解析最终失败，最后错误: {last_error}")
+    return []
 
 
 def parse_ai_response(content: str) -> List[Dict]:
@@ -304,16 +341,35 @@ def compare_results(
 
 
 def normalize_tuition(tuition: str) -> str:
-    """标准化学费字符串以便比较"""
+    """
+    标准化学费字符串以便比较
+
+    处理各种 OCR/AI 识别变体：
+    - "免费" / "0" / "0元" -> "免费"
+    - "6875元" / "6875" -> "6875元"
+    - "16875元" -> 可能是 OCR 错误（计划数1+学费6875），需要特殊处理
+    """
     if not tuition:
         return ""
-    tuition = tuition.strip()
-    if tuition == "免费":
+    tuition = str(tuition).strip()
+    if tuition == "免费" or tuition == "0" or tuition == "0元":
         return "免费"
+
     # 提取数字
     match = re.search(r'(\d+)', tuition)
     if match:
-        return f"{match.group(1)}元"
+        num = int(match.group(1))
+        # 常见学费范围：3000-15000
+        # 如果数字超过 15000 且以常见学费结尾，可能是 OCR 错误
+        if num > 15000:
+            num_str = str(num)
+            # 检查是否是 "计划数+学费" 的错误合并
+            for tuition_len in [4, 5]:  # 学费通常是 4-5 位数
+                if len(num_str) > tuition_len:
+                    potential_tuition = int(num_str[-tuition_len:])
+                    if 3000 <= potential_tuition <= 15000:
+                        return f"{potential_tuition}元"
+        return f"{num}元"
     return tuition
 
 
