@@ -343,6 +343,8 @@ export async function runMultiEngineOcr(params: {
   examType?: string;
   batch?: string;
   enableBaidu?: boolean;
+  enablePaddleocrVl?: boolean;  // PaddleOCR-VL 视觉语言模型
+  enableAistudio?: boolean;     // AIStudio Layout-Parsing
   enablePaddleocr?: boolean;
   enableRapid?: boolean;
   enableAi?: boolean;

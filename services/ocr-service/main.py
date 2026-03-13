@@ -21,6 +21,10 @@ from typing import Optional, List, Tuple, Dict
 from enum import Enum
 from contextlib import asynccontextmanager
 
+# 加载 .env 文件
+from dotenv import load_dotenv
+load_dotenv()
+
 import requests as http_requests
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
@@ -39,7 +43,8 @@ CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # OCR 引擎选择：
-# - "baidu": 百度云 OCR API，识别精度最高，需要 API Key
+# - "baidu": 百度云 OCR API（通用文字识别高精度版），需要 API Key
+# - "paddleocr_vl": PaddleOCR-VL 视觉语言模型（千帆平台），需要 API Key
 # - "paddleocr": PaddleOCR Docker 服务，本地高精度方案
 # - "paddle": PaddleOCR (ppocr-onnx)，本地运行
 # - "rapid": RapidOCR，轻量级本地方案
@@ -48,11 +53,21 @@ OCR_ENGINE = os.environ.get("OCR_ENGINE", "baidu")  # 默认使用百度云 OCR
 # PaddleOCR Docker 服务地址
 PADDLEOCR_SERVICE_URL = os.environ.get("PADDLEOCR_SERVICE_URL", "http://localhost:8101")
 
-# 百度云 OCR 配置
+# 百度云 OCR 配置（传统 OCR API）
 BAIDU_OCR_API_KEY = os.environ.get("BAIDU_OCR_API_KEY", "")
 BAIDU_OCR_SECRET_KEY = os.environ.get("BAIDU_OCR_SECRET_KEY", "")
 _baidu_access_token = None
 _baidu_token_expires = 0
+
+# PaddleOCR-VL 配置（千帆平台视觉语言模型）
+# API 文档: https://cloud.baidu.com/doc/qianfan-api/s/zmho8omz3
+QIANFAN_API_KEY = os.environ.get("QIANFAN_API_KEY", "")
+QIANFAN_BASE_URL = "https://qianfan.baidubce.com"
+
+# AIStudio Layout-Parsing 配置
+# 基于 PaddleOCR 的版面分析 API，支持表格识别
+AISTUDIO_API_URL = os.environ.get("AISTUDIO_API_URL", "https://lf1ev8v7o4maja97.aistudio-app.com/layout-parsing")
+AISTUDIO_TOKEN = os.environ.get("AISTUDIO_TOKEN", "")
 
 
 # ==================== Pydantic Models ====================
@@ -355,6 +370,298 @@ def run_paddleocr_docker(img_path: str) -> List[Tuple]:
     return items
 
 
+def run_paddleocr_vl(img_path: str) -> List[Tuple]:
+    """
+    调用 PaddleOCR-VL 视觉语言模型（千帆平台）识别图片
+
+    PaddleOCR-VL 是基于视觉语言模型的 OCR，具有更强的理解能力，
+    支持表格识别、版面分析等高级功能。
+
+    API 文档: https://cloud.baidu.com/doc/qianfan-api/s/zmho8omz3
+
+    Returns:
+        List of (box, text, confidence)
+    """
+    import base64
+
+    if not QIANFAN_API_KEY:
+        raise ValueError("千帆 API Key 未配置 (QIANFAN_API_KEY)")
+
+    # 读取图片并 base64 编码
+    with open(img_path, "rb") as f:
+        img_data = base64.b64encode(f.read()).decode("utf-8")
+
+    # 获取图片格式
+    ext = os.path.splitext(img_path)[1].lower()
+    if ext in (".jpg", ".jpeg"):
+        mime_type = "image/jpeg"
+    elif ext == ".png":
+        mime_type = "image/png"
+    else:
+        mime_type = "image/jpeg"
+
+    # 构建请求
+    url = f"{QIANFAN_BASE_URL}/v2/ocr/paddleocr"
+    headers = {
+        "Authorization": f"Bearer {QIANFAN_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    # 请求参数
+    # 参考: https://cloud.baidu.com/doc/qianfan-api/s/zmho8omz3
+    payload = {
+        "model": "paddleocr-vl-0.9b",
+        "file": f"data:{mime_type};base64,{img_data}",
+        "fileType": 1,  # 1=图像文件
+        "useChartRecognition": True,   # 启用表格识别
+        "useLayoutDetection": True,    # 启用版面检测
+        "useDocUnwarping": False,      # 文档矫正（征集志愿图片通常不需要）
+        "layoutNms": True,             # NMS 后处理，移除重叠区域
+        "temperature": 0,              # 低温度获得稳定输出
+        "topP": 1.0,
+        "minPixels": 147384,
+        "maxPixels": 2822400,
+        "visualize": False             # 不需要可视化结果
+    }
+
+    logger.info(f"调用 PaddleOCR-VL API...")
+    response = http_requests.post(url, headers=headers, json=payload, timeout=120)
+
+    if response.status_code != 200:
+        logger.error(f"PaddleOCR-VL API 错误: {response.status_code} {response.text[:500]}")
+        raise ValueError(f"PaddleOCR-VL API 错误: {response.status_code}")
+
+    result = response.json()
+
+    # 解析响应
+    # PaddleOCR-VL 返回格式与传统 OCR 不同，需要适配
+    items = []
+
+    # 检查是否有错误
+    if "error" in result:
+        raise ValueError(f"PaddleOCR-VL 错误: {result.get('error')}")
+
+    # 解析 OCR 结果
+    # 新版响应格式: {"result": {"layoutParsingResults": [{"prunedResult": {"parsing_res_list": [...]}}]}}
+    ocr_data = result.get("result", {})
+
+    # 尝试新版 layoutParsingResults 格式
+    layout_results = ocr_data.get("layoutParsingResults", [])
+    if layout_results:
+        for layout in layout_results:
+            pruned = layout.get("prunedResult", {})
+            parsing_list = pruned.get("parsing_res_list", [])
+            for block in parsing_list:
+                text = block.get("block_content", "").strip()
+                bbox = block.get("block_bbox", [])
+                if text and bbox:
+                    # bbox 格式: [x1, y1, x2, y2]
+                    x1, y1, x2, y2 = bbox
+                    box = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+                    # 按行分割文本
+                    for line in text.split("\n"):
+                        line = line.strip()
+                        if line:
+                            items.append((box, line, 0.95))
+        if items:
+            logger.info(f"PaddleOCR-VL 识别完成 (layoutParsing): {len(items)} 行")
+            return items
+
+    # 尝试旧版格式
+    ocr_items = (
+        ocr_data.get("ocr_result", []) or
+        ocr_data.get("texts", []) or
+        ocr_data.get("items", []) or
+        result.get("ocr_result", []) or
+        result.get("texts", [])
+    )
+
+    if not ocr_items and "result" in result:
+        # 可能是纯文本结果，尝试解析
+        raw_result = result.get("result", "")
+        if isinstance(raw_result, str) and raw_result:
+            # VL 模型可能返回结构化文本，按行分割
+            lines = raw_result.strip().split("\n")
+            y_pos = 0
+            for line in lines:
+                line = line.strip()
+                if line:
+                    # 构造虚拟 box（VL 模型可能不返回位置信息）
+                    box = [[0, y_pos], [800, y_pos], [800, y_pos + 30], [0, y_pos + 30]]
+                    items.append((box, line, 0.95))
+                    y_pos += 35
+            logger.info(f"PaddleOCR-VL 识别完成 (文本模式): {len(items)} 行")
+            return items
+
+    for item in ocr_items:
+        if isinstance(item, dict):
+            text = item.get("text", "") or item.get("content", "")
+            bbox = item.get("bbox", []) or item.get("box", []) or item.get("position", [])
+            confidence = item.get("confidence", 0.9) or item.get("score", 0.9)
+
+            if text:
+                # 转换 bbox 格式
+                if bbox and len(bbox) >= 4:
+                    if isinstance(bbox[0], (int, float)):
+                        # [x1, y1, x2, y2] 格式
+                        x1, y1, x2, y2 = bbox[:4]
+                        box = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+                    else:
+                        # [[x1,y1], [x2,y2], ...] 格式
+                        box = bbox
+                else:
+                    # 没有位置信息，使用默认值
+                    box = [[0, 0], [800, 0], [800, 30], [0, 30]]
+
+                items.append((box, text.strip(), confidence))
+        elif isinstance(item, str):
+            # 纯文本项
+            items.append(([[0, 0], [800, 0], [800, 30], [0, 30]], item.strip(), 0.9))
+
+    logger.info(f"PaddleOCR-VL 识别完成: {len(items)} 行")
+    return items
+
+
+def run_aistudio_layout_parsing(img_path: str) -> List[Tuple]:
+    """
+    调用 AIStudio Layout-Parsing API 识别图片
+
+    基于 PaddleOCR 的版面分析 API，支持表格识别。
+    API 地址: https://lf1ev8v7o4maja97.aistudio-app.com/layout-parsing
+
+    Returns:
+        List of (box, text, confidence)
+    """
+    import base64
+
+    if not AISTUDIO_TOKEN:
+        raise ValueError("AIStudio Token 未配置 (AISTUDIO_TOKEN)")
+
+    # 读取图片并 base64 编码
+    with open(img_path, "rb") as f:
+        img_data = base64.b64encode(f.read()).decode("utf-8")
+
+    # 获取图片格式
+    ext = os.path.splitext(img_path)[1].lower()
+    if ext in (".jpg", ".jpeg"):
+        mime_type = "image/jpeg"
+    elif ext == ".png":
+        mime_type = "image/png"
+    else:
+        mime_type = "image/jpeg"
+
+    # 构建请求
+    headers = {
+        "Authorization": f"Bearer {AISTUDIO_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    # 请求参数
+    payload = {
+        "image": f"data:{mime_type};base64,{img_data}",
+        # 可选参数
+        "use_seal_recognition": False,  # 不需要印章识别
+        "use_table_recognition": True,  # 启用表格识别
+    }
+
+    logger.info(f"调用 AIStudio Layout-Parsing API...")
+    response = http_requests.post(AISTUDIO_API_URL, headers=headers, json=payload, timeout=120)
+
+    if response.status_code != 200:
+        logger.error(f"AIStudio API 错误: {response.status_code} {response.text[:500]}")
+        raise ValueError(f"AIStudio API 错误: {response.status_code}")
+
+    result = response.json()
+
+    # 解析响应
+    items = []
+
+    # 检查是否有错误
+    if "error" in result or result.get("code") != 0:
+        error_msg = result.get("error") or result.get("message") or "Unknown error"
+        raise ValueError(f"AIStudio 错误: {error_msg}")
+
+    # 解析 OCR 结果
+    # AIStudio 返回格式可能是: {"code": 0, "result": {"layouts": [...], "texts": [...]}}
+    ocr_data = result.get("result", {})
+
+    # 尝试解析 layouts 格式
+    layouts = ocr_data.get("layouts", [])
+    if layouts:
+        for layout in layouts:
+            text = layout.get("text", "").strip()
+            bbox = layout.get("bbox", []) or layout.get("box", [])
+            confidence = layout.get("confidence", 0.9) or layout.get("score", 0.9)
+
+            if text and bbox:
+                # bbox 格式: [x1, y1, x2, y2] 或 [[x1,y1], [x2,y2], ...]
+                if isinstance(bbox[0], (int, float)):
+                    x1, y1, x2, y2 = bbox[:4]
+                    box = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+                else:
+                    box = bbox
+
+                # 按行分割文本
+                for line in text.split("\n"):
+                    line = line.strip()
+                    if line:
+                        items.append((box, line, confidence))
+
+        if items:
+            logger.info(f"AIStudio 识别完成 (layouts): {len(items)} 行")
+            return items
+
+    # 尝试解析 texts 格式
+    texts = ocr_data.get("texts", []) or ocr_data.get("ocr_result", [])
+    if texts:
+        for item in texts:
+            if isinstance(item, dict):
+                text = item.get("text", "") or item.get("content", "")
+                bbox = item.get("bbox", []) or item.get("box", []) or item.get("position", [])
+                confidence = item.get("confidence", 0.9) or item.get("score", 0.9)
+
+                if text:
+                    if bbox and len(bbox) >= 4:
+                        if isinstance(bbox[0], (int, float)):
+                            x1, y1, x2, y2 = bbox[:4]
+                            box = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+                        else:
+                            box = bbox
+                    else:
+                        box = [[0, 0], [800, 0], [800, 30], [0, 30]]
+
+                    items.append((box, text.strip(), confidence))
+            elif isinstance(item, str):
+                items.append(([[0, 0], [800, 0], [800, 30], [0, 30]], item.strip(), 0.9))
+
+        if items:
+            logger.info(f"AIStudio 识别完成 (texts): {len(items)} 行")
+            return items
+
+    # 尝试解析 parsing_res_list 格式（类似 PaddleOCR-VL）
+    parsing_list = ocr_data.get("parsing_res_list", [])
+    if parsing_list:
+        for block in parsing_list:
+            text = block.get("block_content", "").strip()
+            bbox = block.get("block_bbox", [])
+            if text and bbox:
+                x1, y1, x2, y2 = bbox
+                box = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+                for line in text.split("\n"):
+                    line = line.strip()
+                    if line:
+                        items.append((box, line, 0.95))
+
+        if items:
+            logger.info(f"AIStudio 识别完成 (parsing_res_list): {len(items)} 行")
+            return items
+
+    # 如果没有解析到数据，记录原始响应用于调试
+    logger.warning(f"AIStudio 返回格式未知，原始响应: {str(result)[:500]}")
+    logger.info(f"AIStudio 识别完成: {len(items)} 行")
+    return items
+
+
 # ==================== OCR Engine ====================
 
 def get_ocr():
@@ -399,7 +706,7 @@ def run_ocr(img_path: str) -> List[Tuple]:
     """
     global _ocr_engine
 
-    # 优先使用百度云 OCR
+    # 优先使用百度云 OCR（传统 API）
     if OCR_ENGINE == "baidu" and BAIDU_OCR_API_KEY:
         try:
             result = run_baidu_ocr(img_path)
@@ -407,6 +714,15 @@ def run_ocr(img_path: str) -> List[Tuple]:
             return result
         except Exception as e:
             logger.warning(f"百度云 OCR 失败: {e}，回退到本地 OCR")
+
+    # PaddleOCR-VL 视觉语言模型（千帆平台）
+    if OCR_ENGINE == "paddleocr_vl" and QIANFAN_API_KEY:
+        try:
+            result = run_paddleocr_vl(img_path)
+            _ocr_engine = "paddleocr_vl"
+            return result
+        except Exception as e:
+            logger.warning(f"PaddleOCR-VL 失败: {e}，回退到本地 OCR")
 
     # PaddleOCR Docker 服务
     if OCR_ENGINE == "paddleocr" or (OCR_ENGINE == "baidu" and not BAIDU_OCR_API_KEY):
@@ -1773,6 +2089,8 @@ def health():
     engine = OCR_ENGINE
     if engine == "baidu":
         engine_status = "baidu" if BAIDU_OCR_API_KEY else "baidu (no key)"
+    elif engine == "paddleocr_vl":
+        engine_status = "paddleocr_vl" if QIANFAN_API_KEY else "paddleocr_vl (no key)"
     elif engine == "paddleocr":
         # 检查 PaddleOCR Docker 服务是否可用
         try:
@@ -1786,8 +2104,9 @@ def health():
     return {
         "status": "ok",
         "ocr_engine": engine_status,
-        "ocr_loaded": engine == "baidu" or engine == "paddleocr" or _ocr_instance is not None,
+        "ocr_loaded": engine in ("baidu", "paddleocr", "paddleocr_vl") or _ocr_instance is not None,
         "baidu_configured": bool(BAIDU_OCR_API_KEY and BAIDU_OCR_SECRET_KEY),
+        "qianfan_configured": bool(QIANFAN_API_KEY),
         "paddleocr_url": PADDLEOCR_SERVICE_URL if engine == "paddleocr" else None
     }
 
@@ -2478,7 +2797,9 @@ class MultiEngineOcrRequest(BaseModel):
     source_url: str = Field("", description="数据来源网页 URL")
     # 引擎开关
     enable_baidu: bool = Field(True, description="启用百度云 OCR")
-    enable_paddleocr: bool = Field(True, description="启用 PaddleOCR")
+    enable_paddleocr_vl: bool = Field(False, description="启用 PaddleOCR-VL 视觉语言模型")
+    enable_aistudio: bool = Field(False, description="启用 AIStudio Layout-Parsing")
+    enable_paddleocr: bool = Field(True, description="启用 PaddleOCR Docker")
     enable_rapid: bool = Field(True, description="启用 RapidOCR")
     enable_ai: bool = Field(True, description="启用 AI 视觉模型")
     # AI 配置
@@ -2573,6 +2894,8 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
 
     validator = MultiEngineValidator(
         enable_baidu=req.enable_baidu,
+        enable_paddleocr_vl=req.enable_paddleocr_vl,
+        enable_aistudio=req.enable_aistudio,
         enable_paddleocr=req.enable_paddleocr,
         enable_rapid=req.enable_rapid,
         enable_ai=req.enable_ai and bool(req.ai_api_key),
@@ -2826,6 +3149,7 @@ async def validate_single_image(
     image_url: str,
     data_type: str = "supplementary",
     enable_baidu: bool = True,
+    enable_paddleocr_vl: bool = False,
     enable_paddleocr: bool = True,
     enable_rapid: bool = True,
     enable_ai: bool = False,
@@ -2854,6 +3178,7 @@ async def validate_single_image(
 
     validator = MultiEngineValidator(
         enable_baidu=enable_baidu,
+        enable_paddleocr_vl=enable_paddleocr_vl,
         enable_paddleocr=enable_paddleocr,
         enable_rapid=enable_rapid,
         enable_ai=enable_ai and bool(ai_api_key),

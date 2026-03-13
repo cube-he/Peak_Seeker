@@ -124,6 +124,8 @@ export default function DataImportPage() {
   const [multiEngineLoading, setMultiEngineLoading] = useState(false);
   const [engineOptions, setEngineOptions] = useState({
     enableBaidu: true,
+    enablePaddleocrVl: true,  // PaddleOCR-VL 视觉语言模型（默认启用）
+    enableAistudio: false,    // AIStudio Layout-Parsing（默认关闭）
     enablePaddleocr: true,
     enableRapid: true,
     enableAi: false,
@@ -1057,6 +1059,20 @@ export default function DataImportPage() {
                             style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
                           >
                             百度云 OCR
+                          </Tag.CheckableTag>
+                          <Tag.CheckableTag
+                            checked={engineOptions.enablePaddleocrVl}
+                            onChange={(checked) => setEngineOptions(prev => ({ ...prev, enablePaddleocrVl: checked }))}
+                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                          >
+                            PaddleOCR-VL
+                          </Tag.CheckableTag>
+                          <Tag.CheckableTag
+                            checked={engineOptions.enableAistudio}
+                            onChange={(checked) => setEngineOptions(prev => ({ ...prev, enableAistudio: checked }))}
+                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                          >
+                            AIStudio
                           </Tag.CheckableTag>
                           <Tag.CheckableTag
                             checked={engineOptions.enablePaddleocr}
