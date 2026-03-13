@@ -126,11 +126,60 @@ class ValidationReport:
 
 
 def make_record_key(row: Dict) -> str:
-    """生成记录唯一标识"""
+    """生成记录唯一标识
+
+    使用以下字段组合作为唯一标识：
+    - 考试类型 (exam_type)
+    - 招生类型 (enrollment_type)
+    - 院校代码 (university_code)
+    - 专业组代码 (major_group_code)
+    - 专业代码 (major_code)
+    """
+    exam_type = str(row.get("exam_type", "")).strip()
+    enrollment_type = str(row.get("enrollment_type", "")).strip()
     uni_code = str(row.get("university_code", "")).strip()
+    group_code = str(row.get("major_group_code", "")).strip()
     major_code = str(row.get("major_code", "")).strip()
-    major_name = str(row.get("major_name", ""))[:15].strip()
-    return f"{uni_code}_{major_code}_{major_name}"
+    return f"{exam_type}_{enrollment_type}_{uni_code}_{group_code}_{major_code}"
+
+
+def normalize_tuition(value: any) -> str:
+    """
+    标准化学费值
+
+    处理各种 OCR 识别变体：
+    - "免费" / "0" / "0元" -> "免费"
+    - "6875元" / "6875" -> "6875元"
+    - "16875元" -> 可能是 OCR 错误（计划数1+学费6875），需要特殊处理
+    """
+    if value is None:
+        return ""
+
+    val = str(value).strip()
+    if not val:
+        return ""
+
+    if val == "免费" or val == "0" or val == "0元":
+        return "免费"
+
+    # 提取数字
+    match = re.search(r'(\d+)', val)
+    if match:
+        num = int(match.group(1))
+        # 常见学费范围：3000-15000
+        # 如果数字超过 15000 且以常见学费结尾，可能是 OCR 错误
+        if num > 15000:
+            num_str = str(num)
+            # 检查是否是 "计划数+学费" 的错误合并
+            # 例如：16875 = 1 + 6875, 26875 = 2 + 6875
+            for tuition_len in [4, 5]:  # 学费通常是 4-5 位数
+                if len(num_str) > tuition_len:
+                    potential_tuition = int(num_str[-tuition_len:])
+                    if 3000 <= potential_tuition <= 15000:
+                        return f"{potential_tuition}元"
+        return f"{num}元"
+
+    return val
 
 
 def normalize_value(field_name: str, value: any) -> any:
@@ -139,14 +188,7 @@ def normalize_value(field_name: str, value: any) -> any:
         return None
 
     if field_name == "tuition":
-        # 学费标准化
-        val = str(value).strip()
-        if val == "免费" or val == "0" or val == "0元":
-            return "免费"
-        match = re.search(r'(\d+)', val)
-        if match:
-            return f"{match.group(1)}元"
-        return val
+        return normalize_tuition(value)
 
     if field_name == "plan_count":
         # 计划数标准化为整数
@@ -221,9 +263,74 @@ SECONDARY_FIELDS = [
     "enrollment_type"
 ]
 
+# 引擎权重（基于实际测试的准确率）
+# 权重越高，在投票时影响力越大
+ENGINE_WEIGHTS = {
+    "baidu": 1.5,      # 百度云 OCR 精度最高
+    "ai": 1.3,         # AI 视觉模型次之
+    "paddleocr": 1.0,  # PaddleOCR 标准权重
+    "rapid": 0.8,      # RapidOCR 轻量级，精度稍低
+}
 
-def validate_record(record_key: str, engine_data: Dict[str, Dict]) -> RecordValidation:
-    """校验单条记录"""
+
+def compare_field_weighted(field_name: str, values: Dict[str, any]) -> FieldComparison:
+    """
+    带权重的字段比较
+
+    使用引擎权重进行加权投票，而不是简单的多数投票
+    """
+    # 标准化所有值
+    normalized = {
+        engine: normalize_value(field_name, val)
+        for engine, val in values.items()
+        if val is not None and val != ""
+    }
+
+    if not normalized:
+        return FieldComparison(
+            field_name=field_name,
+            values=values,
+            is_consistent=True,
+            majority_value=None,
+            confidence=0.0
+        )
+
+    # 加权统计各值
+    value_weights: Dict[any, float] = {}
+    total_weight = 0.0
+
+    for engine, val in normalized.items():
+        weight = ENGINE_WEIGHTS.get(engine, 1.0)
+        total_weight += weight
+        if val not in value_weights:
+            value_weights[val] = 0.0
+        value_weights[val] += weight
+
+    # 找出权重最高的值
+    best_value = max(value_weights.keys(), key=lambda v: value_weights[v])
+    best_weight = value_weights[best_value]
+
+    is_consistent = len(value_weights) == 1
+    confidence = best_weight / total_weight if total_weight > 0 else 0.0
+
+    return FieldComparison(
+        field_name=field_name,
+        values=values,
+        is_consistent=is_consistent,
+        majority_value=best_value,
+        confidence=confidence
+    )
+
+
+def validate_record(record_key: str, engine_data: Dict[str, Dict], use_weighted: bool = True) -> RecordValidation:
+    """
+    校验单条记录
+
+    Args:
+        record_key: 记录唯一标识
+        engine_data: 各引擎的识别数据 {engine_name: row_data}
+        use_weighted: 是否使用加权投票（默认 True）
+    """
     validation = RecordValidation(
         record_key=record_key,
         engine_data=engine_data
@@ -237,9 +344,13 @@ def validate_record(record_key: str, engine_data: Dict[str, Dict]) -> RecordVali
         validation.review_status = ReviewStatus.PENDING_REVIEW
         return validation
 
+    # 选择比较函数
+    compare_func = compare_field_weighted if use_weighted else compare_field
+
     # 比较关键字段
     all_consistent = True
     conflict_fields = []
+    high_confidence_fields = 0  # 高置信度字段数
 
     for field_name in CRITICAL_FIELDS:
         values = {
@@ -247,21 +358,24 @@ def validate_record(record_key: str, engine_data: Dict[str, Dict]) -> RecordVali
             for engine, data in engine_data.items()
         }
 
-        comparison = compare_field(field_name, values)
+        comparison = compare_func(field_name, values)
         validation.field_comparisons[field_name] = comparison
 
         if not comparison.is_consistent:
             all_consistent = False
             conflict_fields.append(field_name)
+        elif comparison.confidence >= 0.8:
+            high_confidence_fields += 1
 
     validation.conflict_fields = conflict_fields
 
-    # 确定置信度
+    # 确定置信度（改进版）
     if num_engines == 1:
+        # 单引擎识别也自动通过，避免数据遗漏
         validation.confidence = VerifyConfidence.SINGLE
-        validation.review_status = ReviewStatus.PENDING_REVIEW
+        validation.review_status = ReviewStatus.AUTO_APPROVED
     elif all_consistent:
-        if num_engines >= 3:
+        if num_engines >= 3 or high_confidence_fields >= len(CRITICAL_FIELDS) - 1:
             validation.confidence = VerifyConfidence.HIGH
             validation.review_status = ReviewStatus.AUTO_APPROVED
         else:
@@ -274,10 +388,22 @@ def validate_record(record_key: str, engine_data: Dict[str, Dict]) -> RecordVali
             if fc.is_consistent
         )
 
+        # 检查冲突字段的置信度
+        # 如果冲突字段的多数值置信度很高（>= 0.7），仍可自动通过
+        high_conf_conflicts = sum(
+            1 for field in conflict_fields
+            if validation.field_comparisons[field].confidence >= 0.7
+        )
+
         if consistent_count >= len(CRITICAL_FIELDS) - 1:
             # 只有1个字段不一致
-            validation.confidence = VerifyConfidence.MEDIUM
-            validation.review_status = ReviewStatus.PENDING_REVIEW
+            if high_conf_conflicts == len(conflict_fields):
+                # 冲突字段有明确的多数值，自动通过
+                validation.confidence = VerifyConfidence.MEDIUM
+                validation.review_status = ReviewStatus.AUTO_APPROVED
+            else:
+                validation.confidence = VerifyConfidence.MEDIUM
+                validation.review_status = ReviewStatus.PENDING_REVIEW
         else:
             validation.confidence = VerifyConfidence.CONFLICT
             validation.review_status = ReviewStatus.PENDING_REVIEW
