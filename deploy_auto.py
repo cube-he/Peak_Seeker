@@ -190,7 +190,7 @@ def deploy(ssh):
     print('\n[5/8] Uploading OCR service...')
     local_ocr = os.path.join(LOCAL_ROOT, 'services', 'ocr-service')
     remote_ocr = f'{REMOTE_PATH}/services/ocr-service'
-    for f in ['main.py', 'ai_parser.py', 'multi_engine_validator.py', 'requirements.txt', 'setup.sh', 'FORMAT_ANALYSIS.md']:
+    for f in ['main.py', 'ai_parser.py', 'multi_engine_validator.py', 'image_preprocessor.py', 'requirements.txt', 'setup.sh', 'FORMAT_ANALYSIS.md']:
         local_file = os.path.join(local_ocr, f)
         if os.path.exists(local_file):
             print(f'    {f}')

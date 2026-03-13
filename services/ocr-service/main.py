@@ -1334,8 +1334,11 @@ def extract_supplementary_rows(img_path: str, context: Dict = None, ocr_result: 
 
 def validate_group_plans(rows: List[Dict]) -> None:
     """
-    校验专业组计划数 = 该组各专业计划数之和
-    如果不匹配，记录警告日志
+    校验并修复专业组计划数
+
+    功能：
+    1. 如果专业组计划数为 0，用该组各专业计划数之和填充
+    2. 如果专业组计划数与专业计划数之和不匹配，记录警告日志
 
     注意：同一专业组代码在不同考试类型（历史类/物理类）下是独立的，
     需要按 院校代码 + 考试类型 + 专业组代码 进行分组校验
@@ -1353,17 +1356,26 @@ def validate_group_plans(rows: List[Dict]) -> None:
             }
         groups[key]["majors"].append(row)
 
-    # 校验每个专业组
+    # 校验并修复每个专业组
     for key, data in groups.items():
         group_plan = data["group_plan"]
         majors_sum = sum(m.get("plan_count", 0) for m in data["majors"])
 
-        if group_plan > 0 and majors_sum != group_plan:
-            uni_code = data["majors"][0].get("university_code", "") if data["majors"] else ""
-            group_code = data["majors"][0].get("major_group_code", "") if data["majors"] else ""
-            exam_type = data.get("exam_type", "")
+        uni_code = data["majors"][0].get("university_code", "") if data["majors"] else ""
+        group_code = data["majors"][0].get("major_group_code", "") if data["majors"] else ""
+        exam_type = data.get("exam_type", "")
+
+        # 如果专业组计划数为 0，用专业计划数之和填充
+        if group_plan == 0 and majors_sum > 0:
+            logger.info(
+                f"📝 自动填充专业组计划数: 院校{uni_code} [{exam_type}] 专业组{group_code} "
+                f"计划数={majors_sum}"
+            )
+            for major in data["majors"]:
+                major["major_group_plan"] = majors_sum
+        elif group_plan > 0 and majors_sum != group_plan:
             logger.warning(
-                f"⚠️ 计划数��验失败: 院校{uni_code} [{exam_type}] 专业组{group_code} "
+                f"⚠️ 计划数校验失败: 院校{uni_code} [{exam_type}] 专业组{group_code} "
                 f"组计划={group_plan} 专业计划之和={majors_sum}"
             )
 
