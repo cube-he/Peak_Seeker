@@ -404,6 +404,8 @@ export class DataImportService {
     batch: string,
     options: {
       enableBaidu?: boolean;
+      enablePaddleocrVl?: boolean;
+      enableAistudio?: boolean;
       enablePaddleocr?: boolean;
       enableRapid?: boolean;
       enableAi?: boolean;
@@ -414,7 +416,8 @@ export class DataImportService {
   ) {
     this.logger.log(
       `多引擎校验: ${imageUrls.length} 张图片, 引擎: ` +
-        `baidu=${options.enableBaidu}, paddleocr=${options.enablePaddleocr}, ` +
+        `baidu=${options.enableBaidu}, paddleocr_vl=${options.enablePaddleocrVl}, ` +
+        `aistudio=${options.enableAistudio}, paddleocr=${options.enablePaddleocr}, ` +
         `rapid=${options.enableRapid}, ai=${options.enableAi}`,
     );
 
@@ -429,6 +432,8 @@ export class DataImportService {
         exam_type: examType,
         batch: batch || '本科一批',
         enable_baidu: options.enableBaidu ?? true,
+        enable_paddleocr_vl: options.enablePaddleocrVl ?? false,
+        enable_aistudio: options.enableAistudio ?? false,
         enable_paddleocr: options.enablePaddleocr ?? true,
         enable_rapid: options.enableRapid ?? true,
         enable_ai: options.enableAi ?? false,

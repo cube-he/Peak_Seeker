@@ -9,6 +9,7 @@ opencv-python-headless>=4.8.0
 mysql-connector-python>=8.2.0
 pydantic>=2.5.0
 httpx>=0.25.0
+python-dotenv>=1.0.0
 
 # PaddleOCR (可选，识别能力更强)
 # 服务器已安装，本地可选安装：pip install paddlepaddle paddleocr

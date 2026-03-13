@@ -214,6 +214,8 @@ export class DataImportController {
       examType?: string;
       batch?: string;
       enableBaidu?: boolean;
+      enablePaddleocrVl?: boolean;
+      enableAistudio?: boolean;
       enablePaddleocr?: boolean;
       enableRapid?: boolean;
       enableAi?: boolean;
@@ -232,6 +234,8 @@ export class DataImportController {
         dto.batch ?? '本科一批',
         {
           enableBaidu: dto.enableBaidu ?? true,
+          enablePaddleocrVl: dto.enablePaddleocrVl ?? false,
+          enableAistudio: dto.enableAistudio ?? false,
           enablePaddleocr: dto.enablePaddleocr ?? true,
           enableRapid: dto.enableRapid ?? true,
           enableAi: dto.enableAi ?? false,
