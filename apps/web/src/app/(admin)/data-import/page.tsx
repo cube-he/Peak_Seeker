@@ -36,12 +36,7 @@ import {
   ToolOutlined,
   EditOutlined,
   CheckCircleOutlined,
-  RobotOutlined,
   ExclamationCircleOutlined,
-  SettingOutlined,
-  CloseCircleOutlined,
-  ClockCircleOutlined,
-  QuestionCircleOutlined,
   LinkOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
@@ -50,7 +45,6 @@ import {
   checkImportHealth,
   fetchPage,
   runOcr,
-  runAiVerifySingle,
   runMultiEngineOcr,
   saveImportData,
   saveSupplementaryData,
@@ -63,9 +57,8 @@ import {
   type SupplementaryRow,
   type ImportStats,
   type AiConfig,
-  type VerifyStatus,
   type MultiEngineValidationResponse,
-  type RecordValidationResult,
+  type SupplementaryRowWithConflict,
 } from '@/services/dataImport';
 
 const { Content } = Layout;
@@ -109,28 +102,21 @@ export default function DataImportPage() {
   const [dataErrorMessages, setDataErrorMessages] = useState<string[]>([]);
   const [editingKey, setEditingKey] = useState<number | null>(null);
 
-  // 征集志愿数据
-  const [supplementaryData, setSupplementaryData] = useState<SupplementaryRow[]>([]);
+  // 征集志愿数据（包含冲突信息）
+  const [supplementaryData, setSupplementaryData] = useState<SupplementaryRowWithConflict[]>([]);
+  // 征集志愿编辑状态：{ rowKey: string, field: string }
+  const [editingSupplementaryCell, setEditingSupplementaryCell] = useState<{ rowKey: string; field: string } | null>(null);
 
-  // AI 校验相关
+  // AI 配置（用于多引擎校验中的 AI 引擎）
   const [aiConfigMode, setAiConfigMode] = useState<'manual' | 'saved'>('saved');
   const [aiApiKey, setAiApiKey] = useState('');
   const [aiBaseUrl, setAiBaseUrl] = useState('https://api.deepseek.com/v1');
   const [aiModel, setAiModel] = useState('deepseek-chat');
-  const [aiVerifying, setAiVerifying] = useState(false);
-  const [aiVerifyProgress, setAiVerifyProgress] = useState({ current: 0, total: 0 });
-  const [aiDiffs, setAiDiffs] = useState<Map<string, { field: string; ocrValue: any; aiValue: any }[]>>(new Map());
-  // 新增：跟踪每行的校验状态
-  const [aiVerifyStatus, setAiVerifyStatus] = useState<Map<string, VerifyStatus>>(new Map());
-  const [showAiConfig, setShowAiConfig] = useState(false);
 
   // 本地 AI 配置
   const [aiConfigs, setAiConfigs] = useState<AiConfig[]>([]);
   const [selectedAiConfig, setSelectedAiConfig] = useState<string>('');
   const [loadingAiConfigs, setLoadingAiConfigs] = useState(false);
-
-  // 记录每张图片识别的数据行数（用于筛选有数据的图片）
-  const [imageDataCounts, setImageDataCounts] = useState<number[]>([]);
 
   // 多引擎校验相关
   const [multiEngineMode, setMultiEngineMode] = useState(false);
@@ -142,7 +128,6 @@ export default function DataImportPage() {
     enableRapid: true,
     enableAi: false,
   });
-  const [pendingReviewData, setPendingReviewData] = useState<RecordValidationResult[]>([]);
 
   // 权限检查
   const isAdmin =
@@ -307,7 +292,6 @@ export default function DataImportPage() {
   const handleOcr = async () => {
     if (!fetchResult) return;
     setLoading(true);
-    setAiDiffs(new Map()); // 清空之前的 AI 差异标记
     try {
       const result = await runOcr({
         imageUrls: fetchResult.image_urls,
@@ -327,10 +311,6 @@ export default function DataImportPage() {
       } else {
         const suppResult = result as SupplementaryOcrResult;
         setSupplementaryData([...suppResult.data]);
-        // 记录每张图片的数据行数（后端需要返回这个信息）
-        if ((suppResult as any).image_data_counts) {
-          setImageDataCounts((suppResult as any).image_data_counts);
-        }
       }
 
       setCurrentStep(2);
@@ -344,237 +324,6 @@ export default function DataImportPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // AI 校验（在 OCR 结果基础上逐张验证）
-  const handleAiVerify = async () => {
-    if (!fetchResult || supplementaryData.length === 0) return;
-
-    // 检查 AI 配置
-    if (aiConfigMode === 'saved' && !selectedAiConfig) {
-      message.error('请先选择 AI 配置');
-      return;
-    }
-    if (aiConfigMode === 'manual' && !aiApiKey) {
-      message.error('请先输入 API Key');
-      return;
-    }
-
-    // 根据 imageDataCounts 把 OCR 数据按图片分组
-    const imageOcrDataMap: Map<number, typeof supplementaryData> = new Map();
-    if (imageDataCounts.length > 0) {
-      let dataIndex = 0;
-      for (let imgIdx = 0; imgIdx < imageDataCounts.length; imgIdx++) {
-        const count = imageDataCounts[imgIdx];
-        if (count > 0) {
-          imageOcrDataMap.set(imgIdx, supplementaryData.slice(dataIndex, dataIndex + count));
-        }
-        dataIndex += count;
-      }
-    }
-
-    // 筛选有数据的图片
-    const imagesWithData: { url: string; index: number; ocrData: typeof supplementaryData }[] = [];
-    fetchResult.image_urls.forEach((url, index) => {
-      if (imageDataCounts.length > 0) {
-        const ocrData = imageOcrDataMap.get(index);
-        if (ocrData && ocrData.length > 0) {
-          imagesWithData.push({ url, index, ocrData });
-        }
-      } else {
-        // 没有详细信息时，假设从第2张开始有数据，传入全部数据
-        if (index >= 1) {
-          imagesWithData.push({ url, index, ocrData: supplementaryData });
-        }
-      }
-    });
-
-    if (imagesWithData.length === 0) {
-      message.warning('没有找到包含数据的图片');
-      return;
-    }
-
-    setAiVerifying(true);
-    setAiVerifyProgress({ current: 0, total: imagesWithData.length });
-
-    // 使用本地变量累积差异和状态，避免 React 状态异步更新问题
-    const allDiffs = new Map<string, { field: string; ocrValue: any; aiValue: any }[]>();
-    const allStatus = new Map<string, VerifyStatus>();
-    setAiDiffs(allDiffs);
-    setAiVerifyStatus(allStatus);
-
-    let successCount = 0;
-    let failCount = 0;
-    let timeoutCount = 0;
-    let matchedCount = 0;
-    let conflictCount = 0;
-
-    // 逐张调用 AI 验证
-    for (let i = 0; i < imagesWithData.length; i++) {
-      const { url, ocrData } = imagesWithData[i];
-      setAiVerifyProgress({ current: i + 1, total: imagesWithData.length });
-
-      // 调用单张图片的 AI 验证，传入该图片的 OCR 数据
-      const aiParams: Parameters<typeof runAiVerifySingle>[0] = {
-        imageUrl: url,
-        ocrData,
-        year,
-        province,
-        examType,
-        batch,
-      };
-
-      if (aiConfigMode === 'saved' && selectedAiConfig) {
-        aiParams.aiConfigId = selectedAiConfig;
-      } else {
-        aiParams.aiApiKey = aiApiKey;
-        aiParams.aiBaseUrl = aiBaseUrl;
-        aiParams.aiModel = aiModel;
-      }
-
-      try {
-        const aiResult = await runAiVerifySingle(aiParams);
-
-        // 检查是否有错误（超时等）
-        if (aiResult.error_message) {
-          if (aiResult.error_message.includes('超时')) {
-            timeoutCount++;
-            message.warning(`第 ${i + 1} 张图片 AI 校验超时`);
-          } else {
-            failCount++;
-            message.warning(`第 ${i + 1} 张图片: ${aiResult.error_message}`);
-          }
-
-          // 第一张图片就失败，提示用户并询问是否继续
-          if (i === 0 && (aiResult.summary.timeout > 0 || aiResult.summary.error > 0)) {
-            const shouldContinue = window.confirm(
-              'AI 校验第一张图片就失败了，可能是配置问题。\n\n' +
-              '常见原因：\n' +
-              '1. 模型不支持图片识别（如 qwen-turbo 不支持，需要用 qwen-vl-plus）\n' +
-              '2. API Key 无效或过期\n' +
-              '3. API 调用超时\n\n' +
-              '是否继续尝试其他图片？'
-            );
-            if (!shouldContinue) {
-              setAiVerifying(false);
-              return;
-            }
-          }
-        } else {
-          successCount++;
-        }
-
-        // 统计校验结果
-        matchedCount += aiResult.summary.matched || 0;
-        conflictCount += aiResult.summary.conflict || 0;
-
-        // 处理校验结果，记录每行状态和冲突
-        for (const row of aiResult.verified_rows) {
-          const rowKey = `${row.data.university_code}_${row.data.major_group_code}_${row.data.major_code}`;
-
-          // 记录状态
-          allStatus.set(rowKey, row.status);
-
-          // 如果是冲突，提取差异详情
-          if (row.status === 'conflict' && row.diff_fields && row.diff_fields.length > 0) {
-            const diffs: { field: string; ocrValue: any; aiValue: any }[] = [];
-
-            for (const diffField of row.diff_fields) {
-              // 解析 diff_fields 格式: "plan_count(OCR:1, AI:2)"
-              const match = diffField.match(/^(\w+)\(OCR:(.+), AI:(.+)\)$/);
-              if (match) {
-                const [, field, ocrValue, aiValue] = match;
-                diffs.push({ field, ocrValue, aiValue });
-              }
-            }
-
-            if (diffs.length > 0) {
-              allDiffs.set(rowKey, diffs);
-            }
-          }
-        }
-
-        // 每处理完一张图片，更新 UI 显示
-        setAiDiffs(new Map(allDiffs));
-        setAiVerifyStatus(new Map(allStatus));
-
-        // 实时提示进度
-        const imgSummary = aiResult.summary;
-        message.info(
-          `第 ${i + 1} 张: 一致 ${imgSummary.matched || 0}, 冲突 ${imgSummary.conflict || 0}, ` +
-          `仅OCR ${imgSummary.ocr_only || 0}, 仅AI ${imgSummary.ai_only || 0}`
-        );
-
-      } catch (e: any) {
-        failCount++;
-        const errMsg = e?.response?.data?.message || e?.message || '未知错误';
-        message.error(`第 ${i + 1} 张图片 AI 校验失败: ${errMsg}`);
-
-        // 第一张就失败，询问是否继续
-        if (i === 0) {
-          const shouldContinue = window.confirm(
-            `AI 校验第一张图片就出错了: ${errMsg}\n\n是否继续尝试其他图片？`
-          );
-          if (!shouldContinue) {
-            setAiVerifying(false);
-            return;
-          }
-        }
-      }
-    }
-
-    // 最终汇总
-    setAiVerifying(false);
-    const diffCount = allDiffs.size;
-    const totalImages = imagesWithData.length;
-
-    if (failCount + timeoutCount === totalImages) {
-      message.error('所有图片 AI 校验都失败了，请检查 AI 配置');
-    } else {
-      const statusParts = [];
-      if (successCount > 0) statusParts.push(`成功 ${successCount}`);
-      if (timeoutCount > 0) statusParts.push(`超时 ${timeoutCount}`);
-      if (failCount > 0) statusParts.push(`失败 ${failCount}`);
-
-      if (diffCount > 0) {
-        message.warning(
-          `AI 校验完成（${statusParts.join(', ')}），` +
-          `一致 ${matchedCount} 条，冲突 ${conflictCount} 条，请人工复核`
-        );
-      } else if (successCount > 0) {
-        message.success(`AI 校验完成（${statusParts.join(', ')}），全部一致，无冲突`);
-      }
-    }
-  };
-
-  // 应用 AI 结果到指定行
-  const handleApplyAiValue = (rowKey: string, field: string, aiValue: any) => {
-    setSupplementaryData((prev) =>
-      prev.map((row) => {
-        const key = `${row.university_code}_${row.major_group_code}_${row.major_code}`;
-        if (key === rowKey) {
-          return { ...row, [field]: aiValue };
-        }
-        return row;
-      })
-    );
-
-    // 从差异列表中移除该字段
-    setAiDiffs((prev) => {
-      const newDiffs = new Map(prev);
-      const rowDiffs = newDiffs.get(rowKey);
-      if (rowDiffs) {
-        const updatedDiffs = rowDiffs.filter((d) => d.field !== field);
-        if (updatedDiffs.length === 0) {
-          newDiffs.delete(rowKey);
-        } else {
-          newDiffs.set(rowKey, updatedDiffs);
-        }
-      }
-      return newDiffs;
-    });
-
-    message.success('已应用 AI 结果');
   };
 
   // 多引擎交叉校验
@@ -602,7 +351,6 @@ export default function DataImportPage() {
 
     setMultiEngineLoading(true);
     setMultiEngineResult(null);
-    setPendingReviewData([]);
 
     try {
       const params: Parameters<typeof runMultiEngineOcr>[0] = {
@@ -635,28 +383,53 @@ export default function DataImportPage() {
       const result = await runMultiEngineOcr(params);
       setMultiEngineResult(result);
 
-      // 设置数据
-      if (result.approved_data.length > 0) {
-        setSupplementaryData(result.approved_data);
-      }
-      if (result.pending_review_data.length > 0) {
-        setPendingReviewData(result.pending_review_data);
-      }
+      // 合并所有数据（自动通过 + 待审核），待审核数据带上冲突信息
+      const approvedWithFlag: SupplementaryRowWithConflict[] = result.approved_data.map(row => ({
+        ...row,
+        _hasConflict: false,
+        _confidence: 'high' as const,
+      }));
+
+      const pendingWithConflict: SupplementaryRowWithConflict[] = result.pending_review_data.map(item => ({
+        exam_type: (item.merged_data.exam_type as string) || '',
+        enrollment_type: (item.merged_data.enrollment_type as string) || '',
+        university_code: (item.merged_data.university_code as string) || '',
+        university_name: (item.merged_data.university_name as string) || '',
+        university_location: (item.merged_data.university_location as string) || '',
+        university_note: (item.merged_data.university_note as string) || '',
+        major_group_code: (item.merged_data.major_group_code as string) || '',
+        major_group_subject: (item.merged_data.major_group_subject as string) || '',
+        major_group_plan: (item.merged_data.major_group_plan as number) || 0,
+        major_code: (item.merged_data.major_code as string) || '',
+        major_name: (item.merged_data.major_name as string) || '',
+        major_note: (item.merged_data.major_note as string) || '',
+        plan_count: (item.merged_data.plan_count as number) || 0,
+        tuition: (item.merged_data.tuition as string) || '',
+        page_number: (item.merged_data.page_number as number) || undefined,
+        _hasConflict: item.conflict_fields.length > 0,
+        _confidence: item.confidence,
+        _conflictFields: item.conflict_fields,
+        _fieldDiffs: item.field_diffs,
+        _engineSources: item.engine_sources,
+      }));
+
+      // 合并数据
+      setSupplementaryData([...approvedWithFlag, ...pendingWithConflict]);
 
       setCurrentStep(2);
       setOcrResult({
         total_rows: result.total_records,
-        university_count: new Set(result.approved_data.map(r => r.university_code)).size,
+        university_count: new Set([...result.approved_data, ...pendingWithConflict].map(r => r.university_code)).size,
         major_group_count: 0,
         is_valid: result.is_valid,
         errors: result.errors,
-        data: result.approved_data,
+        data: [...result.approved_data, ...pendingWithConflict],
       } as SupplementaryOcrResult);
 
       // 显示结果摘要
       if (result.pending_review_count > 0) {
         message.warning(
-          `多引擎校验完成: ${result.auto_approved_count} 条自动通过, ${result.pending_review_count} 条待人工审核`
+          `多引擎校验完成: ${result.auto_approved_count} 条自动通过, ${result.pending_review_count} 条有冲突需确认`
         );
       } else {
         message.success(
@@ -670,39 +443,35 @@ export default function DataImportPage() {
     }
   };
 
-  // 审核通过待审核数据
-  const handleApproveReviewItem = (recordKey: string) => {
-    const item = pendingReviewData.find(r => r.record_key === recordKey);
-    if (!item) return;
-
-    // 将待审核数据添加到已通过数据
-    const newRow: SupplementaryRow = {
-      exam_type: (item.merged_data.exam_type as string) || '',
-      enrollment_type: (item.merged_data.enrollment_type as string) || '',
-      university_code: (item.merged_data.university_code as string) || '',
-      university_name: (item.merged_data.university_name as string) || '',
-      university_location: (item.merged_data.university_location as string) || '',
-      university_note: (item.merged_data.university_note as string) || '',
-      major_group_code: (item.merged_data.major_group_code as string) || '',
-      major_group_subject: (item.merged_data.major_group_subject as string) || '',
-      major_group_plan: (item.merged_data.major_group_plan as number) || 0,
-      major_code: (item.merged_data.major_code as string) || '',
-      major_name: (item.merged_data.major_name as string) || '',
-      major_note: (item.merged_data.major_note as string) || '',
-      plan_count: (item.merged_data.plan_count as number) || 0,
-      tuition: (item.merged_data.tuition as string) || '',
-    };
-
-    setSupplementaryData(prev => [...prev, newRow]);
-    setPendingReviewData(prev => prev.filter(r => r.record_key !== recordKey));
-    message.success('已通过审核');
+  // 编辑征集志愿数据单元格
+  const handleSupplementaryCellEdit = (rowKey: string, field: keyof SupplementaryRowWithConflict, value: any) => {
+    setSupplementaryData((prev) =>
+      prev.map((row) => {
+        const key = `${row.university_code}_${row.major_group_code}_${row.major_code}_${row.major_name}`;
+        if (key === rowKey) {
+          // 编辑后清除该字段的冲突标记
+          const newConflictFields = row._conflictFields?.filter(f => f !== field) || [];
+          return {
+            ...row,
+            [field]: value,
+            _conflictFields: newConflictFields,
+            _hasConflict: newConflictFields.length > 0,
+          };
+        }
+        return row;
+      })
+    );
   };
 
-  // 拒绝待审核数据
-  const handleRejectReviewItem = (recordKey: string) => {
-    setPendingReviewData(prev => prev.filter(r => r.record_key !== recordKey));
-    message.info('已拒绝该条数据');
+  // 应用某个引擎的值到冲突字段
+  const handleApplyEngineValue = (rowKey: string, field: string, value: any) => {
+    handleSupplementaryCellEdit(rowKey, field as keyof SupplementaryRowWithConflict, value);
+    message.success('已应用该值');
   };
+
+  // 生成征集志愿行的唯一 key
+  const getSupplementaryRowKey = (row: SupplementaryRow) =>
+    `${row.university_code}_${row.major_group_code}_${row.major_code}_${row.major_name}`;
 
   // Step 3: 保存
   const handleSave = async () => {
@@ -758,16 +527,11 @@ export default function DataImportPage() {
     setDataErrors(new Set());
     setDataErrorMessages([]);
     setEditingKey(null);
-    setAiDiffs(new Map());
-    setAiVerifying(false);
-    setAiVerifyProgress({ current: 0, total: 0 });
-    setImageDataCounts([]);
-    setShowAiConfig(false);
+    setEditingSupplementaryCell(null);
     // 多引擎相关
     setMultiEngineMode(false);
     setMultiEngineResult(null);
     setMultiEngineLoading(false);
-    setPendingReviewData([]);
   };
 
   // OCR 数据表格列（可编辑）
@@ -839,20 +603,226 @@ export default function DataImportPage() {
     },
   ];
 
-  // 征集志愿表格列
+  // 征集志愿表格列（带排序、筛选和编辑功能）
+  // 通用的可编辑单元格渲染函数
+  const renderEditableCell = (
+    field: keyof SupplementaryRowWithConflict,
+    val: any,
+    record: SupplementaryRowWithConflict,
+    type: 'text' | 'number' = 'text',
+    width: number = 100
+  ) => {
+    const rowKey = getSupplementaryRowKey(record);
+    const isEditing = editingSupplementaryCell?.rowKey === rowKey && editingSupplementaryCell?.field === field;
+
+    if (isEditing) {
+      if (type === 'number') {
+        return (
+          <InputNumber
+            size="small"
+            min={0}
+            defaultValue={val}
+            autoFocus
+            onBlur={() => setEditingSupplementaryCell(null)}
+            onChange={(v) => {
+              if (v !== null) handleSupplementaryCellEdit(rowKey, field, v);
+            }}
+            onPressEnter={() => setEditingSupplementaryCell(null)}
+            style={{ width: width - 10 }}
+          />
+        );
+      }
+      return (
+        <Input
+          size="small"
+          defaultValue={val}
+          autoFocus
+          onBlur={(e) => {
+            handleSupplementaryCellEdit(rowKey, field, e.target.value);
+            setEditingSupplementaryCell(null);
+          }}
+          onPressEnter={(e) => {
+            handleSupplementaryCellEdit(rowKey, field, (e.target as HTMLInputElement).value);
+            setEditingSupplementaryCell(null);
+          }}
+          style={{ width: width - 10 }}
+        />
+      );
+    }
+
+    const displayVal = val ?? '-';
+    return (
+      <span
+        style={{ cursor: 'pointer' }}
+        onClick={() => setEditingSupplementaryCell({ rowKey, field })}
+      >
+        {displayVal} <EditOutlined style={{ fontSize: 10, color: '#999' }} />
+      </span>
+    );
+  };
+
+  // 从数据中动态生成筛选选项
+  const getUniqueFilters = (field: keyof SupplementaryRowWithConflict) => {
+    const values = new Set(supplementaryData.map(r => r[field]).filter(Boolean));
+    return Array.from(values).sort().map(v => ({ text: String(v), value: String(v) }));
+  };
+
   const supplementaryColumns = [
-    { title: '页码', dataIndex: 'page_number', key: 'page_number', width: 50, fixed: 'left' as const },
-    { title: '考试类型', dataIndex: 'exam_type', key: 'exam_type', width: 80, fixed: 'left' as const },
-    { title: '招生类型', dataIndex: 'enrollment_type', key: 'enrollment_type', width: 120 },
-    { title: '院校代码', dataIndex: 'university_code', key: 'university_code', width: 80 },
-    { title: '院校名称', dataIndex: 'university_name', key: 'university_name', width: 150 },
-    { title: '专业组', dataIndex: 'major_group_code', key: 'major_group_code', width: 70 },
-    { title: '组计划', dataIndex: 'major_group_plan', key: 'major_group_plan', width: 60 },
-    { title: '专业代码', dataIndex: 'major_code', key: 'major_code', width: 70 },
-    { title: '专业名称', dataIndex: 'major_name', key: 'major_name', width: 150 },
-    { title: '专业备注', dataIndex: 'major_note', key: 'major_note', width: 120 },
-    { title: '计划数', dataIndex: 'plan_count', key: 'plan_count', width: 60 },
-    { title: '收费', dataIndex: 'tuition', key: 'tuition', width: 60 },
+    {
+      title: '页码',
+      dataIndex: 'page_number',
+      key: 'page_number',
+      width: 60,
+      fixed: 'left' as const,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => (a.page_number || 0) - (b.page_number || 0),
+      filters: getUniqueFilters('page_number'),
+      onFilter: (value: any, record: SupplementaryRow) => String(record.page_number) === value,
+      render: (val: number, record: SupplementaryRowWithConflict) => renderEditableCell('page_number', val, record, 'number', 60),
+    },
+    {
+      title: '考试类型',
+      dataIndex: 'exam_type',
+      key: 'exam_type',
+      width: 90,
+      fixed: 'left' as const,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => a.exam_type.localeCompare(b.exam_type),
+      filters: [
+        { text: '物理类', value: '物理类' },
+        { text: '历史类', value: '历史类' },
+        { text: '理科', value: '理科' },
+        { text: '文科', value: '文科' },
+      ],
+      onFilter: (value: any, record: SupplementaryRow) => record.exam_type === value,
+      render: (val: string, record: SupplementaryRowWithConflict) => renderEditableCell('exam_type', val, record, 'text', 90),
+    },
+    {
+      title: '招生类型',
+      dataIndex: 'enrollment_type',
+      key: 'enrollment_type',
+      width: 130,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => a.enrollment_type.localeCompare(b.enrollment_type),
+      filters: getUniqueFilters('enrollment_type'),
+      onFilter: (value: any, record: SupplementaryRow) => record.enrollment_type === value,
+      render: (val: string, record: SupplementaryRowWithConflict) => renderEditableCell('enrollment_type', val, record, 'text', 130),
+    },
+    {
+      title: '院校代码',
+      dataIndex: 'university_code',
+      key: 'university_code',
+      width: 90,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => a.university_code.localeCompare(b.university_code),
+      filterSearch: true,
+      filters: getUniqueFilters('university_code'),
+      onFilter: (value: any, record: SupplementaryRow) => record.university_code === value,
+      render: (val: string, record: SupplementaryRowWithConflict) => renderEditableCell('university_code', val, record, 'text', 90),
+    },
+    {
+      title: '院校名称',
+      dataIndex: 'university_name',
+      key: 'university_name',
+      width: 160,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => a.university_name.localeCompare(b.university_name),
+      filterSearch: true,
+      filters: getUniqueFilters('university_name'),
+      onFilter: (value: any, record: SupplementaryRow) => record.university_name === value,
+      render: (val: string, record: SupplementaryRowWithConflict) => renderEditableCell('university_name', val, record, 'text', 160),
+    },
+    {
+      title: '专业组',
+      dataIndex: 'major_group_code',
+      key: 'major_group_code',
+      width: 80,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => a.major_group_code.localeCompare(b.major_group_code),
+      filters: getUniqueFilters('major_group_code'),
+      onFilter: (value: any, record: SupplementaryRow) => record.major_group_code === value,
+      render: (val: string, record: SupplementaryRowWithConflict) => renderEditableCell('major_group_code', val, record, 'text', 80),
+    },
+    {
+      title: '组计划',
+      dataIndex: 'major_group_plan',
+      key: 'major_group_plan',
+      width: 70,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => a.major_group_plan - b.major_group_plan,
+      render: (val: number, record: SupplementaryRowWithConflict) => renderEditableCell('major_group_plan', val, record, 'number', 70),
+    },
+    {
+      title: '专业代码',
+      dataIndex: 'major_code',
+      key: 'major_code',
+      width: 90,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => a.major_code.localeCompare(b.major_code),
+      filterSearch: true,
+      filters: getUniqueFilters('major_code'),
+      onFilter: (value: any, record: SupplementaryRow) => record.major_code === value,
+      render: (val: string, record: SupplementaryRowWithConflict) => renderEditableCell('major_code', val, record, 'text', 90),
+    },
+    {
+      title: '专业名称',
+      dataIndex: 'major_name',
+      key: 'major_name',
+      width: 160,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => a.major_name.localeCompare(b.major_name),
+      filterSearch: true,
+      filters: getUniqueFilters('major_name'),
+      onFilter: (value: any, record: SupplementaryRow) => record.major_name === value,
+      render: (val: string, record: SupplementaryRowWithConflict) => renderEditableCell('major_name', val, record, 'text', 160),
+    },
+    {
+      title: '专业备注',
+      dataIndex: 'major_note',
+      key: 'major_note',
+      width: 130,
+      render: (val: string, record: SupplementaryRowWithConflict) => {
+        const rowKey = getSupplementaryRowKey(record);
+        const isEditing = editingSupplementaryCell?.rowKey === rowKey && editingSupplementaryCell?.field === 'major_note';
+        if (isEditing) {
+          return (
+            <Input
+              size="small"
+              defaultValue={val}
+              autoFocus
+              onBlur={(e) => {
+                handleSupplementaryCellEdit(rowKey, 'major_note', e.target.value);
+                setEditingSupplementaryCell(null);
+              }}
+              onPressEnter={(e) => {
+                handleSupplementaryCellEdit(rowKey, 'major_note', (e.target as HTMLInputElement).value);
+                setEditingSupplementaryCell(null);
+              }}
+              style={{ width: 120 }}
+            />
+          );
+        }
+        return (
+          <Tooltip title={val}>
+            <span
+              style={{ cursor: 'pointer', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+              onClick={() => setEditingSupplementaryCell({ rowKey, field: 'major_note' })}
+            >
+              {val || '-'} <EditOutlined style={{ fontSize: 10, color: '#999' }} />
+            </span>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: '计划数',
+      dataIndex: 'plan_count',
+      key: 'plan_count',
+      width: 70,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => a.plan_count - b.plan_count,
+      render: (val: number, record: SupplementaryRowWithConflict) => renderEditableCell('plan_count', val, record, 'number', 70),
+    },
+    {
+      title: '收费',
+      dataIndex: 'tuition',
+      key: 'tuition',
+      width: 90,
+      sorter: (a: SupplementaryRow, b: SupplementaryRow) => a.tuition.localeCompare(b.tuition),
+      filters: getUniqueFilters('tuition'),
+      onFilter: (value: any, record: SupplementaryRow) => record.tuition === value,
+      render: (val: string, record: SupplementaryRowWithConflict) => renderEditableCell('tuition', val, record, 'text', 90),
+    },
     {
       title: '来源',
       dataIndex: 'source_url',
@@ -1297,25 +1267,25 @@ export default function DataImportPage() {
                   <>
                     {/* 征集志愿预览 */}
                     <Row gutter={16}>
-                      <Col span={3}>
-                        <Statistic title="识别行数" value={supplementaryData.length + pendingReviewData.length} />
+                      <Col span={4}>
+                        <Statistic title="识别行数" value={supplementaryData.length} />
                       </Col>
-                      <Col span={3}>
+                      <Col span={4}>
                         <Statistic title="院校数" value={(ocrResult as SupplementaryOcrResult).university_count} />
                       </Col>
-                      <Col span={3}>
+                      <Col span={4}>
                         <Statistic
-                          title="自动通过"
-                          value={supplementaryData.length}
+                          title="无冲突"
+                          value={supplementaryData.filter(r => !r._hasConflict).length}
                           valueStyle={{ color: '#52c41a' }}
                           prefix={<CheckCircleOutlined />}
                         />
                       </Col>
-                      <Col span={3}>
+                      <Col span={4}>
                         <Statistic
-                          title="待审核"
-                          value={pendingReviewData.length}
-                          valueStyle={{ color: pendingReviewData.length > 0 ? '#faad14' : '#999' }}
+                          title="有冲突"
+                          value={supplementaryData.filter(r => r._hasConflict).length}
+                          valueStyle={{ color: supplementaryData.some(r => r._hasConflict) ? '#faad14' : '#999' }}
                           prefix={<ExclamationCircleOutlined />}
                         />
                       </Col>
@@ -1327,14 +1297,6 @@ export default function DataImportPage() {
                           valueStyle={{
                             color: ocrResult.is_valid ? '#52c41a' : '#faad14',
                           }}
-                        />
-                      </Col>
-                      <Col span={4}>
-                        <Statistic
-                          title="AI 差异"
-                          value={aiDiffs.size > 0 ? `${aiDiffs.size} 处` : (aiVerifying ? '校验中...' : '未校验')}
-                          prefix={aiDiffs.size > 0 ? <ExclamationCircleOutlined /> : <RobotOutlined />}
-                          valueStyle={{ color: aiDiffs.size > 0 ? '#ff4d4f' : '#999' }}
                         />
                       </Col>
                       <Col span={4}>
@@ -1372,262 +1334,17 @@ export default function DataImportPage() {
                             </Space>
                           </Col>
                         </Row>
+                        {supplementaryData.some(r => r._hasConflict) && (
+                          <Alert
+                            style={{ marginTop: 12 }}
+                            message="部分数据存在冲突"
+                            description="表格中橙色背景的行表示有冲突，冲突字段会显示各引擎的不同值，点击可选择应用"
+                            type="warning"
+                            showIcon
+                          />
+                        )}
                       </Card>
                     )}
-
-                    {/* 待审核数据区域 */}
-                    {pendingReviewData.length > 0 && (
-                      <Card
-                        size="small"
-                        title={
-                          <Space>
-                            <ExclamationCircleOutlined style={{ color: '#faad14' }} />
-                            <span>待人工审核 ({pendingReviewData.length} 条)</span>
-                          </Space>
-                        }
-                        style={{ marginTop: 16, borderColor: '#faad14' }}
-                      >
-                        <Alert
-                          message="以下数据在多个 OCR 引擎间存在差异，请人工确认"
-                          type="warning"
-                          showIcon
-                          style={{ marginBottom: 12 }}
-                        />
-                        <Table
-                          dataSource={pendingReviewData}
-                          rowKey="record_key"
-                          size="small"
-                          pagination={{ pageSize: 10 }}
-                          columns={[
-                            {
-                              title: '置信度',
-                              dataIndex: 'confidence',
-                              width: 80,
-                              render: (val: string) => {
-                                const colors: Record<string, string> = {
-                                  high: 'green',
-                                  medium: 'blue',
-                                  low: 'orange',
-                                  conflict: 'red',
-                                  single: 'default',
-                                };
-                                return <Tag color={colors[val] || 'default'}>{val}</Tag>;
-                              },
-                            },
-                            {
-                              title: '院校',
-                              key: 'university',
-                              width: 150,
-                              render: (_: any, record: RecordValidationResult) => (
-                                <span>{String(record.merged_data.university_code || '')} {String(record.merged_data.university_name || '')}</span>
-                              ),
-                            },
-                            {
-                              title: '专业',
-                              key: 'major',
-                              width: 200,
-                              render: (_: any, record: RecordValidationResult) => (
-                                <span>{String(record.merged_data.major_code || '')} {String(record.merged_data.major_name || '')}</span>
-                              ),
-                            },
-                            {
-                              title: '计划数',
-                              key: 'plan_count',
-                              width: 80,
-                              render: (_: any, record: RecordValidationResult) => String(record.merged_data.plan_count ?? ''),
-                            },
-                            {
-                              title: '冲突字段',
-                              dataIndex: 'conflict_fields',
-                              width: 150,
-                              render: (fields: string[]) => (
-                                <Space wrap size={4}>
-                                  {fields.map(f => <Tag key={f} color="red">{f}</Tag>)}
-                                </Space>
-                              ),
-                            },
-                            {
-                              title: '各引擎值',
-                              dataIndex: 'field_diffs',
-                              width: 200,
-                              render: (diffs: any[]) => (
-                                <Space direction="vertical" size={2}>
-                                  {diffs?.slice(0, 2).map((d, i) => (
-                                    <Text key={i} type="secondary" style={{ fontSize: 12 }}>
-                                      {d.field_name}: {Object.entries(d.values).map(([k, v]) => `${k}=${v}`).join(', ')}
-                                    </Text>
-                                  ))}
-                                </Space>
-                              ),
-                            },
-                            {
-                              title: '来源',
-                              dataIndex: 'engine_sources',
-                              width: 120,
-                              render: (sources: string[]) => (
-                                <Space wrap size={4}>
-                                  {sources.map(s => <Tag key={s} color="blue">{s}</Tag>)}
-                                </Space>
-                              ),
-                            },
-                            {
-                              title: '操作',
-                              key: 'action',
-                              width: 120,
-                              fixed: 'right' as const,
-                              render: (_: any, record: RecordValidationResult) => (
-                                <Space>
-                                  <Button
-                                    type="primary"
-                                    size="small"
-                                    onClick={() => handleApproveReviewItem(record.record_key)}
-                                  >
-                                    通过
-                                  </Button>
-                                  <Button
-                                    size="small"
-                                    danger
-                                    onClick={() => handleRejectReviewItem(record.record_key)}
-                                  >
-                                    拒绝
-                                  </Button>
-                                </Space>
-                              ),
-                            },
-                          ]}
-                          scroll={{ x: 1100 }}
-                        />
-                      </Card>
-                    )}
-                    <Card size="small" style={{ marginTop: 16, background: '#f6f8fa' }}>
-                      <Row align="middle" gutter={16}>
-                        <Col flex="auto">
-                          <Space>
-                            <RobotOutlined style={{ fontSize: 18, color: '#1890ff' }} />
-                            <Text strong>AI 校验</Text>
-                            <Text type="secondary">使用 AI 对 OCR 结果进行二次验证，标记差异</Text>
-                          </Space>
-                        </Col>
-                        <Col>
-                          <Space>
-                            <Button
-                              size="small"
-                              icon={<SettingOutlined />}
-                              onClick={() => {
-                                setShowAiConfig(!showAiConfig);
-                                if (!showAiConfig && aiConfigs.length === 0) {
-                                  loadAiConfigs();
-                                }
-                              }}
-                            >
-                              配置
-                            </Button>
-                            <Button
-                              type="primary"
-                              icon={<RobotOutlined />}
-                              loading={aiVerifying}
-                              onClick={handleAiVerify}
-                              disabled={aiVerifying}
-                            >
-                              {aiVerifying
-                                ? `校验中 ${aiVerifyProgress.current}/${aiVerifyProgress.total}`
-                                : '开始 AI 校验'}
-                            </Button>
-                          </Space>
-                        </Col>
-                      </Row>
-
-                      {/* AI 配置面板 */}
-                      {showAiConfig && (
-                        <div style={{ marginTop: 16, padding: 16, background: '#fff', borderRadius: 4 }}>
-                          <Radio.Group
-                            value={aiConfigMode}
-                            onChange={(e) => setAiConfigMode(e.target.value)}
-                            style={{ marginBottom: 12 }}
-                          >
-                            <Radio.Button value="saved">使用已保存配置</Radio.Button>
-                            <Radio.Button value="manual">手动输入</Radio.Button>
-                          </Radio.Group>
-
-                          {aiConfigMode === 'saved' ? (
-                            <Row gutter={16}>
-                              <Col span={16}>
-                                <Select
-                                  value={selectedAiConfig}
-                                  onChange={setSelectedAiConfig}
-                                  loading={loadingAiConfigs}
-                                  style={{ width: '100%' }}
-                                  placeholder="选择已保存的 AI 配置"
-                                  options={aiConfigs.map(c => ({
-                                    value: c.id,
-                                    label: `${c.name}${c.isDefault ? ' (默认)' : ''}`,
-                                  }))}
-                                />
-                              </Col>
-                              <Col span={8}>
-                                <Space>
-                                  <Button onClick={loadAiConfigs} loading={loadingAiConfigs}>
-                                    刷新
-                                  </Button>
-                                  <Link href="/ai-config">
-                                    <Button type="link" size="small">管理配置</Button>
-                                  </Link>
-                                </Space>
-                              </Col>
-                            </Row>
-                          ) : (
-                            <Row gutter={16}>
-                              <Col span={8}>
-                                <Input.Password
-                                  value={aiApiKey}
-                                  onChange={(e) => setAiApiKey(e.target.value)}
-                                  placeholder="API Key: sk-xxx..."
-                                />
-                              </Col>
-                              <Col span={8}>
-                                <Select
-                                  value={aiBaseUrl}
-                                  onChange={setAiBaseUrl}
-                                  style={{ width: '100%' }}
-                                  options={[
-                                    { value: 'https://api.deepseek.com/v1', label: 'DeepSeek' },
-                                    { value: 'https://api.openai.com/v1', label: 'OpenAI' },
-                                    { value: 'https://api.moonshot.cn/v1', label: 'Moonshot' },
-                                  ]}
-                                />
-                              </Col>
-                              <Col span={8}>
-                                <Input
-                                  value={aiModel}
-                                  onChange={(e) => setAiModel(e.target.value)}
-                                  placeholder="模型: deepseek-chat"
-                                />
-                              </Col>
-                            </Row>
-                          )}
-                        </div>
-                      )}
-
-                      {/* AI 校验进度 */}
-                      {aiVerifying && (
-                        <div style={{ marginTop: 12 }}>
-                          <Text type="secondary">
-                            正在校验第 {aiVerifyProgress.current} / {aiVerifyProgress.total} 张图片...
-                          </Text>
-                        </div>
-                      )}
-
-                      {/* AI 差异摘要 */}
-                      {aiDiffs.size > 0 && !aiVerifying && (
-                        <Alert
-                          style={{ marginTop: 12 }}
-                          message={`发现 ${aiDiffs.size} 处差异`}
-                          description="表格中已用颜色标记差异字段，点击 AI 值可应用"
-                          type="warning"
-                          showIcon
-                        />
-                      )}
-                    </Card>
 
                     {ocrResult.errors.length > 0 && (
                       <Alert
@@ -1649,91 +1366,167 @@ export default function DataImportPage() {
                       style={{ marginTop: 16 }}
                       dataSource={supplementaryData}
                       columns={[
-                        // AI 校验状态列
+                        // 置信度列（多引擎校验结果）
                         {
-                          title: 'AI校验',
-                          key: 'ai_status',
-                          width: 70,
+                          title: '状态',
+                          key: 'confidence',
+                          width: 80,
                           fixed: 'left' as const,
-                          render: (_: any, record: SupplementaryRow) => {
-                            const rowKey = `${record.university_code}_${record.major_group_code}_${record.major_code}`;
-                            const status = aiVerifyStatus.get(rowKey);
-                            if (!status) {
-                              return <Tag color="default"><QuestionCircleOutlined /> 未校验</Tag>;
+                          filters: [
+                            { text: '高置信', value: 'high' },
+                            { text: '中置信', value: 'medium' },
+                            { text: '有冲突', value: 'conflict' },
+                          ],
+                          onFilter: (value: any, record: SupplementaryRowWithConflict) => record._confidence === value,
+                          render: (_: any, record: SupplementaryRowWithConflict) => {
+                            if (!record._confidence) {
+                              return <Tag color="default">-</Tag>;
                             }
-                            switch (status) {
-                              case 'matched':
-                                return <Tag color="success"><CheckCircleOutlined /> 一致</Tag>;
-                              case 'conflict':
-                                return <Tag color="error"><ExclamationCircleOutlined /> 冲突</Tag>;
-                              case 'ocr_only':
-                                return <Tag color="warning"><WarningOutlined /> 仅OCR</Tag>;
-                              case 'ai_only':
-                                return <Tag color="blue"><RobotOutlined /> 仅AI</Tag>;
-                              case 'timeout':
-                                return <Tag color="orange"><ClockCircleOutlined /> 超时</Tag>;
-                              case 'error':
-                                return <Tag color="red"><CloseCircleOutlined /> 错误</Tag>;
-                              default:
-                                return <Tag color="default">{status}</Tag>;
-                            }
+                            const colors: Record<string, string> = {
+                              high: 'green',
+                              medium: 'blue',
+                              low: 'orange',
+                              conflict: 'red',
+                              single: 'default',
+                            };
+                            const labels: Record<string, string> = {
+                              high: '高',
+                              medium: '中',
+                              low: '低',
+                              conflict: '冲突',
+                              single: '单源',
+                            };
+                            return (
+                              <Tag color={colors[record._confidence] || 'default'}>
+                                {record._hasConflict && <ExclamationCircleOutlined style={{ marginRight: 4 }} />}
+                                {labels[record._confidence] || record._confidence}
+                              </Tag>
+                            );
                           },
                         },
-                        ...supplementaryColumns.slice(0, -2), // 除了计划数和收费
+                        ...supplementaryColumns.slice(0, -2), // 除了计划数和���费
                         {
                           title: '计划数',
                           dataIndex: 'plan_count',
                           key: 'plan_count',
-                          width: 100,
-                          render: (val: number, record: SupplementaryRow) => {
-                            const rowKey = `${record.university_code}_${record.major_group_code}_${record.major_code}`;
-                            const diffs = aiDiffs.get(rowKey);
-                            const diff = diffs?.find(d => d.field === 'plan_count');
-                            if (diff) {
+                          width: 120,
+                          sorter: (a: SupplementaryRowWithConflict, b: SupplementaryRowWithConflict) => a.plan_count - b.plan_count,
+                          render: (val: number, record: SupplementaryRowWithConflict) => {
+                            const rowKey = getSupplementaryRowKey(record);
+                            // 检查是否有多引擎冲���
+                            const fieldDiff = record._fieldDiffs?.find(d => d.field_name === 'plan_count');
+
+                            // 有多引擎冲突时显示各引擎值
+                            if (fieldDiff && !fieldDiff.is_consistent) {
                               return (
-                                <Space size={4}>
-                                  <span style={{ color: '#ff4d4f', textDecoration: 'line-through' }}>{diff.ocrValue}</span>
-                                  <Tooltip title="点击应用 AI 结果">
-                                    <Tag
-                                      color="green"
-                                      style={{ cursor: 'pointer' }}
-                                      onClick={() => handleApplyAiValue(rowKey, 'plan_count', diff.aiValue)}
-                                    >
-                                      {diff.aiValue}
-                                    </Tag>
-                                  </Tooltip>
+                                <Space direction="vertical" size={2}>
+                                  <span style={{ fontWeight: 'bold' }}>{val}</span>
+                                  <Space wrap size={2}>
+                                    {Object.entries(fieldDiff.values).map(([engine, engineVal]) => (
+                                      <Tooltip key={engine} title={`点击应用 ${engine} 的值`}>
+                                        <Tag
+                                          color={String(engineVal) === String(val) ? 'green' : 'orange'}
+                                          style={{ cursor: 'pointer', fontSize: 10 }}
+                                          onClick={() => handleApplyEngineValue(rowKey, 'plan_count', engineVal)}
+                                        >
+                                          {engine}: {String(engineVal)}
+                                        </Tag>
+                                      </Tooltip>
+                                    ))}
+                                  </Space>
                                 </Space>
                               );
                             }
-                            return val;
+
+                            // 正常编辑模式
+                            const isEditing = editingSupplementaryCell?.rowKey === rowKey && editingSupplementaryCell?.field === 'plan_count';
+                            if (isEditing) {
+                              return (
+                                <InputNumber
+                                  size="small"
+                                  min={0}
+                                  defaultValue={val}
+                                  autoFocus
+                                  onBlur={() => setEditingSupplementaryCell(null)}
+                                  onChange={(v) => {
+                                    if (v !== null) handleSupplementaryCellEdit(rowKey, 'plan_count', v);
+                                  }}
+                                  onPressEnter={() => setEditingSupplementaryCell(null)}
+                                  style={{ width: 60 }}
+                                />
+                              );
+                            }
+                            return (
+                              <span
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => setEditingSupplementaryCell({ rowKey, field: 'plan_count' })}
+                              >
+                                {val ?? '-'} <EditOutlined style={{ fontSize: 10, color: '#999' }} />
+                              </span>
+                            );
                           },
                         },
                         {
                           title: '收费',
                           dataIndex: 'tuition',
                           key: 'tuition',
-                          width: 100,
-                          render: (val: string, record: SupplementaryRow) => {
-                            const rowKey = `${record.university_code}_${record.major_group_code}_${record.major_code}`;
-                            const diffs = aiDiffs.get(rowKey);
-                            const diff = diffs?.find(d => d.field === 'tuition');
-                            if (diff) {
+                          width: 120,
+                          sorter: (a: SupplementaryRowWithConflict, b: SupplementaryRowWithConflict) => a.tuition.localeCompare(b.tuition),
+                          render: (val: string, record: SupplementaryRowWithConflict) => {
+                            const rowKey = getSupplementaryRowKey(record);
+                            // 检查是否有多引擎冲突
+                            const fieldDiff = record._fieldDiffs?.find(d => d.field_name === 'tuition');
+
+                            // 有多引擎冲突时显示各引擎值
+                            if (fieldDiff && !fieldDiff.is_consistent) {
                               return (
-                                <Space size={4}>
-                                  <span style={{ color: '#ff4d4f', textDecoration: 'line-through' }}>{diff.ocrValue}</span>
-                                  <Tooltip title="点击应用 AI 结果">
-                                    <Tag
-                                      color="green"
-                                      style={{ cursor: 'pointer' }}
-                                      onClick={() => handleApplyAiValue(rowKey, 'tuition', diff.aiValue)}
-                                    >
-                                      {diff.aiValue}
-                                    </Tag>
-                                  </Tooltip>
+                                <Space direction="vertical" size={2}>
+                                  <span style={{ fontWeight: 'bold' }}>{val || '-'}</span>
+                                  <Space wrap size={2}>
+                                    {Object.entries(fieldDiff.values).map(([engine, engineVal]) => (
+                                      <Tooltip key={engine} title={`点击应用 ${engine} 的值`}>
+                                        <Tag
+                                          color={String(engineVal) === String(val) ? 'green' : 'orange'}
+                                          style={{ cursor: 'pointer', fontSize: 10 }}
+                                          onClick={() => handleApplyEngineValue(rowKey, 'tuition', engineVal)}
+                                        >
+                                          {engine}: {String(engineVal)}
+                                        </Tag>
+                                      </Tooltip>
+                                    ))}
+                                  </Space>
                                 </Space>
                               );
                             }
-                            return val;
+
+                            // 正常编辑模式
+                            const isEditing = editingSupplementaryCell?.rowKey === rowKey && editingSupplementaryCell?.field === 'tuition';
+                            if (isEditing) {
+                              return (
+                                <Input
+                                  size="small"
+                                  defaultValue={val}
+                                  autoFocus
+                                  onBlur={(e) => {
+                                    handleSupplementaryCellEdit(rowKey, 'tuition', e.target.value);
+                                    setEditingSupplementaryCell(null);
+                                  }}
+                                  onPressEnter={(e) => {
+                                    handleSupplementaryCellEdit(rowKey, 'tuition', (e.target as HTMLInputElement).value);
+                                    setEditingSupplementaryCell(null);
+                                  }}
+                                  style={{ width: 80 }}
+                                />
+                              );
+                            }
+                            return (
+                              <span
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => setEditingSupplementaryCell({ rowKey, field: 'tuition' })}
+                              >
+                                {val || '-'} <EditOutlined style={{ fontSize: 10, color: '#999' }} />
+                              </span>
+                            );
                           },
                         },
                       ]}
@@ -1741,9 +1534,8 @@ export default function DataImportPage() {
                       size="small"
                       pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
                       scroll={{ x: 1200, y: 400 }}
-                      rowClassName={(record) => {
-                        const rowKey = `${record.university_code}_${record.major_group_code}_${record.major_code}`;
-                        return aiDiffs.has(rowKey) ? 'row-diff' : '';
+                      rowClassName={(record: SupplementaryRowWithConflict) => {
+                        return record._hasConflict ? 'row-conflict' : '';
                       }}
                     />
                   </>
@@ -1751,6 +1543,8 @@ export default function DataImportPage() {
                 <style jsx global>{`
                   .row-error td { background: #fff2f0 !important; }
                   .row-error:hover td { background: #ffebe8 !important; }
+                  .row-conflict td { background: #fff7e6 !important; }
+                  .row-conflict:hover td { background: #ffe7ba !important; }
                 `}</style>
 
                 <Space>

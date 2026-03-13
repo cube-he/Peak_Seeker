@@ -325,6 +325,15 @@ export interface MultiEngineValidationResponse {
   errors: string[];
 }
 
+/** 带冲突信息的数据行（用于合并显示） */
+export interface SupplementaryRowWithConflict extends SupplementaryRow {
+  _hasConflict?: boolean;           // 是否有冲突
+  _confidence?: 'high' | 'medium' | 'low' | 'conflict' | 'single';  // 置信度
+  _conflictFields?: string[];       // 冲突字段列表
+  _fieldDiffs?: FieldDiff[];        // 字段差异详情
+  _engineSources?: string[];        // 数据来源引擎
+}
+
 /** 多引擎交叉校验 OCR */
 export async function runMultiEngineOcr(params: {
   imageUrls: string[];
