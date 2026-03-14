@@ -51,6 +51,7 @@ export class DataImportController {
         dto.examType ?? '物理类',
         dto.batch,
         dto.sourceUrl ?? '',
+        dto.engine,  // 传递指定的引擎
       );
     } catch (e: any) {
       throw new HttpException(
