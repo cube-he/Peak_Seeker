@@ -130,6 +130,8 @@ export default function DataImportPage() {
     enableRapid: true,
     enableAi: false,
   });
+  // 单引擎模式选择的引擎
+  const [selectedEngine, setSelectedEngine] = useState<string>('paddleocr');
 
   // 权限检查
   const isAdmin =
@@ -303,6 +305,7 @@ export default function DataImportPage() {
         examType,
         batch,
         sourceUrl: url,  // 传递来源 URL
+        engine: selectedEngine,  // 传递选择的引擎
       });
       setOcrResult(result);
 
@@ -317,7 +320,7 @@ export default function DataImportPage() {
 
       setCurrentStep(2);
       if (result.is_valid) {
-        message.success(`OCR 识别成功: ${result.total_rows} 条数据`);
+        message.success(`OCR 识别成功: ${result.total_rows} 条数据 (引擎: ${selectedEngine})`);
       } else {
         message.warning(`识别完成，但有 ${result.errors.length} 个问题`);
       }
@@ -1049,6 +1052,33 @@ export default function DataImportPage() {
                       </Col>
                     </Row>
 
+                    {/* 单引擎模式：选择引擎 */}
+                    {!multiEngineMode && (
+                      <div style={{ marginTop: 16, padding: 12, background: '#fff', borderRadius: 4 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8 }}>选择 OCR 引擎</Text>
+                        <Select
+                          value={selectedEngine}
+                          onChange={setSelectedEngine}
+                          style={{ width: 200 }}
+                          options={[
+                            { value: 'baidu', label: '百度云 OCR（精度最高）' },
+                            { value: 'paddleocr_vl', label: 'PaddleOCR-VL（表格识别强）' },
+                            { value: 'aistudio', label: 'AIStudio（版面分析强）' },
+                            { value: 'paddleocr', label: 'PaddleOCR（本地部署）' },
+                            { value: 'rapid', label: 'RapidOCR（轻量快速）' },
+                          ]}
+                        />
+                        <Text type="secondary" style={{ marginLeft: 12 }}>
+                          {selectedEngine === 'baidu' && '需要百度云 API Key'}
+                          {selectedEngine === 'paddleocr_vl' && '需要千帆 API Key'}
+                          {selectedEngine === 'aistudio' && '需要 AIStudio Token'}
+                          {selectedEngine === 'paddleocr' && '本地 Docker 服务'}
+                          {selectedEngine === 'rapid' && '本地轻量引擎'}
+                        </Text>
+                      </div>
+                    )}
+
+                    {/* 多引擎模式：选择多个引擎 */}
                     {multiEngineMode && (
                       <div style={{ marginTop: 16, padding: 12, background: '#fff', borderRadius: 4 }}>
                         <Text strong style={{ display: 'block', marginBottom: 8 }}>选择 OCR 引擎（至少 2 个）</Text>

@@ -90,6 +90,8 @@ class OcrRequest(BaseModel):
     exam_type: str = Field("物理类", description="考试类型")
     batch: str = Field("本科一批", description="批次（征集志愿用）")
     source_url: str = Field("", description="数据来源网页 URL")
+    # 单引擎模式选项
+    engine: str = Field("", description="指定 OCR 引擎: baidu / paddleocr_vl / aistudio / paddleocr / rapid（留空使用默认）")
     # AI 校验选项
     enable_ai: bool = Field(False, description="是否启用 AI 校验")
     ai_api_key: str = Field("", description="AI API 密钥")
@@ -780,6 +782,51 @@ def run_ocr(img_path: str) -> List[Tuple]:
         return result if result else []
 
 
+def run_ocr_with_engine(img_path: str, engine: str = "") -> List[Tuple]:
+    """
+    使用指定引擎运行 OCR
+
+    Args:
+        img_path: 图片路径
+        engine: 引擎名称 (baidu / paddleocr_vl / aistudio / paddleocr / rapid)
+                留空则使用默认引擎
+
+    Returns:
+        List of (box, text, confidence)
+    """
+    if not engine:
+        return run_ocr(img_path)
+
+    logger.info(f"使用指定引擎: {engine}")
+
+    if engine == "baidu":
+        if not BAIDU_OCR_API_KEY:
+            raise ValueError("百度 OCR API Key 未配置")
+        return run_baidu_ocr(img_path)
+
+    elif engine == "paddleocr_vl":
+        if not QIANFAN_API_KEY:
+            raise ValueError("千帆 API Key 未配置")
+        return run_paddleocr_vl(img_path)
+
+    elif engine == "aistudio":
+        if not AISTUDIO_TOKEN:
+            raise ValueError("AIStudio Token 未配置")
+        return run_aistudio_layout_parsing(img_path)
+
+    elif engine == "paddleocr":
+        return run_paddleocr_docker(img_path)
+
+    elif engine == "rapid":
+        ocr = get_ocr()
+        result, _ = ocr(img_path)
+        return result if result else []
+
+    else:
+        logger.warning(f"未知引擎 {engine}，使用默认引擎")
+        return run_ocr(img_path)
+
+
 def download_image(url: str) -> str:
     """下载图片到缓存目录，返回本地路径"""
     url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
@@ -800,9 +847,9 @@ def download_image(url: str) -> str:
     return filepath
 
 
-def extract_score_rows(img_path: str) -> List[Tuple[int, int, int]]:
+def extract_score_rows(img_path: str, engine: str = "") -> List[Tuple[int, int, int]]:
     """OCR 识别单张图片，提取一分一段表数据"""
-    result = run_ocr(img_path)
+    result = run_ocr_with_engine(img_path, engine)
 
     if not result:
         return []
@@ -2397,12 +2444,18 @@ async def ai_verify_single(req: AiVerifySingleRequest):
 
 
 def run_score_segment_ocr(req: OcrRequest) -> OcrResponse:
-    """一分一段表 OCR"""
+    """一分一段表 OCR（支持指定引擎）"""
     all_rows = []
+
+    # 获取指定的引擎
+    specified_engine = getattr(req, 'engine', '') or ''
+    if specified_engine:
+        logger.info(f"使用指定引擎: {specified_engine}")
+
     for i, url in enumerate(req.image_urls):
         logger.info(f"OCR {i+1}/{len(req.image_urls)}: {url}")
         img_path = download_image(url)
-        rows = extract_score_rows(img_path)
+        rows = extract_score_rows(img_path, specified_engine)
         logger.info(f"  识别 {len(rows)} 行")
         all_rows.extend(rows)
 
@@ -2430,13 +2483,18 @@ def run_score_segment_ocr(req: OcrRequest) -> OcrResponse:
 
 
 def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
-    """征集志愿 OCR（纯 OCR 模式，支持图像预处理增强）"""
+    """征集志愿 OCR（纯 OCR 模式，支持图像预处理增强和指定引擎）"""
     all_rows = []
     image_data_counts = []  # 记录每张图片识别的数据行数
     # 跨图片传递状态
     last_exam_type = ""
     last_enrollment_type = ""
     context = {}  # 用于跨图片传递上下文
+
+    # 获取指定的引擎
+    specified_engine = getattr(req, 'engine', '') or ''
+    if specified_engine:
+        logger.info(f"使用指定引擎: {specified_engine}")
 
     # 是否启用预处理增强
     use_preprocess = getattr(req, 'enable_preprocess', False)
@@ -2448,8 +2506,8 @@ def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
         logger.info(f"征集志愿 OCR {i+1}/{len(req.image_urls)}: {url}")
         img_path = download_image(url)
 
-        # 先运行 OCR 获取原始结果（用于提取页码）
-        ocr_result = run_ocr(img_path)
+        # 使用指定引擎或默认引擎运行 OCR
+        ocr_result = run_ocr_with_engine(img_path, specified_engine)
 
         # 从 OCR 结果中提取页码
         page_number = extract_page_number(ocr_result)
@@ -2458,9 +2516,10 @@ def run_supplementary_ocr(req: OcrRequest) -> SupplementaryOcrResponse:
         # 解析数据行
         if use_preprocess:
             # 使用预处理增强模式：多变体 + 投票
+            ocr_func = lambda p: run_ocr_with_engine(p, specified_engine)
             rows, preprocess_stats = run_ocr_with_preprocessing(
                 img_path,
-                ocr_func=run_ocr,
+                ocr_func=ocr_func,
                 parse_func=extract_supplementary_rows,
                 context=context
             )

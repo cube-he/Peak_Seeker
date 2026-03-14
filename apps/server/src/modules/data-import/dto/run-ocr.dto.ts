@@ -37,4 +37,9 @@ export class RunOcrDto {
   @IsOptional()
   @IsString()
   sourceUrl?: string = '';  // 数据来源网页 URL
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['baidu', 'paddleocr_vl', 'aistudio', 'paddleocr', 'rapid'])
+  engine?: string;  // 指定 OCR 引擎
 }

@@ -47,6 +47,7 @@ export class DataImportService {
     examType: string,
     batch?: string,
     sourceUrl?: string,
+    engine?: string,  // 指定 OCR 引擎
   ) {
     const resp = await fetch(`${this.ocrServiceUrl}/ocr`, {
       method: 'POST',
@@ -59,6 +60,7 @@ export class DataImportService {
         exam_type: examType,
         batch: batch || '本科一批',
         source_url: sourceUrl || '',
+        engine: engine || '',  // 传递引擎参数
       }),
       signal: AbortSignal.timeout(5 * 60_000), // OCR 识别最多 5 分钟
     });

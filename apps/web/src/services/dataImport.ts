@@ -122,6 +122,7 @@ export async function runOcr(params: {
   examType?: string;
   batch?: string;
   sourceUrl?: string;  // 数据来源网页 URL
+  engine?: string;     // 指定 OCR 引擎: baidu / paddleocr_vl / aistudio / paddleocr / rapid
 }): Promise<OcrResult | (SupplementaryOcrResult & { image_data_counts?: number[] })> {
   return api.post('/data-import/ocr', params, {
     timeout: 5 * 60 * 1000, // OCR 识别最多等 5 分钟
