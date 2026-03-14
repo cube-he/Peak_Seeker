@@ -812,7 +812,9 @@ def run_ocr_with_engine(img_path: str, engine: str = "") -> List[Tuple]:
     elif engine == "aistudio":
         if not AISTUDIO_TOKEN:
             raise ValueError("AIStudio Token 未配置")
-        return run_aistudio_layout_parsing(img_path)
+        result = run_aistudio_layout_parsing(img_path)
+        # AIStudio 返回 Markdown/HTML 格式，需要转换为纯文本
+        return _convert_aistudio_to_plain_text(result)
 
     elif engine == "paddleocr":
         return run_paddleocr_docker(img_path)
@@ -825,6 +827,61 @@ def run_ocr_with_engine(img_path: str, engine: str = "") -> List[Tuple]:
     else:
         logger.warning(f"未知引擎 {engine}，使用默认引擎")
         return run_ocr(img_path)
+
+
+def _convert_aistudio_to_plain_text(items: List[Tuple]) -> List[Tuple]:
+    """
+    将 AIStudio 的 Markdown/HTML 格式转换为纯文本
+
+    AIStudio 返回的文本可能包含：
+    - HTML 表格: <table>...</table>
+    - Markdown 标题: ## 标题
+    - 普通文本
+
+    需要提取其中的纯文本内容。
+    """
+    import re
+    from html import unescape
+
+    result = []
+    y_offset = 0
+
+    for box, text, confidence in items:
+        # 跳过空文本
+        if not text or not text.strip():
+            continue
+
+        # 处理 HTML 表格
+        if '<table' in text.lower():
+            # 提取表格中的文本内容
+            # 移除 HTML 标签，保留文本
+            # 先处理 <td> 和 <tr> 标签
+            text = re.sub(r'<tr[^>]*>', '\n', text)
+            text = re.sub(r'<td[^>]*>', ' ', text)
+            text = re.sub(r'</td>', ' ', text)
+            text = re.sub(r'<[^>]+>', '', text)  # 移除所有 HTML 标签
+            text = unescape(text)  # 解码 HTML 实体
+
+            # 按行分割
+            for line in text.split('\n'):
+                line = line.strip()
+                if line and len(line) > 2:  # 过滤太短的行
+                    new_box = [[0, y_offset], [800, y_offset], [800, y_offset + 30], [0, y_offset + 30]]
+                    result.append((new_box, line, confidence))
+                    y_offset += 35
+        else:
+            # 处理 Markdown 标题
+            if text.startswith('##'):
+                text = text.lstrip('#').strip()
+
+            # 普通文本直接添加
+            if text.strip():
+                new_box = [[0, y_offset], [800, y_offset], [800, y_offset + 30], [0, y_offset + 30]]
+                result.append((new_box, text.strip(), confidence))
+                y_offset += 35
+
+    logger.info(f"AIStudio 格式转换: {len(items)} -> {len(result)} 行")
+    return result
 
 
 def download_image(url: str) -> str:
