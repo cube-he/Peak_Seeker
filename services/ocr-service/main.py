@@ -835,16 +835,48 @@ def _convert_aistudio_to_plain_text(items: List[Tuple]) -> List[Tuple]:
 
     AIStudio 返回的文本可能包含：
     - HTML 表格: <table>...</table>
+    - Markdown 表格: | col1 | col2 | col3 |
     - Markdown 标题: ## 标题
     - 普通文本
 
-    需要提取其中的纯文本内容。
+    需要提取其中的纯文本内容，并智能拆分表格单元格。
     """
     import re
     from html import unescape
 
     result = []
     y_offset = 0
+    x_offset = 0
+
+    def add_item(text: str, x: int = 0):
+        """添加一个文本项"""
+        nonlocal y_offset
+        if text and len(text.strip()) > 0:
+            new_box = [[x, y_offset], [x + 200, y_offset], [x + 200, y_offset + 30], [x, y_offset + 30]]
+            result.append((new_box, text.strip(), 0.95))
+
+    def process_table_row(row_text: str):
+        """处理表格行，拆分为多个单元格"""
+        nonlocal y_offset, x_offset
+        x_offset = 0
+
+        # 移除 Markdown 表格的 | 分隔符
+        cells = [c.strip() for c in row_text.split('|') if c.strip()]
+
+        if not cells:
+            return
+
+        # 检查是否是表头分隔行（如 |---|---|）
+        if all(re.match(r'^[-:]+$', c) for c in cells):
+            return
+
+        # 为每个单元格创建独立的文本项
+        for cell in cells:
+            if cell:
+                add_item(cell, x_offset)
+                x_offset += 200
+
+        y_offset += 35
 
     for box, text, confidence in items:
         # 跳过空文本
@@ -854,30 +886,53 @@ def _convert_aistudio_to_plain_text(items: List[Tuple]) -> List[Tuple]:
         # 处理 HTML 表格
         if '<table' in text.lower():
             # 提取表格中的文本内容
-            # 移除 HTML 标签，保留文本
-            # 先处理 <td> 和 <tr> 标签
             text = re.sub(r'<tr[^>]*>', '\n', text)
-            text = re.sub(r'<td[^>]*>', ' ', text)
-            text = re.sub(r'</td>', ' ', text)
+            text = re.sub(r'<td[^>]*>', '|', text)
+            text = re.sub(r'</td>', '|', text)
             text = re.sub(r'<[^>]+>', '', text)  # 移除所有 HTML 标签
             text = unescape(text)  # 解码 HTML 实体
 
-            # 按行分割
+            # 按行处理
             for line in text.split('\n'):
                 line = line.strip()
-                if line and len(line) > 2:  # 过滤太短的行
-                    new_box = [[0, y_offset], [800, y_offset], [800, y_offset + 30], [0, y_offset + 30]]
-                    result.append((new_box, line, confidence))
-                    y_offset += 35
+                if line:
+                    process_table_row(line)
+
+        # 处理 Markdown 表格行
+        elif '|' in text and re.search(r'\|.*\|', text):
+            for line in text.split('\n'):
+                line = line.strip()
+                if line and '|' in line:
+                    process_table_row(line)
+
         else:
             # 处理 Markdown 标题
             if text.startswith('##'):
                 text = text.lstrip('#').strip()
 
+            # 检查是否是包含专业信息的行（代码 + 空格 + 名称 + 数字）
+            # 格式如: "47 外国语言文学类（小语种）... 1 6000"
+            major_line_match = re.match(
+                r'^(\d{1,2}|[A-Z][A-Z0-9]?)\s+([一-鿿].+?)\s+(\d+)\s+(\d+|免费)(.*)$',
+                text.strip()
+            )
+            if major_line_match:
+                # 拆分为：专业代码+名称、计划数、学费
+                code = major_line_match.group(1)
+                name = major_line_match.group(2)
+                plan = major_line_match.group(3)
+                tuition = major_line_match.group(4)
+
+                # 合并代码和名称（去掉空格）
+                add_item(f"{code}{name}", 0)
+                add_item(plan, 600)
+                add_item(tuition if tuition != "免费" else "免费", 700)
+                y_offset += 35
+                continue
+
             # 普通文本直接添加
             if text.strip():
-                new_box = [[0, y_offset], [800, y_offset], [800, y_offset + 30], [0, y_offset + 30]]
-                result.append((new_box, text.strip(), confidence))
+                add_item(text.strip(), 0)
                 y_offset += 35
 
     logger.info(f"AIStudio 格式转换: {len(items)} -> {len(result)} 行")
@@ -1657,7 +1712,7 @@ def extract_supplementary_rows(img_path: str, context: Dict = None, ocr_result: 
             continue
 
         # 6. 检测新专业行
-        # 专业代码格式：纯数字(18)、数字+字母(7S)、字母+字母(BL)、字母+数字(K1)、带[V]标记(G7[V])
+        # 专业代码格式：纯数字(18, 47)、数字+字母(7S)、字母+字母(BL)、字母+数字(K1)、带[V]标记(G7[V])
         # 注意：OCR 可能将 [V] 识别为各种变体：【V】、【V]、［V]、[V］、【VJ 等
         #
         # 改进：不仅检查 first_text，还要检查整行是否包含专业代码
@@ -1672,9 +1727,14 @@ def extract_supplementary_rows(img_path: str, context: Dict = None, ocr_result: 
         # 包括：[V]、【V】、【V]、［V]、[V］、【VJ、[VJ 等
         v_mark_pattern = r'[\[【［][VvＶ][\]】］J]?'
 
+        # 专业代码模式：支持纯数字(18, 47)、字母数字组合(BL, 7S, K1)
+        # 注意：纯数字代码通常是 2 位，需要与计划数/学费区分
+        major_code_pattern = r'([A-Z][A-Z0-9]?|[0-9][A-Z]|[0-9]{2})'
+
         # 首先尝试从 first_text 检测
         if not re.match(r'^\d{1,2}(免费|元|\d{4,})?\s*$', first_text.strip()):
-            major_match = re.match(rf'^([A-Z0-9]{{1,2}}[A-Z0-9]?)({v_mark_pattern})?([一-鿿]{{2,}}.*)', first_text)
+            # 模式1：代码紧跟中文（如 "47外国语言文学类" 或 "BL地理科学"）
+            major_match = re.match(rf'^{major_code_pattern}({v_mark_pattern})?([一-鿿]{{2,}}.*)', first_text)
             if major_match and current_university.get("code"):
                 is_new_major = True
                 major_code = major_match.group(1)
@@ -1688,14 +1748,15 @@ def extract_supplementary_rows(img_path: str, context: Dict = None, ocr_result: 
         if not is_new_major and current_university.get("code"):
             for item in group:
                 txt = item["text"].strip()
-                # 跳过纯数字、免费、学费等
+                # 跳过纯数字（可能是计划数/学费）、免费、学费等
+                # 但不跳过 2 位数字后紧跟中文的情况
                 if re.match(r'^[\d免费元]+$', txt):
                     continue
                 if re.match(r'^\d+元$', txt):
                     continue
 
                 # 尝试匹配专业代码+名称
-                major_match = re.match(rf'^([A-Z0-9]{{1,2}}[A-Z0-9]?)({v_mark_pattern})?([一-鿿]{{2,}}.*)', txt)
+                major_match = re.match(rf'^{major_code_pattern}({v_mark_pattern})?([一-鿿]{{2,}}.*)', txt)
                 if major_match:
                     is_new_major = True
                     major_code = major_match.group(1)
