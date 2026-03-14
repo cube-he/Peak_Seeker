@@ -274,6 +274,17 @@ ENGINE_WEIGHTS = {
     "rapid": 0.8,         # RapidOCR 轻量级，精度稍低
 }
 
+# 单引擎模式优先级（按准确率和可用性排序）
+# 用于自动选择最佳单引擎
+SINGLE_ENGINE_PRIORITY = [
+    "baidu",        # 百度云 OCR - 精度最高，需要 API Key
+    "paddleocr_vl", # PaddleOCR-VL - 视觉语言模型，需要千帆 API Key
+    "aistudio",     # AIStudio Layout-Parsing - 版面分析强，需要 Token
+    "ai",           # AI 视觉模型 - 需要 API Key
+    "paddleocr",    # PaddleOCR Docker - 本地部署，无需 API
+    "rapid",        # RapidOCR - 轻量级本地引擎
+]
+
 
 def compare_field_weighted(field_name: str, values: Dict[str, any]) -> FieldComparison:
     """
@@ -472,6 +483,110 @@ class MultiEngineValidator:
             engines.append("ai")
         return engines
 
+    def get_best_single_engine(self, data_type: str = "supplementary") -> Optional[str]:
+        """
+        自动选择最佳的单引擎
+
+        根据引擎优先级和可用性，自动选择当前配置下最佳的单引擎。
+        优先级基于准确率排序：baidu > paddleocr_vl > aistudio > ai > paddleocr > rapid
+
+        Args:
+            data_type: 数据类型，"supplementary" 或 "score_segment"
+                       一分一段表不支持 AI 引擎
+
+        Returns:
+            最佳引擎名称，如果没有可用引擎则返回 None
+        """
+        import main
+
+        for engine in SINGLE_ENGINE_PRIORITY:
+            # 检查引擎是否启用
+            if engine == "baidu" and self.enable_baidu:
+                # 检查百度 API Key 是否配置
+                if main.BAIDU_OCR_API_KEY:
+                    return "baidu"
+            elif engine == "paddleocr_vl" and self.enable_paddleocr_vl:
+                # 检查千帆 API Key 是否配置
+                if main.QIANFAN_API_KEY:
+                    return "paddleocr_vl"
+            elif engine == "aistudio" and self.enable_aistudio:
+                # 检查 AIStudio Token 是否配置
+                if main.AISTUDIO_TOKEN:
+                    return "aistudio"
+            elif engine == "ai" and self.enable_ai:
+                # AI 引擎仅支持征集志愿
+                if data_type == "supplementary" and self.ai_config.get("api_key"):
+                    return "ai"
+            elif engine == "paddleocr" and self.enable_paddleocr:
+                # PaddleOCR Docker 无需额外配置
+                return "paddleocr"
+            elif engine == "rapid" and self.enable_rapid:
+                # RapidOCR 无需额外配置
+                return "rapid"
+
+        return None
+
+    def get_available_engines(self, data_type: str = "supplementary") -> List[Dict[str, any]]:
+        """
+        获取所有可用引擎及其状态
+
+        返回每个引擎的启用状态、可用性（API Key 是否配置）和优先级。
+
+        Args:
+            data_type: 数据类型
+
+        Returns:
+            引擎信息列表，按优先级排序
+        """
+        import main
+
+        engines_info = []
+
+        for priority, engine in enumerate(SINGLE_ENGINE_PRIORITY):
+            info = {
+                "engine": engine,
+                "priority": priority + 1,
+                "weight": ENGINE_WEIGHTS.get(engine, 1.0),
+                "enabled": False,
+                "available": False,
+                "reason": ""
+            }
+
+            if engine == "baidu":
+                info["enabled"] = self.enable_baidu
+                info["available"] = bool(main.BAIDU_OCR_API_KEY)
+                if not info["available"]:
+                    info["reason"] = "百度 OCR API Key 未配置"
+            elif engine == "paddleocr_vl":
+                info["enabled"] = self.enable_paddleocr_vl
+                info["available"] = bool(main.QIANFAN_API_KEY)
+                if not info["available"]:
+                    info["reason"] = "千帆 API Key 未配置"
+            elif engine == "aistudio":
+                info["enabled"] = self.enable_aistudio
+                info["available"] = bool(main.AISTUDIO_TOKEN)
+                if not info["available"]:
+                    info["reason"] = "AIStudio Token 未配置"
+            elif engine == "ai":
+                info["enabled"] = self.enable_ai
+                if data_type != "supplementary":
+                    info["available"] = False
+                    info["reason"] = "AI 引擎仅支持征集志愿"
+                else:
+                    info["available"] = bool(self.ai_config.get("api_key"))
+                    if not info["available"]:
+                        info["reason"] = "AI API Key 未配置"
+            elif engine == "paddleocr":
+                info["enabled"] = self.enable_paddleocr
+                info["available"] = True  # 本地引擎，始终可用
+            elif engine == "rapid":
+                info["enabled"] = self.enable_rapid
+                info["available"] = True  # 本地引擎，始终可用
+
+            engines_info.append(info)
+
+        return engines_info
+
     async def run_single_engine(
         self,
         engine: str,
@@ -532,15 +647,18 @@ class MultiEngineValidator:
 
             # 调用 PaddleOCR-VL
             ocr_result = main.run_paddleocr_vl(img_path)
+            logger.info(f"PaddleOCR-VL 原始 OCR 结果: {len(ocr_result) if ocr_result else 0} 条")
 
             # 解析结果
             if data_type == "supplementary":
                 data = self._parse_supplementary_from_raw_ocr(ocr_result, img_path, context)
+                logger.info(f"PaddleOCR-VL 解析后数据: {len(data)} 条")
             else:
                 data = self._parse_score_segment_from_raw_ocr(ocr_result)
 
             return EngineResult(engine="paddleocr_vl", success=True, data=data)
         except Exception as e:
+            logger.error(f"PaddleOCR-VL 执行异常: {e}", exc_info=True)
             return EngineResult(engine="paddleocr_vl", success=False, error=str(e))
 
     async def _run_aistudio(self, img_path: str, data_type: str, context: Dict) -> EngineResult:
@@ -553,15 +671,18 @@ class MultiEngineValidator:
 
             # 调用 AIStudio Layout-Parsing
             ocr_result = main.run_aistudio_layout_parsing(img_path)
+            logger.info(f"AIStudio 原始 OCR 结果: {len(ocr_result) if ocr_result else 0} 条")
 
             # 解析结果
             if data_type == "supplementary":
                 data = self._parse_supplementary_from_raw_ocr(ocr_result, img_path, context)
+                logger.info(f"AIStudio 解析后数据: {len(data)} 条")
             else:
                 data = self._parse_score_segment_from_raw_ocr(ocr_result)
 
             return EngineResult(engine="aistudio", success=True, data=data)
         except Exception as e:
+            logger.error(f"AIStudio 执行异常: {e}", exc_info=True)
             return EngineResult(engine="aistudio", success=False, error=str(e))
 
     async def _run_paddleocr(self, img_path: str, data_type: str, context: Dict) -> EngineResult:
@@ -638,10 +759,19 @@ class MultiEngineValidator:
         import main
 
         if not ocr_result:
+            logger.warning("_parse_supplementary_from_raw_ocr: OCR 结果为空")
             return []
 
+        # 记录 OCR 结果的前几条用于调试
+        logger.info(f"_parse_supplementary_from_raw_ocr: 收到 {len(ocr_result)} 条 OCR 结果")
+        for i, item in enumerate(ocr_result[:5]):
+            if isinstance(item, tuple) and len(item) >= 2:
+                logger.debug(f"  OCR[{i}]: {item[1][:50] if len(item[1]) > 50 else item[1]}")
+
         # 调用 main.py 的解析函数，传入 ocr_result 参数避免重复 OCR
-        return main.extract_supplementary_rows(img_path, context, ocr_result=ocr_result)
+        result = main.extract_supplementary_rows(img_path, context, ocr_result=ocr_result)
+        logger.info(f"_parse_supplementary_from_raw_ocr: 解析出 {len(result)} 条结构化数据")
+        return result
 
     def _parse_score_segment_from_raw_ocr(self, ocr_result: List[Tuple]) -> List[Dict]:
         """从原始 OCR 结果解析一分一段表数据"""

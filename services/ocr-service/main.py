@@ -529,6 +529,11 @@ def run_aistudio_layout_parsing(img_path: str) -> List[Tuple]:
     基于 PaddleOCR 的版面分析 API，支持表格识别。
     API 地址: https://lf1ev8v7o4maja97.aistudio-app.com/layout-parsing
 
+    API 文档格式:
+    - Authorization: token {TOKEN}  (注意不是 Bearer)
+    - 请求参数: file (base64), fileType (0=PDF, 1=图片)
+    - 响应格式: result.layoutParsingResults[].markdown.text
+
     Returns:
         List of (box, text, confidence)
     """
@@ -539,29 +544,22 @@ def run_aistudio_layout_parsing(img_path: str) -> List[Tuple]:
 
     # 读取图片并 base64 编码
     with open(img_path, "rb") as f:
-        img_data = base64.b64encode(f.read()).decode("utf-8")
+        img_data = base64.b64encode(f.read()).decode("ascii")
 
-    # 获取图片格式
-    ext = os.path.splitext(img_path)[1].lower()
-    if ext in (".jpg", ".jpeg"):
-        mime_type = "image/jpeg"
-    elif ext == ".png":
-        mime_type = "image/png"
-    else:
-        mime_type = "image/jpeg"
-
-    # 构建请求
+    # 构建请求 - 注意 Authorization 格式是 "token {TOKEN}" 而不是 "Bearer"
     headers = {
-        "Authorization": f"Bearer {AISTUDIO_TOKEN}",
+        "Authorization": f"token {AISTUDIO_TOKEN}",
         "Content-Type": "application/json"
     }
 
-    # 请求参数
+    # 请求参数 - 按照 API 文档格式
     payload = {
-        "image": f"data:{mime_type};base64,{img_data}",
+        "file": img_data,
+        "fileType": 1,  # 1 表示图片，0 表示 PDF
         # 可选参数
-        "use_seal_recognition": False,  # 不需要印章识别
-        "use_table_recognition": True,  # 启用表格识别
+        "useDocOrientationClassify": False,
+        "useDocUnwarping": False,
+        "useChartRecognition": False,
     }
 
     logger.info(f"调用 AIStudio Layout-Parsing API...")
@@ -577,15 +575,37 @@ def run_aistudio_layout_parsing(img_path: str) -> List[Tuple]:
     items = []
 
     # 检查是否有错误
-    if "error" in result or result.get("code") != 0:
+    if "error" in result:
         error_msg = result.get("error") or result.get("message") or "Unknown error"
         raise ValueError(f"AIStudio 错误: {error_msg}")
 
-    # 解析 OCR 结果
-    # AIStudio 返回格式可能是: {"code": 0, "result": {"layouts": [...], "texts": [...]}}
+    # 解析 OCR 结果 - 按照 API 文档格式
+    # 响应格式: {"result": {"layoutParsingResults": [{"markdown": {"text": "...", "images": {}}}]}}
     ocr_data = result.get("result", {})
 
-    # 尝试解析 layouts 格式
+    # 解析 layoutParsingResults 格式（API 文档标准格式）
+    layout_results = ocr_data.get("layoutParsingResults", [])
+    if layout_results:
+        y_offset = 0
+        for res in layout_results:
+            markdown_data = res.get("markdown", {})
+            markdown_text = markdown_data.get("text", "")
+
+            if markdown_text:
+                # 按行分割 markdown 文本
+                for line in markdown_text.split("\n"):
+                    line = line.strip()
+                    if line:
+                        # 生成虚拟坐标（因为 markdown 格式没有坐标信息）
+                        box = [[0, y_offset], [800, y_offset], [800, y_offset + 30], [0, y_offset + 30]]
+                        items.append((box, line, 0.95))
+                        y_offset += 35
+
+        if items:
+            logger.info(f"AIStudio 识别完成 (layoutParsingResults): {len(items)} 行")
+            return items
+
+    # 尝试解析 layouts 格式（备用格式）
     layouts = ocr_data.get("layouts", [])
     if layouts:
         for layout in layouts:
@@ -611,7 +631,7 @@ def run_aistudio_layout_parsing(img_path: str) -> List[Tuple]:
             logger.info(f"AIStudio 识别完成 (layouts): {len(items)} 行")
             return items
 
-    # 尝试解析 texts 格式
+    # 尝试解析 texts 格式（备用格式）
     texts = ocr_data.get("texts", []) or ocr_data.get("ocr_result", [])
     if texts:
         for item in texts:
@@ -2795,7 +2815,10 @@ class MultiEngineOcrRequest(BaseModel):
     exam_type: str = Field("物理类", description="考试类型")
     batch: str = Field("本科一批", description="批次")
     source_url: str = Field("", description="数据来源网页 URL")
-    # 引擎开关
+    # 单引擎模式
+    single_engine_mode: bool = Field(False, description="单引擎模式：自动选择最佳引擎")
+    preferred_engine: str = Field("", description="指定单引擎（留空则自动选择最佳引擎）")
+    # 引擎开关（多引擎模式时生效）
     enable_baidu: bool = Field(True, description="启用百度云 OCR")
     enable_paddleocr_vl: bool = Field(False, description="启用 PaddleOCR-VL 视觉语言模型")
     enable_aistudio: bool = Field(False, description="启用 AIStudio Layout-Parsing")
@@ -2870,6 +2893,10 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
     使用多个 OCR 引擎（百度云、PaddleOCR、RapidOCR、AI视觉模型）同时识别，
     通过交叉比对确保数据准确性。
 
+    支持两种模式：
+    1. 多引擎模式（默认）：使用多个引擎交叉校验
+    2. 单引擎模式：自动选择最佳引擎或使用指定引擎
+
     校验策略：
     - 所有引擎一致：高置信度，自动通过
     - 多数引擎一致：中置信度，自动通过
@@ -2883,7 +2910,7 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
         ReviewStatus
     )
 
-    logger.info(f"开始多引擎���验，图片数量: {len(req.image_urls)}")
+    logger.info(f"开始多引擎校验，图片数量: {len(req.image_urls)}, 单引擎模式: {req.single_engine_mode}")
 
     # 创建校验器
     ai_config = {
@@ -2892,15 +2919,52 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
         "model": req.ai_model
     } if req.ai_api_key else None
 
-    validator = MultiEngineValidator(
-        enable_baidu=req.enable_baidu,
-        enable_paddleocr_vl=req.enable_paddleocr_vl,
-        enable_aistudio=req.enable_aistudio,
-        enable_paddleocr=req.enable_paddleocr,
-        enable_rapid=req.enable_rapid,
-        enable_ai=req.enable_ai and bool(req.ai_api_key),
-        ai_config=ai_config
-    )
+    # 单引擎模式处理
+    if req.single_engine_mode:
+        # 创建临时校验器用于选择最佳引擎
+        temp_validator = MultiEngineValidator(
+            enable_baidu=req.enable_baidu,
+            enable_paddleocr_vl=req.enable_paddleocr_vl,
+            enable_aistudio=req.enable_aistudio,
+            enable_paddleocr=req.enable_paddleocr,
+            enable_rapid=req.enable_rapid,
+            enable_ai=req.enable_ai and bool(req.ai_api_key),
+            ai_config=ai_config
+        )
+
+        # 确定使用哪个引擎
+        if req.preferred_engine:
+            # 用户指定了引擎
+            selected_engine = req.preferred_engine
+            logger.info(f"单引擎模式：使用用户指定引擎 {selected_engine}")
+        else:
+            # 自动选择最佳引擎
+            selected_engine = temp_validator.get_best_single_engine(req.data_type)
+            if not selected_engine:
+                raise HTTPException(status_code=400, detail="没有可用的 OCR 引擎")
+            logger.info(f"单引擎模式：自动选择最佳引擎 {selected_engine}")
+
+        # 创建只启用选定引擎的校验器
+        validator = MultiEngineValidator(
+            enable_baidu=(selected_engine == "baidu"),
+            enable_paddleocr_vl=(selected_engine == "paddleocr_vl"),
+            enable_aistudio=(selected_engine == "aistudio"),
+            enable_paddleocr=(selected_engine == "paddleocr"),
+            enable_rapid=(selected_engine == "rapid"),
+            enable_ai=(selected_engine == "ai"),
+            ai_config=ai_config
+        )
+    else:
+        # 多引擎模式
+        validator = MultiEngineValidator(
+            enable_baidu=req.enable_baidu,
+            enable_paddleocr_vl=req.enable_paddleocr_vl,
+            enable_aistudio=req.enable_aistudio,
+            enable_paddleocr=req.enable_paddleocr,
+            enable_rapid=req.enable_rapid,
+            enable_ai=req.enable_ai and bool(req.ai_api_key),
+            ai_config=ai_config
+        )
 
     # 下载所有图片
     image_paths = []
@@ -3141,6 +3205,69 @@ async def run_multi_engine_ocr(req: MultiEngineOcrRequest):
         pending_review_data=pending_review_data,
         is_valid=is_valid,
         errors=errors
+    )
+
+
+class EngineInfo(BaseModel):
+    """引擎信息"""
+    engine: str
+    priority: int
+    weight: float
+    enabled: bool
+    available: bool
+    reason: str = ""
+
+
+class EngineListResponse(BaseModel):
+    """引擎列表响应"""
+    engines: List[EngineInfo]
+    best_engine: Optional[str]
+    available_count: int
+
+
+@app.get("/ocr-engines", response_model=EngineListResponse)
+async def get_available_engines(
+    data_type: str = "supplementary",
+    enable_baidu: bool = True,
+    enable_paddleocr_vl: bool = False,
+    enable_aistudio: bool = False,
+    enable_paddleocr: bool = True,
+    enable_rapid: bool = True,
+    enable_ai: bool = True,
+    ai_api_key: str = ""
+):
+    """
+    获取可用的 OCR 引擎列表
+
+    返回所有引擎的状态信息，包括：
+    - 是否启用
+    - 是否可用（API Key 是否配置）
+    - 优先级排序
+    - 推荐的最佳单引擎
+    """
+    from multi_engine_validator import MultiEngineValidator
+
+    ai_config = {"api_key": ai_api_key} if ai_api_key else None
+
+    validator = MultiEngineValidator(
+        enable_baidu=enable_baidu,
+        enable_paddleocr_vl=enable_paddleocr_vl,
+        enable_aistudio=enable_aistudio,
+        enable_paddleocr=enable_paddleocr,
+        enable_rapid=enable_rapid,
+        enable_ai=enable_ai and bool(ai_api_key),
+        ai_config=ai_config
+    )
+
+    engines_info = validator.get_available_engines(data_type)
+    best_engine = validator.get_best_single_engine(data_type)
+
+    available_count = sum(1 for e in engines_info if e["enabled"] and e["available"])
+
+    return EngineListResponse(
+        engines=[EngineInfo(**e) for e in engines_info],
+        best_engine=best_engine,
+        available_count=available_count
     )
 
 
