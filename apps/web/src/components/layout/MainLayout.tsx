@@ -1,38 +1,42 @@
 'use client';
 
-import { Layout, Menu, Button, Space, Dropdown, Avatar } from 'antd';
+import { Dropdown, Avatar, Space, Button } from 'antd';
 import {
-  HomeOutlined,
-  BankOutlined,
-  BookOutlined,
-  LineChartOutlined,
-  BulbOutlined,
-  FileTextOutlined,
   UserOutlined,
+  BellOutlined,
   LoginOutlined,
+  MenuOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
+import { useState } from 'react';
+import FooterSection from './FooterSection';
 
-const { Header, Content, Footer } = Layout;
-
-const menuItems = [
-  { key: '/', icon: <HomeOutlined />, label: '首页' },
-  { key: '/universities', icon: <BankOutlined />, label: '院校查询' },
-  { key: '/majors', icon: <BookOutlined />, label: '专业查询' },
-  { key: '/scores', icon: <LineChartOutlined />, label: '分数线' },
-  { key: '/recommend', icon: <BulbOutlined />, label: '智能推荐' },
-  { key: '/plan', icon: <FileTextOutlined />, label: '志愿方案' },
+const navItems = [
+  { href: '/', label: '首页' },
+  { href: '/universities', label: '院校库' },
+  { href: '/majors', label: '专业库' },
+  { href: '/scores', label: '查分系统' },
+  { href: '/recommend', label: 'AI 智能推荐' },
+  { href: '/plan', label: '我的方案' },
 ];
 
 interface MainLayoutProps {
   children: React.ReactNode;
+  maxWidth?: string;
+  noPadding?: boolean;
 }
 
-export default function MainLayout({ children }: MainLayoutProps) {
+export default function MainLayout({ children, maxWidth, noPadding }: MainLayoutProps) {
   const pathname = usePathname();
   const { isLoggedIn, user, logout } = useAuthStore();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/';
+    return pathname.startsWith(href);
+  };
 
   const userMenuItems = [
     { key: 'profile', label: <Link href="/profile">个人中心</Link> },
@@ -43,94 +47,120 @@ export default function MainLayout({ children }: MainLayoutProps) {
   ];
 
   return (
-    <Layout className="min-h-screen" style={{ background: '#F8FAFC' }}>
-      <Header
-        className="flex items-center justify-between px-6"
-        style={{
-          background: 'rgba(255,255,255,0.85)',
-          backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid #E2E8F0',
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
-          height: 64,
-          lineHeight: '64px',
-          boxShadow: 'none',
-        }}
-      >
-        <div className="flex items-center">
-          <Link href="/" className="flex items-center mr-8 no-underline">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center mr-2 text-white font-bold text-sm"
-              style={{ background: 'linear-gradient(135deg, #2563EB, #3B82F6)' }}
-            >
-              志
-            </div>
-            <span className="text-lg font-semibold" style={{ color: '#0F172A' }}>
-              志愿填报助手
+    <div className="min-h-screen bg-surface flex flex-col">
+      {/* Header */}
+      <header className="bg-surface/90 backdrop-blur-xl fixed top-0 z-50 w-full">
+        <nav className="flex justify-between items-center w-full px-6 lg:px-8 h-20 max-w-[1920px] mx-auto">
+          {/* Brand */}
+          <Link href="/" className="no-underline flex items-center">
+            <span className="text-xl font-extrabold tracking-tighter text-primary font-headline">
+              巅峰智选 Summit Intelligence
             </span>
           </Link>
-          <Menu
-            mode="horizontal"
-            selectedKeys={[pathname]}
-            items={menuItems.map((item) => ({
-              ...item,
-              label: <Link href={item.key}>{item.label}</Link>,
-            }))}
-            style={{ border: 'none', background: 'transparent', lineHeight: '62px' }}
-          />
-        </div>
-        <Space size={8}>
-          {isLoggedIn ? (
-            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-              <Space className="cursor-pointer px-3 py-1 rounded-lg hover:bg-gray-50 transition-colors">
-                <Avatar
-                  size={32}
-                  icon={<UserOutlined />}
-                  style={{ background: '#2563EB' }}
-                />
-                <span style={{ color: '#334155', fontWeight: 500 }}>{user?.username}</span>
-              </Space>
-            </Dropdown>
-          ) : (
-            <Space size={8}>
-              <Link href="/login">
-                <Button type="text" icon={<LoginOutlined />} style={{ color: '#64748B' }}>
-                  登录
-                </Button>
-              </Link>
-              <Link href="/register">
-                <Button type="primary">注册</Button>
-              </Link>
-            </Space>
-          )}
-        </Space>
-      </Header>
 
-      <Content
-        style={{
-          padding: '24px',
-          maxWidth: 1280,
-          margin: '0 auto',
-          width: '100%',
-          background: 'transparent',
-        }}
+          {/* Desktop Nav */}
+          <div className="hidden lg:flex gap-8 items-center">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`font-headline font-semibold text-sm tracking-tight no-underline transition-colors duration-300 ${
+                  isActive(item.href)
+                    ? 'text-primary border-b-2 border-primary pb-1'
+                    : 'text-slate-600 hover:text-primary'
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Right Section */}
+          <div className="flex items-center gap-3">
+            {isLoggedIn ? (
+              <>
+                <button className="p-2 hover:bg-surface-container-low rounded-lg transition-all duration-300 border-0 bg-transparent cursor-pointer">
+                  <BellOutlined className="text-on-surface-variant text-lg" />
+                </button>
+                <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+                  <Space className="cursor-pointer px-3 py-1.5 rounded-xl hover:bg-surface-container-low transition-all duration-300">
+                    <Avatar
+                      size={32}
+                      icon={<UserOutlined />}
+                      style={{ background: 'linear-gradient(135deg, #003fb1, #1a56db)' }}
+                    />
+                    <span className="text-on-surface font-medium text-sm hidden sm:inline">
+                      {user?.username}
+                    </span>
+                  </Space>
+                </Dropdown>
+              </>
+            ) : (
+              <Space size={8}>
+                <Link href="/login">
+                  <Button
+                    type="text"
+                    icon={<LoginOutlined />}
+                    className="text-on-surface-variant"
+                  >
+                    登录
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button type="primary">注册</Button>
+                </Link>
+              </Space>
+            )}
+
+            {/* Mobile Menu Toggle */}
+            <button
+              className="lg:hidden p-2 hover:bg-surface-container-low rounded-lg transition-all border-0 bg-transparent cursor-pointer"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              <MenuOutlined className="text-on-surface text-lg" />
+            </button>
+          </div>
+        </nav>
+
+        {/* Tonal separator */}
+        <div className="h-px w-full bg-surface-container-low" />
+
+        {/* Mobile Nav Menu */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden bg-surface-container-lowest border-t border-surface-container-low">
+            <div className="flex flex-col py-2 px-4">
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`py-3 px-4 rounded-lg font-headline font-semibold text-sm no-underline transition-colors ${
+                    isActive(item.href)
+                      ? 'text-primary bg-primary-fixed/30'
+                      : 'text-on-surface-variant hover:text-primary hover:bg-surface-container-low'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* Spacer for fixed header */}
+      <div className="h-20" />
+
+      {/* Content */}
+      <main
+        className={`flex-1 ${noPadding ? '' : 'px-6 lg:px-8 py-8'}`}
+        style={{ maxWidth: maxWidth || '1920px', margin: '0 auto', width: '100%' }}
       >
         {children}
-      </Content>
+      </main>
 
-      <Footer
-        style={{
-          textAlign: 'center',
-          color: '#94A3B8',
-          background: 'transparent',
-          borderTop: '1px solid #E2E8F0',
-          fontSize: 13,
-          padding: '16px 24px',
-        }}
-      >
-        志愿填报助手 ©{new Date().getFullYear()} · 帮助考生科学填报志愿
-      </Footer>
-    </Layout>
+      {/* Footer */}
+      <FooterSection />
+    </div>
   );
 }

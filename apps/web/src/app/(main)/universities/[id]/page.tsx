@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Card, Tabs, Table, Tag, Space, Descriptions, Spin } from 'antd';
+import { Card, Tabs, Table, Space, Descriptions, Spin } from 'antd';
 import {
   BankOutlined,
   BookOutlined,
@@ -46,9 +46,9 @@ export default function UniversityDetailPage() {
   if (!university) {
     return (
       <MainLayout>
-        <Card className="text-center py-16">
-          <p style={{ color: '#64748B' }}>院校不存在</p>
-        </Card>
+        <div className="rounded-xl bg-surface-container-lowest shadow-card text-center py-16">
+          <p className="text-on-surface-variant">院校不存在</p>
+        </div>
       </MainLayout>
     );
   }
@@ -61,7 +61,7 @@ export default function UniversityDetailPage() {
       key: 'group',
       width: 100,
       render: (_: any, r: any) => (
-        <span style={{ color: '#64748B', fontSize: 13 }}>{r.groupCode || '-'}</span>
+        <span className="text-on-surface-variant text-[13px]">{r.groupCode || '-'}</span>
       ),
     },
     {
@@ -69,7 +69,7 @@ export default function UniversityDetailPage() {
       dataIndex: ['major', 'name'],
       key: 'majorName',
       render: (text: string, r: any) => (
-        <Link href={`/majors/${r.majorId}`} style={{ color: '#2563EB', fontWeight: 500 }}>
+        <Link href={`/majors/${r.majorId}`} className="text-primary font-medium hover:text-primary-container">
           {text}
         </Link>
       ),
@@ -82,28 +82,32 @@ export default function UniversityDetailPage() {
       dataIndex: 'tuition',
       key: 'tuition',
       width: 90,
-      render: (v: number) => v ? <span style={{ color: '#0F172A' }}>{v}</span> : '-',
+      render: (v: number) => v ? <span className="text-on-surface">{v}</span> : '-',
     },
     {
       title: '学科评估',
       dataIndex: 'disciplineEval',
       key: 'disciplineEval',
       width: 90,
-      render: (v: string) => v ? <Tag color="blue">{v}</Tag> : '-',
+      render: (v: string) => v ? (
+        <span className="inline-block rounded-full bg-primary-fixed text-on-primary-fixed-variant text-xs font-medium px-3 py-0.5">{v}</span>
+      ) : '-',
     },
     {
       title: '国家特色',
       dataIndex: 'isNationalFeature',
       key: 'isNationalFeature',
       width: 80,
-      render: (v: boolean) => v ? <Tag color="gold">是</Tag> : '-',
+      render: (v: boolean) => v ? (
+        <span className="inline-block rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant text-xs font-medium px-3 py-0.5">是</span>
+      ) : '-',
     },
     {
       title: '专业排名',
       dataIndex: 'majorRanking',
       key: 'majorRanking',
       width: 90,
-      render: (v: string) => v ? <span className="font-medium">{v}</span> : '-',
+      render: (v: string) => v ? <span className="font-medium text-on-surface">{v}</span> : '-',
     },
   ];
 
@@ -113,7 +117,7 @@ export default function UniversityDetailPage() {
       dataIndex: ['major', 'name'],
       key: 'majorName',
       render: (text: string, r: any) => (
-        <Link href={`/majors/${r.majorId}`} style={{ color: '#2563EB' }}>{text}</Link>
+        <Link href={`/majors/${r.majorId}`} className="text-primary hover:text-primary-container">{text}</Link>
       ),
     },
     { title: '年份', dataIndex: 'year', key: 'year', width: 70 },
@@ -122,14 +126,14 @@ export default function UniversityDetailPage() {
       dataIndex: 'majorMinScore',
       key: 'majorMinScore',
       width: 80,
-      render: (v: number) => v ? <span className="font-medium" style={{ color: '#0F172A' }}>{v}</span> : '-',
+      render: (v: number) => v ? <span className="font-medium text-on-surface">{v}</span> : '-',
     },
     {
       title: '最低位次',
       dataIndex: 'majorMinRank',
       key: 'majorMinRank',
       width: 100,
-      render: (v: number) => v ? <span style={{ color: '#64748B' }}>{v.toLocaleString()}</span> : '-',
+      render: (v: number) => v ? <span className="text-on-surface-variant">{v.toLocaleString()}</span> : '-',
     },
     {
       title: '录取人数',
@@ -152,7 +156,7 @@ export default function UniversityDetailPage() {
           <Descriptions.Item label="层次">{u.level || '-'}</Descriptions.Item>
           <Descriptions.Item label="办学性质">{u.runningNature || '-'}</Descriptions.Item>
           <Descriptions.Item label="主管部门">{u.department || '-'}</Descriptions.Item>
-          <Descriptions.Item label="院校排名">{u.ranking ? <span className="font-semibold" style={{ color: '#2563EB' }}>第 {u.ranking} 名</span> : '-'}</Descriptions.Item>
+          <Descriptions.Item label="院校排名">{u.ranking ? <span className="font-semibold text-primary">第 {u.ranking} 名</span> : '-'}</Descriptions.Item>
           <Descriptions.Item label="考研率">{u.postgradRate || '-'}</Descriptions.Item>
           <Descriptions.Item label="转专业难度">{u.transferDifficulty || '-'}</Descriptions.Item>
           <Descriptions.Item label="学科评估">{u.disciplineEvaluationLevel || '-'}</Descriptions.Item>
@@ -163,7 +167,7 @@ export default function UniversityDetailPage() {
           )}
           {u.admissionGuide && (
             <Descriptions.Item label="招生章程" span={2}>
-              <div style={{ maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap', fontSize: 13 }}>{u.admissionGuide}</div>
+              <div className="max-h-[200px] overflow-auto whitespace-pre-wrap text-[13px] font-body">{u.admissionGuide}</div>
             </Descriptions.Item>
           )}
         </Descriptions>
@@ -201,32 +205,46 @@ export default function UniversityDetailPage() {
 
   return (
     <MainLayout>
-      {/* Header Card */}
-      <Card className="mb-4" styles={{ body: { padding: '24px 28px' } }}>
+      {/* Breadcrumb */}
+      <nav className="mb-4 font-body text-sm">
+        <Link href="/universities" className="text-on-surface-variant hover:text-primary">院校库</Link>
+        <span className="text-outline mx-2">/</span>
+        <span className="text-on-surface">{u.name}</span>
+      </nav>
+
+      {/* Hero Header Card */}
+      <div className="rounded-xl bg-surface-container-lowest shadow-card p-6 md:p-8 mb-4">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-bold m-0" style={{ color: '#0F172A' }}>{u.name}</h1>
+              <h1 className="font-headline text-2xl font-bold text-on-surface m-0">{u.name}</h1>
               <Space size={4}>
-                {u.is985 && <Tag color="red">985</Tag>}
-                {u.is211 && <Tag color="orange">211</Tag>}
-                {u.isDoubleFirstClass && <Tag color="blue">双一流</Tag>}
+                {u.is985 && (
+                  <span className="inline-block rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant text-xs font-medium px-3 py-0.5">985</span>
+                )}
+                {u.is211 && (
+                  <span className="inline-block rounded-full bg-primary-fixed text-on-primary-fixed-variant text-xs font-medium px-3 py-0.5">211</span>
+                )}
+                {u.isDoubleFirstClass && (
+                  <span className="inline-block rounded-full bg-secondary-fixed text-on-secondary-fixed-variant text-xs font-medium px-3 py-0.5">双一流</span>
+                )}
               </Space>
             </div>
-            <div className="flex items-center gap-1 text-sm" style={{ color: '#64748B' }}>
+            <div className="flex items-center gap-1 text-sm text-on-surface-variant font-body">
               <EnvironmentOutlined />
               {[u.province, u.city, u.type, u.level, u.runningNature].filter(Boolean).join(' · ')}
             </div>
           </div>
           {u.ranking && (
             <div className="text-center px-4">
-              <div className="text-2xl font-bold" style={{ color: '#2563EB' }}>{u.ranking}</div>
-              <div className="text-xs" style={{ color: '#94A3B8' }}>全国排名</div>
+              <div className="text-2xl font-bold text-primary font-headline">{u.ranking}</div>
+              <div className="text-xs text-outline font-body">全国排名</div>
             </div>
           )}
         </div>
-      </Card>
+      </div>
 
+      {/* Tabs Card */}
       <Card styles={{ body: { padding: '4px 0 0' } }}>
         <Tabs items={tabItems} style={{ padding: '0 24px' }} />
       </Card>

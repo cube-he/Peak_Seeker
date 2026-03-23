@@ -1674,8 +1674,9 @@ def extract_supplementary_rows(img_path: str, context: Dict = None, ocr_result: 
             logger.info(f"    院校备注: {note[:30]}...")
             continue
 
-        # 4. 检测院校行: "0048华中师范大学（湖北省武汉市）"
-        uni_match = re.match(r'^(\d{4})([一-鿿]+(?:大学|学院|学校)[一-鿿]*)[（(]([^）)]+)[）)]', first_text)
+        # 4. 检测院校行: "0048华中师范大学（湖北省武汉市）" 或 "0012 北京语言大学(北京市)"
+        # 注意：AIStudio 返回的格式可能在代码和名称之间有空格
+        uni_match = re.match(r'^(\d{4})\s*([一-鿿]+(?:大学|学院|学校)[一-鿿]*)[（(]([^）)]+)[）)]', first_text)
         if uni_match:
             save_major_block()  # 保存之前的专业
             current_university = {
