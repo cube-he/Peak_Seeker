@@ -8,34 +8,102 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: {
-          DEFAULT: '#2563EB',
-          50: '#EFF6FF',
-          100: '#DBEAFE',
-          200: '#BFDBFE',
-          300: '#93C5FD',
-          400: '#60A5FA',
-          500: '#3B82F6',
-          600: '#2563EB',
-          700: '#1D4ED8',
-          800: '#1E40AF',
-          900: '#1E3A8A',
+        // Primary
+        'primary': {
+          DEFAULT: '#003fb1',
+          container: '#1a56db',
+          fixed: '#dbe1ff',
+          'fixed-dim': '#b5c4ff',
         },
-        accent: '#F97316',
-        surface: '#F8FAFC',
-        heading: '#0F172A',
-        body: '#334155',
-        muted: '#64748B',
-        border: '#E2E8F0',
+        'on-primary': '#ffffff',
+        'on-primary-container': '#d4dcff',
+        'on-primary-fixed': '#00174d',
+        'on-primary-fixed-variant': '#003dab',
+
+        // Secondary (AI Engine)
+        'secondary': {
+          DEFAULT: '#006973',
+          container: '#85efff',
+          fixed: '#92f1ff',
+          'fixed-dim': '#6ad6e5',
+        },
+        'on-secondary': '#ffffff',
+        'on-secondary-container': '#006d78',
+        'on-secondary-fixed': '#001f23',
+        'on-secondary-fixed-variant': '#004f57',
+
+        // Tertiary (Elite/Gold)
+        'tertiary': {
+          DEFAULT: '#723b00',
+          container: '#954f00',
+          fixed: '#ffdcc3',
+          'fixed-dim': '#ffb77d',
+        },
+        'on-tertiary': '#ffffff',
+        'on-tertiary-container': '#ffd5b6',
+        'on-tertiary-fixed': '#2f1500',
+        'on-tertiary-fixed-variant': '#6e3900',
+
+        // Error/Risk
+        'error': {
+          DEFAULT: '#ba1a1a',
+          container: '#ffdad6',
+        },
+        'on-error': '#ffffff',
+        'on-error-container': '#93000a',
+
+        // Surface System
+        'surface': {
+          DEFAULT: '#faf8ff',
+          dim: '#d9d9e4',
+          bright: '#faf8ff',
+          tint: '#1353d8',
+          variant: '#e2e1ed',
+          'container-lowest': '#ffffff',
+          'container-low': '#f3f3fe',
+          container: '#ededf8',
+          'container-high': '#e7e7f3',
+          'container-highest': '#e2e1ed',
+        },
+        'on-surface': '#191b23',
+        'on-surface-variant': '#434654',
+
+        // Inverse
+        'inverse-surface': '#2e3039',
+        'inverse-on-surface': '#f0f0fb',
+        'inverse-primary': '#b5c4ff',
+
+        // Outline
+        'outline': {
+          DEFAULT: '#737686',
+          variant: '#c3c5d7',
+        },
+
+        // Background
+        'background': '#faf8ff',
+        'on-background': '#191b23',
+      },
+      fontFamily: {
+        headline: ['var(--font-headline)', 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
+        body: ['var(--font-body)', 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
+        label: ['var(--font-body)', 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
       },
       borderRadius: {
-        xl: '1rem',
-        '2xl': '1.25rem',
+        DEFAULT: '0.25rem',
+        lg: '0.5rem',
+        xl: '0.75rem',
+        '2xl': '1rem',
+        '3xl': '1.5rem',
+        full: '9999px',
       },
       boxShadow: {
-        card: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
-        'card-hover': '0 10px 25px rgba(0,0,0,0.07), 0 4px 10px rgba(0,0,0,0.04)',
-        nav: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)',
+        'ambient': '0 20px 40px rgba(25, 27, 35, 0.06)',
+        'ambient-sm': '0 4px 12px rgba(25, 27, 35, 0.04)',
+        'glow-primary': '0 8px 24px rgba(0, 63, 177, 0.2)',
+        'glow-primary-lg': '0 12px 32px rgba(0, 63, 177, 0.3)',
+        'card': '0 1px 3px rgba(25, 27, 35, 0.04)',
+        'card-hover': '0 20px 40px rgba(25, 27, 35, 0.08)',
+        'nav': '0 1px 3px rgba(25, 27, 35, 0.03)',
       },
     },
   },

@@ -6,8 +6,6 @@ import {
   Table,
   Button,
   Space,
-  Typography,
-  Tag,
   Tabs,
   Empty,
   Popconfirm,
@@ -24,8 +22,6 @@ import MainLayout from '@/components/layout/MainLayout';
 import { favoriteService } from '@/services/favorite';
 import { useAuthStore } from '@/stores/authStore';
 import Link from 'next/link';
-
-const { Title, Text } = Typography;
 
 export default function FavoritesPage() {
   const { isLoggedIn } = useAuthStore();
@@ -49,12 +45,12 @@ export default function FavoritesPage() {
   if (!isLoggedIn) {
     return (
       <MainLayout>
-        <Card className="text-center py-16">
+        <div className="rounded-xl bg-surface-container-lowest shadow-card text-center py-16">
           <Empty description="请先登录后查看收藏" />
           <Link href="/login">
             <Button type="primary" className="mt-4">去登录</Button>
           </Link>
-        </Card>
+        </div>
       </MainLayout>
     );
   }
@@ -65,13 +61,11 @@ export default function FavoritesPage() {
       key: 'name',
       render: (_: any, record: any) => (
         <div>
-          <Link href={`/universities/${record.university?.id}`} className="font-medium text-primary">
+          <Link href={`/universities/${record.university?.id}`} className="font-medium text-primary hover:text-primary-container">
             {record.university?.name}
           </Link>
-          <div>
-            <Text type="secondary" className="text-xs">
-              {record.university?.province} · {record.university?.type}
-            </Text>
+          <div className="text-xs text-on-surface-variant mt-0.5">
+            {record.university?.province} · {record.university?.type}
           </div>
         </div>
       ),
@@ -82,9 +76,15 @@ export default function FavoritesPage() {
       width: 200,
       render: (_: any, record: any) => (
         <Space size={4} wrap>
-          {record.university?.is985 && <Tag color="red">985</Tag>}
-          {record.university?.is211 && <Tag color="orange">211</Tag>}
-          {record.university?.isDoubleFirstClass && <Tag color="blue">双一流</Tag>}
+          {record.university?.is985 && (
+            <span className="inline-block rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant text-xs font-medium px-3 py-0.5">985</span>
+          )}
+          {record.university?.is211 && (
+            <span className="inline-block rounded-full bg-primary-fixed text-on-primary-fixed-variant text-xs font-medium px-3 py-0.5">211</span>
+          )}
+          {record.university?.isDoubleFirstClass && (
+            <span className="inline-block rounded-full bg-secondary-fixed text-on-secondary-fixed-variant text-xs font-medium px-3 py-0.5">双一流</span>
+          )}
         </Space>
       ),
     },
@@ -93,14 +93,18 @@ export default function FavoritesPage() {
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 160,
-      render: (text: string) => new Date(text).toLocaleString('zh-CN'),
+      render: (text: string) => (
+        <span className="text-on-surface-variant text-sm">{new Date(text).toLocaleString('zh-CN')}</span>
+      ),
     },
     {
       title: '备注',
       dataIndex: 'notes',
       key: 'notes',
       width: 150,
-      render: (text: string) => text || '-',
+      render: (text: string) => (
+        <span className="text-on-surface-variant">{text || '-'}</span>
+      ),
     },
     {
       title: '操作',
@@ -123,11 +127,9 @@ export default function FavoritesPage() {
       key: 'name',
       render: (_: any, record: any) => (
         <div>
-          <span className="font-medium">{record.major?.name}</span>
-          <div>
-            <Text type="secondary" className="text-xs">
-              {record.major?.category} · {record.major?.discipline}
-            </Text>
+          <span className="font-medium text-on-surface">{record.major?.name}</span>
+          <div className="text-xs text-on-surface-variant mt-0.5">
+            {record.major?.category} · {record.major?.discipline}
           </div>
         </div>
       ),
@@ -137,9 +139,13 @@ export default function FavoritesPage() {
       key: 'level',
       width: 80,
       render: (_: any, record: any) => (
-        <Tag color={record.major?.level === '本科' ? 'blue' : 'green'}>
+        <span className={`inline-block rounded-full text-xs font-medium px-3 py-0.5 ${
+          record.major?.level === '本科'
+            ? 'bg-primary-fixed text-on-primary-fixed-variant'
+            : 'bg-secondary-fixed text-on-secondary-fixed-variant'
+        }`}>
           {record.major?.level || '-'}
-        </Tag>
+        </span>
       ),
     },
     {
@@ -147,14 +153,18 @@ export default function FavoritesPage() {
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 160,
-      render: (text: string) => new Date(text).toLocaleString('zh-CN'),
+      render: (text: string) => (
+        <span className="text-on-surface-variant text-sm">{new Date(text).toLocaleString('zh-CN')}</span>
+      ),
     },
     {
       title: '备注',
       dataIndex: 'notes',
       key: 'notes',
       width: 150,
-      render: (text: string) => text || '-',
+      render: (text: string) => (
+        <span className="text-on-surface-variant">{text || '-'}</span>
+      ),
     },
     {
       title: '操作',
@@ -208,14 +218,16 @@ export default function FavoritesPage() {
 
   return (
     <MainLayout>
-      <Card
-        title={
-          <Title level={4} className="mb-0">
-            <StarFilled style={{ color: '#faad14' }} className="mr-2" />
-            我的收藏
-          </Title>
-        }
-      >
+      {/* Page Header */}
+      <div className="mb-6">
+        <h1 className="font-headline text-2xl font-bold text-on-surface m-0 flex items-center gap-2">
+          <StarFilled className="text-tertiary" />
+          我的收藏
+        </h1>
+      </div>
+
+      {/* Tabs Card */}
+      <Card>
         <Tabs
           items={tabItems}
           activeKey={activeTab}

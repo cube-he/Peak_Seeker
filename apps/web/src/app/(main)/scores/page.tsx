@@ -2,22 +2,17 @@
 
 import { useState } from 'react';
 import {
-  Card,
   Form,
   InputNumber,
   Select,
-  Button,
   Table,
-  Row,
-  Col,
   Tag,
-  Statistic,
-  Space,
 } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
+import StatCard from '@/components/ui/StatCard';
 import { admissionService } from '@/services/admission';
 import { useUserStore } from '@/stores/userStore';
 import { PROVINCES } from '@volunteer-helper/shared';
@@ -70,10 +65,10 @@ export default function ScoresPage() {
       key: 'university',
       render: (_: any, record: any) => (
         <div>
-          <Link href={`/universities/${record.universityId}`} className="font-medium" style={{ color: '#2563EB' }}>
+          <Link href={`/universities/${record.universityId}`} className="font-medium text-primary hover:underline">
             {record.university?.name}
           </Link>
-          <div className="text-xs" style={{ color: '#94A3B8' }}>{record.university?.province}</div>
+          <div className="text-xs text-on-surface-variant">{record.university?.province}</div>
         </div>
       ),
     },
@@ -82,10 +77,10 @@ export default function ScoresPage() {
       key: 'major',
       render: (_: any, record: any) => (
         <div>
-          <Link href={`/majors/${record.majorId}`} style={{ color: '#334155' }}>
+          <Link href={`/majors/${record.majorId}`} className="text-on-surface hover:text-primary transition-colors">
             {record.major?.name}
           </Link>
-          <div className="text-xs" style={{ color: '#94A3B8' }}>{record.major?.category}</div>
+          <div className="text-xs text-on-surface-variant">{record.major?.category}</div>
         </div>
       ),
     },
@@ -96,7 +91,7 @@ export default function ScoresPage() {
       key: 'majorMinScore',
       width: 80,
       sorter: (a: any, b: any) => (a.majorMinScore || 0) - (b.majorMinScore || 0),
-      render: (val: number) => val ? <span className="font-medium" style={{ color: '#0F172A' }}>{val}</span> : '-',
+      render: (val: number) => val ? <span className="font-semibold text-on-surface">{val}</span> : '-',
     },
     {
       title: '最低位次',
@@ -104,7 +99,7 @@ export default function ScoresPage() {
       key: 'majorMinRank',
       width: 100,
       sorter: (a: any, b: any) => (a.majorMinRank || 0) - (b.majorMinRank || 0),
-      render: (val: number) => val ? <span style={{ color: '#64748B' }}>{val.toLocaleString()}</span> : '-',
+      render: (val: number) => val ? <span className="text-on-surface-variant">{val.toLocaleString()}</span> : '-',
     },
     {
       title: '录取人数',
@@ -118,11 +113,17 @@ export default function ScoresPage() {
       key: 'tags',
       width: 150,
       render: (_: any, record: any) => (
-        <Space size={4} wrap>
-          {record.university?.is985 && <Tag color="red">985</Tag>}
-          {record.university?.is211 && <Tag color="orange">211</Tag>}
-          {record.university?.isDoubleFirstClass && <Tag color="blue">双一流</Tag>}
-        </Space>
+        <div className="flex flex-wrap gap-1">
+          {record.university?.is985 && (
+            <Tag className="rounded-full border-0 bg-tertiary-fixed text-on-tertiary-fixed-variant m-0">985</Tag>
+          )}
+          {record.university?.is211 && (
+            <Tag className="rounded-full border-0 bg-primary-fixed text-on-primary-fixed-variant m-0">211</Tag>
+          )}
+          {record.university?.isDoubleFirstClass && (
+            <Tag className="rounded-full border-0 bg-secondary-fixed text-on-secondary-fixed-variant m-0">双一流</Tag>
+          )}
+        </div>
       ),
     },
   ];
@@ -131,31 +132,42 @@ export default function ScoresPage() {
 
   return (
     <MainLayout>
-      <div className="mb-6">
-        <h2 className="text-xl font-bold mb-1" style={{ color: '#0F172A' }}>分数线查询</h2>
-        <p className="text-sm" style={{ color: '#64748B' }}>按分数或位次查询历年录取数据</p>
+      {/* Page Title */}
+      <div className="mb-8">
+        <h2 className="text-xl font-headline font-extrabold text-on-surface mb-1">分数线查询</h2>
+        <p className="text-sm text-on-surface-variant">按分数或位次查询历年录取数据</p>
       </div>
 
-      <Row gutter={20}>
-        <Col xs={24} lg={8}>
-          <Card className="sticky top-20" styles={{ body: { padding: '24px' } }}>
-            <h3 className="text-base font-semibold mb-4" style={{ color: '#0F172A' }}>查询条件</h3>
-            <Space className="mb-4" size={8}>
-              <Button
-                type={searchMode === 'score' ? 'primary' : 'default'}
+      {/* Main Layout: Sidebar + Content */}
+      <div className="flex gap-6 items-start">
+        {/* Left Sidebar */}
+        <div className="w-80 shrink-0 sticky top-24">
+          <div className="bg-surface-container-lowest rounded-xl p-6">
+            <h3 className="text-sm font-headline font-semibold text-on-surface mb-5">查询条件</h3>
+
+            {/* Mode Toggle */}
+            <div className="flex gap-2 mb-6">
+              <button
+                className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all duration-300 border-0 cursor-pointer ${
+                  searchMode === 'score'
+                    ? 'bg-primary text-on-primary shadow-glow-primary'
+                    : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'
+                }`}
                 onClick={() => setSearchMode('score')}
-                style={{ borderRadius: 6 }}
               >
                 按分数查
-              </Button>
-              <Button
-                type={searchMode === 'rank' ? 'primary' : 'default'}
+              </button>
+              <button
+                className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all duration-300 border-0 cursor-pointer ${
+                  searchMode === 'rank'
+                    ? 'bg-primary text-on-primary shadow-glow-primary'
+                    : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'
+                }`}
                 onClick={() => setSearchMode('rank')}
-                style={{ borderRadius: 6 }}
               >
                 按位次查
-              </Button>
-            </Space>
+              </button>
+            </div>
 
             <Form
               form={form}
@@ -169,7 +181,11 @@ export default function ScoresPage() {
                 range: searchMode === 'score' ? 20 : 5000,
               }}
             >
-              <Form.Item name="province" label="省份" rules={[{ required: true }]}>
+              <Form.Item
+                name="province"
+                label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">省份</span>}
+                rules={[{ required: true }]}
+              >
                 <Select>
                   {PROVINCES.map((p) => (
                     <Option key={p.code} value={p.name}>{p.name}</Option>
@@ -178,16 +194,27 @@ export default function ScoresPage() {
               </Form.Item>
 
               {searchMode === 'score' ? (
-                <Form.Item name="score" label="分数" rules={[{ required: true, message: '请输入分数' }]}>
+                <Form.Item
+                  name="score"
+                  label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">分数</span>}
+                  rules={[{ required: true, message: '请输入分数' }]}
+                >
                   <InputNumber min={0} max={750} className="w-full" placeholder="输入分数" />
                 </Form.Item>
               ) : (
-                <Form.Item name="rank" label="位次" rules={[{ required: true, message: '请输入位次' }]}>
+                <Form.Item
+                  name="rank"
+                  label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">位次</span>}
+                  rules={[{ required: true, message: '请输入位次' }]}
+                >
                   <InputNumber min={1} className="w-full" placeholder="输入位次" />
                 </Form.Item>
               )}
 
-              <Form.Item name="year" label="年份">
+              <Form.Item
+                name="year"
+                label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">年份</span>}
+              >
                 <Select>
                   <Option value={2024}>2024</Option>
                   <Option value={2023}>2023</Option>
@@ -195,7 +222,10 @@ export default function ScoresPage() {
                 </Select>
               </Form.Item>
 
-              <Form.Item name="range" label="浮动范围">
+              <Form.Item
+                name="range"
+                label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">浮动范围</span>}
+              >
                 <InputNumber
                   min={1}
                   className="w-full"
@@ -204,46 +234,54 @@ export default function ScoresPage() {
               </Form.Item>
 
               <Form.Item className="mb-0">
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  icon={<SearchOutlined />}
-                  loading={isLoading}
-                  block
-                  size="large"
-                  style={{ height: 44, fontWeight: 600 }}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary font-semibold text-sm border-0 cursor-pointer flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-glow-primary-lg active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  查询
-                </Button>
+                  <SearchOutlined />
+                  {isLoading ? '查询中...' : '查询'}
+                </button>
               </Form.Item>
             </Form>
-          </Card>
-        </Col>
+          </div>
+        </div>
 
-        <Col xs={24} lg={16}>
+        {/* Right Content */}
+        <div className="flex-1 min-w-0">
+          {/* Statistics Cards */}
           {statistics && (
-            <Card className="mb-4">
-              <Row gutter={24}>
-                <Col span={6}>
-                  <Statistic title="数据总量" value={statistics._count} />
-                </Col>
-                <Col span={6}>
-                  <Statistic title="最高分" value={statistics._max?.majorMinScore || '-'} valueStyle={{ color: '#EF4444' }} />
-                </Col>
-                <Col span={6}>
-                  <Statistic title="平均分" value={statistics._avg?.majorMinScore ? Math.round(statistics._avg.majorMinScore) : '-'} valueStyle={{ color: '#2563EB' }} />
-                </Col>
-                <Col span={6}>
-                  <Statistic title="最低分" value={statistics._min?.majorMinScore || '-'} valueStyle={{ color: '#10B981' }} />
-                </Col>
-              </Row>
-            </Card>
+            <div className="grid grid-cols-4 gap-4 mb-6">
+              <StatCard
+                label="数据总量"
+                value={statistics._count ?? '-'}
+                accentColor="primary"
+              />
+              <StatCard
+                label="最高分"
+                value={statistics._max?.majorMinScore || '-'}
+                accentColor="error"
+              />
+              <StatCard
+                label="平均分"
+                value={statistics._avg?.majorMinScore ? Math.round(statistics._avg.majorMinScore) : '-'}
+                accentColor="primary"
+              />
+              <StatCard
+                label="最低分"
+                value={statistics._min?.majorMinScore || '-'}
+                accentColor="secondary"
+              />
+            </div>
           )}
 
-          <Card
-            title={<span className="font-semibold" style={{ color: '#0F172A' }}>查询结果 ({results.length} 条)</span>}
-            styles={{ body: { padding: 0 } }}
-          >
+          {/* Results Table */}
+          <div className="bg-surface-container-lowest rounded-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-surface-container-low">
+              <span className="font-headline font-semibold text-on-surface text-sm">
+                查询结果 ({results.length} 条)
+              </span>
+            </div>
             <Table
               columns={columns}
               dataSource={results}
@@ -251,10 +289,31 @@ export default function ScoresPage() {
               loading={isLoading}
               pagination={{ pageSize: 20, showSizeChanger: true }}
               size="small"
+              className="summit-table"
             />
-          </Card>
-        </Col>
-      </Row>
+          </div>
+        </div>
+      </div>
+
+      {/* Table styling overrides */}
+      <style jsx global>{`
+        .summit-table .ant-table {
+          background: transparent;
+        }
+        .summit-table .ant-table-thead > tr > th {
+          background: #f3f3fe !important;
+          border-bottom: 1px solid #ededf8 !important;
+          color: #434654 !important;
+          font-weight: 600;
+          font-size: 13px;
+        }
+        .summit-table .ant-table-tbody > tr > td {
+          border-bottom: 1px solid #f3f3fe !important;
+        }
+        .summit-table .ant-table-tbody > tr:hover > td {
+          background: #f3f3fe !important;
+        }
+      `}</style>
     </MainLayout>
   );
 }

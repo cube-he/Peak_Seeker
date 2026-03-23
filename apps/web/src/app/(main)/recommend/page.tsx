@@ -1,35 +1,37 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  Card,
-  Form,
-  InputNumber,
-  Select,
-  Button,
-  Row,
-  Col,
-  Divider,
-  Table,
-  Tag,
-  Space,
-  Progress,
-  Statistic,
-  message,
-} from 'antd';
+import { Form, InputNumber, Select, message } from 'antd';
 import { BulbOutlined, SaveOutlined, ExportOutlined } from '@ant-design/icons';
 import { useMutation } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
+import StatCard from '@/components/ui/StatCard';
+import StatusChip from '@/components/ui/StatusChip';
 import { recommendService, RecommendPlanParams } from '@/services/recommend';
 import { useUserStore } from '@/stores/userStore';
 import { PROVINCES } from '@volunteer-helper/shared';
 
 const { Option } = Select;
 
+type Strategy = 'balanced' | 'aggressive' | 'conservative';
+
+const strategyOptions: { value: Strategy; label: string; description: string }[] = [
+  { value: 'balanced', label: '稳健增长', description: '均衡冲稳保比例，适合多数考生' },
+  { value: 'aggressive', label: '激进冲击', description: '大幅增加冲刺院校，博取更高层次' },
+  { value: 'conservative', label: '保守保底', description: '增加保底院校，确保录取无忧' },
+];
+
+const strategyPresets: Record<Strategy, { rush: number; stable: number; safe: number }> = {
+  balanced: { rush: 20, stable: 40, safe: 36 },
+  aggressive: { rush: 36, stable: 30, safe: 30 },
+  conservative: { rush: 10, stable: 36, safe: 50 },
+};
+
 export default function RecommendPage() {
   const [form] = Form.useForm();
   const { examInfo, setExamInfo } = useUserStore();
   const [planResult, setPlanResult] = useState<any>(null);
+  const [selectedStrategy, setSelectedStrategy] = useState<Strategy>('balanced');
 
   const generateMutation = useMutation({
     mutationFn: (params: RecommendPlanParams) =>
@@ -100,87 +102,59 @@ export default function RecommendPage() {
     message.success('导出成功！');
   };
 
-  const columns = [
-    { title: '序号', dataIndex: 'order', key: 'order', width: 60 },
-    {
-      title: '策略',
-      dataIndex: 'strategy',
-      key: 'strategy',
-      width: 70,
-      render: (strategy: string) => {
-        const config: Record<string, { color: string; label: string }> = {
-          rush: { color: '#EF4444', label: '冲' },
-          stable: { color: '#2563EB', label: '稳' },
-          safe: { color: '#10B981', label: '保' },
-        };
-        const c = config[strategy] || { color: '#94A3B8', label: strategy };
-        return <Tag color={c.color}>{c.label}</Tag>;
-      },
-    },
-    {
-      title: '院校',
-      key: 'university',
-      render: (_: any, record: any) => (
-        <div>
-          <div className="font-medium" style={{ color: '#0F172A' }}>{record.university?.name}</div>
-          <div className="text-xs" style={{ color: '#94A3B8' }}>
-            {record.university?.province} · {record.university?.type}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: '专业',
-      key: 'major',
-      render: (_: any, record: any) => (
-        <div>
-          <div style={{ color: '#334155' }}>{record.major?.name}</div>
-          <div className="text-xs" style={{ color: '#94A3B8' }}>{record.major?.category}</div>
-        </div>
-      ),
-    },
-    {
-      title: '去年分数/位次',
-      key: 'admission',
-      width: 120,
-      render: (_: any, record: any) => (
-        <div>
-          <span className="font-medium" style={{ color: '#0F172A' }}>{record.admission?.minScore || '-'}</span>
-          <span style={{ color: '#CBD5E1' }}> / </span>
-          <span style={{ color: '#64748B' }}>{record.admission?.minRank || '-'}</span>
-        </div>
-      ),
-    },
-    {
-      title: '录取概率',
-      key: 'acceptRate',
-      width: 130,
-      render: (_: any, record: any) => {
-        const rate = record.prediction?.acceptRate || 0;
-        const percent = Math.round(rate * 100);
-        return (
-          <Progress
-            percent={percent}
-            size="small"
-            strokeColor={percent < 40 ? '#EF4444' : percent < 70 ? '#2563EB' : '#10B981'}
-            trailColor="#F1F5F9"
-          />
-        );
-      },
-    },
-  ];
+  const handleStrategyChange = (strategy: Strategy) => {
+    setSelectedStrategy(strategy);
+    const preset = strategyPresets[strategy];
+    form.setFieldsValue({
+      rushCount: preset.rush,
+      stableCount: preset.stable,
+      safeCount: preset.safe,
+    });
+  };
+
+  const getAccentBorder = (strategy: string) => {
+    switch (strategy) {
+      case 'rush': return 'border-l-error';
+      case 'stable': return 'border-l-primary';
+      case 'safe': return 'border-l-secondary';
+      default: return 'border-l-outline';
+    }
+  };
+
+  const getProgressColor = (percent: number) => {
+    if (percent < 40) return 'bg-error';
+    if (percent < 70) return 'bg-primary';
+    return 'bg-secondary';
+  };
+
+  const getProgressTrack = (percent: number) => {
+    if (percent < 40) return 'bg-error-container';
+    if (percent < 70) return 'bg-primary-fixed';
+    return 'bg-secondary-fixed';
+  };
+
+  const strategyLabel: Record<string, string> = { rush: '冲', stable: '稳', safe: '保' };
+  const strategyVariant: Record<string, 'rush' | 'stable' | 'safe'> = {
+    rush: 'rush',
+    stable: 'stable',
+    safe: 'safe',
+  };
 
   return (
     <MainLayout>
-      <div className="mb-6">
-        <h2 className="text-xl font-bold mb-1" style={{ color: '#0F172A' }}>智能推荐</h2>
-        <p className="text-sm" style={{ color: '#64748B' }}>输入分数和位次，AI 智能生成冲稳保方案</p>
+      {/* Page Title */}
+      <div className="mb-8">
+        <h2 className="text-xl font-headline font-extrabold text-on-surface mb-1">智能推荐</h2>
+        <p className="text-sm text-on-surface-variant">输入分数和位次，AI 智能生成冲稳保方案</p>
       </div>
 
-      <Row gutter={20}>
-        <Col xs={24} lg={8}>
-          <Card className="sticky top-20" styles={{ body: { padding: '24px' } }}>
-            <h3 className="text-base font-semibold mb-4" style={{ color: '#0F172A' }}>填写信息</h3>
+      {/* Main Layout: Sidebar + Content */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* Left Sidebar */}
+        <div className="w-full lg:w-80 xl:w-96 shrink-0 sticky top-24">
+          <div className="bg-surface-container-lowest rounded-xl p-6">
+            <h3 className="text-base font-headline font-extrabold text-primary mb-5">AI 实验室参数</h3>
+
             <Form
               form={form}
               layout="vertical"
@@ -194,13 +168,27 @@ export default function RecommendPage() {
                 safeCount: 36,
               }}
             >
-              <Form.Item name="score" label="高考分数" rules={[{ required: true, message: '请输入分数' }]}>
+              <Form.Item
+                name="score"
+                label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">高考分数</span>}
+                rules={[{ required: true, message: '请输入分数' }]}
+              >
                 <InputNumber min={0} max={750} className="w-full" placeholder="请输入高考分数" />
               </Form.Item>
-              <Form.Item name="rank" label="省排名位次" rules={[{ required: true, message: '请输入位次' }]}>
+
+              <Form.Item
+                name="rank"
+                label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">省排名位次</span>}
+                rules={[{ required: true, message: '请输入位次' }]}
+              >
                 <InputNumber min={1} className="w-full" placeholder="请输入省排名位次" />
               </Form.Item>
-              <Form.Item name="province" label="所在省份" rules={[{ required: true, message: '请选择省份' }]}>
+
+              <Form.Item
+                name="province"
+                label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">所在省份</span>}
+                rules={[{ required: true, message: '请选择省份' }]}
+              >
                 <Select placeholder="请选择省份">
                   {PROVINCES.map((p) => (
                     <Option key={p.code} value={p.name}>{p.name}</Option>
@@ -208,27 +196,59 @@ export default function RecommendPage() {
                 </Select>
               </Form.Item>
 
-              <Divider style={{ margin: '16px 0', color: '#94A3B8', fontSize: 13 }}>策略设置</Divider>
+              {/* Strategy Selection */}
+              <div className="mb-5">
+                <span className="text-xs uppercase tracking-widest text-on-surface-variant font-label block mb-3">策略模式</span>
+                <div className="flex flex-col gap-2">
+                  {strategyOptions.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleStrategyChange(opt.value)}
+                      className={`w-full text-left p-3 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
+                        selectedStrategy === opt.value
+                          ? 'border-primary bg-primary-fixed/30'
+                          : 'border-surface-container-high bg-surface-container-high hover:border-outline-variant'
+                      }`}
+                    >
+                      <div className={`text-sm font-semibold ${selectedStrategy === opt.value ? 'text-primary' : 'text-on-surface'}`}>
+                        {opt.label}
+                      </div>
+                      <div className="text-xs text-on-surface-variant mt-0.5">{opt.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              <Row gutter={12}>
-                <Col span={8}>
-                  <Form.Item name="rushCount" label={<Tag color="red">冲</Tag>}>
-                    <InputNumber min={0} max={50} className="w-full" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="stableCount" label={<Tag color="blue">稳</Tag>}>
-                    <InputNumber min={0} max={60} className="w-full" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="safeCount" label={<Tag color="green">保</Tag>}>
-                    <InputNumber min={0} max={50} className="w-full" />
-                  </Form.Item>
-                </Col>
-              </Row>
+              {/* Count Inputs */}
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <Form.Item
+                  name="rushCount"
+                  label={<StatusChip variant="rush" size="sm">冲</StatusChip>}
+                  className="mb-0"
+                >
+                  <InputNumber min={0} max={50} className="w-full" />
+                </Form.Item>
+                <Form.Item
+                  name="stableCount"
+                  label={<StatusChip variant="stable" size="sm">稳</StatusChip>}
+                  className="mb-0"
+                >
+                  <InputNumber min={0} max={60} className="w-full" />
+                </Form.Item>
+                <Form.Item
+                  name="safeCount"
+                  label={<StatusChip variant="safe" size="sm">保</StatusChip>}
+                  className="mb-0"
+                >
+                  <InputNumber min={0} max={50} className="w-full" />
+                </Form.Item>
+              </div>
 
-              <Form.Item name="preferredProvinces" label="偏好省份">
+              <Form.Item
+                name="preferredProvinces"
+                label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">偏好省份</span>}
+              >
                 <Select mode="multiple" placeholder="选择偏好省份（可多选）" maxTagCount={3}>
                   {PROVINCES.map((p) => (
                     <Option key={p.code} value={p.name}>{p.name}</Option>
@@ -237,79 +257,162 @@ export default function RecommendPage() {
               </Form.Item>
 
               <Form.Item className="mb-0">
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  icon={<BulbOutlined />}
-                  loading={generateMutation.isPending}
-                  block
-                  size="large"
-                  style={{ height: 44, fontWeight: 600 }}
+                <button
+                  type="submit"
+                  disabled={generateMutation.isPending}
+                  className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary font-semibold text-sm border-0 cursor-pointer flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-glow-primary-lg active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  生成志愿方案
-                </Button>
+                  <BulbOutlined />
+                  {generateMutation.isPending ? '生成中...' : '✦ 生成志愿方案'}
+                </button>
               </Form.Item>
             </Form>
-          </Card>
-        </Col>
+          </div>
+        </div>
 
-        <Col xs={24} lg={16}>
+        {/* Right Content */}
+        <div className="flex-1 min-w-0">
           {planResult ? (
             <>
-              <Card className="mb-4">
-                <Row gutter={24}>
-                  <Col span={6}>
-                    <Statistic title="总志愿数" value={planResult.statistics?.totalCount} />
-                  </Col>
-                  <Col span={6}>
-                    <Statistic title="冲" value={planResult.statistics?.rushCount} valueStyle={{ color: '#EF4444' }} />
-                  </Col>
-                  <Col span={6}>
-                    <Statistic title="稳" value={planResult.statistics?.stableCount} valueStyle={{ color: '#2563EB' }} />
-                  </Col>
-                  <Col span={6}>
-                    <Statistic title="保" value={planResult.statistics?.safeCount} valueStyle={{ color: '#10B981' }} />
-                  </Col>
-                </Row>
-              </Card>
+              {/* Header with completion badge */}
+              <div className="flex items-center gap-3 mb-6">
+                <h3 className="text-lg font-headline font-extrabold text-on-surface">智能分析报告</h3>
+                <span className="bg-secondary-fixed text-secondary rounded-full text-xs font-semibold px-3 py-1">
+                  已完成
+                </span>
+              </div>
 
-              <Card
-                title={<span className="font-semibold" style={{ color: '#0F172A' }}>志愿方案</span>}
-                extra={
-                  <Space>
-                    <Button icon={<SaveOutlined />} onClick={handleSavePlan}>保存方案</Button>
-                    <Button icon={<ExportOutlined />} onClick={handleExportPlan}>导出</Button>
-                  </Space>
-                }
-                styles={{ body: { padding: 0 } }}
-              >
-                <Table
-                  columns={columns}
-                  dataSource={planResult.plan?.items}
-                  rowKey="order"
-                  pagination={{ pageSize: 20 }}
-                  size="small"
+              {/* Stat Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <StatCard
+                  label="总推荐数"
+                  value={planResult.statistics?.totalCount ?? '-'}
+                  accentColor="primary"
                 />
-              </Card>
+                <StatCard
+                  label="冲刺院校"
+                  value={planResult.statistics?.rushCount ?? '-'}
+                  subtitle="冲"
+                  accentColor="error"
+                />
+                <StatCard
+                  label="稳妥院校"
+                  value={planResult.statistics?.stableCount ?? '-'}
+                  subtitle="稳"
+                  accentColor="primary"
+                />
+                <StatCard
+                  label="保底院校"
+                  value={planResult.statistics?.safeCount ?? '-'}
+                  subtitle="保"
+                  accentColor="secondary"
+                />
+              </div>
+
+              {/* Action Bar */}
+              <div className="bg-surface-container-lowest rounded-xl mb-4">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-surface-container-low">
+                  <span className="font-headline font-semibold text-on-surface text-sm">
+                    志愿方案 ({planResult.plan?.items?.length ?? 0} 条)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSavePlan}
+                      className="h-8 px-4 rounded-lg bg-surface-container-high text-on-surface text-xs font-medium border-0 cursor-pointer flex items-center gap-1.5 transition-all duration-300 hover:bg-surface-container-highest"
+                    >
+                      <SaveOutlined />
+                      保存方案
+                    </button>
+                    <button
+                      onClick={handleExportPlan}
+                      className="h-8 px-4 rounded-lg bg-surface-container-high text-on-surface text-xs font-medium border-0 cursor-pointer flex items-center gap-1.5 transition-all duration-300 hover:bg-surface-container-highest"
+                    >
+                      <ExportOutlined />
+                      导出
+                    </button>
+                  </div>
+                </div>
+
+                {/* Recommendation Cards */}
+                <div className="divide-y divide-surface-container-low">
+                  {planResult.plan?.items?.map((item: any) => {
+                    const rate = item.prediction?.acceptRate || 0;
+                    const percent = Math.round(rate * 100);
+                    const strategy = item.strategy as string;
+                    const chipVariant = strategyVariant[strategy] || 'stable';
+
+                    return (
+                      <div
+                        key={item.order}
+                        className={`flex items-center gap-4 px-6 py-4 border-l-[3px] ${getAccentBorder(strategy)} transition-all duration-300 hover:bg-surface-container-low/50`}
+                      >
+                        {/* Left: Order + Strategy Badge */}
+                        <div className="flex flex-col items-center gap-1.5 w-12 shrink-0">
+                          <span className="text-xs text-on-surface-variant font-label">#{item.order}</span>
+                          <StatusChip variant={chipVariant} size="sm">
+                            {strategyLabel[strategy] || strategy}
+                          </StatusChip>
+                        </div>
+
+                        {/* Middle: University + Major + Historical Data */}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-on-surface text-sm truncate">
+                            {item.university?.name}
+                          </div>
+                          <div className="text-xs text-on-surface-variant mt-0.5 truncate">
+                            {item.major?.name}
+                            {item.university?.province && (
+                              <span className="ml-2 opacity-70">{item.university.province}</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-on-surface-variant mt-1">
+                            历年最低位次{' '}
+                            <span className="text-on-surface font-medium">
+                              {item.admission?.minRank ? item.admission.minRank.toLocaleString() : '-'}
+                            </span>
+                            <span className="mx-1.5 opacity-30">|</span>
+                            最低分{' '}
+                            <span className="text-on-surface font-medium">
+                              {item.admission?.minScore ?? '-'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Right: Acceptance Probability */}
+                        <div className="w-28 shrink-0 text-right">
+                          <div className="text-sm font-headline font-extrabold text-on-surface mb-1.5">
+                            {percent}%
+                          </div>
+                          <div className={`w-full h-1.5 rounded-full ${getProgressTrack(percent)} overflow-hidden`}>
+                            <div
+                              className={`h-full rounded-full ${getProgressColor(percent)} transition-all duration-500`}
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                          <div className="text-[10px] text-on-surface-variant mt-1 font-label">录取概率</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </>
           ) : (
-            <Card className="text-center" styles={{ body: { padding: '64px 24px' } }}>
-              <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                style={{ background: '#F1F5F9' }}
-              >
-                <BulbOutlined style={{ fontSize: 32, color: '#CBD5E1' }} />
+            /* Empty State */
+            <div className="bg-surface-container-lowest rounded-xl flex flex-col items-center justify-center py-24 px-6">
+              <div className="w-16 h-16 rounded-2xl bg-surface-container-high flex items-center justify-center mb-5">
+                <BulbOutlined className="text-3xl text-on-surface-variant opacity-40" />
               </div>
-              <h3 className="text-lg font-semibold mb-2" style={{ color: '#94A3B8' }}>
+              <h3 className="text-lg font-headline font-semibold text-on-surface-variant mb-2">
                 填写信息后生成志愿方案
               </h3>
-              <p className="text-sm" style={{ color: '#CBD5E1' }}>
+              <p className="text-sm text-on-surface-variant opacity-60 max-w-xs text-center">
                 系统将根据您的分数和位次，智能推荐冲稳保志愿
               </p>
-            </Card>
+            </div>
           )}
-        </Col>
-      </Row>
+        </div>
+      </div>
     </MainLayout>
   );
 }

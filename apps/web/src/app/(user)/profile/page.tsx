@@ -9,10 +9,10 @@ import {
   Button,
   Row,
   Col,
-  Typography,
   Tabs,
   message,
   Empty,
+  Spin,
 } from 'antd';
 import { SaveOutlined, UserOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -22,7 +22,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { PROVINCES } from '@volunteer-helper/shared';
 import Link from 'next/link';
 
-const { Title } = Typography;
 const { Option } = Select;
 
 export default function ProfilePage() {
@@ -65,12 +64,20 @@ export default function ProfilePage() {
   if (!isLoggedIn) {
     return (
       <MainLayout>
-        <Card className="text-center py-16">
+        <div className="rounded-xl bg-surface-container-lowest shadow-card text-center py-16">
           <Empty description="请先登录" />
           <Link href="/login">
             <Button type="primary" className="mt-4">去登录</Button>
           </Link>
-        </Card>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex justify-center py-20"><Spin size="large" /></div>
       </MainLayout>
     );
   }
@@ -240,20 +247,29 @@ export default function ProfilePage() {
 
   return (
     <MainLayout>
-      <Card
-        title={
-          <Title level={4} className="mb-0">
-            <UserOutlined className="mr-2" />
-            个人中心
-          </Title>
-        }
-        loading={isLoading}
-      >
-        <div className="mb-4">
-          <span className="text-gray-500 mr-4">用户名：{user?.username}</span>
-          {user?.email && <span className="text-gray-500 mr-4">邮箱：{user?.email}</span>}
-          {user?.phone && <span className="text-gray-500">手机：{user?.phone}</span>}
+      {/* Page Header */}
+      <div className="mb-6">
+        <h1 className="font-headline text-2xl font-bold text-on-surface m-0 flex items-center gap-2">
+          <UserOutlined className="text-primary" />
+          个人中心
+        </h1>
+      </div>
+
+      {/* User Info Summary */}
+      <div className="rounded-xl bg-surface-container-lowest shadow-card p-6 mb-4">
+        <div className="flex items-center gap-6 flex-wrap font-body text-sm">
+          <span className="text-on-surface-variant">用户名：<span className="text-on-surface font-medium">{user?.username}</span></span>
+          {user?.email && (
+            <span className="text-on-surface-variant">邮箱：<span className="text-on-surface font-medium">{user?.email}</span></span>
+          )}
+          {user?.phone && (
+            <span className="text-on-surface-variant">手机：<span className="text-on-surface font-medium">{user?.phone}</span></span>
+          )}
         </div>
+      </div>
+
+      {/* Tabs Card */}
+      <Card>
         <Tabs items={tabItems} />
       </Card>
     </MainLayout>
