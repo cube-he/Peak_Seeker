@@ -62,7 +62,7 @@ export default function SideNavLayout({ children, pageTitle, pageSubtitle }: Sid
             智愿家
           </span>
         </Link>
-        <p className="text-xs text-text-muted mt-1.5 ml-[46px]">智慧 · 志愿 · 专家</p>
+        <p className="text-xs text-text-muted mt-1.5 ml-[46px] hidden sm:block">智慧 · 志愿 · 专家</p>
       </div>
 
       {/* Main Nav Items */}
@@ -166,7 +166,7 @@ export default function SideNavLayout({ children, pageTitle, pageSubtitle }: Sid
       <div className="flex-1 lg:ml-[280px]">
         {/* Top Bar */}
         <header className="sticky top-0 z-40 h-16 bg-[rgba(250,249,245,0.92)] backdrop-blur-xl shadow-nav">
-          <div className="flex items-center justify-between px-6 lg:px-8 h-full">
+          <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 h-full">
             <div className="flex items-center gap-4">
               <button
                 className="lg:hidden p-2 hover:bg-surface-dim rounded-lg border-0 bg-transparent cursor-pointer"
@@ -202,7 +202,7 @@ export default function SideNavLayout({ children, pageTitle, pageSubtitle }: Sid
         </header>
 
         {/* Page Content */}
-        <main className="p-8 bg-bg">
+        <main className="p-4 sm:p-6 lg:p-8 pb-16 lg:pb-8 bg-bg">
           {children}
         </main>
       </div>
