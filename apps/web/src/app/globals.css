@@ -290,6 +290,13 @@ body {
 }
 
 /* ========================================
+   Safe Area Utility
+   ======================================== */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ========================================
    Reduced Motion
    ======================================== */
 @media (prefers-reduced-motion: reduce) {

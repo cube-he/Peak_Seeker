@@ -12,6 +12,7 @@ import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useState } from 'react';
 import FooterSection from './FooterSection';
+import MobileBottomNav from './MobileBottomNav';
 
 const navItems = [
   { href: '/', label: '首页' },
@@ -50,7 +51,7 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
     <div className="min-h-screen bg-bg flex flex-col">
       {/* Navbar */}
       <header className="sticky top-0 z-50 h-16 backdrop-blur-xl bg-[rgba(250,249,245,0.92)] shadow-nav">
-        <nav className="max-w-[1200px] mx-auto px-12 h-full flex items-center justify-between">
+        <nav className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 h-full flex items-center justify-between">
           {/* Brand */}
           <Link href="/" className="no-underline flex items-center gap-2.5">
             <span className="w-[34px] h-[34px] bg-gradient-to-br from-primary to-primary-light rounded-lg flex items-center justify-center text-white font-serif font-bold text-[17px]">
@@ -60,7 +61,7 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
               <span className="font-serif text-[19px] font-semibold text-text leading-tight">
                 智愿家
               </span>
-              <span className="text-[9px] text-text-muted tracking-[1.5px] leading-tight">
+              <span className="hidden sm:block text-[9px] text-text-muted tracking-[1.5px] leading-tight">
                 智慧 · 志愿 · 专家
               </span>
             </div>
@@ -147,7 +148,7 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
 
       {/* Content */}
       <main
-        className={`flex-1 ${noPadding ? '' : 'max-w-[1200px] mx-auto px-12 py-8 w-full'}`}
+        className={`flex-1 pb-16 lg:pb-0 ${noPadding ? '' : 'max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-8 w-full'}`}
         style={noPadding ? { maxWidth: maxWidth || undefined, margin: '0 auto', width: '100%' } : { maxWidth: maxWidth || '1200px' }}
       >
         {children}
@@ -155,6 +156,9 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
 
       {/* Footer */}
       <FooterSection />
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 }
