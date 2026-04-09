@@ -44,22 +44,15 @@ export default function RegisterPage() {
         { icon: '📈', title: '精准位次预测', description: '基于近十年千万级招录数据，采用非线性回归模型，预测误差率极低。' },
         { icon: '🏫', title: '名校资源库', description: '权威覆盖全国 2,800+ 所高校，深度解析双一流及 985/211 核心学科数据。' },
       ]}
-      socialProof="50,000+ 学子已加入"
+      socialProof="125万+ 家庭的共同选择"
     >
       <div>
-        <h2 className="font-headline font-extrabold text-2xl text-on-surface mb-2">
-          创建您的账户
+        <h2 className="font-serif text-[28px] font-semibold text-text">
+          加入智愿家
         </h2>
-        <p className="text-on-surface-variant text-sm mb-8">
-          开启您的精准升学规划之旅
+        <p className="text-[15px] text-text-tertiary mt-2 mb-8">
+          创建账号，开始你的升学规划
         </p>
-
-        {/* Progress Bar */}
-        <div className="flex gap-2 mb-8">
-          <div className="flex-1 h-1 rounded-full bg-primary" />
-          <div className="flex-1 h-1 rounded-full bg-surface-container-high" />
-          <div className="flex-1 h-1 rounded-full bg-surface-container-high" />
-        </div>
 
         <Form layout="vertical" onFinish={handleRegister} size="large">
           <Form.Item
@@ -70,8 +63,9 @@ export default function RegisterPage() {
             ]}
           >
             <Input
-              prefix={<UserOutlined className="text-outline" />}
+              prefix={<UserOutlined className="text-text-muted" />}
               placeholder="用户名"
+              className="bg-surface-dim"
             />
           </Form.Item>
 
@@ -83,8 +77,9 @@ export default function RegisterPage() {
             ]}
           >
             <Input.Password
-              prefix={<LockOutlined className="text-outline" />}
+              prefix={<LockOutlined className="text-text-muted" />}
               placeholder="设置密码"
+              className="bg-surface-dim"
             />
           </Form.Item>
 
@@ -104,15 +99,17 @@ export default function RegisterPage() {
             ]}
           >
             <Input.Password
-              prefix={<LockOutlined className="text-outline" />}
+              prefix={<LockOutlined className="text-text-muted" />}
               placeholder="确认密码"
+              className="bg-surface-dim"
             />
           </Form.Item>
 
           <Form.Item name="phone">
             <Input
-              prefix={<PhoneOutlined className="text-outline" />}
+              prefix={<PhoneOutlined className="text-text-muted" />}
               placeholder="手机号码（选填）"
+              className="bg-surface-dim"
             />
           </Form.Item>
 
@@ -120,7 +117,7 @@ export default function RegisterPage() {
             <Select
               placeholder="选择高考省份"
               allowClear
-              suffixIcon={<EnvironmentOutlined className="text-outline" />}
+              suffixIcon={<EnvironmentOutlined className="text-text-muted" />}
             >
               {PROVINCES.map((p) => (
                 <Option key={p.code} value={p.name}>
@@ -136,25 +133,19 @@ export default function RegisterPage() {
               htmlType="submit"
               loading={registerMutation.isPending}
               block
-              style={{ height: 48, fontWeight: 600, fontSize: 15 }}
+              className="bg-gradient-to-br from-primary to-primary-light text-white h-12 rounded text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 w-full"
             >
-              立即开启规划
+              创建账号
             </Button>
           </Form.Item>
         </Form>
 
         <div className="text-center">
-          <p className="text-on-surface-variant text-sm">
-            已有账户？{' '}
-            <Link href="/login" className="text-primary font-semibold no-underline hover:underline">
-              立即登录
+          <p className="text-sm text-text-tertiary">
+            已有账号？{' '}
+            <Link href="/login" className="text-primary-light hover:text-primary font-medium no-underline hover:underline">
+              去登录
             </Link>
-          </p>
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-surface-container-low text-center">
-          <p className="text-xs text-outline">
-            &copy; {new Date().getFullYear()} SUMMIT INTELLIGENCE FRAMEWORK. ALL RIGHTS RESERVED.
           </p>
         </div>
       </div>
