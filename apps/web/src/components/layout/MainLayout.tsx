@@ -56,9 +56,14 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
             <span className="w-[34px] h-[34px] bg-gradient-to-br from-primary to-primary-light rounded-lg flex items-center justify-center text-white font-serif font-bold text-[17px]">
               智
             </span>
-            <span className="font-serif text-[19px] font-semibold text-text">
-              智愿家
-            </span>
+            <div className="flex flex-col">
+              <span className="font-serif text-[19px] font-semibold text-text leading-tight">
+                智愿家
+              </span>
+              <span className="text-[9px] text-text-muted tracking-[1.5px] leading-tight">
+                智慧 · 志愿 · 专家
+              </span>
+            </div>
           </Link>
 
           {/* Desktop Nav */}
