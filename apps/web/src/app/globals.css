@@ -2,9 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Prevent horizontal scroll — clip at root, not body (preserves scrolling inside children) */
-html {
-  overflow-x: clip;
+/* Root overflow containment — prevent any child from causing horizontal scroll */
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Allow horizontal scroll inside explicitly marked containers */
+.overflow-x-auto {
+  overflow-x: auto !important;
 }
 
 :root {
@@ -111,9 +117,14 @@ body {
 }
 
 /* Tables */
+.ant-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .ant-table {
   border-radius: 10px !important;
-  overflow: hidden;
+  min-width: 0;
 }
 
 .ant-table-thead > tr > th {
@@ -229,6 +240,11 @@ body {
 }
 
 /* Pagination */
+.ant-pagination {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 .ant-pagination-item-active {
   background: var(--color-primary) !important;
   border-color: var(--color-primary) !important;
@@ -236,6 +252,12 @@ body {
 
 .ant-pagination-item-active a {
   color: #ffffff !important;
+}
+
+@media (max-width: 640px) {
+  .ant-pagination-options {
+    display: none !important;
+  }
 }
 
 /* Modal */
