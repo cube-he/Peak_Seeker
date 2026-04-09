@@ -100,12 +100,12 @@ export default function ProfilePage() {
         >
           <h3 className="font-serif text-base font-semibold text-text mb-4">基本资料</h3>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="realName" label="真实姓名">
                 <Input placeholder="请输入真实姓名" className="bg-surface-dim" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="gender" label="性别">
                 <Select placeholder="请选择" allowClear>
                   <Option value="男">男</Option>
@@ -145,7 +145,7 @@ export default function ProfilePage() {
         >
           <h3 className="font-serif text-base font-semibold text-text mb-4">考试详情</h3>
           <Row gutter={16}>
-            <Col span={8}>
+            <Col xs={24} sm={8}>
               <Form.Item name="province" label="所在省份">
                 <Select placeholder="选择省份">
                   {PROVINCES.map((p) => (
@@ -154,12 +154,12 @@ export default function ProfilePage() {
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={8}>
               <Form.Item name="examYear" label="高考年份">
                 <InputNumber min={2020} max={2030} className="w-full" />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={8}>
               <Form.Item name="batch" label="批次">
                 <Select placeholder="选择批次" allowClear>
                   <Option value="本科一批">本科一批</Option>
@@ -170,12 +170,12 @@ export default function ProfilePage() {
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="score" label="高考分数">
                 <InputNumber min={0} max={750} className="w-full" placeholder="输入分数" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="rank" label="省排名位次">
                 <InputNumber min={1} className="w-full" placeholder="输入位次" />
               </Form.Item>
@@ -254,14 +254,14 @@ export default function ProfilePage() {
     <MainLayout>
       {/* Page Header */}
       <div className="mb-6">
-        <h1 className="font-serif text-2xl font-semibold text-text m-0">
+        <h1 className="font-serif text-[22px] sm:text-2xl font-semibold text-text m-0">
           个人中心
         </h1>
       </div>
 
       {/* User Summary Card */}
-      <div className="bg-surface rounded-xl p-6 mb-6 shadow-card">
-        <div className="flex items-center gap-5">
+      <div className="bg-surface rounded-xl p-4 sm:p-6 mb-6 shadow-card">
+        <div className="flex flex-col sm:flex-row items-center gap-5">
           {/* Avatar */}
           <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center text-white font-serif text-2xl shrink-0">
             {avatarInitial}
@@ -281,7 +281,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Tabs Section */}
-      <div className="bg-surface rounded-xl p-6 shadow-card">
+      <div className="bg-surface rounded-xl p-4 sm:p-6 shadow-card">
         <Tabs items={tabItems} />
       </div>
     </MainLayout>

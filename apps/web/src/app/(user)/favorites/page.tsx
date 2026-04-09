@@ -30,8 +30,8 @@ function UniversityCard({ record, onRemove, removing }: { record: any; onRemove:
   ].filter(Boolean);
 
   return (
-    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-5">
-      <div className="flex items-start justify-between gap-4">
+    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-4 sm:p-5">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <Link
@@ -87,8 +87,8 @@ function MajorCard({ record, onRemove, removing }: { record: any; onRemove: (id:
   const major = record.major;
 
   return (
-    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-5">
-      <div className="flex items-start justify-between gap-4">
+    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-4 sm:p-5">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="font-serif font-semibold text-text text-base">
@@ -236,14 +236,14 @@ export default function FavoritesPage() {
     <MainLayout>
       {/* Page Header */}
       <div className="mb-6">
-        <h1 className="font-serif text-2xl font-semibold text-text m-0 flex items-center gap-2">
+        <h1 className="font-serif text-[22px] sm:text-2xl font-semibold text-text m-0 flex items-center gap-2">
           <StarFilled className="text-accent" />
           我的收藏
         </h1>
       </div>
 
       {/* Tabs Section */}
-      <div className="bg-surface rounded-xl p-6 shadow-card">
+      <div className="bg-surface rounded-xl p-4 sm:p-6 shadow-card">
         <Tabs
           items={tabItems}
           activeKey={activeTab}

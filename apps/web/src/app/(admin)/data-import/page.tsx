@@ -164,7 +164,7 @@ export default function DataImportPage() {
   if (!isLoggedIn || !isAdmin) {
     return (
       <div className="min-h-screen bg-bg">
-        <div className="mx-auto max-w-[800px] px-6 pt-20">
+        <div className="mx-auto max-w-[800px] px-4 sm:px-6 pt-20">
           <Result
             status="403"
             title="无权限访问"
@@ -838,7 +838,7 @@ export default function DataImportPage() {
 
   return (
     <div className="min-h-screen bg-bg">
-      <div className="mx-auto w-full max-w-[1600px] px-6 py-6">
+      <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 py-6">
         {/* Back link */}
         <div className="mb-6">
           <Link href="/">
@@ -850,7 +850,7 @@ export default function DataImportPage() {
 
         {/* Page header */}
         <div className="mb-6">
-          <h1 className="font-serif text-[28px] font-semibold text-text flex items-center gap-3 mb-2">
+          <h1 className="font-serif text-[22px] sm:text-[28px] font-semibold text-text flex items-center gap-3 mb-2">
             <DatabaseOutlined className="text-primary" /> 数据导入管理
           </h1>
           <p className="text-text-tertiary text-sm">
@@ -874,7 +874,7 @@ export default function DataImportPage() {
         )}
 
         {/* 步骤条 */}
-        <div className="mb-8 bg-surface rounded-lg shadow-card p-5">
+        <div className="mb-8 bg-surface rounded-lg shadow-card p-4 sm:p-5 overflow-x-auto">
           <Steps
             current={currentStep}
             items={[
@@ -889,7 +889,7 @@ export default function DataImportPage() {
         <Spin spinning={loading}>
           {/* Step 0: 输入 URL */}
           {currentStep === 0 && (
-            <div className="bg-surface rounded-lg shadow-card p-5">
+            <div className="bg-surface rounded-lg shadow-card p-4 sm:p-5">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 <div>
                   <p className="font-serif text-base font-semibold text-text mb-2">选择数据类型</p>
@@ -938,7 +938,7 @@ export default function DataImportPage() {
 
           {/* Step 1: 配置参数 + 图片预览 */}
           {currentStep === 1 && fetchResult && (
-            <div className="bg-surface rounded-lg shadow-card p-5">
+            <div className="bg-surface rounded-lg shadow-card p-4 sm:p-5">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 <div className="rounded-lg bg-safe-fixed border border-safe/10 px-4 py-3">
                   <div className="flex items-start gap-3">
@@ -1244,7 +1244,7 @@ export default function DataImportPage() {
 
           {/* Step 2: OCR 结果预览 */}
           {currentStep === 2 && ocrResult && (
-            <div className="bg-surface rounded-lg shadow-card p-5">
+            <div className="bg-surface rounded-lg shadow-card p-4 sm:p-5">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {dataType === 'score_segment' ? (
                   <>
@@ -1656,8 +1656,9 @@ export default function DataImportPage() {
 
         {/* 已导入数据统计 */}
         {stats.length > 0 && (
-          <div className="mt-6 bg-surface rounded-lg shadow-card p-5">
+          <div className="mt-6 bg-surface rounded-lg shadow-card p-4 sm:p-5">
             <h2 className="font-serif text-base font-semibold text-text mb-4">已导入数据</h2>
+            <div className="overflow-x-auto">
             <Table
               dataSource={stats}
               columns={statsColumns}
@@ -1665,6 +1666,7 @@ export default function DataImportPage() {
               size="small"
               pagination={false}
             />
+            </div>
           </div>
         )}
       </div>
