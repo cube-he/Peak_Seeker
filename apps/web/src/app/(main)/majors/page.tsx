@@ -108,10 +108,10 @@ function CategoryNav({
 // 专业卡片
 function MajorCard({ major }: { major: any }) {
   return (
-    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover p-4 sm:p-5 transition-all duration-300 cursor-pointer group">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover p-5 transition-all duration-300 cursor-pointer group">
+      <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+          <div className="flex items-center gap-2 mb-1.5">
             <Link
               href={`/majors/${major.id}`}
               className="font-serif text-base font-semibold text-text hover:text-primary truncate transition-colors"
@@ -125,7 +125,7 @@ function MajorCard({ major }: { major: any }) {
             )}
           </div>
 
-          <div className="flex items-center gap-3 text-sm text-text-tertiary flex-wrap">
+          <div className="flex items-center gap-3 text-sm text-text-tertiary">
             {major.code && <span>代码：{major.code}</span>}
             {major.category && (
               <span className="flex items-center gap-1">
@@ -140,7 +140,7 @@ function MajorCard({ major }: { major: any }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 sm:gap-5 shrink-0 sm:ml-4">
+        <div className="flex items-center gap-5 shrink-0 ml-4">
           {major.employmentRate != null && (
             <div className="text-center min-w-[64px]">
               <div className="text-xs mb-1 text-text-tertiary">就业率</div>
@@ -158,7 +158,7 @@ function MajorCard({ major }: { major: any }) {
           {major.avgSalary != null && (
             <div className="text-center">
               <div className="text-xs mb-0.5 text-text-tertiary">平均薪资</div>
-              <div className="font-serif text-base sm:text-lg font-semibold text-accent [font-variant-numeric:tabular-nums]">
+              <div className="font-serif text-lg font-semibold text-accent [font-variant-numeric:tabular-nums]">
                 ¥{major.avgSalary.toLocaleString()}
               </div>
             </div>
@@ -260,7 +260,7 @@ export default function MajorsPage() {
       </div>
 
       {/* 顶部：层次切换 + 搜索 */}
-      <div className="bg-surface rounded-xl shadow-card p-4 mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+      <div className="bg-surface rounded-xl shadow-card p-4 mb-5 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-1">
           <span
             className={`px-4 py-1.5 text-sm rounded-lg cursor-pointer transition-all duration-200 ${
@@ -300,43 +300,15 @@ export default function MajorsPage() {
             setFilters({ ...filters, keyword: e.target.value, page: 1 })
           }
           allowClear
-          className="!bg-surface-dim !rounded-lg w-full sm:w-[280px]"
+          style={{ width: 280 }}
+          className="!bg-surface-dim !rounded-lg"
         />
       </div>
 
-      {/* Mobile category pills (visible only on small screens) */}
-      <div className="lg:hidden flex overflow-x-auto gap-2 mb-4 pb-2 -mx-1 px-1">
-        <span
-          className={`shrink-0 px-3 py-1.5 text-sm rounded-full cursor-pointer transition-colors whitespace-nowrap ${
-            !filters.category
-              ? 'bg-primary-fixed text-primary font-medium'
-              : 'bg-surface text-text-tertiary hover:bg-surface-dim'
-          }`}
-          onClick={() => setFilters({ ...filters, category: undefined, page: 1 })}
-        >
-          全部
-        </span>
-        {CATEGORIES.map((cat) => (
-          <span
-            key={cat}
-            className={`shrink-0 px-3 py-1.5 text-sm rounded-full cursor-pointer transition-colors whitespace-nowrap ${
-              filters.category === cat
-                ? 'bg-primary-fixed text-primary font-medium'
-                : 'bg-surface text-text-tertiary hover:bg-surface-dim'
-            }`}
-            onClick={() =>
-              setFilters({ ...filters, category: filters.category === cat ? undefined : cat, page: 1 })
-            }
-          >
-            {cat}
-          </span>
-        ))}
-      </div>
-
       {/* 主内容区：左侧门类导航 + 中间列表 + 右侧热门 */}
-      <div className="flex flex-col lg:flex-row gap-5">
-        {/* 左侧门类导航 (hidden on mobile, shown on lg) */}
-        <div className="w-52 shrink-0 hidden lg:block">
+      <div className="flex gap-5">
+        {/* 左侧门类导航 */}
+        <div className="w-52 shrink-0 hidden md:block">
           <div className="sticky top-20">
             <CategoryNav
               categories={CATEGORIES}
