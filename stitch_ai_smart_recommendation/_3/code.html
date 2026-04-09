@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>登录 - Summit Intelligence 巅峰智选</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1A56DB",
+                        "surface": "#FFFFFF",
+                        "background": "#F8FAFC",
+                        "on-surface": "#1E293B",
+                        "on-surface-variant": "#64748B",
+                        "outline": "#CBD5E1",
+                        "outline-variant": "#E2E8F0",
+                        "surface-container": "#F1F5F9",
+                        "on-primary": "#FFFFFF"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope", "HarmonyOS Sans SC", "sans-serif"],
+                        "body": ["Inter", "HarmonyOS Sans SC", "sans-serif"],
+                        "label": ["Inter", "HarmonyOS Sans SC", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        @font-face {
+            font-family: 'HarmonyOS Sans SC';
+            src: url('https://lib.baomitu.com/fonts/harmonyos-sans/HarmonyOS_Sans_SC_Regular.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'HarmonyOS Sans SC';
+            src: url('https://lib.baomitu.com/fonts/harmonyos-sans/HarmonyOS_Sans_SC_Bold.woff2') format('woff2');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+        }
+        
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        body {
+            font-family: 'Inter', 'HarmonyOS Sans SC', sans-serif;
+        }
+
+        .academic-grid {
+            background-image: radial-gradient(#ffffff20 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-background font-body text-on-surface antialiased">
+<main class="min-h-screen flex flex-col md:flex-row">
+<!-- Left Visual Side: Brand Identity (The Informed Architect) -->
+<section class="hidden md:flex md:w-1/2 lg:w-[55%] bg-primary relative overflow-hidden items-center justify-center p-12 lg:p-20">
+<!-- Decorative Elements -->
+<div class="absolute inset-0 academic-grid opacity-30"></div>
+<div class="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-primary via-primary to-[#1e40af]"></div>
+<div class="relative z-10 max-w-2xl w-full">
+<!-- Brand Anchor -->
+<div class="mb-16">
+<h2 class="font-headline font-extrabold text-2xl tracking-tight text-white flex items-center gap-2">
+<span class="w-8 h-8 bg-white text-primary rounded flex items-center justify-center text-lg">S</span>
+                    Summit Intelligence
+                </h2>
+</div>
+<div class="space-y-8">
+<h1 class="font-headline text-5xl lg:text-7xl font-extrabold text-white leading-[1.1] tracking-tight">
+                    AI 驱动<br/>
+<span class="text-blue-200">智选未来</span>
+</h1>
+<p class="text-blue-50 text-xl max-w-lg font-medium leading-relaxed opacity-90">
+                    全球顶尖升学情报系统，为每一位追梦者构建精准的“数字作战室”。基于大数据深度洞察，重新定义名校申请策略。
+                </p>
+</div>
+<!-- AI Visualization Component -->
+<div class="mt-20">
+<div class="glass-card p-2 rounded-xl shadow-2xl">
+<div class="relative rounded-lg overflow-hidden bg-slate-900 aspect-video">
+<img alt="AI data visualization with holographic abstract nodes" class="w-full h-full object-cover opacity-80" data-alt="Futuristic holographic representation of data and intelligence" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBtiWwdS-QeCDy92hVzDtXRQJr4--xN9vGJ878iC7wX1xOTUcG67UcAb7-qCKRxtMD5_AOhiADw51kQeUP8no8oox3jRxoqJMb-3l2Hy4OUQS3o3SvNe1qF_VZLcU0Amlw2Jije01Zg64fpfz_WbnDdzjLONY4kJfejbYlBY3bKXmmo0_n10bM_J6EXLpUwiKBPIlI7L9Fzf5sxF0dWcDy_WnbrXBHJ0dQ3sqly5lMM0iciX-phOJnIJKt3zN4AHax79bnXoH6IxeIj"/>
+</div>
+</div>
+<div class="mt-8 flex items-center gap-4">
+<div class="flex -space-x-2">
+<img alt="Avatar" class="w-9 h-9 rounded-full border-2 border-primary bg-slate-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCFQDt5wlI1eQpnj8gbDWEDcuKCefQwKCzuXf9iiUAcFw4BVUto5TKRwYGiksvJpVWqg_uRsB_E1DzVakfxRPeC7ZXTQsTNyLzofZm1RNpW0ansv6Iy-4biLoZeERPzVxtvs5pJmFx34SvzwAInZN8HH0Sx9iBy-Q-IIsBHRFPHjgghToB8FFNZhEWI0YRGx0-V9u8wmr-OG1itUMBd-TmDMCsLIb9jUDC4h6YUJN6J1Bp1OU5vKczyFL-8EiCwpF3Dao-2tKGlq2SC"/>
+<img alt="Avatar" class="w-9 h-9 rounded-full border-2 border-primary bg-slate-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCSPctr9voz_X6t4aHOU3xtjKbXLqSZYB055tmnHZ-QruHXhiC0fYq3cibY_MUcjC9_9Pm-RpPLpLLMUprRGuKsYWrwOnfX2HbXwR0zZRE5NaIU53D4D7F-JD1DN6Jt-WZgH3ViLYVpIcTwqHZJsqlsGf6gtkDcjNjVk6QJ1BZP2w1ShCNChYwbHz7Mwz6YGR1axQDLKm95W9nM2I3-bC9QKtN0KfpQMpID1FN_SjO5Cgx6GsLtjc2bJQIlqnn37pOodVU-z0m6wBie"/>
+<img alt="Avatar" class="w-9 h-9 rounded-full border-2 border-primary bg-slate-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVugym30rrFgf9pQ1eRY2FLiY_iqtxXs12dxIDEzGwx751GBqBZ_rderlr9MrAzndqaxryxifuYoAHF1mXbHhrxfi9LtECd7IM3t5cY1KEImFupxNeHRZ-BvKgPzVoUfhwa5N1XajA2DE2V1JqG58CklAnOACR9rlVzsK6gLu3JPKZeZckNhM6Ct-cyk-_2tzmew-a2iXze473pOCXzzFN7qSak5IBamxsRZPL1644_Qkw0nBFHFTyeyjqzJ5DjTeqnFk5419mQHa_"/>
+</div>
+<span class="text-sm font-semibold text-blue-100/80 tracking-wide">10,000+ 学子已获得理想 Offer</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Side: Login Form -->
+<section class="flex-1 flex flex-col justify-center px-6 md:px-16 lg:px-24 xl:px-32 bg-surface py-12 relative overflow-y-auto">
+<!-- Mobile Logo -->
+<div class="md:hidden absolute top-8 left-8">
+<span class="font-headline font-extrabold text-xl tracking-tight text-primary">Summit Intelligence</span>
+</div>
+<div class="max-w-md w-full mx-auto space-y-12">
+<!-- Form Header -->
+<div class="space-y-3">
+<h3 class="font-headline text-3xl font-bold text-on-surface tracking-tight">欢迎回来</h3>
+<p class="text-on-surface-variant text-base font-medium">请登录您的学术情报账户以继续</p>
+</div>
+<!-- Login Form -->
+<form class="space-y-8">
+<div class="space-y-6">
+<!-- Phone Input -->
+<div class="space-y-2">
+<label class="block text-sm font-bold text-on-surface tracking-tight">手机号码</label>
+<div class="relative">
+<div class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">smartphone</span>
+</div>
+<input class="w-full pl-12 pr-4 py-4 bg-white border border-outline focus:border-primary focus:ring-1 focus:ring-primary rounded-lg transition-all text-on-surface font-medium placeholder:text-on-surface-variant/50" placeholder="请输入手机号" type="tel"/>
+</div>
+</div>
+<!-- Verification Code Input -->
+<div class="space-y-2">
+<label class="block text-sm font-bold text-on-surface tracking-tight">验证码</label>
+<div class="flex gap-3">
+<div class="relative flex-1">
+<div class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">shield</span>
+</div>
+<input class="w-full pl-12 pr-4 py-4 bg-white border border-outline focus:border-primary focus:ring-1 focus:ring-primary rounded-lg transition-all text-on-surface font-medium placeholder:text-on-surface-variant/50" placeholder="6位验证码" type="text"/>
+</div>
+<button class="px-6 bg-surface-container text-primary font-bold text-sm rounded-lg hover:bg-outline-variant transition-colors whitespace-nowrap border border-outline" type="button">
+                                获取验证码
+                            </button>
+</div>
+</div>
+</div>
+<!-- Agreement -->
+<div class="flex items-start gap-3">
+<input class="mt-1 w-4 h-4 rounded border-outline text-primary focus:ring-primary/20 cursor-pointer" id="agreement" type="checkbox"/>
+<label class="text-xs text-on-surface-variant leading-relaxed cursor-pointer select-none" for="agreement">
+                        我已阅读并同意 <a class="text-primary font-semibold hover:underline" href="#">《用户服务协议》</a> 与 <a class="text-primary font-semibold hover:underline" href="#">《隐私权政策》</a>
+</label>
+</div>
+<!-- Submit Button -->
+<button class="w-full bg-primary text-on-primary py-4 rounded-lg font-bold shadow-md hover:bg-[#1e40af] hover:shadow-lg transition-all flex items-center justify-center gap-2" type="submit">
+<span>一键登录</span>
+<span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</form>
+<!-- Divider -->
+<div class="relative flex items-center">
+<div class="flex-grow border-t border-outline-variant"></div>
+<span class="flex-shrink mx-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">其他方式登录</span>
+<div class="flex-grow border-t border-outline-variant"></div>
+</div>
+<!-- Third Party Socials -->
+<div class="grid grid-cols-2 gap-4">
+<button class="flex items-center justify-center gap-2 py-3.5 px-4 bg-white border border-outline rounded-lg hover:bg-surface-container transition-colors text-sm font-bold text-on-surface">
+<img alt="WeChat" class="w-5 h-5" data-alt="WeChat logo icon" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCeybeLhmN9oZzcrWyZO0A9QHhP8dnEFrymSx0AHhGrtqTd2M54-i6S9W-VeveZMpjWqj0hveIyP7ijDdu3I2uqN7B7njes5WBKo4EMnQCu6YG7ly3edExuAtBsNJ2fVmoBWSoSHT5j6eqAaL5TJqryuxbQsPpdWOJXrfFqS73kWgWiQYPqmVBsuPTTvAWWchbM9u9c6oDnEkIwMoBB0A82jRsFKeZ7WHpcE2PsTk1xzGjdDAzS4vhBN8BxoBpQ_mavzARF1tuZ4sGm"/>
+<span>微信登录</span>
+</button>
+<button class="flex items-center justify-center gap-2 py-3.5 px-4 bg-white border border-outline rounded-lg hover:bg-surface-container transition-colors text-sm font-bold text-on-surface">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">mail</span>
+<span>密码登录</span>
+</button>
+</div>
+<!-- Footer Link -->
+<p class="text-center text-sm text-on-surface-variant font-medium">
+                还没有账户？ <a class="text-primary font-bold hover:underline" href="#">立即注册</a>
+</p>
+</div>
+<!-- Subtle Brand Footer -->
+<footer class="absolute bottom-8 left-0 w-full flex justify-center px-8">
+<p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40">
+                © 2024 SUMMIT INTELLIGENCE FRAMEWORK. POWERED BY ARCHITECT AI.
+            </p>
+</footer>
+</section>
+</main>
+</body></html>
