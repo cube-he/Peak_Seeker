@@ -46,8 +46,8 @@ export default function UniversityDetailPage() {
   if (!university) {
     return (
       <MainLayout>
-        <div className="rounded-xl bg-surface-container-lowest shadow-card text-center py-16">
-          <p className="text-on-surface-variant">院校不存在</p>
+        <div className="rounded-xl bg-surface shadow-card text-center py-16">
+          <p className="text-text-tertiary">院校不存在</p>
         </div>
       </MainLayout>
     );
@@ -61,7 +61,7 @@ export default function UniversityDetailPage() {
       key: 'group',
       width: 100,
       render: (_: any, r: any) => (
-        <span className="text-on-surface-variant text-[13px]">{r.groupCode || '-'}</span>
+        <span className="text-text-tertiary text-[13px]">{r.groupCode || '-'}</span>
       ),
     },
     {
@@ -69,7 +69,7 @@ export default function UniversityDetailPage() {
       dataIndex: ['major', 'name'],
       key: 'majorName',
       render: (text: string, r: any) => (
-        <Link href={`/majors/${r.majorId}`} className="text-primary font-medium hover:text-primary-container">
+        <Link href={`/majors/${r.majorId}`} className="text-primary font-medium hover:text-primary-light">
           {text}
         </Link>
       ),
@@ -82,7 +82,7 @@ export default function UniversityDetailPage() {
       dataIndex: 'tuition',
       key: 'tuition',
       width: 90,
-      render: (v: number) => v ? <span className="text-on-surface">{v}</span> : '-',
+      render: (v: number) => v ? <span className="text-text">{v}</span> : '-',
     },
     {
       title: '学科评估',
@@ -90,7 +90,7 @@ export default function UniversityDetailPage() {
       key: 'disciplineEval',
       width: 90,
       render: (v: string) => v ? (
-        <span className="inline-block rounded-full bg-primary-fixed text-on-primary-fixed-variant text-xs font-medium px-3 py-0.5">{v}</span>
+        <span className="inline-block rounded-full bg-primary-fixed text-primary text-xs font-medium px-3 py-0.5">{v}</span>
       ) : '-',
     },
     {
@@ -99,7 +99,7 @@ export default function UniversityDetailPage() {
       key: 'isNationalFeature',
       width: 80,
       render: (v: boolean) => v ? (
-        <span className="inline-block rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant text-xs font-medium px-3 py-0.5">是</span>
+        <span className="inline-block rounded-full bg-accent-fixed text-accent text-xs font-medium px-3 py-0.5">是</span>
       ) : '-',
     },
     {
@@ -107,7 +107,7 @@ export default function UniversityDetailPage() {
       dataIndex: 'majorRanking',
       key: 'majorRanking',
       width: 90,
-      render: (v: string) => v ? <span className="font-medium text-on-surface">{v}</span> : '-',
+      render: (v: string) => v ? <span className="font-medium text-text">{v}</span> : '-',
     },
   ];
 
@@ -117,7 +117,7 @@ export default function UniversityDetailPage() {
       dataIndex: ['major', 'name'],
       key: 'majorName',
       render: (text: string, r: any) => (
-        <Link href={`/majors/${r.majorId}`} className="text-primary hover:text-primary-container">{text}</Link>
+        <Link href={`/majors/${r.majorId}`} className="text-primary hover:text-primary-light">{text}</Link>
       ),
     },
     { title: '年份', dataIndex: 'year', key: 'year', width: 70 },
@@ -126,14 +126,14 @@ export default function UniversityDetailPage() {
       dataIndex: 'majorMinScore',
       key: 'majorMinScore',
       width: 80,
-      render: (v: number) => v ? <span className="font-medium text-on-surface">{v}</span> : '-',
+      render: (v: number) => v ? <span className="font-medium text-text">{v}</span> : '-',
     },
     {
       title: '最低位次',
       dataIndex: 'majorMinRank',
       key: 'majorMinRank',
       width: 100,
-      render: (v: number) => v ? <span className="text-on-surface-variant">{v.toLocaleString()}</span> : '-',
+      render: (v: number) => v ? <span className="text-text-secondary">{v.toLocaleString()}</span> : '-',
     },
     {
       title: '录取人数',
@@ -167,7 +167,7 @@ export default function UniversityDetailPage() {
           )}
           {u.admissionGuide && (
             <Descriptions.Item label="招生章程" span={2}>
-              <div className="max-h-[200px] overflow-auto whitespace-pre-wrap text-[13px] font-body">{u.admissionGuide}</div>
+              <div className="max-h-[200px] overflow-auto whitespace-pre-wrap text-[13px]">{u.admissionGuide}</div>
             </Descriptions.Item>
           )}
         </Descriptions>
@@ -206,39 +206,39 @@ export default function UniversityDetailPage() {
   return (
     <MainLayout>
       {/* Breadcrumb */}
-      <nav className="mb-4 font-body text-sm">
-        <Link href="/universities" className="text-on-surface-variant hover:text-primary">院校库</Link>
-        <span className="text-outline mx-2">/</span>
-        <span className="text-on-surface">{u.name}</span>
+      <nav className="mb-4 text-sm">
+        <Link href="/universities" className="text-text-tertiary hover:text-primary">院校库</Link>
+        <span className="text-text-faint mx-2">/</span>
+        <span className="text-text">{u.name}</span>
       </nav>
 
       {/* Hero Header Card */}
-      <div className="rounded-xl bg-surface-container-lowest shadow-card p-6 md:p-8 mb-4">
+      <div className="rounded-xl bg-surface shadow-card p-6 md:p-8 mb-4">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="font-headline text-2xl font-bold text-on-surface m-0">{u.name}</h1>
+              <h1 className="font-serif text-[36px] font-semibold text-text m-0">{u.name}</h1>
               <Space size={4}>
                 {u.is985 && (
-                  <span className="inline-block rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant text-xs font-medium px-3 py-0.5">985</span>
+                  <span className="inline-block rounded-full bg-surface-dim text-text-secondary text-xs font-medium px-3 py-0.5">985</span>
                 )}
                 {u.is211 && (
-                  <span className="inline-block rounded-full bg-primary-fixed text-on-primary-fixed-variant text-xs font-medium px-3 py-0.5">211</span>
+                  <span className="inline-block rounded-full bg-surface-dim text-text-secondary text-xs font-medium px-3 py-0.5">211</span>
                 )}
                 {u.isDoubleFirstClass && (
-                  <span className="inline-block rounded-full bg-secondary-fixed text-on-secondary-fixed-variant text-xs font-medium px-3 py-0.5">双一流</span>
+                  <span className="inline-block rounded-full bg-surface-dim text-text-secondary text-xs font-medium px-3 py-0.5">双一流</span>
                 )}
               </Space>
             </div>
-            <div className="flex items-center gap-1 text-sm text-on-surface-variant font-body">
+            <div className="flex items-center gap-1 text-sm text-text-tertiary">
               <EnvironmentOutlined />
               {[u.province, u.city, u.type, u.level, u.runningNature].filter(Boolean).join(' · ')}
             </div>
           </div>
           {u.ranking && (
-            <div className="text-center px-4">
-              <div className="text-2xl font-bold text-primary font-headline">{u.ranking}</div>
-              <div className="text-xs text-outline font-body">全国排名</div>
+            <div className="bg-surface rounded-lg shadow-card p-5 border-l-[3px] border-l-accent text-center">
+              <div className="text-2xl font-bold text-primary font-serif">{u.ranking}</div>
+              <div className="text-xs text-text-muted">全国排名</div>
             </div>
           )}
         </div>
