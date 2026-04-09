@@ -136,12 +136,12 @@ export default function PlanPage() {
     return (
       <MainLayout>
         <div className="flex flex-col items-center justify-center py-32">
-          <div className="w-20 h-20 rounded-full bg-surface-container-high flex items-center justify-center mb-6">
-            <FolderOpenOutlined className="text-3xl text-on-surface-variant" />
+          <div className="w-20 h-20 rounded-full bg-surface-dim flex items-center justify-center mb-6">
+            <FolderOpenOutlined className="text-3xl text-text-muted" />
           </div>
-          <p className="text-on-surface-variant text-sm mb-6">请先登录后查看志愿方案</p>
+          <p className="text-text-secondary text-sm mb-6">请先登录后查看志愿方案</p>
           <Link href="/login">
-            <button className="h-12 px-8 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary font-semibold text-sm border-0 cursor-pointer transition-all duration-300 hover:shadow-glow-primary-lg active:scale-[0.98]">
+            <button className="h-12 px-8 rounded-lg bg-gradient-to-r from-primary to-accent text-white font-sans font-semibold text-sm border-0 cursor-pointer transition-all duration-300 shadow-glow-primary hover:shadow-glow-accent active:scale-[0.98]">
               去登录
             </button>
           </Link>
@@ -154,14 +154,14 @@ export default function PlanPage() {
     <MainLayout>
       {/* Page Header */}
       <div className="mb-8">
-        <h2 className="font-headline font-extrabold text-2xl tracking-tight text-primary">
+        <h2 className="font-serif font-semibold text-2xl tracking-tight text-text">
           我的志愿方案
         </h2>
-        <p className="font-body text-sm text-on-surface-variant">管理您的个性化升学策略</p>
+        <p className="font-sans text-sm text-text-muted mt-1">管理您的个性化升学策略</p>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
         <StatCard
           label="方案总数"
           value={String(totalPlans).padStart(2, '0')}
@@ -172,27 +172,27 @@ export default function PlanPage() {
           label="名校匹配"
           value={totalItems > 0 ? totalItems : '--'}
           subtitle="已覆盖 Top 5% 院校"
-          accentColor="tertiary"
+          accentColor="accent"
         />
         <StatCard
           label="AI 准确率"
           value="98.4%"
           subtitle="基于 2024 年官方验证数据"
-          accentColor="secondary"
+          accentColor="safe"
         />
       </div>
 
       {/* Section Title + Actions */}
-      <div className="flex justify-between items-end mb-8">
+      <div className="flex justify-between items-end mb-6">
         <div>
-          <h3 className="font-headline font-bold text-xl text-on-surface">方案工作台</h3>
-          <div className="h-1 w-12 bg-primary mt-2 rounded-full" />
+          <h3 className="font-serif font-semibold text-xl text-text">方案工作台</h3>
+          <div className="h-0.5 w-10 bg-primary mt-2 rounded-full" />
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-container-high font-body text-sm font-semibold text-on-surface hover:bg-surface-container-highest transition-colors border-0 cursor-pointer">
+          <button className="bg-surface text-text-secondary shadow-ring rounded px-4 py-2 text-sm font-medium hover:shadow-card-hover transition-all border-0 cursor-pointer flex items-center gap-1.5">
             <FilterOutlined /> 筛选
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-container-high font-body text-sm font-semibold text-on-surface hover:bg-surface-container-highest transition-colors border-0 cursor-pointer">
+          <button className="bg-surface text-text-secondary shadow-ring rounded px-4 py-2 text-sm font-medium hover:shadow-card-hover transition-all border-0 cursor-pointer flex items-center gap-1.5">
             <SortAscendingOutlined /> 排序
           </button>
         </div>
@@ -204,20 +204,19 @@ export default function PlanPage() {
           <Spin size="large" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Create New Plan Card */}
           <button
             onClick={() => setCreateModalOpen(true)}
-            className="relative group h-full min-h-[280px] rounded-2xl border-2 border-dashed border-outline-variant/40 bg-surface-container-low hover:bg-surface-container-high transition-all duration-300 flex flex-col items-center justify-center p-12 text-center cursor-pointer"
+            className="relative group h-full min-h-[260px] rounded-lg border-2 border-dashed border-border bg-surface hover:shadow-card transition-all duration-300 flex flex-col items-center justify-center p-10 text-center cursor-pointer"
           >
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <PlusOutlined className="text-primary text-2xl" />
+            <div className="w-14 h-14 rounded-full bg-primary-light flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+              <PlusOutlined className="text-primary text-xl" />
             </div>
-            <h4 className="font-headline font-bold text-lg text-primary">创建新策略方案</h4>
-            <p className="font-body text-sm text-on-surface-variant max-w-[240px] mt-2">
+            <h4 className="font-serif text-base font-semibold text-text">创建新策略方案</h4>
+            <p className="font-sans text-sm text-text-muted max-w-[240px] mt-2">
               启动 AI 引擎，根据您的分数匹配目标院校。
             </p>
-            <div className="absolute inset-0 bg-primary opacity-0 group-active:opacity-5 transition-opacity rounded-2xl" />
           </button>
 
           {/* Plan Cards */}
@@ -229,25 +228,25 @@ export default function PlanPage() {
             return (
               <div
                 key={plan.id}
-                className="bg-surface-container-lowest rounded-2xl p-8 border-l-[3px] border-l-primary group hover:-translate-y-1 transition-transform duration-300 relative"
+                className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-5 border-l-[3px] border-l-primary"
               >
                 {/* Card Header */}
-                <div className="flex justify-between items-start mb-6">
+                <div className="flex justify-between items-start mb-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-headline font-bold text-lg text-on-surface truncate">
+                      <h4 className="font-serif text-base font-semibold text-text truncate">
                         {plan.name}
                       </h4>
                       <StatusChip variant={statusChipVariant(plan.status)} size="sm">
                         {statusLabel(plan.status)}
                       </StatusChip>
                     </div>
-                    <div className="flex gap-4 mt-2 flex-wrap">
-                      <span className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
+                    <div className="flex gap-4 mt-1.5 flex-wrap">
+                      <span className="text-xs text-text-muted">
                         创建于: {new Date(plan.createdAt || plan.updatedAt).toLocaleDateString('zh-CN')}
                       </span>
                       {plan.province && (
-                        <span className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
+                        <span className="text-xs text-text-muted">
                           省份: {plan.province}
                         </span>
                       )}
@@ -255,39 +254,39 @@ export default function PlanPage() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      className="p-2 rounded-lg hover:bg-surface-container-high transition-colors border-0 bg-transparent cursor-pointer"
+                      className="p-2 rounded-lg hover:bg-surface-dim transition-colors border-0 bg-transparent cursor-pointer"
                       onClick={() => favoriteMutation.mutate(plan.id)}
                     >
                       {plan.isFavorite
-                        ? <StarFilled className="text-lg text-tertiary" />
-                        : <StarOutlined className="text-lg text-outline-variant" />
+                        ? <StarFilled className="text-lg text-accent" />
+                        : <StarOutlined className="text-lg text-text-faint" />
                       }
                     </button>
                     <Popconfirm
                       title="确定删除该方案？"
                       onConfirm={() => deleteMutation.mutate(plan.id)}
                     >
-                      <button className="p-2 rounded-lg hover:bg-error-container transition-colors border-0 bg-transparent cursor-pointer">
-                        <DeleteOutlined className="text-lg text-outline" />
+                      <button className="p-2 rounded-lg hover:bg-rush-fixed transition-colors border-0 bg-transparent cursor-pointer">
+                        <DeleteOutlined className="text-lg text-text-faint" />
                       </button>
                     </Popconfirm>
                   </div>
                 </div>
 
                 {/* Score + Update Row */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-surface-container-low p-4 rounded-xl">
-                    <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-1">志愿数</p>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="bg-bg p-3.5 rounded-lg">
+                    <p className="text-[11px] uppercase tracking-wider font-medium text-text-muted mb-1">志愿数</p>
                     <div className="flex items-end gap-2">
-                      <span className="font-headline font-extrabold text-2xl text-on-surface">{itemCount}</span>
-                      <span className="text-xs text-primary font-bold mb-1">{plan.year}</span>
+                      <span className="font-serif text-[28px] font-semibold [font-variant-numeric:tabular-nums] text-text">{itemCount}</span>
+                      <span className="text-xs text-primary font-medium mb-1">{plan.year}</span>
                     </div>
                   </div>
-                  <div className="bg-surface-container-low p-4 rounded-xl">
-                    <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-1">最后更新</p>
+                  <div className="bg-bg p-3.5 rounded-lg">
+                    <p className="text-[11px] uppercase tracking-wider font-medium text-text-muted mb-1">最后更新</p>
                     <div className="flex items-center gap-2 h-8">
-                      <ClockCircleOutlined className="text-sm text-on-surface-variant" />
-                      <span className="font-body text-sm font-medium text-on-surface">
+                      <ClockCircleOutlined className="text-sm text-text-muted" />
+                      <span className="text-sm text-text-secondary font-medium">
                         {timeAgo(plan.updatedAt)}
                       </span>
                     </div>
@@ -296,46 +295,46 @@ export default function PlanPage() {
 
                 {/* Strategy Distribution */}
                 {hasItems ? (
-                  <div className="space-y-3 mb-8">
-                    <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                  <div className="space-y-2.5 mb-6">
+                    <div className="flex justify-between items-center text-xs font-medium text-text-muted">
                       <span>策略分布</span>
-                      <span className="text-primary">{plan.strategy || '均衡风险模型'}</span>
+                      <span className="text-text-secondary">{plan.strategy || '均衡风险模型'}</span>
                     </div>
-                    <div className="flex h-3 w-full rounded-full overflow-hidden">
-                      <div className="h-full bg-error transition-all" style={{ width: `${dist.rush}%` }} title={`冲 (${dist.rush}%)`} />
-                      <div className="h-full bg-primary transition-all" style={{ width: `${dist.stable}%` }} title={`稳 (${dist.stable}%)`} />
-                      <div className="h-full bg-secondary transition-all" style={{ width: `${dist.safe}%` }} title={`保 (${dist.safe}%)`} />
+                    <div className="flex h-1.5 w-full rounded-full overflow-hidden bg-border">
+                      <div className="h-full bg-rush transition-all" style={{ width: `${dist.rush}%` }} title={`冲 (${dist.rush}%)`} />
+                      <div className="h-full bg-stable transition-all" style={{ width: `${dist.stable}%` }} title={`稳 (${dist.stable}%)`} />
+                      <div className="h-full bg-safe transition-all" style={{ width: `${dist.safe}%` }} title={`保 (${dist.safe}%)`} />
                     </div>
-                    <div className="flex gap-6 pt-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-error" />
-                        <span className="text-[10px] font-bold text-on-surface-variant uppercase">冲 {dist.rush}%</span>
+                    <div className="flex gap-5 pt-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-rush" />
+                        <span className="text-xs text-text-muted">冲 {dist.rush}%</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-primary" />
-                        <span className="text-[10px] font-bold text-on-surface-variant uppercase">稳 {dist.stable}%</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-stable" />
+                        <span className="text-xs text-text-muted">稳 {dist.stable}%</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-secondary" />
-                        <span className="text-[10px] font-bold text-on-surface-variant uppercase">保 {dist.safe}%</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-safe" />
+                        <span className="text-xs text-text-muted">保 {dist.safe}%</span>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="mb-8 py-4 text-center">
-                    <p className="text-xs text-on-surface-variant">暂无志愿，点击下方查看详情添加</p>
+                  <div className="mb-6 py-4 text-center">
+                    <p className="text-xs text-text-muted">暂无志愿，点击下方查看详情添加</p>
                   </div>
                 )}
 
                 {/* Action Buttons */}
                 <div className="flex gap-3">
                   <Link href={`/plan/${plan.id}`} className="flex-1">
-                    <button className="w-full py-2.5 rounded-lg bg-gradient-to-r from-primary to-primary-container text-on-primary font-body text-sm font-semibold shadow-md hover:shadow-lg transition-all border-0 cursor-pointer">
+                    <button className="w-full py-2 rounded-lg bg-gradient-to-r from-primary to-accent text-white font-sans text-sm font-medium shadow-card hover:shadow-card-hover transition-all border-0 cursor-pointer">
                       查看详情
                     </button>
                   </Link>
-                  <button className="px-4 py-2.5 rounded-lg bg-surface-container border border-outline-variant/20 hover:bg-surface-container-high transition-colors cursor-pointer">
-                    <DownloadOutlined className="text-lg text-on-surface-variant" />
+                  <button className="bg-surface text-text-secondary shadow-ring rounded px-4 py-2 text-sm font-medium hover:shadow-card-hover transition-all border-0 cursor-pointer">
+                    <DownloadOutlined className="text-lg" />
                   </button>
                 </div>
               </div>
@@ -344,14 +343,15 @@ export default function PlanPage() {
 
           {/* Empty state when no plans exist */}
           {planList.length === 0 && (
-            <div className="lg:col-span-1 flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center mb-4">
-                <FolderOpenOutlined className="text-2xl text-on-surface-variant" />
+            <div className="lg:col-span-1 text-center py-16">
+              <div className="w-16 h-16 rounded-full bg-surface-dim flex items-center justify-center mb-4 mx-auto">
+                <FolderOpenOutlined className="text-2xl text-text-muted" />
               </div>
-              <p className="text-sm text-on-surface-variant mb-4">暂无方案，去智能推荐页面生成一个吧</p>
+              <h4 className="font-serif text-xl text-text-muted mb-2">暂无方案</h4>
+              <p className="text-sm text-text-faint mb-6">去智能推荐页面生成一个吧</p>
               <Link href="/recommend">
-                <button className="h-11 px-6 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary font-semibold text-sm border-0 cursor-pointer flex items-center gap-2 transition-all duration-300 hover:shadow-glow-primary-lg active:scale-[0.98]">
-                  <RocketOutlined /> 开始智能推荐
+                <button className="h-11 px-6 rounded-lg bg-gradient-to-r from-primary to-accent text-white font-sans font-medium text-sm border-0 cursor-pointer inline-flex items-center gap-2 transition-all duration-300 shadow-glow-primary hover:shadow-glow-accent active:scale-[0.98]">
+                  <RocketOutlined /> 创建第一个方案
                 </button>
               </Link>
             </div>
@@ -363,7 +363,7 @@ export default function PlanPage() {
       {planList.length > 0 && (
         <div className="mt-10 flex justify-center">
           <Link href="/recommend">
-            <button className="h-12 px-8 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary font-semibold text-sm border-0 cursor-pointer flex items-center gap-2 transition-all duration-300 hover:shadow-glow-primary-lg active:scale-[0.98]">
+            <button className="h-12 px-8 rounded-lg bg-gradient-to-r from-primary to-accent text-white font-sans font-semibold text-sm border-0 cursor-pointer flex items-center gap-2 transition-all duration-300 shadow-glow-primary hover:shadow-glow-accent active:scale-[0.98]">
               <RocketOutlined /> 开始智能推荐
             </button>
           </Link>
@@ -372,7 +372,7 @@ export default function PlanPage() {
 
       {/* Create Plan Modal */}
       <Modal
-        title={<span className="font-headline font-semibold text-on-surface">创建志愿方案</span>}
+        title={<span className="font-serif font-semibold text-text">创建志愿方案</span>}
         open={createModalOpen}
         onCancel={() => setCreateModalOpen(false)}
         onOk={() => form.submit()}
