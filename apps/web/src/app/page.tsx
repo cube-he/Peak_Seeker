@@ -27,13 +27,13 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row gap-3 mt-8">
               <Link
                 href="/recommend"
-                className="w-full sm:w-auto text-center bg-gradient-to-br from-primary to-primary-light text-white px-7 py-3.5 rounded-[10px] text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 no-underline"
+                className="w-full sm:w-auto text-center bg-gradient-to-br from-primary to-primary-light text-white px-5 sm:px-7 py-3 sm:py-3.5 rounded-[10px] text-sm sm:text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 no-underline"
               >
                 开始智能推荐
               </Link>
               <Link
                 href="/universities"
-                className="w-full sm:w-auto text-center bg-surface text-text-secondary px-7 py-3.5 rounded-[10px] text-[15px] font-medium shadow-ring hover:shadow-card-hover transition-all duration-200 no-underline"
+                className="w-full sm:w-auto text-center bg-surface text-text-secondary px-5 sm:px-7 py-3 sm:py-3.5 rounded-[10px] text-sm sm:text-[15px] font-medium shadow-ring hover:shadow-card-hover transition-all duration-200 no-underline"
               >
                 浏览全国院校
               </Link>
@@ -233,7 +233,7 @@ export default function HomePage() {
         </p>
         <Link
           href="/recommend"
-          className="w-full sm:w-auto bg-accent text-white px-9 py-4 rounded-[10px] text-base font-medium shadow-glow-accent hover:-translate-y-px transition-all duration-200 mt-7 inline-block no-underline"
+          className="w-full sm:w-auto bg-accent text-white px-6 sm:px-9 py-3 sm:py-4 rounded-[10px] text-sm sm:text-base font-medium shadow-glow-accent hover:-translate-y-px transition-all duration-200 mt-7 inline-block no-underline"
         >
           免费开始使用
         </Link>
