@@ -51,7 +51,7 @@ function FilterRow({
   onChange: (val: string | undefined) => void;
 }) {
   return (
-    <div className="flex items-start py-3 bg-surface-dim rounded-lg mb-1.5 px-4 overflow-x-auto">
+    <div className="flex items-start py-3 bg-surface-dim rounded-lg mb-1.5 px-4">
       <span className="shrink-0 text-xs font-medium font-sans mr-4 mt-0.5 text-text-muted tracking-wide" style={{ width: 70 }}>
         {label}
       </span>
@@ -95,7 +95,7 @@ function FeatureFilterRow({
   const noneActive = !filters.is985 && !filters.is211 && !filters.isDoubleFirstClass;
 
   return (
-    <div className="flex items-start py-3 bg-surface-dim rounded-lg mb-1.5 px-4 overflow-x-auto">
+    <div className="flex items-start py-3 bg-surface-dim rounded-lg mb-1.5 px-4">
       <span className="shrink-0 text-xs font-medium font-sans mr-4 mt-0.5 text-text-muted tracking-wide" style={{ width: 70 }}>
         院校特色
       </span>
@@ -156,13 +156,13 @@ function UniversityCard({ uni }: { uni: any }) {
   const infoItems = [uni.province, uni.city, uni.type, uni.runningNature].filter(Boolean);
 
   return (
-    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-4 sm:p-5">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-5">
+      <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <div className="flex items-center gap-2 mb-2">
             <Link
               href={`/universities/${uni.id}`}
-              className="font-serif text-base sm:text-lg font-semibold text-text hover:text-primary truncate transition-colors"
+              className="font-serif text-lg font-semibold text-text hover:text-primary truncate transition-colors"
             >
               {uni.name}
             </Link>
@@ -197,7 +197,7 @@ function UniversityCard({ uni }: { uni: any }) {
         </div>
 
         {/* 右侧数据 */}
-        <div className="flex items-center gap-4 sm:gap-6 shrink-0 sm:ml-4">
+        <div className="flex items-center gap-6 shrink-0 ml-4">
           {uni.ranking && (
             <div className="text-center">
               <div className="text-xs mb-1 text-text-tertiary">
@@ -341,7 +341,7 @@ export default function UniversitiesPage() {
           onChange={(val) => setFilters({ ...filters, type: val, page: 1 })}
         />
         <FeatureFilterRow filters={filters} setFilters={setFilters} />
-        <div className="flex items-start py-3 bg-surface-dim rounded-lg px-4 overflow-x-auto">
+        <div className="flex items-start py-3 bg-surface-dim rounded-lg px-4">
           <span className="shrink-0 text-xs font-medium font-sans mr-4 mt-0.5 text-text-muted tracking-wide" style={{ width: 70 }}>
             院校性质
           </span>
@@ -390,15 +390,15 @@ export default function UniversitiesPage() {
       </div>
 
       {/* 主内容区：左侧列表 + 右侧热门 */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex gap-6">
         {/* 左侧列表 */}
         <div className="flex-1 min-w-0">
           {/* 搜索栏 + 结果数 */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center justify-between mb-4">
             <div className="text-sm text-text-tertiary">
               共 <span className="font-semibold text-primary">{total}</span> 所院校
             </div>
-            <div className="relative w-full sm:w-auto">
+            <div className="relative">
               <Input
                 placeholder="搜索院校名称"
                 prefix={<SearchOutlined className="text-text-muted" />}
@@ -407,7 +407,7 @@ export default function UniversitiesPage() {
                   setFilters({ ...filters, keyword: e.target.value, page: 1 })
                 }
                 allowClear
-                className="w-full sm:w-[260px]"
+                style={{ width: 260 }}
               />
             </div>
           </div>
