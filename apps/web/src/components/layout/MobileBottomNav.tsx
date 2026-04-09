@@ -3,16 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  HomeOutlined,
   BankOutlined,
+  ReadOutlined,
   StarOutlined,
   FileTextOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 
 const tabs = [
-  { href: '/', label: '首页', icon: HomeOutlined },
   { href: '/universities', label: '院校', icon: BankOutlined },
+  { href: '/majors', label: '专业', icon: ReadOutlined },
   { href: '/recommend', label: 'AI推荐', icon: StarOutlined, highlight: true },
   { href: '/plan', label: '方案', icon: FileTextOutlined },
   { href: '/profile', label: '我的', icon: UserOutlined },
@@ -21,10 +21,7 @@ const tabs = [
 export default function MobileBottomNav() {
   const pathname = usePathname();
 
-  const isActive = (href: string) => {
-    if (href === '/') return pathname === '/';
-    return pathname.startsWith(href);
-  };
+  const isActive = (href: string) => pathname.startsWith(href);
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[rgba(250,249,245,0.95)] backdrop-blur-xl border-t border-border safe-area-bottom">
