@@ -9,12 +9,17 @@ interface StatusChipProps {
 }
 
 const variantStyles: Record<ChipVariant, string> = {
-  rush: 'bg-error-container text-on-error-container',
-  stable: 'bg-primary-fixed text-on-primary-fixed',
-  safe: 'bg-secondary-fixed text-on-secondary-fixed',
-  elite: 'bg-tertiary-fixed text-on-tertiary-fixed-variant',
-  ai: 'bg-secondary-fixed text-on-secondary-fixed-variant',
-  default: 'bg-surface-container-high text-on-surface-variant',
+  rush: 'bg-rush-fixed text-rush',
+  stable: 'bg-stable-fixed text-stable',
+  safe: 'bg-safe-fixed text-safe',
+  elite: 'bg-elite-fixed text-elite',
+  ai: 'bg-stable-fixed text-stable',
+  default: 'bg-surface-dim text-text-secondary',
+};
+
+const sizeStyles: Record<NonNullable<StatusChipProps['size']>, string> = {
+  default: 'px-3.5 py-1 text-[13px]',
+  sm: 'px-2.5 py-0.5 text-[11px]',
 };
 
 export default function StatusChip({
@@ -22,13 +27,11 @@ export default function StatusChip({
   children,
   size = 'default',
 }: StatusChipProps) {
-  const sizeClasses = size === 'sm' ? 'text-xs px-2.5 py-0.5' : 'text-xs px-3 py-1';
-
   return (
     <span
       className={`
-        inline-flex items-center rounded-full font-semibold font-label
-        ${sizeClasses}
+        rounded-full font-sans font-medium inline-flex items-center
+        ${sizeStyles[size]}
         ${variantStyles[variant]}
       `}
     >
