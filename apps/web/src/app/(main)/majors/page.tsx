@@ -23,7 +23,7 @@ const CATEGORIES = [
 // 层次
 const LEVELS = ['本科', '专科'];
 
-// 门类图标色 — mapped to design-system tokens
+// 门类图标色
 const CATEGORY_COLORS: Record<string, string> = {
   '哲学': '#8B5CF6',
   '经济学': '#F59E0B',
@@ -39,13 +39,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   '艺术学': '#A855F7',
 };
 
-// Accent border colors for major cards (cycle through 3)
-const CARD_ACCENT_BORDERS = [
-  'border-l-primary',
-  'border-l-secondary',
-  'border-l-tertiary',
-];
-
 // 左侧门类导航
 function CategoryNav({
   categories,
@@ -59,22 +52,22 @@ function CategoryNav({
   counts: Record<string, number>;
 }) {
   return (
-    <div className="bg-surface-container-lowest rounded-xl shadow-card overflow-hidden">
-      <div className="px-4 py-3 font-headline font-semibold text-sm flex items-center gap-2 text-on-surface border-b border-surface-container">
+    <div className="bg-surface rounded-xl overflow-hidden">
+      <div className="px-4 py-3 font-serif font-semibold text-sm flex items-center gap-2 text-text border-b border-border">
         <BookOutlined className="text-primary" />
         学科门类
       </div>
       <div className="py-1">
         {/* "全部门类" item */}
         <div
-          className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-all duration-200 ${
+          className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${
             !selected
-              ? 'border-l-[3px] border-l-primary bg-primary-fixed/20 text-primary font-semibold'
-              : 'border-l-[3px] border-l-transparent text-on-surface-variant hover:bg-surface-container-low'
+              ? 'bg-primary-fixed text-primary font-medium rounded-lg mx-1'
+              : 'text-text-tertiary hover:bg-surface-dim rounded-lg mx-1'
           }`}
           onClick={() => onSelect(undefined)}
         >
-          <span className="text-sm font-body">全部门类</span>
+          <span className="text-sm">全部门类</span>
           <RightOutlined
             className={`text-[10px] transition-opacity ${!selected ? 'opacity-100 text-primary' : 'opacity-0'}`}
           />
@@ -83,10 +76,10 @@ function CategoryNav({
         {categories.map((cat) => (
           <div
             key={cat}
-            className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-all duration-200 ${
+            className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors rounded-lg mx-1 ${
               selected === cat
-                ? 'border-l-[3px] border-l-primary bg-primary-fixed/20 text-primary font-semibold'
-                : 'border-l-[3px] border-l-transparent text-on-surface-variant hover:bg-surface-container-low'
+                ? 'bg-primary-fixed text-primary font-medium'
+                : 'text-text-tertiary hover:bg-surface-dim'
             }`}
             onClick={() => onSelect(selected === cat ? undefined : cat)}
           >
@@ -95,11 +88,11 @@ function CategoryNav({
                 className="w-2 h-2 rounded-full shrink-0"
                 style={{ background: CATEGORY_COLORS[cat] || '#94A3B8' }}
               />
-              <span className="text-sm font-body">{cat}</span>
+              <span className="text-sm">{cat}</span>
             </div>
             <div className="flex items-center gap-2">
               {counts[cat] !== undefined && (
-                <span className="text-xs text-outline">{counts[cat]}</span>
+                <span className="text-xs text-text-muted">{counts[cat]}</span>
               )}
               {selected === cat && (
                 <RightOutlined className="text-[10px] text-primary" />
@@ -113,36 +106,26 @@ function CategoryNav({
 }
 
 // 专业卡片
-function MajorCard({ major, index }: { major: any; index: number }) {
-  const accentBorder = CARD_ACCENT_BORDERS[index % 3];
-
+function MajorCard({ major }: { major: any }) {
   return (
-    <div
-      className={`bg-surface-container-lowest rounded-xl shadow-card border-l-[3px] ${accentBorder} p-4 transition-all duration-300 hover:shadow-ambient hover:translate-y-[-4px] cursor-pointer group`}
-    >
+    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover p-5 transition-all duration-300 cursor-pointer group">
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
             <Link
               href={`/majors/${major.id}`}
-              className="text-sm font-headline font-semibold text-on-surface hover:text-primary hover:underline truncate transition-colors"
+              className="font-serif text-base font-semibold text-text hover:text-primary truncate transition-colors"
             >
               {major.name}
             </Link>
             {major.level && (
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] leading-[18px] font-medium ${
-                  major.level === '本科'
-                    ? 'bg-primary-fixed text-primary'
-                    : 'bg-secondary-fixed text-secondary'
-                }`}
-              >
+              <span className="bg-surface-dim text-text-secondary rounded-full px-2.5 py-0.5 text-xs">
                 {major.level}
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-outline font-body">
+          <div className="flex items-center gap-3 text-sm text-text-tertiary">
             {major.code && <span>代码：{major.code}</span>}
             {major.category && (
               <span className="flex items-center gap-1">
@@ -160,28 +143,22 @@ function MajorCard({ major, index }: { major: any; index: number }) {
         <div className="flex items-center gap-5 shrink-0 ml-4">
           {major.employmentRate != null && (
             <div className="text-center min-w-[64px]">
-              <div className="text-xs mb-1 text-on-surface-variant font-body">就业率</div>
-              <div className="w-full bg-surface-container rounded-full h-1.5 mb-1">
+              <div className="text-xs mb-1 text-text-tertiary">就业率</div>
+              <div className="w-full h-1.5 rounded-full bg-border mb-1">
                 <div
-                  className={`h-1.5 rounded-full transition-all ${
-                    major.employmentRate >= 90 ? 'bg-secondary' : 'bg-primary'
-                  }`}
+                  className="h-1.5 rounded-full bg-safe transition-all"
                   style={{ width: `${Math.min(major.employmentRate, 100)}%` }}
                 />
               </div>
-              <div
-                className={`text-xs font-semibold font-headline ${
-                  major.employmentRate >= 90 ? 'text-secondary' : 'text-on-surface'
-                }`}
-              >
+              <div className="text-xs font-semibold font-serif text-text">
                 {major.employmentRate}%
               </div>
             </div>
           )}
           {major.avgSalary != null && (
             <div className="text-center">
-              <div className="text-xs mb-0.5 text-on-surface-variant font-body">平均薪资</div>
-              <div className="text-sm font-headline font-extrabold text-primary">
+              <div className="text-xs mb-0.5 text-text-tertiary">平均薪资</div>
+              <div className="font-serif text-lg font-semibold text-accent [font-variant-numeric:tabular-nums]">
                 ¥{major.avgSalary.toLocaleString()}
               </div>
             </div>
@@ -202,10 +179,10 @@ function HotMajorsSidebar() {
   const list = data?.data || data || [];
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl shadow-card p-4">
+    <div className="bg-surface rounded-xl p-5">
       <div className="flex items-center gap-2 mb-4">
-        <FireOutlined className="text-tertiary text-base" />
-        <span className="font-headline font-semibold text-sm text-on-surface">
+        <FireOutlined className="text-accent text-base" />
+        <span className="font-serif font-semibold text-sm text-text">
           热门专业
         </span>
       </div>
@@ -219,19 +196,19 @@ function HotMajorsSidebar() {
             <span
               className={`w-5 h-5 rounded text-xs flex items-center justify-center font-semibold shrink-0 ${
                 idx < 3
-                  ? 'bg-primary text-on-primary'
-                  : 'bg-surface-container-low text-outline'
+                  ? 'bg-primary text-white'
+                  : 'bg-surface-dim text-text-muted'
               }`}
             >
               {idx + 1}
             </span>
-            <span className="text-sm font-body truncate text-on-surface-variant group-hover:text-primary transition-colors">
+            <span className="text-sm truncate text-text-tertiary group-hover:text-primary transition-colors">
               {m.name}
             </span>
           </Link>
         ))}
         {(!Array.isArray(list) || list.length === 0) && (
-          <div className="text-xs text-center py-4 text-outline font-body">
+          <div className="text-xs text-center py-4 text-text-muted">
             暂无数据
           </div>
         )}
@@ -274,22 +251,22 @@ export default function MajorsPage() {
     <MainLayout>
       {/* 页面标题 */}
       <div className="mb-5">
-        <h2 className="text-xl font-headline font-bold mb-1 text-on-surface">
+        <h2 className="text-xl font-serif font-bold mb-1 text-text">
           专业查询
         </h2>
-        <p className="text-sm font-body text-on-surface-variant">
+        <p className="text-sm text-text-secondary">
           查找各类专业信息，了解专业详情与就业前景
         </p>
       </div>
 
       {/* 顶部：层次切换 + 搜索 */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-card p-4 mb-5 flex items-center justify-between gap-4 flex-wrap">
+      <div className="bg-surface rounded-xl shadow-card p-4 mb-5 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-1">
           <span
-            className={`px-4 py-1.5 text-sm rounded-lg cursor-pointer transition-all duration-200 font-body ${
+            className={`px-4 py-1.5 text-sm rounded-lg cursor-pointer transition-all duration-200 ${
               !filters.level
-                ? 'bg-primary text-on-primary font-semibold'
-                : 'bg-transparent text-on-surface-variant hover:bg-surface-container-low'
+                ? 'bg-primary-fixed text-primary font-semibold'
+                : 'bg-transparent text-text-tertiary hover:bg-surface-dim'
             }`}
             onClick={() => setFilters({ ...filters, level: undefined, page: 1 })}
           >
@@ -298,10 +275,10 @@ export default function MajorsPage() {
           {LEVELS.map((lv) => (
             <span
               key={lv}
-              className={`px-4 py-1.5 text-sm rounded-lg cursor-pointer transition-all duration-200 font-body ${
+              className={`px-4 py-1.5 text-sm rounded-lg cursor-pointer transition-all duration-200 ${
                 filters.level === lv
-                  ? 'bg-primary text-on-primary font-semibold'
-                  : 'bg-transparent text-on-surface-variant hover:bg-surface-container-low'
+                  ? 'bg-primary-fixed text-primary font-semibold'
+                  : 'bg-transparent text-text-tertiary hover:bg-surface-dim'
               }`}
               onClick={() =>
                 setFilters({
@@ -317,14 +294,14 @@ export default function MajorsPage() {
         </div>
         <Input
           placeholder="搜索专业名称或代码"
-          prefix={<SearchOutlined className="text-outline" />}
+          prefix={<SearchOutlined className="text-text-muted" />}
           value={filters.keyword}
           onChange={(e) =>
             setFilters({ ...filters, keyword: e.target.value, page: 1 })
           }
           allowClear
           style={{ width: 280 }}
-          className="font-body"
+          className="!bg-surface-dim !rounded-lg"
         />
       </div>
 
@@ -348,9 +325,9 @@ export default function MajorsPage() {
         <div className="flex-1 min-w-0">
           {/* 结果统计 */}
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2 font-body">
+            <div className="flex items-center gap-2">
               <ReadOutlined className="text-primary text-sm" />
-              <span className="text-sm text-on-surface-variant">
+              <span className="text-sm text-text-secondary">
                 共{' '}
                 <span className="font-semibold text-primary">
                   {total}
@@ -359,7 +336,7 @@ export default function MajorsPage() {
               </span>
               {filters.category && (
                 <span
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs bg-primary-fixed text-primary cursor-pointer hover:bg-primary-fixed-dim transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs bg-primary-fixed text-primary cursor-pointer hover:bg-primary-light/10 transition-colors"
                   onClick={() =>
                     setFilters({ ...filters, category: undefined, page: 1 })
                   }
@@ -370,17 +347,13 @@ export default function MajorsPage() {
               )}
               {filters.level && (
                 <span
-                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs cursor-pointer transition-colors ${
-                    filters.level === '本科'
-                      ? 'bg-primary-fixed text-primary hover:bg-primary-fixed-dim'
-                      : 'bg-secondary-fixed text-secondary hover:bg-secondary-fixed-dim'
-                  }`}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs bg-primary-fixed text-primary cursor-pointer hover:bg-primary-light/10 transition-colors"
                   onClick={() =>
                     setFilters({ ...filters, level: undefined, page: 1 })
                   }
                 >
                   {filters.level}
-                  <span className="opacity-60 hover:opacity-100 ml-0.5">&times;</span>
+                  <span className="text-primary/60 hover:text-primary ml-0.5">&times;</span>
                 </span>
               )}
             </div>
@@ -393,12 +366,12 @@ export default function MajorsPage() {
             </div>
           ) : majors.length > 0 ? (
             <div className="space-y-3">
-              {majors.map((m: any, idx: number) => (
-                <MajorCard key={m.id} major={m} index={idx} />
+              {majors.map((m: any) => (
+                <MajorCard key={m.id} major={m} />
               ))}
             </div>
           ) : (
-            <div className="bg-surface-container-lowest rounded-xl shadow-card p-12">
+            <div className="bg-surface rounded-xl shadow-card p-12">
               <Empty description="暂无匹配的专业" />
             </div>
           )}
