@@ -18,33 +18,23 @@ export default function AuthLayout({
   socialProof,
 }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
+    <div className="min-h-screen flex flex-col lg:flex-row">
       {/* Left Brand Panel */}
-      <div className="hidden md:flex md:w-1/2 lg:w-[45%] bg-primary relative flex-col justify-between p-12 overflow-hidden">
-        {/* Grid Pattern Overlay */}
-        <div
-          className="absolute inset-0 opacity-10"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-          }}
-        />
-
+      <div className="hidden lg:flex lg:w-[45%] bg-primary relative flex-col justify-between p-12 overflow-hidden">
         <div className="relative z-10">
           {/* Brand Logo */}
           <Link href="/" className="no-underline">
-            <div className="flex items-center gap-3 mb-16">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                <span className="text-white font-bold text-lg">S</span>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                <span className="text-white font-serif font-bold text-lg">智</span>
               </div>
-              <span className="text-white font-headline font-bold text-lg">
-                Summit Intelligence
-              </span>
             </div>
+            <h2 className="font-serif text-3xl font-bold text-white mt-4">智愿家</h2>
+            <p className="text-white/70 text-[13px] tracking-[3px] mt-2">智慧 · 志愿 · 专家</p>
           </Link>
 
           {/* Hero Text */}
-          <h1 className="text-white font-headline font-extrabold text-4xl lg:text-5xl leading-tight mb-6">
+          <h1 className="text-white font-serif font-extrabold text-4xl lg:text-5xl leading-tight mt-12 mb-6">
             {heroTitle}
           </h1>
           <p className="text-white/70 text-base leading-relaxed max-w-md mb-12">
@@ -53,14 +43,12 @@ export default function AuthLayout({
 
           {/* Features */}
           {features && features.length > 0 && (
-            <div className="space-y-6">
+            <div className="space-y-5">
               {features.map((feat, i) => (
-                <div key={i} className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white/80 text-lg">{feat.icon}</span>
-                  </div>
+                <div key={i} className="flex items-start gap-3">
+                  <span className="text-white/60 text-sm mt-0.5">✓</span>
                   <div>
-                    <h3 className="text-white font-semibold text-sm mb-1">{feat.title}</h3>
+                    <h3 className="text-white/80 font-semibold text-sm mb-1">{feat.title}</h3>
                     <p className="text-white/60 text-xs leading-relaxed">{feat.description}</p>
                   </div>
                 </div>
@@ -70,16 +58,16 @@ export default function AuthLayout({
         </div>
 
         {/* Social Proof */}
-        {socialProof && (
-          <div className="relative z-10 mt-12">
-            <div className="h-px bg-white/20 mb-6" />
-            <p className="text-white/60 text-sm">{socialProof}</p>
-          </div>
-        )}
+        <div className="relative z-10 mt-8">
+          <div className="h-px bg-white/20 mb-6" />
+          <p className="text-white/50 text-sm">
+            {socialProof || '125万+ 家庭的共同选择'}
+          </p>
+        </div>
       </div>
 
       {/* Right Form Panel */}
-      <div className="flex-1 flex items-center justify-center p-6 md:p-12 bg-surface-container-lowest min-h-screen md:min-h-0">
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-surface min-h-screen lg:min-h-0">
         <div className="w-full max-w-md">
           {children}
         </div>

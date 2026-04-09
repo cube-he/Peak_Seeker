@@ -1,231 +1,242 @@
 'use client';
 
-import {
-  ArrowRightOutlined,
-  BankOutlined,
-  BookOutlined,
-  BulbOutlined,
-  FileTextOutlined,
-  SafetyCertificateOutlined,
-  DatabaseOutlined,
-} from '@ant-design/icons';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
-import GradientButton from '@/components/ui/GradientButton';
-
-const features = [
-  {
-    icon: <BankOutlined className="text-2xl" />,
-    title: '大学查询',
-    description: '覆盖 2,800+ 所高校的详尽数据库，综合多维度指标与横向评估。',
-    link: '/universities',
-    accent: 'border-l-primary',
-    iconBg: 'bg-primary-fixed',
-    iconColor: 'text-primary',
-  },
-  {
-    icon: <BookOutlined className="text-2xl" />,
-    title: '专业库查询',
-    description: '深入解析 1,200 多个学科的职业走向与就业前景及发展趋势。',
-    link: '/majors',
-    accent: 'border-l-secondary',
-    iconBg: 'bg-secondary-fixed',
-    iconColor: 'text-secondary',
-  },
-  {
-    icon: <BulbOutlined className="text-2xl" />,
-    title: '智能推荐',
-    description: '基于大数据结合历史录取概率分析，精准匹配冲稳保最佳方案。',
-    link: '/recommend',
-    accent: 'border-l-tertiary',
-    iconBg: 'bg-tertiary-fixed',
-    iconColor: 'text-tertiary',
-  },
-  {
-    icon: <FileTextOutlined className="text-2xl" />,
-    title: '志愿填报方案',
-    description: '针对不同科目的填报策略，自动生成冲稳保优化志愿组合，直逼录取率。',
-    link: '/plan',
-    accent: 'border-l-primary',
-    iconBg: 'bg-primary-fixed',
-    iconColor: 'text-primary',
-  },
-];
-
-const stats = [
-  { value: '2,800+', label: '覆盖院校' },
-  { value: '1,200+', label: '覆盖专业' },
-  { value: '15+', label: '历年数据研究' },
-  { value: '1,250万', label: '生成方案数' },
-];
-
-const methodology = [
-  {
-    num: '01',
-    title: '官方权威同步',
-    description: '直接与各省教育考试院及高校招生办同步，确保招生政策与志愿的实时性准确性。',
-  },
-  {
-    num: '02',
-    title: '长周期趋势分析',
-    description: '我们的 AI 模型综合考量人口结构变化及科技前沿趋势，涵盖 15 年维度的纵向预测。',
-  },
-  {
-    num: '03',
-    title: '隐私优先承诺',
-    description: '企业级加密技术确保学生个人信息在参与智能量化分析时，始终处于严格保护之中。',
-  },
-];
 
 export default function HomePage() {
   return (
     <MainLayout noPadding>
       {/* Hero Section */}
-      <section className="relative min-h-[600px] lg:min-h-[700px] flex items-center">
-        <div className="w-full max-w-[1920px] mx-auto px-6 lg:px-16 py-20">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-8 bg-secondary-fixed text-on-secondary-fixed-variant">
-              <BulbOutlined /> AI 驱动的升学智能引擎
+      <section className="max-w-[1200px] mx-auto px-12 pt-[100px] pb-20">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          {/* Left Column */}
+          <div>
+            <div className="inline-flex items-center gap-1.5 bg-surface border border-border rounded-full px-4 py-1.5 text-xs text-text-muted mb-6">
+              <span className="w-1.5 h-1.5 bg-safe rounded-full" />
+              2026 高考数据已更新
             </div>
-            <h1 className="font-headline font-extrabold text-5xl lg:text-7xl text-on-surface leading-tight mb-6">
-              睿智抉择，
+            <h1 className="font-serif text-[48px] font-bold leading-[1.12] tracking-tight text-text">
+              每一个志愿，
               <br />
-              <span className="text-primary">定鼎未来。</span>
+              都值得被<span className="text-primary">认真对待</span>。
             </h1>
-            <p className="text-on-surface-variant text-lg leading-relaxed mb-10 max-w-lg">
-              1000万+ 家庭的共同选择。依托顶尖 AI 数据建模，以 99.8% 的极高精度预判大学录取概率。
+            <p className="text-[17px] text-text-tertiary leading-relaxed mt-5 max-w-[480px]">
+              智愿家基于 15 年录取大数据与 AI
+              深度分析，为你构建专属的升学决策方案。不只是填表工具，更是你的升学智囊。
             </p>
-            <div className="flex flex-wrap gap-4">
-              <Link href="/recommend">
-                <GradientButton size="large" icon={<ArrowRightOutlined />}>
-                  开始智能推荐
-                </GradientButton>
+            <div className="flex gap-3 mt-8">
+              <Link
+                href="/recommend"
+                className="bg-gradient-to-br from-primary to-primary-light text-white px-7 py-3.5 rounded-[10px] text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 no-underline"
+              >
+                开始智能推荐
               </Link>
-              <Link href="/universities">
-                <GradientButton size="large" variant="secondary">
-                  浏览全国院校
-                </GradientButton>
+              <Link
+                href="/universities"
+                className="bg-surface text-text-secondary px-7 py-3.5 rounded-[10px] text-[15px] font-medium shadow-ring hover:shadow-card-hover transition-all duration-200 no-underline"
+              >
+                浏览全国院校
               </Link>
+            </div>
+          </div>
+
+          {/* Right Column — Floating Data Cards */}
+          <div className="relative h-[420px]">
+            {/* Card 1: Match Summary */}
+            <div className="absolute top-0 left-5 right-5 bg-surface rounded-xl p-5 shadow-card-hover border-l-[3px] border-primary">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-text-muted">为你匹配</div>
+                  <div className="font-serif text-[32px] font-semibold text-primary tabular-nums">
+                    48 所院校
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="bg-rush/10 text-rush text-xs font-medium px-2.5 py-1 rounded-full">
+                    冲12
+                  </span>
+                  <span className="bg-stable/10 text-stable text-xs font-medium px-2.5 py-1 rounded-full">
+                    稳20
+                  </span>
+                  <span className="bg-safe/10 text-safe text-xs font-medium px-2.5 py-1 rounded-full">
+                    保16
+                  </span>
+                </div>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden bg-border mt-4 flex">
+                <div className="bg-rush h-full" style={{ width: '25%' }} />
+                <div className="bg-stable h-full" style={{ width: '42%' }} />
+                <div className="bg-safe h-full" style={{ width: '33%' }} />
+              </div>
+            </div>
+
+            {/* Card 2: AI Accuracy */}
+            <div className="absolute top-[160px] left-0 w-[52%] bg-surface rounded-xl p-5 shadow-card-hover">
+              <div className="text-xs text-text-muted">AI 精准度</div>
+              <div className="font-serif text-[32px] font-semibold text-accent tabular-nums">
+                99.8%
+              </div>
+              <div className="text-xs text-text-muted mt-1">历年预测准确率</div>
+            </div>
+
+            {/* Card 3: Families Served */}
+            <div className="absolute top-[160px] right-0 w-[44%] bg-surface rounded-xl p-5 shadow-card-hover">
+              <div className="text-xs text-text-muted">已服务家庭</div>
+              <div className="font-serif text-[32px] font-semibold text-text tabular-nums">
+                125万+
+              </div>
+              <div className="text-xs text-text-muted mt-1">覆盖全国 31 省份</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Bento Grid */}
-      <section className="bg-surface-container-low py-20 lg:py-24">
-        <div className="max-w-[1920px] mx-auto px-6 lg:px-16">
-          <h2 className="font-headline font-extrabold text-2xl lg:text-3xl text-on-surface mb-3">
-            全维度决策情报站
+      {/* Trust Bar */}
+      <section className="max-w-[1200px] mx-auto px-12 pb-20 flex justify-center gap-12">
+        {[
+          { value: '2,800+', label: '全国院校' },
+          { value: '1,200+', label: '专业覆盖' },
+          { value: '15 年', label: '录取数据纵深' },
+          { value: '1,250 万', label: '已生成方案' },
+        ].map((item, i) => (
+          <div key={i}>
+            <div className="font-serif text-[28px] font-semibold text-primary tabular-nums text-center">
+              {item.value}
+            </div>
+            <div className="text-[13px] text-text-muted mt-1 text-center">
+              {item.label}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* Features Section */}
+      <section className="bg-surface-dim py-20 px-12">
+        <div className="max-w-[1200px] mx-auto">
+          <div className="text-[11px] uppercase tracking-[2px] text-accent font-medium">
+            核心能力
+          </div>
+          <h2 className="font-serif text-[36px] font-semibold text-text mt-2.5">
+            用数据照亮每一步抉择
           </h2>
-          <p className="text-on-surface-variant text-base mb-12 max-w-xl">
-            我们的核心引擎提供四层深度分析，确保您的学术路径在每一个环节都得到最优化。
+          <p className="text-[15px] text-text-tertiary mt-3 max-w-[560px] leading-relaxed">
+            从院校全景到专业深度、从智能推荐到趋势洞察，六大核心模块覆盖升学决策的每一个关键环节。
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {features.map((feat, i) => (
-              <Link key={i} href={feat.link} className="no-underline group">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mt-10">
+            {[
+              {
+                icon: '🏛',
+                bg: 'bg-primary-fixed',
+                title: '院校全景',
+                desc: '覆盖全国 2,800+ 院校，多维度数据横向对比，助你快速锁定目标。',
+              },
+              {
+                icon: '📊',
+                bg: 'bg-safe-fixed',
+                title: '专业洞察',
+                desc: '1,200+ 专业的就业前景、薪资走势与发展空间，看清每一条赛道。',
+              },
+              {
+                icon: '✨',
+                bg: 'bg-accent-fixed',
+                title: 'AI 智能推荐',
+                desc: '深度分析 15 年录取数据，结合你的分数与偏好，生成个性化冲/稳/保方案。',
+              },
+              {
+                icon: '📈',
+                bg: 'bg-rush-fixed',
+                title: '趋势分析',
+                desc: '录取分数线走势、报考热度变化、专业冷热轮动，数据驱动前瞻决策。',
+              },
+              {
+                icon: '📋',
+                bg: 'bg-stable-fixed',
+                title: '方案管理',
+                desc: '对比、调整、优化你的志愿组合，一键导出完整方案，填报时胸有成竹。',
+              },
+              {
+                icon: '🔒',
+                bg: 'bg-surface-dim',
+                title: '隐私优先',
+                desc: '企业级数据加密，你的个人信息与成绩数据始终在严格保护之中。',
+              },
+            ].map((card, i) => (
+              <div
+                key={i}
+                className="bg-surface rounded-xl p-7 hover:shadow-card-hover transition-shadow duration-300 cursor-pointer"
+              >
                 <div
-                  className={`bg-surface-container-lowest rounded-xl p-8 border-l-[3px] ${feat.accent} transition-all duration-300 hover:shadow-ambient hover:translate-y-[-4px] h-full`}
+                  className={`w-11 h-11 rounded-[10px] ${card.bg} flex items-center justify-center text-xl`}
                 >
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-6 ${feat.iconBg} ${feat.iconColor}`}>
-                    {feat.icon}
-                  </div>
-                  <h3 className="font-headline font-bold text-base text-on-surface mb-2">
-                    {feat.title}
-                  </h3>
-                  <p className="text-sm text-on-surface-variant leading-relaxed mb-4">
-                    {feat.description}
-                  </p>
-                  <span className="text-sm font-semibold text-primary inline-flex items-center gap-1 group-hover:gap-2 transition-all">
-                    了解更多 <ArrowRightOutlined className="text-xs" />
-                  </span>
+                  {card.icon}
                 </div>
-              </Link>
+                <h3 className="font-serif text-[19px] font-semibold text-text mt-4">
+                  {card.title}
+                </h3>
+                <p className="text-sm text-text-tertiary mt-2 leading-relaxed">
+                  {card.desc}
+                </p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Social Proof - Dark Card */}
-      <section className="py-20 lg:py-24">
-        <div className="max-w-[1920px] mx-auto px-6 lg:px-16">
-          <div className="bg-inverse-surface rounded-3xl p-10 lg:p-16">
-            <h3 className="font-headline font-extrabold text-xl text-inverse-on-surface mb-2">
-              卓越规模
-            </h3>
-            <p className="text-inverse-on-surface/60 text-sm mb-10 max-w-lg">
-              我们的数据引擎处理海量数据点，只为给每一个体带来确定性的答案。
-            </p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-              {stats.map((stat, i) => (
-                <div key={i}>
-                  <div className="text-3xl lg:text-4xl font-headline font-extrabold text-secondary-fixed mb-1">
-                    {stat.value}
-                  </div>
-                  <div className="text-xs uppercase tracking-widest text-inverse-on-surface/50 font-label">
-                    {stat.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* How It Works */}
+      <section className="max-w-[1200px] mx-auto px-12 py-20">
+        <div className="text-[11px] uppercase tracking-[2px] text-accent font-medium">
+          使用流程
         </div>
-      </section>
-
-      {/* Methodology Section */}
-      <section className="bg-surface-container-low py-20 lg:py-24">
-        <div className="max-w-[1920px] mx-auto px-6 lg:px-16">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            {/* Left - Image Placeholder */}
-            <div className="bg-surface-container rounded-3xl aspect-[4/3] flex items-center justify-center">
-              <div className="text-center">
-                <DatabaseOutlined className="text-5xl text-primary/20 mb-4" />
-                <p className="text-on-surface-variant text-sm">数据分析引擎</p>
+        <h2 className="font-serif text-[36px] font-semibold text-text mt-2.5">
+          三步，从迷茫到从容
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
+          {[
+            {
+              num: '01',
+              title: '输入你的成绩',
+              desc: '填写高考分数、位次、所在省份。支持一分一段表精确定位。',
+            },
+            {
+              num: '02',
+              title: 'AI 生成方案',
+              desc: '智能引擎分析 15 年录取数据，结合你的偏好生成个性化冲/稳/保方案。',
+            },
+            {
+              num: '03',
+              title: '优化并导出',
+              desc: '调整、比较、确认。导出最终方案，胸有成竹走进填报系统。',
+            },
+          ].map((step, i) => (
+            <div key={i}>
+              <div className="font-serif text-[64px] font-bold text-border leading-none">
+                {step.num}
               </div>
-            </div>
-
-            {/* Right - Steps */}
-            <div>
-              <h2 className="font-headline font-extrabold text-2xl lg:text-3xl text-on-surface mb-3">
-                数据来源与算法机制
-              </h2>
-              <p className="text-on-surface-variant text-base mb-10">
-                透明、可靠、可追溯的数据基础设施
+              <h3 className="font-serif text-xl font-semibold text-text mt-3">
+                {step.title}
+              </h3>
+              <p className="text-sm text-text-tertiary mt-2 leading-relaxed">
+                {step.desc}
               </p>
-              <div className="space-y-8">
-                {methodology.map((step, i) => (
-                  <div key={i} className="flex items-start gap-5">
-                    <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-headline font-bold text-sm">{step.num}</span>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-on-surface mb-1">{step.title}</h4>
-                      <p className="text-sm text-on-surface-variant leading-relaxed">{step.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
-          </div>
+          ))}
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 lg:py-24">
-        <div className="max-w-[1920px] mx-auto px-6 lg:px-16">
-          <div className="bg-surface-container-low rounded-3xl p-10 lg:p-16 text-center">
-            <h2 className="font-headline font-extrabold text-3xl lg:text-4xl text-on-surface mb-4">
-              开启你的卓越未来
-            </h2>
-            <p className="text-on-surface-variant text-base mb-8 max-w-md mx-auto">
-              加入万千学子的行列，通过巅峰智选锁定理想学府的入场券。
-            </p>
-            <Link href="/recommend">
-              <GradientButton size="large" icon={<SafetyCertificateOutlined />}>
-                开启成功方案
-              </GradientButton>
-            </Link>
-          </div>
-        </div>
+      <section className="bg-primary py-20 px-12 text-center">
+        <h2 className="font-serif text-[36px] font-semibold text-white">
+          你的未来，值得一份好方案
+        </h2>
+        <p className="text-base text-white/70 mt-3">
+          智愿家与你一起，认真对待每一个选择
+        </p>
+        <Link
+          href="/recommend"
+          className="bg-accent text-white px-9 py-4 rounded-[10px] text-base font-medium shadow-glow-accent hover:-translate-y-px transition-all duration-200 mt-7 inline-block no-underline"
+        >
+          免费开始使用
+        </Link>
       </section>
     </MainLayout>
   );

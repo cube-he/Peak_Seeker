@@ -2,14 +2,12 @@
 
 import { useState } from 'react';
 import {
-  Card,
-  Table,
-  Button,
-  Space,
   Tabs,
   Empty,
   Popconfirm,
+  Spin,
   message,
+  Button,
 } from 'antd';
 import {
   StarFilled,
@@ -22,6 +20,138 @@ import MainLayout from '@/components/layout/MainLayout';
 import { favoriteService } from '@/services/favorite';
 import { useAuthStore } from '@/stores/authStore';
 import Link from 'next/link';
+
+function UniversityCard({ record, onRemove, removing }: { record: any; onRemove: (id: number) => void; removing: boolean }) {
+  const uni = record.university;
+  const tags = [
+    uni?.is985 && '985',
+    uni?.is211 && '211',
+    uni?.isDoubleFirstClass && '双一流',
+  ].filter(Boolean);
+
+  return (
+    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <Link
+              href={`/universities/${uni?.id}`}
+              className="font-serif font-semibold text-text hover:text-primary truncate transition-colors text-base"
+            >
+              {uni?.name}
+            </Link>
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="bg-surface-dim text-text-secondary rounded-full px-2.5 py-0.5 text-xs font-medium"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+
+          <div className="text-sm text-text-tertiary mb-2">
+            {uni?.province} · {uni?.type}
+          </div>
+
+          {record.notes && (
+            <div className="text-sm text-text-tertiary">
+              备注：{record.notes}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="text-xs text-text-muted [font-variant-numeric:tabular-nums]">
+            {new Date(record.createdAt).toLocaleDateString('zh-CN')}
+          </div>
+          <Popconfirm
+            title="确定取消收藏？"
+            onConfirm={() => onRemove(record.id)}
+          >
+            <button
+              className="text-rush text-sm hover:text-rush/80 transition-colors border-0 bg-transparent cursor-pointer inline-flex items-center gap-1 px-0"
+              disabled={removing}
+            >
+              <DeleteOutlined />
+              取消收藏
+            </button>
+          </Popconfirm>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MajorCard({ record, onRemove, removing }: { record: any; onRemove: (id: number) => void; removing: boolean }) {
+  const major = record.major;
+
+  return (
+    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="font-serif font-semibold text-text text-base">
+              {major?.name}
+            </span>
+            {major?.level && (
+              <span className="bg-surface-dim text-text-secondary rounded-full px-2.5 py-0.5 text-xs font-medium">
+                {major?.level}
+              </span>
+            )}
+          </div>
+
+          <div className="text-sm text-text-tertiary mb-2">
+            {major?.category} · {major?.discipline}
+          </div>
+
+          {record.notes && (
+            <div className="text-sm text-text-tertiary">
+              备注：{record.notes}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="text-xs text-text-muted [font-variant-numeric:tabular-nums]">
+            {new Date(record.createdAt).toLocaleDateString('zh-CN')}
+          </div>
+          <Popconfirm
+            title="确定取消收藏？"
+            onConfirm={() => onRemove(record.id)}
+          >
+            <button
+              className="text-rush text-sm hover:text-rush/80 transition-colors border-0 bg-transparent cursor-pointer inline-flex items-center gap-1 px-0"
+              disabled={removing}
+            >
+              <DeleteOutlined />
+              取消收藏
+            </button>
+          </Popconfirm>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyFavorites({ type }: { type: 'university' | 'major' }) {
+  const label = type === 'university' ? '院校' : '专业';
+  const href = type === 'university' ? '/universities' : '/majors';
+
+  return (
+    <div className="text-center py-12">
+      <StarFilled className="text-4xl text-text-faint mb-4" />
+      <div className="font-serif text-lg text-text-muted mb-4">
+        暂无收藏的{label}
+      </div>
+      <Link href={href}>
+        <button className="bg-gradient-to-br from-primary to-primary-light text-white px-6 py-2.5 rounded font-medium border-0 cursor-pointer transition-all duration-200 hover:-translate-y-px shadow-glow-accent text-sm">
+          去发现{label}
+        </button>
+      </Link>
+    </div>
+  );
+}
 
 export default function FavoritesPage() {
   const { isLoggedIn } = useAuthStore();
@@ -45,7 +175,7 @@ export default function FavoritesPage() {
   if (!isLoggedIn) {
     return (
       <MainLayout>
-        <div className="rounded-xl bg-surface-container-lowest shadow-card text-center py-16">
+        <div className="bg-surface rounded-xl text-center py-16 shadow-card">
           <Empty description="请先登录后查看收藏" />
           <Link href="/login">
             <Button type="primary" className="mt-4">去登录</Button>
@@ -55,163 +185,49 @@ export default function FavoritesPage() {
     );
   }
 
-  const universityColumns = [
-    {
-      title: '院校名称',
-      key: 'name',
-      render: (_: any, record: any) => (
-        <div>
-          <Link href={`/universities/${record.university?.id}`} className="font-medium text-primary hover:text-primary-container">
-            {record.university?.name}
-          </Link>
-          <div className="text-xs text-on-surface-variant mt-0.5">
-            {record.university?.province} · {record.university?.type}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: '标签',
-      key: 'tags',
-      width: 200,
-      render: (_: any, record: any) => (
-        <Space size={4} wrap>
-          {record.university?.is985 && (
-            <span className="inline-block rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant text-xs font-medium px-3 py-0.5">985</span>
-          )}
-          {record.university?.is211 && (
-            <span className="inline-block rounded-full bg-primary-fixed text-on-primary-fixed-variant text-xs font-medium px-3 py-0.5">211</span>
-          )}
-          {record.university?.isDoubleFirstClass && (
-            <span className="inline-block rounded-full bg-secondary-fixed text-on-secondary-fixed-variant text-xs font-medium px-3 py-0.5">双一流</span>
-          )}
-        </Space>
-      ),
-    },
-    {
-      title: '收藏时间',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 160,
-      render: (text: string) => (
-        <span className="text-on-surface-variant text-sm">{new Date(text).toLocaleString('zh-CN')}</span>
-      ),
-    },
-    {
-      title: '备注',
-      dataIndex: 'notes',
-      key: 'notes',
-      width: 150,
-      render: (text: string) => (
-        <span className="text-on-surface-variant">{text || '-'}</span>
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 80,
-      render: (_: any, record: any) => (
-        <Popconfirm
-          title="确定取消收藏？"
-          onConfirm={() => removeMutation.mutate(record.id)}
-        >
-          <Button type="text" danger icon={<DeleteOutlined />} />
-        </Popconfirm>
-      ),
-    },
-  ];
-
-  const majorColumns = [
-    {
-      title: '专业名称',
-      key: 'name',
-      render: (_: any, record: any) => (
-        <div>
-          <span className="font-medium text-on-surface">{record.major?.name}</span>
-          <div className="text-xs text-on-surface-variant mt-0.5">
-            {record.major?.category} · {record.major?.discipline}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: '层次',
-      key: 'level',
-      width: 80,
-      render: (_: any, record: any) => (
-        <span className={`inline-block rounded-full text-xs font-medium px-3 py-0.5 ${
-          record.major?.level === '本科'
-            ? 'bg-primary-fixed text-on-primary-fixed-variant'
-            : 'bg-secondary-fixed text-on-secondary-fixed-variant'
-        }`}>
-          {record.major?.level || '-'}
-        </span>
-      ),
-    },
-    {
-      title: '收藏时间',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 160,
-      render: (text: string) => (
-        <span className="text-on-surface-variant text-sm">{new Date(text).toLocaleString('zh-CN')}</span>
-      ),
-    },
-    {
-      title: '备注',
-      dataIndex: 'notes',
-      key: 'notes',
-      width: 150,
-      render: (text: string) => (
-        <span className="text-on-surface-variant">{text || '-'}</span>
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 80,
-      render: (_: any, record: any) => (
-        <Popconfirm
-          title="确定取消收藏？"
-          onConfirm={() => removeMutation.mutate(record.id)}
-        >
-          <Button type="text" danger icon={<DeleteOutlined />} />
-        </Popconfirm>
-      ),
-    },
-  ];
-
   const tabItems = [
     {
       key: 'university',
       label: (
-        <span><BankOutlined className="mr-1" />收藏院校</span>
+        <span><BankOutlined className="mr-1" />收藏的院校</span>
       ),
-      children: (
-        <Table
-          columns={universityColumns}
-          dataSource={favorites}
-          rowKey="id"
-          loading={isLoading}
-          pagination={{ pageSize: 10 }}
-          locale={{ emptyText: <Empty description="暂无收藏的院校" /> }}
-        />
+      children: isLoading ? (
+        <div className="flex justify-center py-12"><Spin size="large" /></div>
+      ) : !favorites || favorites.length === 0 ? (
+        <EmptyFavorites type="university" />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {favorites.map((record: any) => (
+            <UniversityCard
+              key={record.id}
+              record={record}
+              onRemove={(id) => removeMutation.mutate(id)}
+              removing={removeMutation.isPending}
+            />
+          ))}
+        </div>
       ),
     },
     {
       key: 'major',
       label: (
-        <span><BookOutlined className="mr-1" />收藏专业</span>
+        <span><BookOutlined className="mr-1" />收藏的专业</span>
       ),
-      children: (
-        <Table
-          columns={majorColumns}
-          dataSource={favorites}
-          rowKey="id"
-          loading={isLoading}
-          pagination={{ pageSize: 10 }}
-          locale={{ emptyText: <Empty description="暂无收藏的专业" /> }}
-        />
+      children: isLoading ? (
+        <div className="flex justify-center py-12"><Spin size="large" /></div>
+      ) : !favorites || favorites.length === 0 ? (
+        <EmptyFavorites type="major" />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {favorites.map((record: any) => (
+            <MajorCard
+              key={record.id}
+              record={record}
+              onRemove={(id) => removeMutation.mutate(id)}
+              removing={removeMutation.isPending}
+            />
+          ))}
+        </div>
       ),
     },
   ];
@@ -220,20 +236,20 @@ export default function FavoritesPage() {
     <MainLayout>
       {/* Page Header */}
       <div className="mb-6">
-        <h1 className="font-headline text-2xl font-bold text-on-surface m-0 flex items-center gap-2">
-          <StarFilled className="text-tertiary" />
+        <h1 className="font-serif text-2xl font-semibold text-text m-0 flex items-center gap-2">
+          <StarFilled className="text-accent" />
           我的收藏
         </h1>
       </div>
 
-      {/* Tabs Card */}
-      <Card>
+      {/* Tabs Section */}
+      <div className="bg-surface rounded-xl p-6 shadow-card">
         <Tabs
           items={tabItems}
           activeKey={activeTab}
           onChange={(key) => setActiveTab(key as 'university' | 'major')}
         />
-      </Card>
+      </div>
     </MainLayout>
   );
 }
