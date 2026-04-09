@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Input, Spin, Pagination, Empty } from 'antd';
+import { Alert, Input, Spin, Pagination, Empty } from 'antd';
 import {
   SearchOutlined,
   EnvironmentOutlined,
@@ -51,7 +51,7 @@ function FilterRow({
   onChange: (val: string | undefined) => void;
 }) {
   return (
-    <div className="flex items-start py-3 bg-surface-dim rounded-lg mb-1.5 px-4">
+    <div className="flex items-start py-3 bg-surface-dim rounded-lg mb-1.5 px-3 sm:px-4 overflow-hidden">
       <span className="shrink-0 text-xs font-medium font-sans mr-4 mt-0.5 text-text-muted tracking-wide" style={{ width: 70 }}>
         {label}
       </span>
@@ -95,7 +95,7 @@ function FeatureFilterRow({
   const noneActive = !filters.is985 && !filters.is211 && !filters.isDoubleFirstClass;
 
   return (
-    <div className="flex items-start py-3 bg-surface-dim rounded-lg mb-1.5 px-4">
+    <div className="flex items-start py-3 bg-surface-dim rounded-lg mb-1.5 px-3 sm:px-4 overflow-hidden">
       <span className="shrink-0 text-xs font-medium font-sans mr-4 mt-0.5 text-text-muted tracking-wide" style={{ width: 70 }}>
         院校特色
       </span>
@@ -156,10 +156,10 @@ function UniversityCard({ uni }: { uni: any }) {
   const infoItems = [uni.province, uni.city, uni.type, uni.runningNature].filter(Boolean);
 
   return (
-    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-5">
-      <div className="flex items-start justify-between">
+    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-4 sm:p-5 overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <Link
               href={`/universities/${uni.id}`}
               className="font-serif text-lg font-semibold text-text hover:text-primary truncate transition-colors"
@@ -197,7 +197,7 @@ function UniversityCard({ uni }: { uni: any }) {
         </div>
 
         {/* 右侧数据 */}
-        <div className="flex items-center gap-6 shrink-0 ml-4">
+        <div className="flex items-center gap-4 sm:gap-6 shrink-0 sm:ml-4">
           {uni.ranking && (
             <div className="text-center">
               <div className="text-xs mb-1 text-text-tertiary">
@@ -287,7 +287,7 @@ export default function UniversitiesPage() {
     pageSize: 15,
   });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['universities', filters],
     queryFn: () => universityService.getList(filters),
   });
@@ -394,7 +394,7 @@ export default function UniversitiesPage() {
         {/* 左侧列表 */}
         <div className="flex-1 min-w-0">
           {/* 搜索栏 + 结果数 */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div className="text-sm text-text-tertiary">
               共 <span className="font-semibold text-primary">{total}</span> 所院校
             </div>
@@ -407,7 +407,7 @@ export default function UniversitiesPage() {
                   setFilters({ ...filters, keyword: e.target.value, page: 1 })
                 }
                 allowClear
-                style={{ width: 260 }}
+                className="w-full sm:w-[260px]"
               />
             </div>
           </div>
@@ -416,6 +416,15 @@ export default function UniversitiesPage() {
           {isLoading ? (
             <div className="flex justify-center py-20">
               <Spin size="large" />
+            </div>
+          ) : isError ? (
+            <div className="bg-surface rounded-xl shadow-card p-6 sm:p-8">
+              <Alert
+                type="error"
+                showIcon
+                message="院校数据加载失败"
+                description={(error as Error)?.message || '请稍后刷新重试，或检查当前站点网络配置。'}
+              />
             </div>
           ) : universities.length > 0 ? (
             <div className="space-y-3">

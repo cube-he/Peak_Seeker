@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Input, Spin, Empty, Pagination } from 'antd';
+import { Alert, Input, Spin, Empty, Pagination } from 'antd';
 import {
   SearchOutlined,
   BookOutlined,
@@ -108,10 +108,10 @@ function CategoryNav({
 // 专业卡片
 function MajorCard({ major }: { major: any }) {
   return (
-    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover p-5 transition-all duration-300 cursor-pointer group">
-      <div className="flex items-start justify-between">
+    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover p-4 sm:p-5 transition-all duration-300 cursor-pointer group overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <Link
               href={`/majors/${major.id}`}
               className="font-serif text-base font-semibold text-text hover:text-primary truncate transition-colors"
@@ -125,7 +125,7 @@ function MajorCard({ major }: { major: any }) {
             )}
           </div>
 
-          <div className="flex items-center gap-3 text-sm text-text-tertiary">
+          <div className="flex items-center gap-3 text-sm text-text-tertiary flex-wrap">
             {major.code && <span>代码：{major.code}</span>}
             {major.category && (
               <span className="flex items-center gap-1">
@@ -140,7 +140,7 @@ function MajorCard({ major }: { major: any }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-5 shrink-0 ml-4">
+        <div className="flex items-center gap-4 sm:gap-5 shrink-0 sm:ml-4">
           {major.employmentRate != null && (
             <div className="text-center min-w-[64px]">
               <div className="text-xs mb-1 text-text-tertiary">就业率</div>
@@ -223,7 +223,7 @@ export default function MajorsPage() {
     pageSize: 20,
   });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['majors', filters],
     queryFn: () => majorService.getList(filters),
   });
@@ -300,8 +300,7 @@ export default function MajorsPage() {
             setFilters({ ...filters, keyword: e.target.value, page: 1 })
           }
           allowClear
-          style={{ width: 280 }}
-          className="!bg-surface-dim !rounded-lg"
+          className="!bg-surface-dim !rounded-lg w-full sm:w-[280px]"
         />
       </div>
 
@@ -363,6 +362,15 @@ export default function MajorsPage() {
           {isLoading ? (
             <div className="flex justify-center py-20">
               <Spin size="large" />
+            </div>
+          ) : isError ? (
+            <div className="bg-surface rounded-xl shadow-card p-6 sm:p-8">
+              <Alert
+                type="error"
+                showIcon
+                message="专业数据加载失败"
+                description={(error as Error)?.message || '请稍后刷新重试，或检查当前站点网络配置。'}
+              />
             </div>
           ) : majors.length > 0 ? (
             <div className="space-y-3">

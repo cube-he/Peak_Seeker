@@ -2,15 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Root overflow containment — prevent any child from causing horizontal scroll */
-html, body {
-  overflow-x: hidden;
-  width: 100%;
-}
-
-/* Allow horizontal scroll inside explicitly marked containers */
-.overflow-x-auto {
-  overflow-x: auto !important;
+/* All containers respect their boundaries */
+*, *::before, *::after {
+  min-width: 0;
 }
 
 :root {
@@ -34,6 +28,8 @@ html, body {
   --color-stable: #2c5282;
   --color-safe: #276749;
   --color-elite: #b8860b;
+  --font-serif: 'Crimson Pro', Georgia, 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-sans: Inter, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-heading: 'Crimson Pro', Georgia, 'Noto Serif SC', serif;
   --font-body: Inter, 'Noto Sans SC', sans-serif;
 }
