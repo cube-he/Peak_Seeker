@@ -213,12 +213,12 @@ export default function UniversityDetailPage() {
       </nav>
 
       {/* Hero Header Card */}
-      <div className="rounded-xl bg-surface shadow-card p-6 md:p-8 mb-4">
-        <div className="flex items-start justify-between flex-wrap gap-4">
+      <div className="rounded-xl bg-surface shadow-card p-4 sm:p-6 lg:p-8 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="font-serif text-[36px] font-semibold text-text m-0">{u.name}</h1>
-              <Space size={4}>
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <h1 className="font-serif text-[24px] sm:text-[30px] lg:text-[36px] font-semibold text-text m-0">{u.name}</h1>
+              <Space size={4} wrap>
                 {u.is985 && (
                   <span className="inline-block rounded-full bg-surface-dim text-text-secondary text-xs font-medium px-3 py-0.5">985</span>
                 )}
@@ -246,7 +246,7 @@ export default function UniversityDetailPage() {
 
       {/* Tabs Card */}
       <Card styles={{ body: { padding: '4px 0 0' } }}>
-        <Tabs items={tabItems} style={{ padding: '0 24px' }} />
+        <Tabs items={tabItems} className="px-3 sm:px-6" />
       </Card>
     </MainLayout>
   );

@@ -147,7 +147,7 @@ export default function RecommendPage() {
       {/* Main Layout: Sidebar + Content */}
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* Left Sidebar */}
-        <div className="w-full lg:w-80 xl:w-96 shrink-0 sticky top-24">
+        <div className="w-full lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-24">
           <div className="bg-surface rounded-xl p-6">
             <h3 className="font-serif text-lg font-semibold text-text mb-5">参数设置</h3>
 
@@ -279,7 +279,7 @@ export default function RecommendPage() {
               </div>
 
               {/* Stat Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 <StatCard
                   label="总推荐数"
                   value={planResult.statistics?.totalCount ?? '-'}
@@ -328,21 +328,21 @@ export default function RecommendPage() {
               )}
 
               {/* Action Bar */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
                 <span className="font-serif font-semibold text-text text-sm">
                   志愿方案 ({planResult.plan?.items?.length ?? 0} 条)
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2 w-full sm:w-auto">
                   <button
                     onClick={handleSavePlan}
-                    className="bg-accent text-white px-6 py-2.5 rounded font-medium border-0 cursor-pointer flex items-center gap-1.5 shadow-glow-accent transition-all duration-300 hover:opacity-90 text-sm"
+                    className="bg-accent text-white px-6 py-2.5 rounded font-medium border-0 cursor-pointer flex items-center justify-center gap-1.5 shadow-glow-accent transition-all duration-300 hover:opacity-90 text-sm"
                   >
                     <SaveOutlined />
                     保存方案
                   </button>
                   <button
                     onClick={handleExportPlan}
-                    className="bg-surface text-text-secondary px-6 py-2.5 rounded font-medium border-0 cursor-pointer flex items-center gap-1.5 shadow-ring transition-all duration-300 hover:text-text text-sm"
+                    className="bg-surface text-text-secondary px-6 py-2.5 rounded font-medium border-0 cursor-pointer flex items-center justify-center gap-1.5 shadow-ring transition-all duration-300 hover:text-text text-sm"
                   >
                     <ExportOutlined />
                     导出 CSV
@@ -363,9 +363,9 @@ export default function RecommendPage() {
                       key={item.order}
                       className="bg-surface rounded-lg shadow-card p-5 hover:shadow-card-hover transition-shadow duration-300"
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                         {/* Left: Order + Strategy Badge */}
-                        <div className="flex flex-col items-center gap-1.5 w-12 shrink-0">
+                        <div className="flex sm:flex-col items-center gap-2 sm:gap-1.5 sm:w-12 shrink-0">
                           <span className="text-xs text-text-faint font-medium">#{item.order}</span>
                           <StatusChip variant={chipVariant} size="sm">
                             {strategyLabel[strategy] || strategy}
@@ -374,7 +374,7 @@ export default function RecommendPage() {
 
                         {/* Middle: University + Major + Historical Data */}
                         <div className="flex-1 min-w-0">
-                          <div className="font-serif text-lg font-semibold text-text truncate">
+                          <div className="font-serif text-base sm:text-lg font-semibold text-text truncate">
                             {item.university?.name}
                           </div>
                           <div className="text-[13px] text-text-tertiary mt-0.5 truncate">
@@ -397,17 +397,17 @@ export default function RecommendPage() {
                         </div>
 
                         {/* Right: Acceptance Probability */}
-                        <div className="w-28 shrink-0 text-right">
-                          <div className={`font-serif text-[28px] font-semibold [font-variant-numeric:tabular-nums] ${getProbabilityColor(percent)}`}>
+                        <div className="w-full sm:w-28 shrink-0 sm:text-right flex sm:block items-center gap-3">
+                          <div className={`font-serif text-xl sm:text-[28px] font-semibold [font-variant-numeric:tabular-nums] ${getProbabilityColor(percent)}`}>
                             {percent}%
                           </div>
-                          <div className="w-full h-1 rounded-full bg-border overflow-hidden mt-1">
+                          <div className="flex-1 sm:w-full h-1 rounded-full bg-border overflow-hidden sm:mt-1">
                             <div
                               className={`h-full rounded-full ${getProgressColor(percent)} transition-all duration-500`}
                               style={{ width: `${percent}%` }}
                             />
                           </div>
-                          <div className="text-[10px] text-text-faint mt-1">录取概率</div>
+                          <div className="text-[10px] text-text-faint sm:mt-1 shrink-0">录取概率</div>
                         </div>
                       </div>
                     </div>
