@@ -141,7 +141,7 @@ export default function PlanPage() {
           </div>
           <p className="text-text-secondary text-sm mb-6">请先登录后查看志愿方案</p>
           <Link href="/login">
-            <button className="h-12 px-8 rounded-lg bg-gradient-to-r from-primary to-accent text-white font-sans font-semibold text-sm border-0 cursor-pointer transition-all duration-300 shadow-glow-primary hover:shadow-glow-accent active:scale-[0.98]">
+            <button className="h-12 px-4 sm:px-8 rounded-lg bg-gradient-to-r from-primary to-accent text-white font-sans font-semibold text-sm border-0 cursor-pointer transition-all duration-300 shadow-glow-primary hover:shadow-glow-accent active:scale-[0.98]">
               去登录
             </button>
           </Link>
@@ -363,7 +363,7 @@ export default function PlanPage() {
       {planList.length > 0 && (
         <div className="mt-10 flex justify-center">
           <Link href="/recommend">
-            <button className="h-12 px-8 rounded-lg bg-gradient-to-r from-primary to-accent text-white font-sans font-semibold text-sm border-0 cursor-pointer flex items-center gap-2 transition-all duration-300 shadow-glow-primary hover:shadow-glow-accent active:scale-[0.98]">
+            <button className="h-12 px-4 sm:px-8 rounded-lg bg-gradient-to-r from-primary to-accent text-white font-sans font-semibold text-sm border-0 cursor-pointer flex items-center gap-2 transition-all duration-300 shadow-glow-primary hover:shadow-glow-accent active:scale-[0.98]">
               <RocketOutlined /> 开始智能推荐
             </button>
           </Link>

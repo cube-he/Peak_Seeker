@@ -31,7 +31,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN" className={`${crimsonPro.variable} ${inter.variable}`}>
-      <body className={`${crimsonPro.variable} ${inter.variable} font-sans antialiased`}>
+      <body className={`${crimsonPro.variable} ${inter.variable} font-sans antialiased w-full max-w-[100vw]`}>
         <QueryProvider>
           <AntdRegistry>
             <ConfigProvider

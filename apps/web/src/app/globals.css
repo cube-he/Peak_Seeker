@@ -2,10 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Prevent horizontal scroll on mobile */
-html, body {
-  overflow-x: hidden;
-  max-width: 100vw;
+/* Prevent horizontal scroll — clip at root, not body (preserves scrolling inside children) */
+html {
+  overflow-x: clip;
 }
 
 :root {
