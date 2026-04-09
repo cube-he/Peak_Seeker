@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Card,
   Form,
   Input,
   Select,
@@ -14,7 +13,7 @@ import {
   Empty,
   Spin,
 } from 'antd';
-import { SaveOutlined, UserOutlined } from '@ant-design/icons';
+import { SaveOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
 import { userService } from '@/services/user';
@@ -64,7 +63,7 @@ export default function ProfilePage() {
   if (!isLoggedIn) {
     return (
       <MainLayout>
-        <div className="rounded-xl bg-surface-container-lowest shadow-card text-center py-16">
+        <div className="bg-surface rounded-xl text-center py-16 shadow-card">
           <Empty description="请先登录" />
           <Link href="/login">
             <Button type="primary" className="mt-4">去登录</Button>
@@ -82,6 +81,9 @@ export default function ProfilePage() {
     );
   }
 
+  // Derive initials for avatar
+  const avatarInitial = user?.realName?.[0] || user?.username?.[0] || '?';
+
   const tabItems = [
     {
       key: 'profile',
@@ -96,10 +98,11 @@ export default function ProfilePage() {
             gender: user?.gender,
           }}
         >
+          <h3 className="font-serif text-base font-semibold text-text mb-4">基本资料</h3>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="realName" label="真实姓名">
-                <Input placeholder="请输入真实姓名" />
+                <Input placeholder="请输入真实姓名" className="bg-surface-dim" />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -112,14 +115,14 @@ export default function ProfilePage() {
             </Col>
           </Row>
           <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              icon={<SaveOutlined />}
-              loading={updateProfile.isPending}
+            <button
+              type="submit"
+              disabled={updateProfile.isPending}
+              className="bg-accent text-white px-6 py-2.5 rounded font-medium shadow-glow-accent hover:opacity-90 transition-all duration-200 inline-flex items-center gap-1.5 border-0 cursor-pointer text-sm"
             >
-              保存
-            </Button>
+              <SaveOutlined />
+              {updateProfile.isPending ? '保存中...' : '保存'}
+            </button>
           </Form.Item>
         </Form>
       ),
@@ -140,6 +143,7 @@ export default function ProfilePage() {
             batch: user?.batch,
           }}
         >
+          <h3 className="font-serif text-base font-semibold text-text mb-4">考试详情</h3>
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item name="province" label="所在省份">
@@ -178,14 +182,14 @@ export default function ProfilePage() {
             </Col>
           </Row>
           <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              icon={<SaveOutlined />}
-              loading={updateExamInfo.isPending}
+            <button
+              type="submit"
+              disabled={updateExamInfo.isPending}
+              className="bg-accent text-white px-6 py-2.5 rounded font-medium shadow-glow-accent hover:opacity-90 transition-all duration-200 inline-flex items-center gap-1.5 border-0 cursor-pointer text-sm"
             >
-              保存
-            </Button>
+              <SaveOutlined />
+              {updateExamInfo.isPending ? '保存中...' : '保存'}
+            </button>
           </Form.Item>
         </Form>
       ),
@@ -204,6 +208,7 @@ export default function ProfilePage() {
             careerDirection: user?.careerDirection,
           }}
         >
+          <h3 className="font-serif text-base font-semibold text-text mb-4">志愿偏好</h3>
           <Form.Item name="preferredProvinces" label="偏好省份">
             <Select mode="multiple" placeholder="选择偏好省份（可多选）">
               {PROVINCES.map((p) => (
@@ -228,17 +233,17 @@ export default function ProfilePage() {
             </Select>
           </Form.Item>
           <Form.Item name="careerDirection" label="职业方向">
-            <Input.TextArea rows={3} placeholder="描述你的职业方向和兴趣（可选）" />
+            <Input.TextArea rows={3} placeholder="描述你的职业方向和兴趣（可选）" className="bg-surface-dim" />
           </Form.Item>
           <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              icon={<SaveOutlined />}
-              loading={updatePreferences.isPending}
+            <button
+              type="submit"
+              disabled={updatePreferences.isPending}
+              className="bg-accent text-white px-6 py-2.5 rounded font-medium shadow-glow-accent hover:opacity-90 transition-all duration-200 inline-flex items-center gap-1.5 border-0 cursor-pointer text-sm"
             >
-              保存
-            </Button>
+              <SaveOutlined />
+              {updatePreferences.isPending ? '保存中...' : '保存'}
+            </button>
           </Form.Item>
         </Form>
       ),
@@ -249,29 +254,36 @@ export default function ProfilePage() {
     <MainLayout>
       {/* Page Header */}
       <div className="mb-6">
-        <h1 className="font-headline text-2xl font-bold text-on-surface m-0 flex items-center gap-2">
-          <UserOutlined className="text-primary" />
+        <h1 className="font-serif text-2xl font-semibold text-text m-0">
           个人中心
         </h1>
       </div>
 
-      {/* User Info Summary */}
-      <div className="rounded-xl bg-surface-container-lowest shadow-card p-6 mb-4">
-        <div className="flex items-center gap-6 flex-wrap font-body text-sm">
-          <span className="text-on-surface-variant">用户名：<span className="text-on-surface font-medium">{user?.username}</span></span>
-          {user?.email && (
-            <span className="text-on-surface-variant">邮箱：<span className="text-on-surface font-medium">{user?.email}</span></span>
-          )}
-          {user?.phone && (
-            <span className="text-on-surface-variant">手机：<span className="text-on-surface font-medium">{user?.phone}</span></span>
-          )}
+      {/* User Summary Card */}
+      <div className="bg-surface rounded-xl p-6 mb-6 shadow-card">
+        <div className="flex items-center gap-5">
+          {/* Avatar */}
+          <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center text-white font-serif text-2xl shrink-0">
+            {avatarInitial}
+          </div>
+          {/* User info */}
+          <div className="min-w-0">
+            <div className="font-serif text-xl font-semibold text-text mb-1">
+              {user?.realName || user?.username}
+            </div>
+            <div className="flex items-center gap-4 flex-wrap text-sm text-text-tertiary">
+              <span>用户名：{user?.username}</span>
+              {user?.email && <span>邮箱：{user?.email}</span>}
+              {user?.phone && <span>手机：{user?.phone}</span>}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Tabs Card */}
-      <Card>
+      {/* Tabs Section */}
+      <div className="bg-surface rounded-xl p-6 shadow-card">
         <Tabs items={tabItems} />
-      </Card>
+      </div>
     </MainLayout>
   );
 }
