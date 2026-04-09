@@ -1,25 +1,35 @@
 'use client';
 
+type AccentColor = 'primary' | 'accent' | 'secondary' | 'tertiary' | 'safe' | 'rush' | 'error';
+
 interface StatCardProps {
   label: string;
   value: string | number;
   subtitle?: string;
-  accentColor?: 'primary' | 'secondary' | 'tertiary' | 'error';
+  accentColor?: AccentColor;
   icon?: React.ReactNode;
 }
 
-const accentColorMap = {
-  primary: 'border-l-primary',
-  secondary: 'border-l-secondary',
-  tertiary: 'border-l-tertiary',
-  error: 'border-l-error',
+// Maps accent prop to left-border color
+const borderColorMap: Record<AccentColor, string> = {
+  primary: 'border-primary',
+  accent: 'border-accent',
+  tertiary: 'border-accent',
+  secondary: 'border-safe',
+  safe: 'border-safe',
+  error: 'border-rush',
+  rush: 'border-rush',
 };
 
-const textColorMap = {
+// Maps accent prop to value text color
+const valueColorMap: Record<AccentColor, string> = {
   primary: 'text-primary',
-  secondary: 'text-secondary',
-  tertiary: 'text-tertiary',
-  error: 'text-error',
+  accent: 'text-accent',
+  tertiary: 'text-accent',
+  secondary: 'text-safe',
+  safe: 'text-safe',
+  error: 'text-rush',
+  rush: 'text-rush',
 };
 
 export default function StatCard({
@@ -31,22 +41,24 @@ export default function StatCard({
 }: StatCardProps) {
   return (
     <div
-      className={`bg-surface-container-lowest rounded-xl p-6 border-l-[3px] ${accentColorMap[accentColor]} transition-all duration-300 hover:shadow-ambient`}
+      className={`bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-shadow duration-300 p-5 border-l-[3px] ${borderColorMap[accentColor]}`}
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant mb-2">
+          <p className="text-[11px] uppercase tracking-wider text-text-muted font-sans mb-2">
             {label}
           </p>
-          <p className={`text-3xl font-headline font-extrabold ${textColorMap[accentColor]}`}>
+          <p
+            className={`font-serif text-[28px] font-semibold [font-variant-numeric:tabular-nums] ${valueColorMap[accentColor]}`}
+          >
             {value}
           </p>
           {subtitle && (
-            <p className="text-xs text-on-surface-variant mt-1">{subtitle}</p>
+            <p className="text-xs text-text-faint mt-1">{subtitle}</p>
           )}
         </div>
         {icon && (
-          <div className="text-on-surface-variant opacity-40 text-2xl">
+          <div className="text-text-muted text-2xl">
             {icon}
           </div>
         )}
