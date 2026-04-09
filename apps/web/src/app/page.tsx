@@ -7,7 +7,7 @@ export default function HomePage() {
   return (
     <MainLayout noPadding>
       {/* Hero Section */}
-      <section className="max-w-[1200px] mx-auto px-12 pt-[100px] pb-20">
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-[100px]">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           {/* Left Column */}
           <div>
@@ -15,25 +15,25 @@ export default function HomePage() {
               <span className="w-1.5 h-1.5 bg-safe rounded-full" />
               2026 高考数据已更新
             </div>
-            <h1 className="font-serif text-[48px] font-bold leading-[1.12] tracking-tight text-text">
+            <h1 className="font-serif text-[28px] sm:text-[36px] lg:text-[48px] font-bold leading-[1.12] tracking-tight text-text">
               每一个志愿，
               <br />
               都值得被<span className="text-primary">认真对待</span>。
             </h1>
-            <p className="text-[17px] text-text-tertiary leading-relaxed mt-5 max-w-[480px]">
+            <p className="text-[15px] sm:text-[17px] text-text-tertiary leading-relaxed mt-5 max-w-[480px]">
               智愿家基于 15 年录取大数据与 AI
               深度分析，为你构建专属的升学决策方案。不只是填表工具，更是你的升学智囊。
             </p>
-            <div className="flex gap-3 mt-8">
+            <div className="flex flex-col sm:flex-row gap-3 mt-8">
               <Link
                 href="/recommend"
-                className="bg-gradient-to-br from-primary to-primary-light text-white px-7 py-3.5 rounded-[10px] text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 no-underline"
+                className="w-full sm:w-auto text-center bg-gradient-to-br from-primary to-primary-light text-white px-7 py-3.5 rounded-[10px] text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 no-underline"
               >
                 开始智能推荐
               </Link>
               <Link
                 href="/universities"
-                className="bg-surface text-text-secondary px-7 py-3.5 rounded-[10px] text-[15px] font-medium shadow-ring hover:shadow-card-hover transition-all duration-200 no-underline"
+                className="w-full sm:w-auto text-center bg-surface text-text-secondary px-7 py-3.5 rounded-[10px] text-[15px] font-medium shadow-ring hover:shadow-card-hover transition-all duration-200 no-underline"
               >
                 浏览全国院校
               </Link>
@@ -41,7 +41,7 @@ export default function HomePage() {
           </div>
 
           {/* Right Column — Floating Data Cards */}
-          <div className="relative h-[420px]">
+          <div className="hidden lg:block relative h-[420px]">
             {/* Card 1: Match Summary */}
             <div className="absolute top-0 left-5 right-5 bg-surface rounded-xl p-5 shadow-card-hover border-l-[3px] border-primary">
               <div className="flex items-center justify-between">
@@ -92,7 +92,7 @@ export default function HomePage() {
       </section>
 
       {/* Trust Bar */}
-      <section className="max-w-[1200px] mx-auto px-12 pb-20 flex justify-center gap-12">
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 pb-12 sm:pb-16 lg:pb-20 flex flex-wrap justify-center gap-6 sm:gap-8 lg:gap-12">
         {[
           { value: '2,800+', label: '全国院校' },
           { value: '1,200+', label: '专业覆盖' },
@@ -100,7 +100,7 @@ export default function HomePage() {
           { value: '1,250 万', label: '已生成方案' },
         ].map((item, i) => (
           <div key={i}>
-            <div className="font-serif text-[28px] font-semibold text-primary tabular-nums text-center">
+            <div className="font-serif text-xl sm:text-[28px] font-semibold text-primary tabular-nums text-center">
               {item.value}
             </div>
             <div className="text-[13px] text-text-muted mt-1 text-center">
@@ -111,12 +111,12 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="bg-surface-dim py-20 px-12">
+      <section className="bg-surface-dim py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12">
         <div className="max-w-[1200px] mx-auto">
           <div className="text-[11px] uppercase tracking-[2px] text-accent font-medium">
             核心能力
           </div>
-          <h2 className="font-serif text-[36px] font-semibold text-text mt-2.5">
+          <h2 className="font-serif text-[24px] sm:text-[30px] lg:text-[36px] font-semibold text-text mt-2.5">
             用数据照亮每一步抉择
           </h2>
           <p className="text-[15px] text-text-tertiary mt-3 max-w-[560px] leading-relaxed">
@@ -163,7 +163,7 @@ export default function HomePage() {
             ].map((card, i) => (
               <div
                 key={i}
-                className="bg-surface rounded-xl p-7 hover:shadow-card-hover transition-shadow duration-300 cursor-pointer"
+                className="bg-surface rounded-xl p-5 sm:p-7 hover:shadow-card-hover transition-shadow duration-300 cursor-pointer"
               >
                 <div
                   className={`w-11 h-11 rounded-[10px] ${card.bg} flex items-center justify-center text-xl`}
@@ -183,11 +183,11 @@ export default function HomePage() {
       </section>
 
       {/* How It Works */}
-      <section className="max-w-[1200px] mx-auto px-12 py-20">
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-20">
         <div className="text-[11px] uppercase tracking-[2px] text-accent font-medium">
           使用流程
         </div>
-        <h2 className="font-serif text-[36px] font-semibold text-text mt-2.5">
+        <h2 className="font-serif text-[24px] sm:text-[30px] lg:text-[36px] font-semibold text-text mt-2.5">
           三步，从迷茫到从容
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
@@ -209,7 +209,7 @@ export default function HomePage() {
             },
           ].map((step, i) => (
             <div key={i}>
-              <div className="font-serif text-[64px] font-bold text-border leading-none">
+              <div className="font-serif text-[40px] sm:text-[52px] lg:text-[64px] font-bold text-border leading-none">
                 {step.num}
               </div>
               <h3 className="font-serif text-xl font-semibold text-text mt-3">
@@ -224,8 +224,8 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="bg-primary py-20 px-12 text-center">
-        <h2 className="font-serif text-[36px] font-semibold text-white">
+      <section className="bg-primary py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12 text-center">
+        <h2 className="font-serif text-[24px] sm:text-[30px] lg:text-[36px] font-semibold text-white">
           你的未来，值得一份好方案
         </h2>
         <p className="text-base text-white/70 mt-3">
@@ -233,7 +233,7 @@ export default function HomePage() {
         </p>
         <Link
           href="/recommend"
-          className="bg-accent text-white px-9 py-4 rounded-[10px] text-base font-medium shadow-glow-accent hover:-translate-y-px transition-all duration-200 mt-7 inline-block no-underline"
+          className="w-full sm:w-auto bg-accent text-white px-9 py-4 rounded-[10px] text-base font-medium shadow-glow-accent hover:-translate-y-px transition-all duration-200 mt-7 inline-block no-underline"
         >
           免费开始使用
         </Link>
