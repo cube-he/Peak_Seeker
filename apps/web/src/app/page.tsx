@@ -8,7 +8,7 @@ export default function HomePage() {
     <MainLayout noPadding>
       {/* Hero Section */}
       <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-[100px]">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
           {/* Left Column */}
           <div>
             <div className="inline-flex items-center gap-1.5 bg-surface border border-border rounded-full px-4 py-1.5 text-xs text-text-muted mb-6">
@@ -71,7 +71,7 @@ export default function HomePage() {
             </div>
 
             {/* Card 2: AI Accuracy */}
-            <div className="absolute top-[160px] left-0 w-[52%] bg-surface rounded-xl p-5 shadow-card-hover">
+            <div className="absolute top-[160px] left-0 w-[48%] bg-surface rounded-xl p-5 shadow-card-hover">
               <div className="text-xs text-text-muted">AI 精准度</div>
               <div className="font-serif text-[32px] font-semibold text-accent tabular-nums">
                 99.8%
@@ -79,13 +79,13 @@ export default function HomePage() {
               <div className="text-xs text-text-muted mt-1">历年预测准确率</div>
             </div>
 
-            {/* Card 3: Families Served */}
-            <div className="absolute top-[160px] right-0 w-[44%] bg-surface rounded-xl p-5 shadow-card-hover">
-              <div className="text-xs text-text-muted">已服务家庭</div>
+            {/* Card 3: Data Coverage */}
+            <div className="absolute top-[300px] left-[15%] right-[15%] bg-surface rounded-xl p-5 shadow-card-hover">
+              <div className="text-xs text-text-muted">数据覆盖</div>
               <div className="font-serif text-[32px] font-semibold text-text tabular-nums">
-                125万+
+                全国在川招生
               </div>
-              <div className="text-xs text-text-muted mt-1">覆盖全国 31 省份</div>
+              <div className="text-xs text-text-muted mt-1">四川考生专属 · 全国院校在川招生数据</div>
             </div>
           </div>
         </div>
@@ -94,10 +94,10 @@ export default function HomePage() {
       {/* Trust Bar */}
       <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 pb-12 sm:pb-16 lg:pb-20 flex flex-wrap justify-center gap-6 sm:gap-8 lg:gap-12">
         {[
-          { value: '2,800+', label: '全国院校' },
-          { value: '1,200+', label: '专业覆盖' },
-          { value: '15 年', label: '录取数据纵深' },
-          { value: '1,250 万', label: '已生成方案' },
+          { value: '2800+', label: '全国院校' },
+          { value: '1200+', label: '专业覆盖' },
+          { value: '15年', label: '录取数据纵深' },
+          { value: '1250万', label: '已生成方案' },
         ].map((item, i) => (
           <div key={i}>
             <div className="font-serif text-xl sm:text-[28px] font-semibold text-primary tabular-nums text-center">
