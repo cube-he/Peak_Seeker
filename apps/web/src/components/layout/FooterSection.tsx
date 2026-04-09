@@ -5,10 +5,10 @@ import Link from 'next/link';
 export default function FooterSection() {
   return (
     <footer>
-      <div className="max-w-[1200px] mx-auto px-12 pt-[60px] pb-10">
-        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-12">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 pt-10 md:pt-[60px] pb-8 md:pb-10">
+        <div className="grid grid-cols-2 md:grid-cols-[2fr_1fr_1fr_1fr] gap-8 lg:gap-12">
           {/* Brand */}
-          <div>
+          <div className="col-span-2 md:col-span-1">
             <div className="font-serif text-xl font-semibold text-text">
               智愿家
             </div>
@@ -94,7 +94,7 @@ export default function FooterSection() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-border mt-8 pt-5 flex justify-between">
+        <div className="border-t border-border mt-8 pt-5 flex flex-col sm:flex-row gap-2 sm:gap-0 justify-between">
           <span className="text-xs text-text-faint">
             &copy; 2026 立方科技. All rights reserved.
           </span>
