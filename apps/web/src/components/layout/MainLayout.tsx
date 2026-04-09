@@ -148,7 +148,7 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
 
       {/* Content */}
       <main
-        className={`flex-1 pb-16 lg:pb-0 ${noPadding ? '' : 'max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-8 w-full'}`}
+        className={`flex-1 min-w-0 pb-16 lg:pb-0 ${noPadding ? '' : 'max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-8 w-full'}`}
         style={noPadding ? { maxWidth: maxWidth || undefined, margin: '0 auto', width: '100%' } : { maxWidth: maxWidth || '1200px' }}
       >
         {children}

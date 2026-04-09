@@ -163,7 +163,7 @@ export default function SideNavLayout({ children, pageTitle, pageSubtitle }: Sid
       )}
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-[280px]">
+      <div className="flex-1 min-w-0 lg:ml-[280px]">
         {/* Top Bar */}
         <header className="sticky top-0 z-40 h-16 bg-[rgba(250,249,245,0.92)] backdrop-blur-xl shadow-nav">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 h-full">
