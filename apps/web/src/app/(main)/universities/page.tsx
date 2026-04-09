@@ -51,16 +51,16 @@ function FilterRow({
   onChange: (val: string | undefined) => void;
 }) {
   return (
-    <div className="flex items-start py-3 bg-surface-container-low rounded-lg mb-1.5 px-4">
-      <span className="shrink-0 text-xs font-semibold font-label mr-4 mt-0.5 text-on-surface-variant uppercase tracking-wide" style={{ width: 70 }}>
+    <div className="flex items-start py-3 bg-surface-dim rounded-lg mb-1.5 px-4">
+      <span className="shrink-0 text-xs font-medium font-sans mr-4 mt-0.5 text-text-muted tracking-wide" style={{ width: 70 }}>
         {label}
       </span>
       <div className="flex flex-wrap gap-1.5">
         <span
-          className={`inline-block px-3 py-1 text-sm rounded-lg cursor-pointer transition-all duration-200 font-label ${
+          className={`inline-block px-3 py-1 text-sm rounded-full cursor-pointer transition-colors ${
             !value
-              ? 'bg-primary text-on-primary font-medium shadow-sm'
-              : 'text-on-surface hover:bg-surface-container'
+              ? 'bg-primary-fixed text-primary font-medium'
+              : 'text-text-secondary hover:bg-primary-fixed hover:text-primary'
           }`}
           onClick={() => onChange(undefined)}
         >
@@ -69,10 +69,10 @@ function FilterRow({
         {items.map((item) => (
           <span
             key={item.key}
-            className={`inline-block px-3 py-1 text-sm rounded-lg cursor-pointer transition-all duration-200 font-label ${
+            className={`inline-block px-3 py-1 text-sm rounded-full cursor-pointer transition-colors ${
               value === item.key
-                ? 'bg-primary text-on-primary font-medium shadow-sm'
-                : 'text-on-surface hover:bg-surface-container'
+                ? 'bg-primary-fixed text-primary font-medium'
+                : 'text-text-secondary hover:bg-primary-fixed hover:text-primary'
             }`}
             onClick={() => onChange(value === item.key ? undefined : item.key)}
           >
@@ -95,16 +95,16 @@ function FeatureFilterRow({
   const noneActive = !filters.is985 && !filters.is211 && !filters.isDoubleFirstClass;
 
   return (
-    <div className="flex items-start py-3 bg-surface-container-low rounded-lg mb-1.5 px-4">
-      <span className="shrink-0 text-xs font-semibold font-label mr-4 mt-0.5 text-on-surface-variant uppercase tracking-wide" style={{ width: 70 }}>
+    <div className="flex items-start py-3 bg-surface-dim rounded-lg mb-1.5 px-4">
+      <span className="shrink-0 text-xs font-medium font-sans mr-4 mt-0.5 text-text-muted tracking-wide" style={{ width: 70 }}>
         院校特色
       </span>
       <div className="flex flex-wrap gap-1.5">
         <span
-          className={`inline-block px-3 py-1 text-sm rounded-lg cursor-pointer transition-all duration-200 font-label ${
+          className={`inline-block px-3 py-1 text-sm rounded-full cursor-pointer transition-colors ${
             noneActive
-              ? 'bg-primary text-on-primary font-medium shadow-sm'
-              : 'text-on-surface hover:bg-surface-container'
+              ? 'bg-primary-fixed text-primary font-medium'
+              : 'text-text-secondary hover:bg-primary-fixed hover:text-primary'
           }`}
           onClick={() =>
             setFilters({
@@ -123,10 +123,10 @@ function FeatureFilterRow({
           return (
             <span
               key={f.key}
-              className={`inline-block px-3 py-1 text-sm rounded-lg cursor-pointer transition-all duration-200 font-label ${
+              className={`inline-block px-3 py-1 text-sm rounded-full cursor-pointer transition-colors ${
                 active
-                  ? 'bg-primary text-on-primary font-medium shadow-sm'
-                  : 'text-on-surface hover:bg-surface-container'
+                  ? 'bg-primary-fixed text-primary font-medium'
+                  : 'text-text-secondary hover:bg-primary-fixed hover:text-primary'
               }`}
               onClick={() =>
                 setFilters({
@@ -147,38 +147,38 @@ function FeatureFilterRow({
 
 // 院校卡片
 function UniversityCard({ uni }: { uni: any }) {
-  const tags: { label: string; className: string }[] = [];
-  if (uni.is985) tags.push({ label: '985', className: 'bg-tertiary-fixed text-on-tertiary-fixed-variant' });
-  if (uni.is211) tags.push({ label: '211', className: 'bg-primary-fixed text-on-primary-fixed' });
-  if (uni.isDoubleFirstClass) tags.push({ label: '双一流', className: 'bg-secondary-fixed text-on-secondary-fixed-variant' });
+  const tags: string[] = [];
+  if (uni.is985) tags.push('985');
+  if (uni.is211) tags.push('211');
+  if (uni.isDoubleFirstClass) tags.push('双一流');
 
   const admission = uni.latestAdmission;
   const infoItems = [uni.province, uni.city, uni.type, uni.runningNature].filter(Boolean);
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl border-l-[3px] border-l-primary shadow-card hover:shadow-ambient hover:translate-y-[-4px] transition-all duration-300 cursor-pointer p-5">
+    <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-5">
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <Link
               href={`/universities/${uni.id}`}
-              className="text-base font-semibold font-headline text-on-surface hover:text-primary hover:underline truncate transition-colors"
+              className="font-serif text-lg font-semibold text-text hover:text-primary truncate transition-colors"
             >
               {uni.name}
             </Link>
-            {tags.map((t) => (
+            {tags.map((tag) => (
               <span
-                key={t.label}
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${t.className}`}
+                key={tag}
+                className="bg-surface-dim text-text-secondary rounded-full px-2.5 py-0.5 text-xs font-medium"
               >
-                {t.label}
+                {tag}
               </span>
             ))}
           </div>
 
-          <div className="flex items-center gap-1 text-xs mb-3 text-outline">
+          <div className="flex items-center gap-1 text-xs mb-3 text-text-tertiary">
             <EnvironmentOutlined />
-            <span className="font-body">{infoItems.join(' / ') || '-'}</span>
+            <span>{infoItems.join(' / ') || '-'}</span>
           </div>
 
           {/* 标签展示 */}
@@ -187,7 +187,7 @@ function UniversityCard({ uni }: { uni: any }) {
               {(uni.tags as string[]).slice(0, 6).map((tag: string) => (
                 <span
                   key={tag}
-                  className="text-xs px-2.5 py-0.5 rounded-full bg-surface-container-low text-on-surface-variant font-label"
+                  className="bg-surface-dim text-text-secondary rounded-full px-2.5 py-0.5 text-xs"
                 >
                   {tag}
                 </span>
@@ -200,28 +200,28 @@ function UniversityCard({ uni }: { uni: any }) {
         <div className="flex items-center gap-6 shrink-0 ml-4">
           {uni.ranking && (
             <div className="text-center">
-              <div className="text-xs mb-1 text-outline font-label">
+              <div className="text-xs mb-1 text-text-tertiary">
                 <RiseOutlined className="mr-1" />排名
               </div>
-              <div className="text-sm font-semibold font-headline text-on-surface">
+              <div className="text-sm font-semibold text-text-secondary [font-variant-numeric:tabular-nums]">
                 {uni.ranking}
               </div>
             </div>
           )}
           {admission && (
             <div className="text-center">
-              <div className="text-xs mb-1 text-outline font-label">最低分/位次</div>
-              <div className="text-sm font-body">
-                <span className="font-semibold text-primary">
+              <div className="text-xs mb-1 text-text-tertiary">最低分/位次</div>
+              <div className="text-sm [font-variant-numeric:tabular-nums]">
+                <span className="font-semibold text-text-secondary">
                   {admission.minScore || '-'}
                 </span>
-                <span className="text-outline-variant"> / </span>
-                <span className="text-on-surface-variant">{admission.minRank || '-'}</span>
+                <span className="text-text-muted"> / </span>
+                <span className="text-text-tertiary">{admission.minRank || '-'}</span>
               </div>
             </div>
           )}
           <button
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-outline-variant hover:text-primary hover:bg-surface-container-low transition-all duration-200"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-accent hover:text-accent-light cursor-pointer transition-colors"
           >
             <StarOutlined />
           </button>
@@ -241,12 +241,12 @@ function HotUniversitiesSidebar() {
   const list = data?.data || data || [];
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl shadow-card p-5">
-      <div className="flex items-center gap-2 mb-5">
-        <div className="w-7 h-7 rounded-lg bg-tertiary-fixed flex items-center justify-center">
-          <FireOutlined className="text-on-tertiary-fixed-variant text-sm" />
+    <div className="bg-surface rounded-xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-7 h-7 rounded-lg bg-accent-fixed flex items-center justify-center">
+          <FireOutlined className="text-accent text-sm" />
         </div>
-        <span className="font-semibold text-sm font-headline text-on-surface">
+        <span className="font-serif text-base font-semibold text-text">
           热门院校排名
         </span>
       </div>
@@ -255,24 +255,24 @@ function HotUniversitiesSidebar() {
           <Link
             key={uni.id}
             href={`/universities/${uni.id}`}
-            className="flex items-center gap-3 group no-underline py-1.5 px-2 rounded-lg hover:bg-surface-container-low transition-colors duration-200"
+            className="flex items-center gap-3 group no-underline py-1.5 px-2 rounded-lg hover:bg-surface-dim transition-colors duration-200"
           >
             <span
               className={`w-5 h-5 rounded text-xs flex items-center justify-center font-semibold shrink-0 ${
                 idx < 3
-                  ? 'bg-primary text-on-primary'
-                  : 'bg-surface-container-high text-on-surface-variant'
+                  ? 'bg-primary text-white'
+                  : 'bg-surface-dim text-text-tertiary'
               }`}
             >
               {idx + 1}
             </span>
-            <span className="text-sm truncate font-body text-on-surface group-hover:text-primary transition-colors duration-200">
+            <span className="text-sm truncate text-text-tertiary group-hover:text-primary transition-colors duration-200">
               {uni.name}
             </span>
           </Link>
         ))}
         {(!Array.isArray(list) || list.length === 0) && (
-          <div className="text-xs text-center py-6 text-outline font-body">
+          <div className="text-xs text-center py-6 text-text-muted">
             暂无数据
           </div>
         )}
@@ -316,16 +316,16 @@ export default function UniversitiesPage() {
     <MainLayout>
       {/* 页面标题 */}
       <div className="mb-6">
-        <h2 className="text-xl font-bold font-headline text-on-surface mb-1">
+        <h2 className="font-serif text-[28px] font-semibold text-text mb-1">
           院校库
         </h2>
-        <p className="text-sm font-body text-on-surface-variant">
+        <p className="text-sm text-text-tertiary">
           查找全国高校，了解院校详情
         </p>
       </div>
 
       {/* 筛选区域 */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-card p-5 mb-6">
+      <div className="bg-surface rounded-xl p-4 mb-6">
         <FilterRow
           label="院校省份"
           items={provinceItems}
@@ -341,18 +341,18 @@ export default function UniversitiesPage() {
           onChange={(val) => setFilters({ ...filters, type: val, page: 1 })}
         />
         <FeatureFilterRow filters={filters} setFilters={setFilters} />
-        <div className="flex items-start py-3 bg-surface-container-low rounded-lg px-4">
-          <span className="shrink-0 text-xs font-semibold font-label mr-4 mt-0.5 text-on-surface-variant uppercase tracking-wide" style={{ width: 70 }}>
+        <div className="flex items-start py-3 bg-surface-dim rounded-lg px-4">
+          <span className="shrink-0 text-xs font-medium font-sans mr-4 mt-0.5 text-text-muted tracking-wide" style={{ width: 70 }}>
             院校性质
           </span>
           <div className="flex flex-wrap gap-1.5 items-center">
             {natureItems.map((item) => (
               <span
                 key={item.key}
-                className={`inline-block px-3 py-1 text-sm rounded-lg cursor-pointer transition-all duration-200 font-label ${
+                className={`inline-block px-3 py-1 text-sm rounded-full cursor-pointer transition-colors ${
                   filters.nature === item.key
-                    ? 'bg-primary text-on-primary font-medium shadow-sm'
-                    : 'text-on-surface hover:bg-surface-container'
+                    ? 'bg-primary-fixed text-primary font-medium'
+                    : 'text-text-secondary hover:bg-primary-fixed hover:text-primary'
                 }`}
                 onClick={() =>
                   setFilters({
@@ -365,14 +365,14 @@ export default function UniversitiesPage() {
                 {item.label}
               </span>
             ))}
-            <span className="text-outline-variant mx-1">|</span>
+            <span className="text-text-faint mx-1">|</span>
             {levelItems.map((item) => (
               <span
                 key={item.key}
-                className={`inline-block px-3 py-1 text-sm rounded-lg cursor-pointer transition-all duration-200 font-label ${
+                className={`inline-block px-3 py-1 text-sm rounded-full cursor-pointer transition-colors ${
                   filters.level === item.key
-                    ? 'bg-primary text-on-primary font-medium shadow-sm'
-                    : 'text-on-surface hover:bg-surface-container'
+                    ? 'bg-primary-fixed text-primary font-medium'
+                    : 'text-text-secondary hover:bg-primary-fixed hover:text-primary'
                 }`}
                 onClick={() =>
                   setFilters({
@@ -395,20 +395,19 @@ export default function UniversitiesPage() {
         <div className="flex-1 min-w-0">
           {/* 搜索栏 + 结果数 */}
           <div className="flex items-center justify-between mb-4">
-            <div className="text-sm font-body text-on-surface-variant">
+            <div className="text-sm text-text-tertiary">
               共 <span className="font-semibold text-primary">{total}</span> 所院校
             </div>
             <div className="relative">
               <Input
                 placeholder="搜索院校名称"
-                prefix={<SearchOutlined className="text-outline" />}
+                prefix={<SearchOutlined className="text-text-muted" />}
                 value={filters.keyword}
                 onChange={(e) =>
                   setFilters({ ...filters, keyword: e.target.value, page: 1 })
                 }
                 allowClear
                 style={{ width: 260 }}
-                className="font-body"
               />
             </div>
           </div>
@@ -425,7 +424,7 @@ export default function UniversitiesPage() {
               ))}
             </div>
           ) : (
-            <div className="bg-surface-container-lowest rounded-xl shadow-card p-12">
+            <div className="bg-surface rounded-xl shadow-card p-12">
               <Empty description="暂无匹配的院校" />
             </div>
           )}
