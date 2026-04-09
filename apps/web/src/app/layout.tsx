@@ -1,20 +1,29 @@
 import type { Metadata } from 'next';
-import { Crimson_Pro, Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import QueryProvider from '@/components/QueryProvider';
 import './globals.css';
 
-const crimsonPro = Crimson_Pro({
-  subsets: ['latin'],
+const crimsonPro = localFont({
+  src: [
+    { path: '../../public/fonts/crimson-pro-400.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/crimson-pro-500.woff2', weight: '500', style: 'normal' },
+    { path: '../../public/fonts/crimson-pro-600.woff2', weight: '600', style: 'normal' },
+    { path: '../../public/fonts/crimson-pro-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-serif',
   display: 'swap',
-  weight: ['400', '500', '600', '700'],
 });
 
-const inter = Inter({
-  subsets: ['latin'],
+const inter = localFont({
+  src: [
+    { path: '../../public/fonts/inter-400.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/inter-500.woff2', weight: '500', style: 'normal' },
+    { path: '../../public/fonts/inter-600.woff2', weight: '600', style: 'normal' },
+    { path: '../../public/fonts/inter-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-sans',
   display: 'swap',
 });
