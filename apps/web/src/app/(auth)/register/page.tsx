@@ -46,8 +46,8 @@ export default function RegisterPage() {
       ]}
       socialProof="125万+ 家庭的共同选择"
     >
-      <div>
-        <h2 className="font-serif text-[28px] font-semibold text-text">
+      <div className="w-full max-w-md mx-auto px-4 sm:px-0">
+        <h2 className="font-serif text-[22px] sm:text-[28px] font-semibold text-text">
           加入智愿家
         </h2>
         <p className="text-[15px] text-text-tertiary mt-2 mb-8">

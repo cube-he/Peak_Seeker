@@ -77,7 +77,7 @@ export default function AiConfigPage() {
   if (!isLoggedIn || !isAdmin) {
     return (
       <div className="min-h-screen bg-bg">
-        <div className="mx-auto max-w-[800px] px-6 pt-20">
+        <div className="mx-auto max-w-[800px] px-4 sm:px-6 pt-20">
           <Result
             status="403"
             title="无权限访问"
@@ -277,7 +277,7 @@ export default function AiConfigPage() {
 
   return (
     <div className="min-h-screen bg-bg">
-      <div className="mx-auto w-full max-w-[1000px] px-6 py-6">
+      <div className="mx-auto w-full max-w-[1000px] px-4 sm:px-6 py-6">
         {/* Back link */}
         <div className="mb-6">
           <Link href="/data-import">
@@ -289,7 +289,7 @@ export default function AiConfigPage() {
 
         {/* Page header */}
         <div className="mb-6">
-          <h1 className="font-serif text-[28px] font-semibold text-text flex items-center gap-3 mb-2">
+          <h1 className="font-serif text-[22px] sm:text-[28px] font-semibold text-text flex items-center gap-3 mb-2">
             <KeyOutlined className="text-primary" /> AI 配置管理
           </h1>
           <p className="text-text-tertiary text-sm">
@@ -311,7 +311,7 @@ export default function AiConfigPage() {
         </div>
 
         {/* Config list card */}
-        <div className="bg-surface rounded-lg shadow-card p-5">
+        <div className="bg-surface rounded-lg shadow-card p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-serif text-base font-semibold text-text">AI 配置列表</h2>
             <Button
@@ -324,6 +324,7 @@ export default function AiConfigPage() {
           </div>
 
           <Spin spinning={loading}>
+            <div className="overflow-x-auto">
             <Table
               dataSource={configs}
               columns={columns}
@@ -331,6 +332,7 @@ export default function AiConfigPage() {
               pagination={false}
               locale={{ emptyText: '暂无配置，点击上方按钮添加' }}
             />
+            </div>
           </Spin>
         </div>
 

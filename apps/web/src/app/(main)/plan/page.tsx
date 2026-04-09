@@ -154,14 +154,14 @@ export default function PlanPage() {
     <MainLayout>
       {/* Page Header */}
       <div className="mb-8">
-        <h2 className="font-serif font-semibold text-2xl tracking-tight text-text">
+        <h2 className="font-serif font-semibold text-[22px] sm:text-2xl tracking-tight text-text">
           我的志愿方案
         </h2>
         <p className="font-sans text-sm text-text-muted mt-1">管理您的个性化升学策略</p>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 mb-10">
         <StatCard
           label="方案总数"
           value={String(totalPlans).padStart(2, '0')}
@@ -204,7 +204,7 @@ export default function PlanPage() {
           <Spin size="large" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
           {/* Create New Plan Card */}
           <button
             onClick={() => setCreateModalOpen(true)}

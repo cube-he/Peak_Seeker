@@ -134,14 +134,14 @@ export default function ScoresPage() {
     <MainLayout>
       {/* Page Title */}
       <div className="mb-8">
-        <h2 className="font-serif text-[28px] font-semibold text-text mb-1">分数线查询</h2>
+        <h2 className="font-serif text-[22px] sm:text-[28px] font-semibold text-text mb-1">分数线查询</h2>
         <p className="text-[15px] text-text-tertiary">按分数或位次查询历年录取数据</p>
       </div>
 
       {/* Main Layout: Sidebar + Content */}
-      <div className="flex gap-6 items-start">
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* Left Sidebar */}
-        <div className="w-80 shrink-0 sticky top-24">
+        <div className="w-full lg:w-80 shrink-0 lg:sticky lg:top-24">
           <div className="bg-surface rounded-xl p-6">
             <h3 className="text-sm font-sans font-semibold text-text mb-5">查询条件</h3>
 
@@ -251,7 +251,7 @@ export default function ScoresPage() {
         <div className="flex-1 min-w-0">
           {/* Statistics Cards */}
           {statistics && (
-            <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
               <StatCard
                 label="数据总量"
                 value={statistics._count ?? '-'}
@@ -276,7 +276,7 @@ export default function ScoresPage() {
           )}
 
           {/* Results Table */}
-          <div className="bg-surface rounded-xl overflow-hidden">
+          <div className="bg-surface rounded-xl overflow-hidden overflow-x-auto">
             <div className="px-6 py-4 border-b border-border">
               <span className="font-sans font-semibold text-text text-sm">
                 查询结果 ({results.length} 条)
