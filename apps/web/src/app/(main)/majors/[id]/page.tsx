@@ -157,9 +157,9 @@ export default function MajorDetailPage() {
       </nav>
 
       {/* Hero Header Card */}
-      <div className="rounded-xl bg-surface shadow-card p-6 md:p-8 mb-4">
-        <div className="flex items-center gap-3 mb-3">
-          <h1 className="font-serif text-[36px] font-semibold text-text m-0">{m.name}</h1>
+      <div className="rounded-xl bg-surface shadow-card p-4 sm:p-6 lg:p-8 mb-4">
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <h1 className="font-serif text-[24px] sm:text-[30px] lg:text-[36px] font-semibold text-text m-0">{m.name}</h1>
           {m.code && (
             <span className="inline-block rounded-full bg-surface-dim text-text-secondary text-[13px] font-medium px-3 py-0.5">{m.code}</span>
           )}
@@ -178,7 +178,7 @@ export default function MajorDetailPage() {
             {[m.category, m.discipline].filter(Boolean).join(' · ')}
           </p>
         )}
-        <Descriptions bordered column={{ xs: 1, sm: 2, md: 4 }} size="small">
+        <Descriptions bordered column={{ xs: 1, sm: 2, lg: 4 }} size="small">
           <Descriptions.Item label="专业代码">{m.code || '-'}</Descriptions.Item>
           <Descriptions.Item label="门类">{m.category || '-'}</Descriptions.Item>
           <Descriptions.Item label="本地硕士点">
@@ -210,7 +210,7 @@ export default function MajorDetailPage() {
 
       {/* Tabs Card */}
       <Card styles={{ body: { padding: '4px 0 0' } }}>
-        <Tabs items={tabItems} style={{ padding: '0 24px' }} />
+        <Tabs items={tabItems} className="px-3 sm:px-6" />
       </Card>
     </MainLayout>
   );
