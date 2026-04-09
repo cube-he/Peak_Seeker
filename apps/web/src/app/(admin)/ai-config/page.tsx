@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Layout,
-  Card,
   Table,
   Button,
   Modal,
@@ -15,10 +13,8 @@ import {
   message,
   Popconfirm,
   Tag,
-  Typography,
   Result,
   Spin,
-  Alert,
 } from 'antd';
 import {
   PlusOutlined,
@@ -38,9 +34,6 @@ import {
   deleteAiConfig,
   type AiConfig,
 } from '@/services/dataImport';
-
-const { Content } = Layout;
-const { Title, Text } = Typography;
 
 // 预设的 AI 提供商
 const AI_PROVIDERS = [
@@ -83,8 +76,8 @@ export default function AiConfigPage() {
   // 权限检查
   if (!isLoggedIn || !isAdmin) {
     return (
-      <Layout style={{ minHeight: '100vh', background: '#F8FAFC' }}>
-        <Content style={{ padding: 24, maxWidth: 800, margin: '80px auto' }}>
+      <div className="min-h-screen bg-bg">
+        <div className="mx-auto max-w-[800px] px-6 pt-20">
           <Result
             status="403"
             title="无权限访问"
@@ -95,8 +88,8 @@ export default function AiConfigPage() {
               </Link>
             }
           />
-        </Content>
-      </Layout>
+        </div>
+      </div>
     );
   }
 
@@ -208,10 +201,14 @@ export default function AiConfigPage() {
       key: 'name',
       render: (name: string, record: AiConfig) => (
         <Space>
-          <RobotOutlined />
-          <span>{name}</span>
-          {record.isDefault && <Tag color="blue">默认</Tag>}
-          {!record.isActive && <Tag color="red">已禁用</Tag>}
+          <RobotOutlined className="text-primary" />
+          <span className="font-serif text-base font-semibold text-text">{name}</span>
+          {record.isDefault && (
+            <Tag className="!bg-primary-fixed !text-primary">默认</Tag>
+          )}
+          {!record.isActive && (
+            <Tag className="!bg-rush-fixed !text-rush">已禁用</Tag>
+          )}
         </Space>
       ),
     },
@@ -221,7 +218,7 @@ export default function AiConfigPage() {
       key: 'provider',
       render: (provider: string) => {
         const preset = AI_PROVIDERS.find(p => p.value === provider);
-        return preset?.label || provider;
+        return <span className="text-text-secondary">{preset?.label || provider}</span>;
       },
     },
     {
@@ -229,11 +226,13 @@ export default function AiConfigPage() {
       dataIndex: 'apiBaseUrl',
       key: 'apiBaseUrl',
       ellipsis: true,
+      render: (url: string) => <span className="text-text-tertiary">{url}</span>,
     },
     {
       title: '模型',
       dataIndex: 'modelName',
       key: 'modelName',
+      render: (model: string) => <span className="text-text-secondary">{model}</span>,
     },
     {
       title: '操作',
@@ -247,6 +246,7 @@ export default function AiConfigPage() {
               size="small"
               icon={<CheckCircleOutlined />}
               onClick={() => handleSetDefault(record)}
+              className="!text-safe hover:!text-safe/80"
             >
               设为默认
             </Button>
@@ -256,6 +256,7 @@ export default function AiConfigPage() {
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleOpenModal(record)}
+            className="!text-primary hover:!text-primary-light"
           >
             编辑
           </Button>
@@ -275,34 +276,44 @@ export default function AiConfigPage() {
   ];
 
   return (
-    <Layout style={{ minHeight: '100vh', background: '#F8FAFC' }}>
-      <Content style={{ padding: 24, maxWidth: 1000, margin: '0 auto', width: '100%' }}>
-        <div style={{ marginBottom: 24 }}>
+    <div className="min-h-screen bg-bg">
+      <div className="mx-auto w-full max-w-[1000px] px-6 py-6">
+        {/* Back link */}
+        <div className="mb-6">
           <Link href="/data-import">
-            <Button type="text" icon={<ArrowLeftOutlined />}>
+            <Button type="text" icon={<ArrowLeftOutlined />} className="!text-text-tertiary hover:!text-text-secondary">
               返回数据导入
             </Button>
           </Link>
         </div>
 
-        <Title level={3} style={{ marginBottom: 8 }}>
-          <KeyOutlined /> AI 配置管理
-        </Title>
-        <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
-          管理用于 OCR 校验的 AI 服务配置，API Key 将加密存储
-        </Text>
+        {/* Page header */}
+        <div className="mb-6">
+          <h1 className="font-serif text-[28px] font-semibold text-text flex items-center gap-3 mb-2">
+            <KeyOutlined className="text-primary" /> AI 配置管理
+          </h1>
+          <p className="text-text-tertiary text-sm">
+            管理用于 OCR 校验的 AI 服务配置，API Key 将加密存储
+          </p>
+        </div>
 
-        <Alert
-          message="安全提示"
-          description="API Key 使用 AES-256-GCM 加密存储，仅在调用 AI 服务时解密使用。请确保服务器环境变量 ENCRYPTION_KEY 已正确配置。"
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
+        {/* Security notice */}
+        <div className="mb-4 rounded-lg bg-primary-fixed border border-primary/10 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <KeyOutlined className="text-primary mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-text mb-1">安全提示</p>
+              <p className="text-xs text-text-tertiary">
+                API Key 使用 AES-256-GCM 加密存储，仅在调用 AI 服务时解密使用。请确保服务器环境变量 ENCRYPTION_KEY 已正确配置。
+              </p>
+            </div>
+          </div>
+        </div>
 
-        <Card
-          title="AI 配置列表"
-          extra={
+        {/* Config list card */}
+        <div className="bg-surface rounded-lg shadow-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-serif text-base font-semibold text-text">AI 配置列表</h2>
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -310,8 +321,8 @@ export default function AiConfigPage() {
             >
               添加配置
             </Button>
-          }
-        >
+          </div>
+
           <Spin spinning={loading}>
             <Table
               dataSource={configs}
@@ -321,16 +332,22 @@ export default function AiConfigPage() {
               locale={{ emptyText: '暂无配置，点击上方按钮添加' }}
             />
           </Spin>
-        </Card>
+        </div>
 
         {/* 新建/编辑弹窗 */}
         <Modal
-          title={editingConfig ? '编辑 AI 配置' : '添加 AI 配置'}
+          title={
+            <span className="font-serif font-semibold">
+              {editingConfig ? '编辑 AI 配置' : '添加 AI 配置'}
+            </span>
+          }
           open={modalVisible}
           onOk={handleSave}
           onCancel={() => setModalVisible(false)}
           confirmLoading={loading}
           width={500}
+          okText="保存"
+          cancelText="取消"
         >
           <Form form={form} layout="vertical">
             <Form.Item
@@ -364,7 +381,7 @@ export default function AiConfigPage() {
             <Form.Item
               name="apiBaseUrl"
               label="API Base URL"
-              rules={[{ required: true, message: '请输入 API ���址' }]}
+              rules={[{ required: true, message: '请输入 API 地址' }]}
             >
               <Input placeholder="https://api.deepseek.com/v1" />
             </Form.Item>
@@ -386,7 +403,7 @@ export default function AiConfigPage() {
             </Form.Item>
           </Form>
         </Modal>
-      </Content>
-    </Layout>
+      </div>
+    </div>
   );
 }

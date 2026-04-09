@@ -2,20 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Layout,
-  Card,
   Input,
   Button,
   Steps,
   Table,
-  Alert,
   Space,
   Select,
   InputNumber,
   Image,
   message,
   Spin,
-  Typography,
   Statistic,
   Row,
   Col,
@@ -60,9 +56,6 @@ import {
   type MultiEngineValidationResponse,
   type SupplementaryRowWithConflict,
 } from '@/services/dataImport';
-
-const { Content } = Layout;
-const { Title, Text } = Typography;
 
 export default function DataImportPage() {
   const { user, isLoggedIn } = useAuthStore();
@@ -170,8 +163,8 @@ export default function DataImportPage() {
 
   if (!isLoggedIn || !isAdmin) {
     return (
-      <Layout style={{ minHeight: '100vh', background: '#F8FAFC' }}>
-        <Content style={{ padding: 24, maxWidth: 800, margin: '80px auto' }}>
+      <div className="min-h-screen bg-bg">
+        <div className="mx-auto max-w-[800px] px-6 pt-20">
           <Result
             status="403"
             title="无权限访问"
@@ -182,8 +175,8 @@ export default function DataImportPage() {
               </Link>
             }
           />
-        </Content>
-      </Layout>
+        </div>
+      </div>
     );
   }
 
@@ -561,10 +554,10 @@ export default function DataImportPage() {
           />
         ) : (
           <span
-            style={{ cursor: 'pointer' }}
+            className="cursor-pointer text-text hover:text-primary"
             onClick={() => setEditingKey(record.score)}
           >
-            {val} <EditOutlined style={{ fontSize: 12, color: '#999' }} />
+            {val} <EditOutlined className="text-[12px] text-text-faint" />
           </span>
         ),
     },
@@ -586,10 +579,10 @@ export default function DataImportPage() {
           />
         ) : (
           <span
-            style={{ cursor: 'pointer' }}
+            className="cursor-pointer text-text hover:text-primary"
             onClick={() => setEditingKey(record.score)}
           >
-            {val} <EditOutlined style={{ fontSize: 12, color: '#999' }} />
+            {val} <EditOutlined className="text-[12px] text-text-faint" />
           </span>
         ),
     },
@@ -658,10 +651,10 @@ export default function DataImportPage() {
     const displayVal = val ?? '-';
     return (
       <span
-        style={{ cursor: 'pointer' }}
+        className="cursor-pointer text-text hover:text-primary"
         onClick={() => setEditingSupplementaryCell({ rowKey, field })}
       >
-        {displayVal} <EditOutlined style={{ fontSize: 10, color: '#999' }} />
+        {displayVal} <EditOutlined className="text-[10px] text-text-faint" />
       </span>
     );
   };
@@ -801,10 +794,10 @@ export default function DataImportPage() {
         return (
           <Tooltip title={val}>
             <span
-              style={{ cursor: 'pointer', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+              className="cursor-pointer max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap inline-block text-text hover:text-primary"
               onClick={() => setEditingSupplementaryCell({ rowKey, field: 'major_note' })}
             >
-              {val || '-'} <EditOutlined style={{ fontSize: 10, color: '#999' }} />
+              {val || '-'} <EditOutlined className="text-[10px] text-text-faint" />
             </span>
           </Tooltip>
         );
@@ -835,62 +828,71 @@ export default function DataImportPage() {
       width: 60,
       render: (val: string) => val ? (
         <Tooltip title={val}>
-          <a href={val} target="_blank" rel="noopener noreferrer">
+          <a href={val} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-light">
             <LinkOutlined />
           </a>
         </Tooltip>
-      ) : '-',
+      ) : <span className="text-text-faint">-</span>,
     },
   ];
 
   return (
-    <Layout style={{ minHeight: '100vh', background: '#F8FAFC' }}>
-      <Content style={{ padding: 24, maxWidth: 1600, margin: '0 auto', width: '100%' }}>
-        <div style={{ marginBottom: 24 }}>
+    <div className="min-h-screen bg-bg">
+      <div className="mx-auto w-full max-w-[1600px] px-6 py-6">
+        {/* Back link */}
+        <div className="mb-6">
           <Link href="/">
-            <Button type="text" icon={<ArrowLeftOutlined />}>
+            <Button type="text" icon={<ArrowLeftOutlined />} className="!text-text-tertiary hover:!text-text-secondary">
               返回首页
             </Button>
           </Link>
         </div>
 
-        <Title level={3} style={{ marginBottom: 8 }}>
-          <DatabaseOutlined /> 数据导入管理
-        </Title>
-        <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
-          从教育考试院网页自动提取数据并导入数据库
-        </Text>
+        {/* Page header */}
+        <div className="mb-6">
+          <h1 className="font-serif text-[28px] font-semibold text-text flex items-center gap-3 mb-2">
+            <DatabaseOutlined className="text-primary" /> 数据导入管理
+          </h1>
+          <p className="text-text-tertiary text-sm">
+            从教育考试院网页自动提取数据并导入数据库
+          </p>
+        </div>
 
         {/* OCR 服务状态 */}
         {ocrHealthy === false && (
-          <Alert
-            message="OCR 服务未启动"
-            description="请先在服务器上启动 OCR 微服务: cd services/ocr-service && python main.py"
-            type="error"
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
+          <div className="mb-4 rounded-lg bg-rush-fixed border border-rush/10 px-4 py-3">
+            <div className="flex items-start gap-3">
+              <WarningOutlined className="text-rush mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-text mb-1">OCR 服务未启动</p>
+                <p className="text-xs text-text-tertiary">
+                  请先在服务器上启动 OCR 微服务: cd services/ocr-service && python main.py
+                </p>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* 步骤条 */}
-        <Steps
-          current={currentStep}
-          style={{ marginBottom: 32 }}
-          items={[
-            { title: '输入网址', description: '抓取页面图片' },
-            { title: 'OCR 识别', description: '提取表格数据' },
-            { title: '数据预览', description: '校验并确认' },
-            { title: '导入完成', description: '写入数据库' },
-          ]}
-        />
+        <div className="mb-8 bg-surface rounded-lg shadow-card p-5">
+          <Steps
+            current={currentStep}
+            items={[
+              { title: '输入网址', description: '抓取页面图片' },
+              { title: 'OCR 识别', description: '提取表格数据' },
+              { title: '数据预览', description: '校验并确认' },
+              { title: '导入完成', description: '写入数据库' },
+            ]}
+          />
+        </div>
 
         <Spin spinning={loading}>
           {/* Step 0: 输入 URL */}
           {currentStep === 0 && (
-            <Card>
+            <div className="bg-surface rounded-lg shadow-card p-5">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 <div>
-                  <Text strong style={{ display: 'block', marginBottom: 8 }}>选择数据类型</Text>
+                  <p className="font-serif text-base font-semibold text-text mb-2">选择数据类型</p>
                   <Radio.Group
                     value={dataType}
                     onChange={(e) => setDataType(e.target.value)}
@@ -902,14 +904,14 @@ export default function DataImportPage() {
                   </Radio.Group>
                 </div>
 
-                <Divider style={{ margin: '12px 0' }} />
+                <div className="border-t border-border-subtle my-3" />
 
-                <Text strong>输入目标网页地址</Text>
-                <Text type="secondary">
+                <p className="font-serif text-base font-semibold text-text">输入目标网页地址</p>
+                <p className="text-text-tertiary text-sm">
                   {dataType === 'score_segment'
                     ? '粘贴教育考试院的一分一段表页面 URL'
                     : '粘贴教育考试院的征集志愿页面 URL（如本科一批征集志愿）'}
-                </Text>
+                </p>
                 <Input.Search
                   placeholder={
                     dataType === 'score_segment'
@@ -931,37 +933,42 @@ export default function DataImportPage() {
                   size="large"
                 />
               </Space>
-            </Card>
+            </div>
           )}
 
           {/* Step 1: 配置参数 + 图片预览 */}
           {currentStep === 1 && fetchResult && (
-            <Card>
+            <div className="bg-surface rounded-lg shadow-card p-5">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                <Alert
-                  message={`页面: ${fetchResult.title}`}
-                  description={`找到 ${fetchResult.image_count} 张图片，数据类型: ${dataType === 'score_segment' ? '一分一段表' : '征集志愿'}`}
-                  type="success"
-                  showIcon
-                />
+                <div className="rounded-lg bg-safe-fixed border border-safe/10 px-4 py-3">
+                  <div className="flex items-start gap-3">
+                    <CheckCircleOutlined className="text-safe mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-text mb-1">页面: {fetchResult.title}</p>
+                      <p className="text-xs text-text-tertiary">
+                        找到 {fetchResult.image_count} 张图片，数据类型: {dataType === 'score_segment' ? '一分一段表' : '征集志愿'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
                 <Row gutter={16}>
                   <Col span={6}>
-                    <Text strong>年份</Text>
+                    <p className="font-serif text-sm font-semibold text-text mb-1">年份</p>
                     <InputNumber
                       value={year}
                       onChange={(v) => v && setYear(v)}
                       min={2020}
                       max={2030}
-                      style={{ width: '100%', marginTop: 4 }}
+                      style={{ width: '100%' }}
                     />
                   </Col>
                   <Col span={6}>
-                    <Text strong>省份</Text>
+                    <p className="font-serif text-sm font-semibold text-text mb-1">省份</p>
                     <Select
                       value={province}
                       onChange={setProvince}
-                      style={{ width: '100%', marginTop: 4 }}
+                      style={{ width: '100%' }}
                       options={[
                         { value: '四川', label: '四川' },
                         { value: '重庆', label: '重庆' },
@@ -971,11 +978,11 @@ export default function DataImportPage() {
                     />
                   </Col>
                   <Col span={6}>
-                    <Text strong>考试类型</Text>
+                    <p className="font-serif text-sm font-semibold text-text mb-1">考试类型</p>
                     <Select
                       value={examType}
                       onChange={setExamType}
-                      style={{ width: '100%', marginTop: 4 }}
+                      style={{ width: '100%' }}
                       options={[
                         { value: '物理类', label: '物理类' },
                         { value: '历史类', label: '历史类' },
@@ -986,11 +993,11 @@ export default function DataImportPage() {
                   </Col>
                   {dataType === 'supplementary' && (
                     <Col span={6}>
-                      <Text strong>批次</Text>
+                      <p className="font-serif text-sm font-semibold text-text mb-1">批次</p>
                       <Select
                         value={batch}
                         onChange={setBatch}
-                        style={{ width: '100%', marginTop: 4 }}
+                        style={{ width: '100%' }}
                         options={[
                           { value: '本科提前批A段', label: '本科提前批A段' },
                           { value: '本科提前批B段', label: '本科提前批B段' },
@@ -1006,7 +1013,11 @@ export default function DataImportPage() {
                   )}
                 </Row>
 
-                <Divider>图片预览（前 6 张）</Divider>
+                <div className="border-t border-border-subtle my-2 text-center">
+                  <span className="relative -top-3 bg-surface px-4 text-xs text-text-muted">
+                    图片预览（前 6 张）
+                  </span>
+                </div>
                 <Image.PreviewGroup>
                   <Row gutter={[8, 8]}>
                     {fetchResult.image_urls.slice(0, 6).map((imgUrl, i) => (
@@ -1014,7 +1025,7 @@ export default function DataImportPage() {
                         <Image
                           src={imgUrl}
                           alt={`图片 ${i + 1}`}
-                          style={{ borderRadius: 4 }}
+                          className="rounded"
                           fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/+F/PQAJpAN42kLfHwAAAABJRU5ErkJggg=="
                         />
                       </Col>
@@ -1022,21 +1033,21 @@ export default function DataImportPage() {
                   </Row>
                 </Image.PreviewGroup>
                 {fetchResult.image_count > 6 && (
-                  <Text type="secondary">
+                  <p className="text-text-muted text-sm">
                     还有 {fetchResult.image_count - 6} 张图片未显示
-                  </Text>
+                  </p>
                 )}
 
                 {/* 多引擎校验选项（仅征集志愿） */}
                 {dataType === 'supplementary' && (
-                  <Card size="small" style={{ marginTop: 16, background: '#f0f5ff' }}>
+                  <div className="mt-4 bg-primary-fixed rounded-xl border border-primary/10 p-4">
                     <Row align="middle" gutter={16}>
                       <Col flex="auto">
                         <Space>
-                          <ScanOutlined style={{ fontSize: 18, color: '#1890ff' }} />
-                          <Text strong>多引擎交叉校验</Text>
-                          <Tag color="blue">推荐</Tag>
-                          <Text type="secondary">使用多个 OCR 引擎同时识别，交叉比对确保数据准确</Text>
+                          <ScanOutlined className="text-lg text-primary" />
+                          <span className="font-serif text-sm font-semibold text-text">多引擎交叉校验</span>
+                          <Tag className="!bg-primary-fixed !text-primary !border-primary/20">推荐</Tag>
+                          <span className="text-text-tertiary text-xs">使用多个 OCR 引擎同时识别，交叉比对确保数据准确</span>
                         </Space>
                       </Col>
                       <Col>
@@ -1054,8 +1065,8 @@ export default function DataImportPage() {
 
                     {/* 单引擎模式：选择引擎 */}
                     {!multiEngineMode && (
-                      <div style={{ marginTop: 16, padding: 12, background: '#fff', borderRadius: 4 }}>
-                        <Text strong style={{ display: 'block', marginBottom: 8 }}>选择 OCR 引擎</Text>
+                      <div className="mt-4 p-3 bg-surface rounded-lg">
+                        <p className="font-serif text-sm font-semibold text-text mb-2">选择 OCR 引擎</p>
                         <Select
                           value={selectedEngine}
                           onChange={setSelectedEngine}
@@ -1068,53 +1079,53 @@ export default function DataImportPage() {
                             { value: 'rapid', label: 'RapidOCR（轻量快速）' },
                           ]}
                         />
-                        <Text type="secondary" style={{ marginLeft: 12 }}>
+                        <span className="text-text-muted text-xs ml-3">
                           {selectedEngine === 'baidu' && '需要百度云 API Key'}
                           {selectedEngine === 'paddleocr_vl' && '需要千帆 API Key'}
                           {selectedEngine === 'aistudio' && '需要 AIStudio Token'}
                           {selectedEngine === 'paddleocr' && '本地 Docker 服务'}
                           {selectedEngine === 'rapid' && '本地轻量引擎'}
-                        </Text>
+                        </span>
                       </div>
                     )}
 
                     {/* 多引擎模式：选择多个引擎 */}
                     {multiEngineMode && (
-                      <div style={{ marginTop: 16, padding: 12, background: '#fff', borderRadius: 4 }}>
-                        <Text strong style={{ display: 'block', marginBottom: 8 }}>选择 OCR 引擎（至少 2 个）</Text>
+                      <div className="mt-4 p-3 bg-surface rounded-lg">
+                        <p className="font-serif text-sm font-semibold text-text mb-2">选择 OCR 引擎（至少 2 个）</p>
                         <Space wrap>
                           <Tag.CheckableTag
                             checked={engineOptions.enableBaidu}
                             onChange={(checked) => setEngineOptions(prev => ({ ...prev, enableBaidu: checked }))}
-                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                            style={{ padding: '4px 12px', border: '1px solid var(--color-border)' }}
                           >
                             百度云 OCR
                           </Tag.CheckableTag>
                           <Tag.CheckableTag
                             checked={engineOptions.enablePaddleocrVl}
                             onChange={(checked) => setEngineOptions(prev => ({ ...prev, enablePaddleocrVl: checked }))}
-                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                            style={{ padding: '4px 12px', border: '1px solid var(--color-border)' }}
                           >
                             PaddleOCR-VL
                           </Tag.CheckableTag>
                           <Tag.CheckableTag
                             checked={engineOptions.enableAistudio}
                             onChange={(checked) => setEngineOptions(prev => ({ ...prev, enableAistudio: checked }))}
-                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                            style={{ padding: '4px 12px', border: '1px solid var(--color-border)' }}
                           >
                             AIStudio
                           </Tag.CheckableTag>
                           <Tag.CheckableTag
                             checked={engineOptions.enablePaddleocr}
                             onChange={(checked) => setEngineOptions(prev => ({ ...prev, enablePaddleocr: checked }))}
-                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                            style={{ padding: '4px 12px', border: '1px solid var(--color-border)' }}
                           >
                             PaddleOCR
                           </Tag.CheckableTag>
                           <Tag.CheckableTag
                             checked={engineOptions.enableRapid}
                             onChange={(checked) => setEngineOptions(prev => ({ ...prev, enableRapid: checked }))}
-                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                            style={{ padding: '4px 12px', border: '1px solid var(--color-border)' }}
                           >
                             RapidOCR
                           </Tag.CheckableTag>
@@ -1126,14 +1137,14 @@ export default function DataImportPage() {
                                 loadAiConfigs();
                               }
                             }}
-                            style={{ padding: '4px 12px', border: '1px solid #d9d9d9' }}
+                            style={{ padding: '4px 12px', border: '1px solid var(--color-border)' }}
                           >
                             AI 视觉模型
                           </Tag.CheckableTag>
                         </Space>
 
                         {engineOptions.enableAi && (
-                          <div style={{ marginTop: 12, padding: 8, background: '#fafafa', borderRadius: 4 }}>
+                          <div className="mt-3 p-2 bg-surface-dim rounded-lg">
                             <Radio.Group
                               value={aiConfigMode}
                               onChange={(e) => setAiConfigMode(e.target.value)}
@@ -1188,26 +1199,26 @@ export default function DataImportPage() {
                           </div>
                         )}
 
-                        <Alert
-                          style={{ marginTop: 12 }}
-                          message="多引擎校验说明"
-                          description={
-                            <ul style={{ margin: 0, paddingLeft: 16 }}>
-                              <li>多个引擎结果一致的数据自动通过</li>
-                              <li>结果不一致的数据标记待人工审核</li>
-                              <li>启用的引擎越多，校验越准确，但耗时也越长</li>
-                            </ul>
-                          }
-                          type="info"
-                          showIcon
-                        />
+                        <div className="mt-3 rounded-lg bg-primary-fixed/50 border border-primary/10 px-3 py-2">
+                          <div className="flex items-start gap-2">
+                            <ScanOutlined className="text-primary mt-0.5 text-xs" />
+                            <div>
+                              <p className="text-xs font-medium text-text mb-1">多引擎校验说明</p>
+                              <ul className="text-xs text-text-tertiary m-0 pl-4">
+                                <li>多个引擎结果一致的数据自动通过</li>
+                                <li>结果不一致的数据标记待人工审核</li>
+                                <li>启用的引擎越多，校验越准确，但耗时也越长</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
-                  </Card>
+                  </div>
                 )}
 
                 <Space>
-                  <Button onClick={() => setCurrentStep(0)}>上一步</Button>
+                  <Button onClick={() => setCurrentStep(0)} className="!text-text-tertiary">上一步</Button>
                   {dataType === 'supplementary' && multiEngineMode ? (
                     <Button
                       type="primary"
@@ -1228,12 +1239,12 @@ export default function DataImportPage() {
                   )}
                 </Space>
               </Space>
-            </Card>
+            </div>
           )}
 
           {/* Step 2: OCR 结果预览 */}
           {currentStep === 2 && ocrResult && (
-            <Card>
+            <div className="bg-surface rounded-lg shadow-card p-5">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {dataType === 'score_segment' ? (
                   <>
@@ -1251,7 +1262,7 @@ export default function DataImportPage() {
                           value={dataErrorMessages.length === 0 ? '校验通过' : `${dataErrorMessages.length} 个问题`}
                           prefix={dataErrorMessages.length === 0 ? <CheckCircleOutlined /> : <WarningOutlined />}
                           valueStyle={{
-                            color: dataErrorMessages.length === 0 ? '#52c41a' : '#faad14',
+                            color: dataErrorMessages.length === 0 ? 'var(--color-safe)' : 'var(--color-rush)',
                           }}
                         />
                       </Col>
@@ -1264,11 +1275,12 @@ export default function DataImportPage() {
                     </Row>
 
                     {dataErrorMessages.length > 0 && (
-                      <Alert
-                        message={`发现 ${dataErrorMessages.length} 个问题`}
-                        description={
-                          <div>
-                            <ul style={{ margin: '0 0 12px', paddingLeft: 20 }}>
+                      <div className="rounded-lg bg-rush-fixed border border-rush/10 px-4 py-3">
+                        <div className="flex items-start gap-3">
+                          <WarningOutlined className="text-rush mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-text mb-2">发现 {dataErrorMessages.length} 个问题</p>
+                            <ul className="text-xs text-text-tertiary m-0 mb-3 pl-5">
                               {dataErrorMessages.slice(0, 10).map((e, i) => (
                                 <li key={i}>{e}</li>
                               ))}
@@ -1285,16 +1297,13 @@ export default function DataImportPage() {
                               >
                                 智能修复
                               </Button>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
+                              <span className="text-text-muted text-xs">
                                 自动判断是人数还是累计人数出错并修正，也可点击数值手动编辑
-                              </Text>
+                              </span>
                             </Space>
                           </div>
-                        }
-                        type="warning"
-                        showIcon
-                        icon={<WarningOutlined />}
-                      />
+                        </div>
+                      </div>
                     )}
 
                     <Table
@@ -1323,7 +1332,7 @@ export default function DataImportPage() {
                         <Statistic
                           title="无冲突"
                           value={supplementaryData.filter(r => !r._hasConflict).length}
-                          valueStyle={{ color: '#52c41a' }}
+                          valueStyle={{ color: 'var(--color-safe)' }}
                           prefix={<CheckCircleOutlined />}
                         />
                       </Col>
@@ -1331,7 +1340,7 @@ export default function DataImportPage() {
                         <Statistic
                           title="有冲突"
                           value={supplementaryData.filter(r => r._hasConflict).length}
-                          valueStyle={{ color: supplementaryData.some(r => r._hasConflict) ? '#faad14' : '#999' }}
+                          valueStyle={{ color: supplementaryData.some(r => r._hasConflict) ? 'var(--color-rush)' : 'var(--color-text-muted)' }}
                           prefix={<ExclamationCircleOutlined />}
                         />
                       </Col>
@@ -1341,7 +1350,7 @@ export default function DataImportPage() {
                           value={ocrResult.is_valid ? '校验通过' : `${ocrResult.errors.length} 个问题`}
                           prefix={ocrResult.is_valid ? <CheckCircleOutlined /> : <WarningOutlined />}
                           valueStyle={{
-                            color: ocrResult.is_valid ? '#52c41a' : '#faad14',
+                            color: ocrResult.is_valid ? 'var(--color-safe)' : 'var(--color-rush)',
                           }}
                         />
                       </Col>
@@ -1355,61 +1364,65 @@ export default function DataImportPage() {
 
                     {/* 多引擎校验结果摘要 */}
                     {multiEngineResult && (
-                      <Card size="small" style={{ marginTop: 16, background: '#f0f5ff' }}>
+                      <div className="mt-4 bg-primary-fixed rounded-xl border border-primary/10 p-4">
                         <Row align="middle" gutter={16}>
                           <Col flex="auto">
                             <Space wrap>
-                              <Text strong>多引擎校验结果</Text>
+                              <span className="font-serif text-sm font-semibold text-text">多引擎校验结果</span>
                               <Divider type="vertical" />
-                              <Text type="secondary">使用引擎:</Text>
+                              <span className="text-text-muted text-xs">使用引擎:</span>
                               {multiEngineResult.engines_success.map(engine => (
-                                <Tag key={engine} color="green">{engine}</Tag>
+                                <Tag key={engine} className="!bg-safe-fixed !text-safe">{engine}</Tag>
                               ))}
                               {Object.entries(multiEngineResult.engines_failed).map(([engine, error]) => (
                                 <Tooltip key={engine} title={error}>
-                                  <Tag color="red">{engine} (失败)</Tag>
+                                  <Tag className="!bg-rush-fixed !text-rush">{engine} (失败)</Tag>
                                 </Tooltip>
                               ))}
                             </Space>
                           </Col>
                           <Col>
                             <Space>
-                              <Tag color="green">高置信: {multiEngineResult.high_confidence}</Tag>
-                              <Tag color="blue">中置信: {multiEngineResult.medium_confidence}</Tag>
-                              <Tag color="orange">冲突: {multiEngineResult.conflicts}</Tag>
+                              <Tag className="!bg-safe-fixed !text-safe">高置信: {multiEngineResult.high_confidence}</Tag>
+                              <Tag className="!bg-accent-fixed !text-accent">中置信: {multiEngineResult.medium_confidence}</Tag>
+                              <Tag className="!bg-rush-fixed !text-rush">冲突: {multiEngineResult.conflicts}</Tag>
                             </Space>
                           </Col>
                         </Row>
                         {supplementaryData.some(r => r._hasConflict) && (
-                          <Alert
-                            style={{ marginTop: 12 }}
-                            message="部分数据存在冲突"
-                            description="表格中橙色背景的行表示有冲突，冲突字段会显示各引擎的不同值，点击可选择应用"
-                            type="warning"
-                            showIcon
-                          />
+                          <div className="mt-3 rounded-lg bg-rush-fixed/50 border border-rush/10 px-3 py-2">
+                            <div className="flex items-start gap-2">
+                              <WarningOutlined className="text-rush mt-0.5 text-xs" />
+                              <div>
+                                <p className="text-xs font-medium text-text mb-0.5">部分数据存在冲突</p>
+                                <p className="text-xs text-text-tertiary">
+                                  表格中橙色背景的行表示有冲突，冲突字段会显示各引擎的不同值，点击可选择应用
+                                </p>
+                              </div>
+                            </div>
+                          </div>
                         )}
-                      </Card>
+                      </div>
                     )}
 
                     {ocrResult.errors.length > 0 && (
-                      <Alert
-                        style={{ marginTop: 16 }}
-                        message={`发现 ${ocrResult.errors.length} 个问题`}
-                        description={
-                          <ul style={{ margin: 0, paddingLeft: 20 }}>
-                            {ocrResult.errors.slice(0, 10).map((e, i) => (
-                              <li key={i}>{e}</li>
-                            ))}
-                          </ul>
-                        }
-                        type="warning"
-                        showIcon
-                      />
+                      <div className="mt-4 rounded-lg bg-rush-fixed border border-rush/10 px-4 py-3">
+                        <div className="flex items-start gap-3">
+                          <WarningOutlined className="text-rush mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-text mb-2">发现 {ocrResult.errors.length} 个问题</p>
+                            <ul className="text-xs text-text-tertiary m-0 pl-5">
+                              {ocrResult.errors.slice(0, 10).map((e, i) => (
+                                <li key={i}>{e}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
                     )}
 
                     <Table
-                      style={{ marginTop: 16 }}
+                      className="mt-4"
                       dataSource={supplementaryData}
                       columns={[
                         // 置信度列（多引擎校验结果）
@@ -1426,14 +1439,14 @@ export default function DataImportPage() {
                           onFilter: (value: any, record: SupplementaryRowWithConflict) => record._confidence === value,
                           render: (_: any, record: SupplementaryRowWithConflict) => {
                             if (!record._confidence) {
-                              return <Tag color="default">-</Tag>;
+                              return <Tag className="!bg-surface-dim !text-text-muted">-</Tag>;
                             }
-                            const colors: Record<string, string> = {
-                              high: 'green',
-                              medium: 'blue',
-                              low: 'orange',
-                              conflict: 'red',
-                              single: 'default',
+                            const tagStyles: Record<string, string> = {
+                              high: '!bg-safe-fixed !text-safe',
+                              medium: '!bg-accent-fixed !text-accent',
+                              low: '!bg-rush-fixed !text-rush',
+                              conflict: '!bg-rush-fixed !text-rush',
+                              single: '!bg-surface-dim !text-text-muted',
                             };
                             const labels: Record<string, string> = {
                               high: '高',
@@ -1443,14 +1456,14 @@ export default function DataImportPage() {
                               single: '单源',
                             };
                             return (
-                              <Tag color={colors[record._confidence] || 'default'}>
+                              <Tag className={tagStyles[record._confidence] || '!bg-surface-dim !text-text-muted'}>
                                 {record._hasConflict && <ExclamationCircleOutlined style={{ marginRight: 4 }} />}
                                 {labels[record._confidence] || record._confidence}
                               </Tag>
                             );
                           },
                         },
-                        ...supplementaryColumns.slice(0, -2), // 除了计划数和���费
+                        ...supplementaryColumns.slice(0, -2), // 除了计划数和收费
                         {
                           title: '计划数',
                           dataIndex: 'plan_count',
@@ -1459,20 +1472,19 @@ export default function DataImportPage() {
                           sorter: (a: SupplementaryRowWithConflict, b: SupplementaryRowWithConflict) => a.plan_count - b.plan_count,
                           render: (val: number, record: SupplementaryRowWithConflict) => {
                             const rowKey = getSupplementaryRowKey(record);
-                            // 检查是否有多引擎冲���
+                            // 检查是否有多引擎冲突
                             const fieldDiff = record._fieldDiffs?.find(d => d.field_name === 'plan_count');
 
                             // 有多引擎冲突时显示各引擎值
                             if (fieldDiff && !fieldDiff.is_consistent) {
                               return (
                                 <Space direction="vertical" size={2}>
-                                  <span style={{ fontWeight: 'bold' }}>{val}</span>
+                                  <span className="font-semibold text-text">{val}</span>
                                   <Space wrap size={2}>
                                     {Object.entries(fieldDiff.values).map(([engine, engineVal]) => (
                                       <Tooltip key={engine} title={`点击应用 ${engine} 的值`}>
                                         <Tag
-                                          color={String(engineVal) === String(val) ? 'green' : 'orange'}
-                                          style={{ cursor: 'pointer', fontSize: 10 }}
+                                          className={String(engineVal) === String(val) ? '!bg-safe-fixed !text-safe cursor-pointer !text-[10px]' : '!bg-rush-fixed !text-rush cursor-pointer !text-[10px]'}
                                           onClick={() => handleApplyEngineValue(rowKey, 'plan_count', engineVal)}
                                         >
                                           {engine}: {String(engineVal)}
@@ -1504,10 +1516,10 @@ export default function DataImportPage() {
                             }
                             return (
                               <span
-                                style={{ cursor: 'pointer' }}
+                                className="cursor-pointer text-text hover:text-primary"
                                 onClick={() => setEditingSupplementaryCell({ rowKey, field: 'plan_count' })}
                               >
-                                {val ?? '-'} <EditOutlined style={{ fontSize: 10, color: '#999' }} />
+                                {val ?? '-'} <EditOutlined className="text-[10px] text-text-faint" />
                               </span>
                             );
                           },
@@ -1527,13 +1539,12 @@ export default function DataImportPage() {
                             if (fieldDiff && !fieldDiff.is_consistent) {
                               return (
                                 <Space direction="vertical" size={2}>
-                                  <span style={{ fontWeight: 'bold' }}>{val || '-'}</span>
+                                  <span className="font-semibold text-text">{val || '-'}</span>
                                   <Space wrap size={2}>
                                     {Object.entries(fieldDiff.values).map(([engine, engineVal]) => (
                                       <Tooltip key={engine} title={`点击应用 ${engine} 的值`}>
                                         <Tag
-                                          color={String(engineVal) === String(val) ? 'green' : 'orange'}
-                                          style={{ cursor: 'pointer', fontSize: 10 }}
+                                          className={String(engineVal) === String(val) ? '!bg-safe-fixed !text-safe cursor-pointer !text-[10px]' : '!bg-rush-fixed !text-rush cursor-pointer !text-[10px]'}
                                           onClick={() => handleApplyEngineValue(rowKey, 'tuition', engineVal)}
                                         >
                                           {engine}: {String(engineVal)}
@@ -1567,10 +1578,10 @@ export default function DataImportPage() {
                             }
                             return (
                               <span
-                                style={{ cursor: 'pointer' }}
+                                className="cursor-pointer text-text hover:text-primary"
                                 onClick={() => setEditingSupplementaryCell({ rowKey, field: 'tuition' })}
                               >
-                                {val || '-'} <EditOutlined style={{ fontSize: 10, color: '#999' }} />
+                                {val || '-'} <EditOutlined className="text-[10px] text-text-faint" />
                               </span>
                             );
                           },
@@ -1587,14 +1598,14 @@ export default function DataImportPage() {
                   </>
                 )}
                 <style jsx global>{`
-                  .row-error td { background: #fff2f0 !important; }
-                  .row-error:hover td { background: #ffebe8 !important; }
-                  .row-conflict td { background: #fff7e6 !important; }
-                  .row-conflict:hover td { background: #ffe7ba !important; }
+                  .row-error td { background: var(--color-rush-fixed, #fef2f2) !important; }
+                  .row-error:hover td { background: #fde8e8 !important; }
+                  .row-conflict td { background: var(--color-elite-fixed, #fdf8ec) !important; }
+                  .row-conflict:hover td { background: #faecd0 !important; }
                 `}</style>
 
                 <Space>
-                  <Button onClick={() => setCurrentStep(1)}>上一步</Button>
+                  <Button onClick={() => setCurrentStep(1)} className="!text-text-tertiary">上一步</Button>
                   {dataType === 'score_segment' && dataErrorMessages.length > 0 && (
                     <Button icon={<ToolOutlined />} onClick={handleAutoFix}>
                       智能修复
@@ -1612,12 +1623,12 @@ export default function DataImportPage() {
                   </Button>
                 </Space>
               </Space>
-            </Card>
+            </div>
           )}
 
           {/* Step 3: 完成 */}
           {currentStep === 3 && saveResult && (
-            <Card>
+            <div className="bg-surface rounded-lg shadow-card p-5">
               <Result
                 status="success"
                 title="数据导入成功"
@@ -1639,13 +1650,14 @@ export default function DataImportPage() {
                   </Link>,
                 ]}
               />
-            </Card>
+            </div>
           )}
         </Spin>
 
         {/* 已导入数据统计 */}
         {stats.length > 0 && (
-          <Card title="已导入数据" style={{ marginTop: 24 }}>
+          <div className="mt-6 bg-surface rounded-lg shadow-card p-5">
+            <h2 className="font-serif text-base font-semibold text-text mb-4">已导入数据</h2>
             <Table
               dataSource={stats}
               columns={statsColumns}
@@ -1653,9 +1665,9 @@ export default function DataImportPage() {
               size="small"
               pagination={false}
             />
-          </Card>
+          </div>
         )}
-      </Content>
-    </Layout>
+      </div>
+    </div>
   );
 }
