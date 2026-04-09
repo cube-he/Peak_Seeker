@@ -5,7 +5,12 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(ls:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(npx next:*)",
+      "Bash(find C:UsersAdministratorDocumentsVolunteerHelperappswebsrccomponents -name *.tsx -type f)",
+      "Bash(grep -rn \"px-8\\\\b\\\\|px-12\\\\b\\\\|p-8\\\\b\\\\|p-12\\\\b\" /c/Users/Administrator/Documents/VolunteerHelper/apps/web/src/app/ --include=*.tsx)",
+      "Bash(grep -rn \"w-\\\\[[3-9][0-9][0-9]px\\\\]\\\\|min-w-\\\\[\" /c/Users/Administrator/Documents/VolunteerHelper/apps/web/src/ --include=*.tsx)",
+      "Bash(grep -rn style={{.*width /c/Users/Administrator/Documents/VolunteerHelper/apps/web/src/app/ --include=*.tsx)"
     ]
   }
 }
