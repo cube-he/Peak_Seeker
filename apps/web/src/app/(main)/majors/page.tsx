@@ -399,7 +399,7 @@ export default function MajorsPage() {
               ))}
             </div>
           ) : (
-            <div className="bg-surface rounded-xl shadow-card p-12">
+            <div className="bg-surface rounded-xl shadow-card p-6 sm:p-12">
               <Empty description="暂无匹配的专业" />
             </div>
           )}

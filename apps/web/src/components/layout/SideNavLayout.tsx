@@ -150,7 +150,7 @@ export default function SideNavLayout({ children, pageTitle, pageSubtitle }: Sid
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/30" onClick={() => setSidebarOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-[280px] bg-surface flex flex-col shadow-2xl">
+          <aside className="absolute inset-y-0 left-0 w-[85vw] max-w-[280px] bg-surface flex flex-col shadow-2xl">
             <button
               onClick={() => setSidebarOpen(false)}
               className="absolute top-4 right-4 p-2 rounded-lg hover:bg-surface-dim border-0 bg-transparent cursor-pointer"
