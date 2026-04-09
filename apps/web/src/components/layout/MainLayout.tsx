@@ -1,6 +1,6 @@
 'use client';
 
-import { Dropdown, Avatar, Space, Button } from 'antd';
+import { Dropdown, Space } from 'antd';
 import {
   UserOutlined,
   BellOutlined,
@@ -18,7 +18,7 @@ const navItems = [
   { href: '/universities', label: '院校库' },
   { href: '/majors', label: '专业库' },
   { href: '/scores', label: '查分系统' },
-  { href: '/recommend', label: 'AI 智能推荐' },
+  { href: '/recommend', label: 'AI 推荐' },
   { href: '/plan', label: '我的方案' },
 ];
 
@@ -47,27 +47,30 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
   ];
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
-      {/* Header */}
-      <header className="bg-surface/90 backdrop-blur-xl fixed top-0 z-50 w-full">
-        <nav className="flex justify-between items-center w-full px-6 lg:px-8 h-20 max-w-[1920px] mx-auto">
+    <div className="min-h-screen bg-bg flex flex-col">
+      {/* Navbar */}
+      <header className="sticky top-0 z-50 h-16 backdrop-blur-xl bg-[rgba(250,249,245,0.92)] shadow-nav">
+        <nav className="max-w-[1200px] mx-auto px-12 h-full flex items-center justify-between">
           {/* Brand */}
-          <Link href="/" className="no-underline flex items-center">
-            <span className="text-xl font-extrabold tracking-tighter text-primary font-headline">
-              巅峰智选 Summit Intelligence
+          <Link href="/" className="no-underline flex items-center gap-2.5">
+            <span className="w-[34px] h-[34px] bg-gradient-to-br from-primary to-primary-light rounded-lg flex items-center justify-center text-white font-serif font-bold text-[17px]">
+              智
+            </span>
+            <span className="font-serif text-[19px] font-semibold text-text">
+              智愿家
             </span>
           </Link>
 
           {/* Desktop Nav */}
-          <div className="hidden lg:flex gap-8 items-center">
+          <div className="hidden lg:flex items-center gap-8">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`font-headline font-semibold text-sm tracking-tight no-underline transition-colors duration-300 ${
+                className={`text-sm no-underline transition-colors duration-200 ${
                   isActive(item.href)
-                    ? 'text-primary border-b-2 border-primary pb-1'
-                    : 'text-slate-600 hover:text-primary'
+                    ? 'text-primary font-medium'
+                    : 'text-text-tertiary hover:text-primary'
                 }`}
               >
                 {item.label}
@@ -79,65 +82,54 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
           <div className="flex items-center gap-3">
             {isLoggedIn ? (
               <>
-                <button className="p-2 hover:bg-surface-container-low rounded-lg transition-all duration-300 border-0 bg-transparent cursor-pointer">
-                  <BellOutlined className="text-on-surface-variant text-lg" />
+                <button className="w-8 h-8 bg-surface-dim rounded-full flex items-center justify-center text-text-tertiary border-0 cursor-pointer transition-colors duration-200 hover:text-primary">
+                  <BellOutlined className="text-base" />
                 </button>
                 <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-                  <Space className="cursor-pointer px-3 py-1.5 rounded-xl hover:bg-surface-container-low transition-all duration-300">
-                    <Avatar
-                      size={32}
-                      icon={<UserOutlined />}
-                      style={{ background: 'linear-gradient(135deg, #003fb1, #1a56db)' }}
-                    />
-                    <span className="text-on-surface font-medium text-sm hidden sm:inline">
-                      {user?.username}
+                  <Space className="cursor-pointer">
+                    <span className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white text-[13px] font-sans font-medium">
+                      {user?.username?.charAt(0) || <UserOutlined />}
                     </span>
                   </Space>
                 </Dropdown>
               </>
             ) : (
               <Space size={8}>
-                <Link href="/login">
-                  <Button
-                    type="text"
-                    icon={<LoginOutlined />}
-                    className="text-on-surface-variant"
-                  >
-                    登录
-                  </Button>
+                <Link href="/login" className="text-sm text-text-tertiary hover:text-primary no-underline transition-colors duration-200">
+                  <LoginOutlined className="mr-1" />
+                  登录
                 </Link>
                 <Link href="/register">
-                  <Button type="primary">注册</Button>
+                  <button className="bg-gradient-to-br from-primary to-primary-light text-white text-[13px] font-medium px-5 py-2 rounded border-0 cursor-pointer hover:opacity-90 transition-opacity duration-200">
+                    注册
+                  </button>
                 </Link>
               </Space>
             )}
 
             {/* Mobile Menu Toggle */}
             <button
-              className="lg:hidden p-2 hover:bg-surface-container-low rounded-lg transition-all border-0 bg-transparent cursor-pointer"
+              className="lg:hidden w-8 h-8 flex items-center justify-center rounded-full bg-surface-dim text-text-tertiary border-0 cursor-pointer transition-colors duration-200 hover:text-primary"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
-              <MenuOutlined className="text-on-surface text-lg" />
+              <MenuOutlined className="text-base" />
             </button>
           </div>
         </nav>
 
-        {/* Tonal separator */}
-        <div className="h-px w-full bg-surface-container-low" />
-
         {/* Mobile Nav Menu */}
         {mobileMenuOpen && (
-          <div className="lg:hidden bg-surface-container-lowest border-t border-surface-container-low">
+          <div className="lg:hidden bg-surface border-t border-border">
             <div className="flex flex-col py-2 px-4">
               {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`py-3 px-4 rounded-lg font-headline font-semibold text-sm no-underline transition-colors ${
+                  className={`py-3 px-4 rounded-lg text-sm no-underline transition-colors duration-200 ${
                     isActive(item.href)
-                      ? 'text-primary bg-primary-fixed/30'
-                      : 'text-on-surface-variant hover:text-primary hover:bg-surface-container-low'
+                      ? 'text-primary font-medium bg-primary/5'
+                      : 'text-text-tertiary hover:text-primary hover:bg-surface-dim'
                   }`}
                 >
                   {item.label}
@@ -148,13 +140,10 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
         )}
       </header>
 
-      {/* Spacer for fixed header */}
-      <div className="h-20" />
-
       {/* Content */}
       <main
-        className={`flex-1 ${noPadding ? '' : 'px-6 lg:px-8 py-8'}`}
-        style={{ maxWidth: maxWidth || '1920px', margin: '0 auto', width: '100%' }}
+        className={`flex-1 ${noPadding ? '' : 'max-w-[1200px] mx-auto px-12 py-8 w-full'}`}
+        style={noPadding ? { maxWidth: maxWidth || undefined, margin: '0 auto', width: '100%' } : { maxWidth: maxWidth || '1200px' }}
       >
         {children}
       </main>

@@ -65,10 +65,10 @@ export default function ScoresPage() {
       key: 'university',
       render: (_: any, record: any) => (
         <div>
-          <Link href={`/universities/${record.universityId}`} className="font-medium text-primary hover:underline">
+          <Link href={`/universities/${record.universityId}`} className="font-medium text-primary hover:text-primary-light hover:underline transition-colors">
             {record.university?.name}
           </Link>
-          <div className="text-xs text-on-surface-variant">{record.university?.province}</div>
+          <div className="text-xs text-text-muted">{record.university?.province}</div>
         </div>
       ),
     },
@@ -77,10 +77,10 @@ export default function ScoresPage() {
       key: 'major',
       render: (_: any, record: any) => (
         <div>
-          <Link href={`/majors/${record.majorId}`} className="text-on-surface hover:text-primary transition-colors">
+          <Link href={`/majors/${record.majorId}`} className="text-text hover:text-primary transition-colors">
             {record.major?.name}
           </Link>
-          <div className="text-xs text-on-surface-variant">{record.major?.category}</div>
+          <div className="text-xs text-text-muted">{record.major?.category}</div>
         </div>
       ),
     },
@@ -91,7 +91,7 @@ export default function ScoresPage() {
       key: 'majorMinScore',
       width: 80,
       sorter: (a: any, b: any) => (a.majorMinScore || 0) - (b.majorMinScore || 0),
-      render: (val: number) => val ? <span className="font-semibold text-on-surface">{val}</span> : '-',
+      render: (val: number) => val ? <span className="font-semibold text-text [font-variant-numeric:tabular-nums]">{val}</span> : '-',
     },
     {
       title: '最低位次',
@@ -99,14 +99,14 @@ export default function ScoresPage() {
       key: 'majorMinRank',
       width: 100,
       sorter: (a: any, b: any) => (a.majorMinRank || 0) - (b.majorMinRank || 0),
-      render: (val: number) => val ? <span className="text-on-surface-variant">{val.toLocaleString()}</span> : '-',
+      render: (val: number) => val ? <span className="text-text-secondary [font-variant-numeric:tabular-nums]">{val.toLocaleString()}</span> : '-',
     },
     {
       title: '录取人数',
       dataIndex: 'majorAdmissionCount',
       key: 'majorAdmissionCount',
       width: 80,
-      render: (val: number) => val || '-',
+      render: (val: number) => val ? <span className="[font-variant-numeric:tabular-nums]">{val}</span> : '-',
     },
     {
       title: '标签',
@@ -115,13 +115,13 @@ export default function ScoresPage() {
       render: (_: any, record: any) => (
         <div className="flex flex-wrap gap-1">
           {record.university?.is985 && (
-            <Tag className="rounded-full border-0 bg-tertiary-fixed text-on-tertiary-fixed-variant m-0">985</Tag>
+            <Tag className="rounded-full border-0 bg-accent-fixed text-accent m-0">985</Tag>
           )}
           {record.university?.is211 && (
-            <Tag className="rounded-full border-0 bg-primary-fixed text-on-primary-fixed-variant m-0">211</Tag>
+            <Tag className="rounded-full border-0 bg-primary-fixed text-primary m-0">211</Tag>
           )}
           {record.university?.isDoubleFirstClass && (
-            <Tag className="rounded-full border-0 bg-secondary-fixed text-on-secondary-fixed-variant m-0">双一流</Tag>
+            <Tag className="rounded-full border-0 bg-safe-fixed text-safe m-0">双一流</Tag>
           )}
         </div>
       ),
@@ -134,24 +134,24 @@ export default function ScoresPage() {
     <MainLayout>
       {/* Page Title */}
       <div className="mb-8">
-        <h2 className="text-xl font-headline font-extrabold text-on-surface mb-1">分数线查询</h2>
-        <p className="text-sm text-on-surface-variant">按分数或位次查询历年录取数据</p>
+        <h2 className="font-serif text-[28px] font-semibold text-text mb-1">分数线查询</h2>
+        <p className="text-[15px] text-text-tertiary">按分数或位次查询历年录取数据</p>
       </div>
 
       {/* Main Layout: Sidebar + Content */}
       <div className="flex gap-6 items-start">
         {/* Left Sidebar */}
         <div className="w-80 shrink-0 sticky top-24">
-          <div className="bg-surface-container-lowest rounded-xl p-6">
-            <h3 className="text-sm font-headline font-semibold text-on-surface mb-5">查询条件</h3>
+          <div className="bg-surface rounded-xl p-6">
+            <h3 className="text-sm font-sans font-semibold text-text mb-5">查询条件</h3>
 
             {/* Mode Toggle */}
             <div className="flex gap-2 mb-6">
               <button
                 className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all duration-300 border-0 cursor-pointer ${
                   searchMode === 'score'
-                    ? 'bg-primary text-on-primary shadow-glow-primary'
-                    : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'
+                    ? 'bg-gradient-to-br from-primary to-primary-light text-white shadow-glow-primary'
+                    : 'bg-surface-dim text-text-secondary hover:bg-border'
                 }`}
                 onClick={() => setSearchMode('score')}
               >
@@ -160,8 +160,8 @@ export default function ScoresPage() {
               <button
                 className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all duration-300 border-0 cursor-pointer ${
                   searchMode === 'rank'
-                    ? 'bg-primary text-on-primary shadow-glow-primary'
-                    : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'
+                    ? 'bg-gradient-to-br from-primary to-primary-light text-white shadow-glow-primary'
+                    : 'bg-surface-dim text-text-secondary hover:bg-border'
                 }`}
                 onClick={() => setSearchMode('rank')}
               >
@@ -183,7 +183,7 @@ export default function ScoresPage() {
             >
               <Form.Item
                 name="province"
-                label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">省份</span>}
+                label={<span className="text-sm text-text-secondary font-medium">省份</span>}
                 rules={[{ required: true }]}
               >
                 <Select>
@@ -196,7 +196,7 @@ export default function ScoresPage() {
               {searchMode === 'score' ? (
                 <Form.Item
                   name="score"
-                  label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">分数</span>}
+                  label={<span className="text-sm text-text-secondary font-medium">分数</span>}
                   rules={[{ required: true, message: '请输入分数' }]}
                 >
                   <InputNumber min={0} max={750} className="w-full" placeholder="输入分数" />
@@ -204,7 +204,7 @@ export default function ScoresPage() {
               ) : (
                 <Form.Item
                   name="rank"
-                  label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">位次</span>}
+                  label={<span className="text-sm text-text-secondary font-medium">位次</span>}
                   rules={[{ required: true, message: '请输入位次' }]}
                 >
                   <InputNumber min={1} className="w-full" placeholder="输入位次" />
@@ -213,7 +213,7 @@ export default function ScoresPage() {
 
               <Form.Item
                 name="year"
-                label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">年份</span>}
+                label={<span className="text-sm text-text-secondary font-medium">年份</span>}
               >
                 <Select>
                   <Option value={2024}>2024</Option>
@@ -224,7 +224,7 @@ export default function ScoresPage() {
 
               <Form.Item
                 name="range"
-                label={<span className="text-xs uppercase tracking-widest text-on-surface-variant font-label">浮动范围</span>}
+                label={<span className="text-sm text-text-secondary font-medium">浮动范围</span>}
               >
                 <InputNumber
                   min={1}
@@ -237,7 +237,7 @@ export default function ScoresPage() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary-container text-on-primary font-semibold text-sm border-0 cursor-pointer flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-glow-primary-lg active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full h-12 rounded-xl bg-gradient-to-br from-primary to-primary-light text-white font-semibold text-sm border-0 cursor-pointer flex items-center justify-center gap-2 shadow-glow-primary transition-all duration-300 hover:shadow-glow-primary-lg active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <SearchOutlined />
                   {isLoading ? '查询中...' : '查询'}
@@ -260,25 +260,25 @@ export default function ScoresPage() {
               <StatCard
                 label="最高分"
                 value={statistics._max?.majorMinScore || '-'}
-                accentColor="error"
+                accentColor="rush"
               />
               <StatCard
                 label="平均分"
                 value={statistics._avg?.majorMinScore ? Math.round(statistics._avg.majorMinScore) : '-'}
-                accentColor="primary"
+                accentColor="accent"
               />
               <StatCard
                 label="最低分"
                 value={statistics._min?.majorMinScore || '-'}
-                accentColor="secondary"
+                accentColor="safe"
               />
             </div>
           )}
 
           {/* Results Table */}
-          <div className="bg-surface-container-lowest rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-surface-container-low">
-              <span className="font-headline font-semibold text-on-surface text-sm">
+          <div className="bg-surface rounded-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <span className="font-sans font-semibold text-text text-sm">
                 查询结果 ({results.length} 条)
               </span>
             </div>
@@ -289,7 +289,10 @@ export default function ScoresPage() {
               loading={isLoading}
               pagination={{ pageSize: 20, showSizeChanger: true }}
               size="small"
-              className="summit-table"
+              className="zhiyuanjia-table"
+              rowClassName={(record: any) =>
+                record.isUserPosition ? 'zhiyuanjia-highlight-row' : ''
+              }
             />
           </div>
         </div>
@@ -297,21 +300,27 @@ export default function ScoresPage() {
 
       {/* Table styling overrides */}
       <style jsx global>{`
-        .summit-table .ant-table {
+        .zhiyuanjia-table .ant-table {
           background: transparent;
         }
-        .summit-table .ant-table-thead > tr > th {
-          background: #f3f3fe !important;
-          border-bottom: 1px solid #ededf8 !important;
-          color: #434654 !important;
+        .zhiyuanjia-table .ant-table-thead > tr > th {
+          background: var(--color-surface-dim) !important;
+          border-bottom: 1px solid var(--color-border-subtle) !important;
+          color: var(--color-text-secondary) !important;
           font-weight: 600;
           font-size: 13px;
         }
-        .summit-table .ant-table-tbody > tr > td {
-          border-bottom: 1px solid #f3f3fe !important;
+        .zhiyuanjia-table .ant-table-tbody > tr > td {
+          border-bottom: 1px solid var(--color-border-subtle) !important;
         }
-        .summit-table .ant-table-tbody > tr:hover > td {
-          background: #f3f3fe !important;
+        .zhiyuanjia-table .ant-table-tbody > tr:hover > td {
+          background: var(--color-surface-dim) !important;
+        }
+        .zhiyuanjia-highlight-row > td {
+          background: #ebf4ff !important;
+        }
+        .zhiyuanjia-highlight-row:hover > td {
+          background: #ebf4ff !important;
         }
       `}</style>
     </MainLayout>

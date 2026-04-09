@@ -1,26 +1,27 @@
 import type { Metadata } from 'next';
-import { Inter, Manrope } from 'next/font/google';
+import { Crimson_Pro, Inter } from 'next/font/google';
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import QueryProvider from '@/components/QueryProvider';
 import './globals.css';
 
-const inter = Inter({
+const crimsonPro = Crimson_Pro({
   subsets: ['latin'],
-  variable: '--font-body',
+  variable: '--font-serif',
   display: 'swap',
+  weight: ['400', '500', '600', '700'],
 });
 
-const manrope = Manrope({
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-headline',
+  variable: '--font-sans',
   display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: '巅峰智选 Summit Intelligence | AI 驱动的升学志愿填报专家',
-  description: '全球顶尖升学情报系统，为每一位追梦者构建精准的"数字作战室"。基于大数据深度洞察，重新定义名校申请策略。',
+  title: '智愿家 Zhiyuanjia | 你的升学智囊',
+  description: '基于 AI 与大数据的升学决策平台，让每一个志愿都被认真对待。智慧·志愿·专家。',
 };
 
 export default function RootLayout({
@@ -29,58 +30,52 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-CN" className={`${inter.variable} ${manrope.variable}`}>
-      <body className="bg-surface text-on-surface font-body antialiased">
+    <html lang="zh-CN" className={`${crimsonPro.variable} ${inter.variable}`}>
+      <body className={`${crimsonPro.variable} ${inter.variable} font-sans antialiased`}>
         <QueryProvider>
           <AntdRegistry>
             <ConfigProvider
               locale={zhCN}
               theme={{
                 token: {
-                  colorPrimary: '#003fb1',
-                  colorSuccess: '#006973',
-                  colorWarning: '#723b00',
-                  colorError: '#ba1a1a',
-                  colorInfo: '#1a56db',
+                  colorPrimary: '#1e3a5f',
+                  colorSuccess: '#276749',
+                  colorWarning: '#b8860b',
+                  colorError: '#c53030',
+                  colorBgBase: '#f5f4ed',
+                  colorBgContainer: '#faf9f5',
+                  colorBgElevated: '#ffffff',
+                  colorText: '#1a1a19',
+                  colorTextSecondary: '#4d4c48',
+                  colorTextTertiary: '#6b6962',
+                  colorTextQuaternary: '#87867f',
+                  colorBorder: '#e8e6dc',
+                  colorBorderSecondary: '#f0eee6',
                   borderRadius: 8,
-                  colorBgContainer: '#ffffff',
-                  colorBgLayout: '#faf8ff',
-                  colorBorder: '#c3c5d7',
-                  colorText: '#191b23',
-                  colorTextSecondary: '#434654',
-                  fontFamily: `var(--font-body), 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif`,
+                  fontFamily: "Inter, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+                  fontSize: 14,
+                  lineHeight: 1.65,
                 },
                 components: {
                   Button: {
                     controlHeight: 40,
                     controlHeightLG: 48,
-                    paddingContentHorizontal: 24,
+                    borderRadius: 8,
                   },
                   Card: {
                     paddingLG: 24,
+                    borderRadiusLG: 10,
                   },
                   Table: {
-                    headerBg: '#f3f3fe',
-                    headerColor: '#191b23',
-                    rowHoverBg: 'rgba(243, 243, 254, 0.5)',
+                    headerBg: '#f0eee6',
+                    rowHoverBg: '#faf9f5',
                   },
                   Input: {
-                    activeBorderColor: '#003fb1',
-                    hoverBorderColor: '#b5c4ff',
-                  },
-                  Select: {
-                    optionActiveBg: '#f3f3fe',
-                  },
-                  Tabs: {
-                    inkBarColor: '#003fb1',
-                    itemSelectedColor: '#003fb1',
-                    itemHoverColor: '#1a56db',
+                    activeBg: '#f0eee6',
+                    hoverBg: '#f0eee6',
                   },
                   Tag: {
-                    borderRadiusSM: 9999,
-                  },
-                  Modal: {
-                    borderRadiusLG: 16,
+                    borderRadiusSM: 999,
                   },
                 },
               }}

@@ -36,19 +36,19 @@ export default function LoginPage() {
   return (
     <AuthLayout
       heroTitle="AI 驱动，智选未来"
-      heroSubtitle={'全球顶尖升学情报系统，为每一位追梦者构建精准的\u201C数字作战室\u201D。基于大数据深度洞察，重新定义名校申请策略。'}
+      heroSubtitle="基于大数据深度洞察，为每一位学子构建精准的升学规划路径，让理想前程有据可依。"
       features={[
         { icon: '📊', title: '精准位次预测', description: '基于近十年千万级招录数据，采用非线性回归模型，预测误差率极低。' },
         { icon: '🏛️', title: '名校资源库', description: '权威覆盖全国 2,800+ 所高校，深度解析双一流及 985/211 核心学科数据。' },
       ]}
-      socialProof="10,000+ 学子已获得理想 Offer"
+      socialProof="125万+ 家庭的共同选择"
     >
       <div>
-        <h2 className="font-headline font-extrabold text-2xl text-on-surface mb-2">
+        <h2 className="font-serif text-[28px] font-semibold text-text">
           欢迎回来
         </h2>
-        <p className="text-on-surface-variant text-sm mb-8">
-          请登录您的学术情报账户以继续
+        <p className="text-[15px] text-text-tertiary mt-2 mb-8">
+          登录你的智愿家账号
         </p>
 
         <Form layout="vertical" onFinish={handleLogin} size="large">
@@ -57,8 +57,9 @@ export default function LoginPage() {
             rules={[{ required: true, message: '请输入用户名' }]}
           >
             <Input
-              prefix={<UserOutlined className="text-outline" />}
+              prefix={<UserOutlined className="text-text-muted" />}
               placeholder="用户名"
+              className="bg-surface-dim"
             />
           </Form.Item>
 
@@ -67,8 +68,9 @@ export default function LoginPage() {
             rules={[{ required: true, message: '请输入密码' }]}
           >
             <Input.Password
-              prefix={<LockOutlined className="text-outline" />}
+              prefix={<LockOutlined className="text-text-muted" />}
               placeholder="密码"
+              className="bg-surface-dim"
             />
           </Form.Item>
 
@@ -78,25 +80,19 @@ export default function LoginPage() {
               htmlType="submit"
               loading={loginMutation.isPending}
               block
-              style={{ height: 48, fontWeight: 600, fontSize: 15 }}
+              className="bg-gradient-to-br from-primary to-primary-light text-white h-12 rounded text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 w-full"
             >
-              一键登录 →
+              登录
             </Button>
           </Form.Item>
         </Form>
 
         <div className="text-center">
-          <p className="text-on-surface-variant text-sm">
-            还没有账户？{' '}
-            <Link href="/register" className="text-primary font-semibold no-underline hover:underline">
+          <p className="text-sm text-text-tertiary">
+            还没有账号？{' '}
+            <Link href="/register" className="text-primary-light hover:text-primary font-medium no-underline hover:underline">
               立即注册
             </Link>
-          </p>
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-surface-container-low text-center">
-          <p className="text-xs text-outline">
-            &copy; {new Date().getFullYear()} SUMMIT INTELLIGENCE FRAMEWORK. POWERED BY ARCHITECT AI.
           </p>
         </div>
       </div>
