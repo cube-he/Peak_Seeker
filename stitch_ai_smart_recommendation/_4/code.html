@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>分数线查询 - 巅峰智选</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body { font-family: 'Inter', 'HarmonyOS Sans SC', sans-serif; }
+        .font-headline { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e1ed; border-radius: 10px; }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#003fb1",
+                        "primary-container": "#1a56db",
+                        "secondary": "#006973",
+                        "tertiary": "#723b00",
+                        "surface": "#faf8ff",
+                        "on-surface": "#191b23",
+                        "surface-container": "#ededf8",
+                        "surface-container-low": "#f3f3fe",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-high": "#e7e7f3",
+                        "surface-container-highest": "#e2e1ed",
+                        "outline-variant": "#c3c5d7",
+                        "on-primary": "#ffffff",
+                        "error": "#ba1a1a"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface min-h-screen">
+<!-- TopNavBar Execution -->
+<header class="bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl shadow-sm dark:shadow-none docked full-width top-0 sticky z-50">
+<div class="flex justify-between items-center px-8 h-16 max-w-[1920px] mx-auto">
+<div class="text-xl font-bold tracking-tighter text-blue-800 dark:text-blue-200">巅峰智选</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="font-manrope font-semibold text-sm tracking-tight text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors" href="#">首页</a>
+<a class="font-manrope font-semibold text-sm tracking-tight text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors" href="#">院校库</a>
+<a class="font-manrope font-semibold text-sm tracking-tight text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors" href="#">专业库</a>
+<a class="font-manrope font-semibold text-sm tracking-tight text-blue-700 dark:text-blue-400 border-b-2 border-blue-700 dark:border-blue-400 pb-1" href="#">分数线查询</a>
+<a class="font-manrope font-semibold text-sm tracking-tight text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors" href="#">AI智能推荐</a>
+<a class="font-manrope font-semibold text-sm tracking-tight text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors" href="#">我的方案</a>
+</nav>
+<div class="flex items-center gap-4">
+<div class="flex gap-3 mr-4">
+<span class="material-symbols-outlined text-slate-600 cursor-pointer p-2 hover:bg-slate-50 rounded-full transition-all">notifications</span>
+<span class="material-symbols-outlined text-slate-600 cursor-pointer p-2 hover:bg-slate-50 rounded-full transition-all">account_circle</span>
+</div>
+<button class="bg-primary-container text-white px-5 py-2 rounded-md font-semibold text-sm hover:shadow-lg hover:shadow-primary/20 scale-95 active:scale-90 duration-200 transition-all">
+                    开始测评
+                </button>
+</div>
+</div>
+<div class="bg-slate-100/50 dark:bg-slate-800/50 h-[1px] w-full"></div>
+</header>
+<main class="flex max-w-[1920px] mx-auto min-h-[calc(100-4rem)]">
+<!-- SideNavBar (Query Panel) -->
+<aside class="h-screen w-80 fixed left-0 top-16 bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur-lg border-r-0 flex flex-col py-8 px-6 gap-6 overflow-y-auto custom-scrollbar">
+<div class="space-y-1">
+<h2 class="text-xl font-headline font-bold text-primary">智能查询参数</h2>
+<p class="text-xs text-slate-500 font-medium uppercase tracking-wider">精确定位录取概率</p>
+</div>
+<!-- Query Type Switch -->
+<div class="bg-surface-container-high p-1 rounded-xl flex">
+<button class="flex-1 py-2 text-sm font-semibold rounded-lg bg-white shadow-sm text-primary">分数查询</button>
+<button class="flex-1 py-2 text-sm font-semibold text-slate-500 hover:text-primary transition-colors">位次查询</button>
+</div>
+<div class="space-y-5">
+<!-- Selectors -->
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">所在省份</label>
+<select class="w-full bg-surface-container-highest border-none rounded-xl text-sm py-3 focus:ring-2 focus:ring-primary transition-all">
+<option>浙江</option>
+<option>江苏</option>
+<option>广东</option>
+<option>山东</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">毕业年份</label>
+<select class="w-full bg-surface-container-highest border-none rounded-xl text-sm py-3 focus:ring-2 focus:ring-primary transition-all">
+<option>2024 (当前)</option>
+<option>2023</option>
+<option>2022</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">考试科目</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="py-2 text-xs font-bold border-2 border-primary text-primary bg-primary/5 rounded-lg">物理/化学/生物</button>
+<button class="py-2 text-xs font-bold border-2 border-transparent bg-surface-container-highest text-slate-600 rounded-lg hover:bg-slate-200 transition-all">其他组合</button>
+</div>
+</div>
+<!-- Input score -->
+<div class="space-y-2 pt-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">我的预估成绩</label>
+<div class="relative">
+<input class="w-full bg-surface-container-highest border-none rounded-xl text-lg font-bold py-4 pl-4 pr-12 focus:ring-2 focus:ring-primary transition-all" placeholder="输入分数" type="number"/>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">分</span>
+</div>
+</div>
+<!-- Stepper -->
+<div class="space-y-3">
+<div class="flex justify-between items-center px-1">
+<label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">成绩浮动范围</label>
+<span class="text-xs font-bold text-primary">±10 分</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-slate-600 hover:bg-primary hover:text-white transition-all">
+<span class="material-symbols-outlined">remove</span>
+</button>
+<div class="flex-1 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-2/3"></div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-slate-600 hover:bg-primary hover:text-white transition-all">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</div>
+</div>
+<div class="mt-auto space-y-4">
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-white py-4 rounded-xl font-bold text-sm shadow-lg shadow-primary/30 flex items-center justify-center gap-2 hover:translate-y-[-2px] transition-all">
+<span class="material-symbols-outlined text-[20px]">search</span>
+                    立即执行查询
+                </button>
+<button class="w-full text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-primary transition-colors flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px]">refresh</span>
+                    重置所有筛选
+                </button>
+</div>
+</aside>
+<!-- Right Content Area (Results Center) -->
+<section class="ml-80 flex-1 p-10 pb-20">
+<!-- Statistical Dashboards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+<div class="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border-l-4 border-primary">
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">2024 浙江理科</p>
+<h3 class="text-lg font-headline font-bold text-on-surface mb-2">批次线趋势预测</h3>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-headline font-extrabold text-primary">592</span>
+<span class="text-xs text-error font-bold flex items-center">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> +4
+                        </span>
+</div>
+<div class="mt-4 h-12 w-full flex items-end gap-1">
+<div class="flex-1 bg-slate-100 rounded-t h-[60%]"></div>
+<div class="flex-1 bg-slate-100 rounded-t h-[75%]"></div>
+<div class="flex-1 bg-slate-100 rounded-t h-[70%]"></div>
+<div class="flex-1 bg-primary rounded-t h-[90%]"></div>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border-l-4 border-secondary">
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">位次预测</p>
+<h3 class="text-lg font-headline font-bold text-on-surface mb-2">省内同分段竞争</h3>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-headline font-extrabold text-secondary">18,245</span>
+<span class="text-xs text-slate-400 font-medium">名左右</span>
+</div>
+<div class="mt-4 flex items-center gap-2">
+<div class="flex -space-x-2">
+<div class="w-6 h-6 rounded-full border-2 border-white bg-slate-200"></div>
+<div class="w-6 h-6 rounded-full border-2 border-white bg-slate-300"></div>
+<div class="w-6 h-6 rounded-full border-2 border-white bg-slate-400"></div>
+</div>
+<span class="text-[10px] font-bold text-slate-500">已有 2.4k 同分段用户查询</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl shadow-sm border-l-4 border-tertiary">
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">AI 智能引擎</p>
+<h3 class="text-lg font-headline font-bold text-on-surface mb-2">推荐院校覆盖数</h3>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-headline font-extrabold text-tertiary">142</span>
+<span class="text-xs text-slate-400 font-medium">所院校</span>
+</div>
+<div class="mt-4 bg-tertiary-fixed text-on-tertiary-fixed px-3 py-1 rounded-full text-[10px] font-bold inline-block">
+                        根据您的成绩，有 12 所为“保底”院校
+                    </div>
+</div>
+</div>
+<!-- Horizontal Filters -->
+<div class="bg-surface-container-low rounded-2xl p-4 mb-8 flex flex-wrap items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-wider">院校类型:</span>
+<div class="flex gap-2">
+<span class="px-3 py-1 bg-primary text-white text-xs font-semibold rounded-full cursor-pointer">全部</span>
+<span class="px-3 py-1 bg-white text-slate-600 text-xs font-semibold rounded-full hover:bg-slate-100 cursor-pointer transition-colors">综合类</span>
+<span class="px-3 py-1 bg-white text-slate-600 text-xs font-semibold rounded-full hover:bg-slate-100 cursor-pointer transition-colors">理工类</span>
+</div>
+</div>
+<div class="h-6 w-[1px] bg-slate-200"></div>
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-wider">办学层次:</span>
+<div class="flex gap-2">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="rounded text-primary focus:ring-primary w-4 h-4 border-slate-300" type="checkbox"/>
+<span class="text-xs font-bold text-slate-600 group-hover:text-primary transition-colors">985</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="rounded text-primary focus:ring-primary w-4 h-4 border-slate-300" type="checkbox"/>
+<span class="text-xs font-bold text-slate-600 group-hover:text-primary transition-colors">211</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="rounded text-primary focus:ring-primary w-4 h-4 border-slate-300" type="checkbox"/>
+<span class="text-xs font-bold text-slate-600 group-hover:text-primary transition-colors">双一流</span>
+</label>
+</div>
+</div>
+<div class="ml-auto flex items-center gap-4">
+<div class="flex items-center gap-2 text-xs font-bold text-slate-500">
+<span>排序方式:</span>
+<select class="border-none bg-transparent focus:ring-0 text-primary font-bold cursor-pointer">
+<option>最低分从高到低</option>
+<option>录取人数最多</option>
+<option>录取概率最高</option>
+</select>
+</div>
+</div>
+</div>
+<!-- Data Table -->
+<div class="bg-surface-container-lowest rounded-3xl overflow-hidden shadow-sm">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-slate-100">
+<th class="py-5 px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">院校名称</th>
+<th class="py-5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">专业</th>
+<th class="py-5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">23年最低分/位次</th>
+<th class="py-5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">录取人数</th>
+<th class="py-5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">录取概率</th>
+<th class="py-5 px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">操作</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-50">
+<!-- Row 1 -->
+<tr class="hover:bg-slate-50/50 transition-colors group">
+<td class="py-6 px-6">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center p-2">
+<img class="w-full h-full object-contain" data-alt="University crest logo minimalist" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDoPGjuSvTZtN-RWbIzK8L9ySanySoD5jDPX5EIfEIikFawX_OSomLrTyL-v3WVBbR8kfL4fE5IiBPjzBSEBrfbyUpEUxD1SeqKPP0sQDF8vZ2FjI5K3lXt-NJSuJ75gmsxKDIO_UNDbBwYDNqxJsDKEBsinnyvqxc1vf_pljZSiCr3DoUCBvJmz-5j5ZPNFxopScBfUN3IVHo6QFHWv5M72YktFh8K1LlUDzphqCyQPbYyiQNNOc1U8faj61hmMNvaC7MEm9R-dbF-"/>
+</div>
+<div>
+<h4 class="font-headline font-bold text-on-surface">浙江大学</h4>
+<div class="flex gap-1 mt-1">
+<span class="px-1.5 py-0.5 bg-tertiary-fixed text-[9px] font-extrabold text-on-tertiary-fixed-variant rounded">985</span>
+<span class="px-1.5 py-0.5 bg-tertiary-fixed text-[9px] font-extrabold text-on-tertiary-fixed-variant rounded">211</span>
+<span class="px-1.5 py-0.5 bg-slate-100 text-[9px] font-bold text-slate-500 rounded">杭州</span>
+</div>
+</div>
+</div>
+</td>
+<td class="py-6 px-4">
+<span class="text-sm font-semibold text-slate-700">计算机科学与技术</span>
+</td>
+<td class="py-6 px-4">
+<div>
+<span class="text-sm font-bold text-on-surface">682</span>
+<p class="text-[10px] text-slate-400 font-medium">1,245名</p>
+</div>
+</td>
+<td class="py-6 px-4">
+<span class="text-sm font-bold text-slate-600">45人</span>
+</td>
+<td class="py-6 px-4">
+<div class="flex items-center gap-3">
+<div class="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
+<div class="h-full bg-orange-500 w-[15%]"></div>
+</div>
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-orange-50 text-orange-600">冲 (15%)</span>
+</div>
+</td>
+<td class="py-6 px-6 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/5 rounded-lg transition-all">加入对比</button>
+<button class="px-4 py-1.5 text-xs font-bold bg-primary text-white rounded-lg shadow-sm">查看详情</button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-slate-50/50 transition-colors group">
+<td class="py-6 px-6">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center p-2">
+<img class="w-full h-full object-contain" data-alt="Academic institution emblem vector" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDE803zdgKCyRiKm1hA1Q1q3FFNMUCH0K8FDXUf9mlZddsOMJR2dMfY1RDbKMbdfL70JXoujdK76McWXY3fJgDS2PwGZQTy7svw-0-ktqVowLCO4hRInjJV5oicYpcCqTLKLrPblfW04qSFIOWZRNnx7DLdFnozn0ZG-WzgufdkaOmtcZfZubw93fnIFivvzjnQrxMABDSGwJjZdke1kbXhOIvKWElVOyZl6YAUm8azP-Rj-k8lVc50zA3DZ5VYZ0Qv0dmtQlXyZ2nt"/>
+</div>
+<div>
+<h4 class="font-headline font-bold text-on-surface">南京大学</h4>
+<div class="flex gap-1 mt-1">
+<span class="px-1.5 py-0.5 bg-tertiary-fixed text-[9px] font-extrabold text-on-tertiary-fixed-variant rounded">985</span>
+<span class="px-1.5 py-0.5 bg-slate-100 text-[9px] font-bold text-slate-500 rounded">南京</span>
+</div>
+</div>
+</div>
+</td>
+<td class="py-6 px-4">
+<span class="text-sm font-semibold text-slate-700">软件工程 (基础学科)</span>
+</td>
+<td class="py-6 px-4">
+<div>
+<span class="text-sm font-bold text-on-surface">674</span>
+<p class="text-[10px] text-slate-400 font-medium">2,890名</p>
+</div>
+</td>
+<td class="py-6 px-4">
+<span class="text-sm font-bold text-slate-600">32人</span>
+</td>
+<td class="py-6 px-4">
+<div class="flex items-center gap-3">
+<div class="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
+<div class="h-full bg-blue-600 w-[62%]"></div>
+</div>
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700">稳 (62%)</span>
+</div>
+</td>
+<td class="py-6 px-6 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/5 rounded-lg transition-all">加入对比</button>
+<button class="px-4 py-1.5 text-xs font-bold bg-primary text-white rounded-lg shadow-sm">查看详情</button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-slate-50/50 transition-colors group">
+<td class="py-6 px-6">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center p-2">
+<img class="w-full h-full object-contain" data-alt="Modern college insignia logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQbyxFY6_5aSEpnIt9rM6RoeUhYJpneCi5yUFSFpRWKMSzIdJtn2ZUttYsWRMgBqpo2BikYYH_y7u02aHpuFtiRVyonE881rQlO2tlznVMQOchNr5o6DEF0rU0JkqRav7nBSG2zd9ZkVXIQfRRW32dl_RvYKtkiTEm9gwKCt2mjESqYCdQdXnlsjQdEHULMW_MxluAlcNlBOpeJeTEylr3Uufn-a16SsFeFWLv3X64_1OWmM59e8TVpmrNn95JguI7tlYSlWJFG3ex"/>
+</div>
+<div>
+<h4 class="font-headline font-bold text-on-surface">北京邮电大学</h4>
+<div class="flex gap-1 mt-1">
+<span class="px-1.5 py-0.5 bg-tertiary-fixed text-[9px] font-extrabold text-on-tertiary-fixed-variant rounded">211</span>
+<span class="px-1.5 py-0.5 bg-slate-100 text-[9px] font-bold text-slate-500 rounded">北京</span>
+</div>
+</div>
+</div>
+</td>
+<td class="py-6 px-4">
+<span class="text-sm font-semibold text-slate-700">通信工程 (实验班)</span>
+</td>
+<td class="py-6 px-4">
+<div>
+<span class="text-sm font-bold text-on-surface">658</span>
+<p class="text-[10px] text-slate-400 font-medium">5,102名</p>
+</div>
+</td>
+<td class="py-6 px-4">
+<span class="text-sm font-bold text-slate-600">120人</span>
+</td>
+<td class="py-6 px-4">
+<div class="flex items-center gap-3">
+<div class="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
+<div class="h-full bg-green-600 w-[94%]"></div>
+</div>
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-green-50 text-green-700">保 (94%)</span>
+</div>
+</td>
+<td class="py-6 px-6 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/5 rounded-lg transition-all">加入对比</button>
+<button class="px-4 py-1.5 text-xs font-bold bg-primary text-white rounded-lg shadow-sm">查看详情</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="p-6 flex items-center justify-center border-t border-slate-50">
+<button class="text-sm font-bold text-slate-400 hover:text-primary transition-colors flex items-center gap-2">
+                        加载更多结果
+                        <span class="material-symbols-outlined text-[18px]">expand_more</span>
+</button>
+</div>
+</div>
+<!-- Footer Message -->
+<div class="mt-8 text-center">
+<p class="text-[11px] text-slate-400 font-medium uppercase tracking-[0.2em]">数据真实 • AI 精准 • 决策可靠</p>
+</div>
+</section>
+</main>
+<!-- Footer Execution -->
+<footer class="w-full border-t-0 mt-20 bg-slate-50 dark:bg-slate-950">
+<div class="bg-slate-200 dark:bg-slate-800 h-[1px] w-full"></div>
+<div class="max-w-7xl mx-auto px-8 py-12 flex flex-col items-center gap-6">
+<div class="font-manrope font-bold text-slate-900 dark:text-slate-100 text-lg">巅峰智选 Summit Intelligence</div>
+<div class="flex flex-wrap justify-center gap-8">
+<a class="font-inter text-xs text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">关于我们</a>
+<a class="font-inter text-xs text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">服务协议</a>
+<a class="font-inter text-xs text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">隐私政策</a>
+<a class="font-inter text-xs text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors text-blue-600 underline" href="#">联系专家</a>
+</div>
+<div class="font-inter text-xs text-slate-400 text-center">
+                © 2024 巅峰智选 Summit Intelligence. 高端升学规划决策系统.
+            </div>
+</div>
+</footer>
+</body></html>

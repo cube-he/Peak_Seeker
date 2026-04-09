@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI 智能推荐 | Summit Intelligence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "error-container": "#ffdad6",
+                        "on-error": "#ffffff",
+                        "surface-dim": "#d9d9e4",
+                        "surface-tint": "#1353d8",
+                        "surface": "#faf8ff",
+                        "inverse-surface": "#2e3039",
+                        "secondary": "#006973",
+                        "on-background": "#191b23",
+                        "on-surface": "#191b23",
+                        "surface-variant": "#e2e1ed",
+                        "secondary-fixed": "#92f1ff",
+                        "tertiary": "#723b00",
+                        "inverse-on-surface": "#f0f0fb",
+                        "secondary-container": "#85efff",
+                        "tertiary-fixed": "#ffdcc3",
+                        "tertiary-fixed-dim": "#ffb77d",
+                        "surface-container-highest": "#e2e1ed",
+                        "on-primary-container": "#d4dcff",
+                        "on-secondary": "#ffffff",
+                        "background": "#faf8ff",
+                        "on-surface-variant": "#434654",
+                        "error": "#ba1a1a",
+                        "on-tertiary-container": "#ffd5b6",
+                        "tertiary-container": "#954f00",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed": "#00174d",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container": "#ededf8",
+                        "primary-container": "#1a56db",
+                        "outline-variant": "#c3c5d7",
+                        "primary": "#003fb1",
+                        "on-error-container": "#93000a",
+                        "primary-fixed": "#dbe1ff",
+                        "secondary-fixed-dim": "#6ad6e5",
+                        "surface-container-low": "#f3f3fe",
+                        "primary-fixed-dim": "#b5c4ff",
+                        "on-primary": "#ffffff",
+                        "surface-container-high": "#e7e7f3",
+                        "on-tertiary-fixed": "#2f1500",
+                        "on-secondary-container": "#006d78",
+                        "outline": "#737686",
+                        "inverse-primary": "#b5c4ff",
+                        "surface-bright": "#faf8ff",
+                        "on-primary-fixed-variant": "#003dab",
+                        "on-secondary-fixed": "#001f23",
+                        "on-secondary-fixed-variant": "#004f57"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope", "Noto Sans SC", "sans-serif"],
+                        "body": ["Inter", "Noto Sans SC", "sans-serif"],
+                        "label": ["Inter", "Noto Sans SC", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface">
+<!-- TopNavBar Implementation -->
+<nav class="bg-[#faf8ff] dark:bg-slate-950 shadow-sm dark:shadow-none docked full-width top-0 z-50 sticky">
+<div class="flex justify-between items-center w-full px-8 h-20 max-w-[1920px] mx-auto transition-all duration-300 ease-in-out">
+<div class="text-xl font-extrabold tracking-tighter text-[#003fb1] dark:text-blue-400 font-headline">
+            Summit Intelligence
+        </div>
+<div class="hidden md:flex gap-8 items-center">
+<a class="text-slate-600 dark:text-slate-400 hover:text-[#003fb1] transition-colors font-semibold text-sm tracking-tight" href="#">首页</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-[#003fb1] transition-colors font-semibold text-sm tracking-tight" href="#">大学库</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-[#003fb1] transition-colors font-semibold text-sm tracking-tight" href="#">专业库</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-[#003fb1] transition-colors font-semibold text-sm tracking-tight" href="#">查分系统</a>
+<a class="text-[#003fb1] dark:text-blue-400 border-b-2 border-[#003fb1] pb-1 font-semibold text-sm tracking-tight" href="#">AI 智能推荐</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-[#003fb1] transition-colors font-semibold text-sm tracking-tight" href="#">我的方案</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all">
+<span class="material-symbols-outlined text-slate-600">notifications</span>
+</button>
+<button class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all">
+<span class="material-symbols-outlined text-[#003fb1]">account_circle</span>
+</button>
+</div>
+</div>
+<div class="bg-[#f3f3fe] dark:bg-slate-900 h-px w-full"></div>
+</nav>
+<main class="max-w-[1920px] mx-auto flex min-h-screen">
+<!-- Left Panel: Input Form -->
+<aside class="w-80 lg:w-96 p-8 bg-surface-container-low flex flex-col gap-8 shrink-0 border-r border-outline-variant/10">
+<div>
+<h2 class="font-headline font-bold text-xl text-primary mb-2">AI 实验室参数</h2>
+<p class="text-sm text-on-surface-variant font-medium">配置您的学业概况以进行深度智能匹配。</p>
+</div>
+<div class="space-y-6">
+<!-- Form Group -->
+<div class="space-y-4">
+<div class="relative">
+<label class="block text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1 ml-1">当前分数</label>
+<input class="w-full bg-surface-container-highest border-b-2 border-transparent focus:border-primary focus:ring-0 px-4 py-3 rounded-t-lg font-semibold transition-all" placeholder="例如：685" type="text"/>
+</div>
+<div class="relative">
+<label class="block text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1 ml-1">全省位次</label>
+<input class="w-full bg-surface-container-highest border-b-2 border-transparent focus:border-primary focus:ring-0 px-4 py-3 rounded-t-lg font-semibold transition-all" placeholder="例如：1204" type="text"/>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="relative">
+<label class="block text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1 ml-1">省份</label>
+<select class="w-full bg-surface-container-highest border-b-2 border-transparent focus:border-primary focus:ring-0 px-4 py-3 rounded-t-lg font-semibold transition-all appearance-none">
+<option>浙江</option>
+<option>北京</option>
+<option>上海</option>
+</select>
+</div>
+<div class="relative">
+<label class="block text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1 ml-1">科目</label>
+<select class="w-full bg-surface-container-highest border-b-2 border-transparent focus:border-primary focus:ring-0 px-4 py-3 rounded-t-lg font-semibold transition-all appearance-none">
+<option>理科</option>
+<option>文科</option>
+</select>
+</div>
+</div>
+</div>
+<div class="space-y-4">
+<h3 class="font-headline font-bold text-sm text-primary uppercase tracking-widest">策略设置</h3>
+<div class="space-y-3">
+<label class="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-xl cursor-pointer hover:bg-primary/5 transition-colors">
+<input checked="" class="text-primary focus:ring-primary h-4 w-4" name="strategy" type="radio"/>
+<span class="text-sm font-semibold">稳健增长</span>
+</label>
+<label class="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-xl cursor-pointer hover:bg-primary/5 transition-colors">
+<input class="text-primary focus:ring-primary h-4 w-4" name="strategy" type="radio"/>
+<span class="text-sm font-semibold">激进冲击</span>
+</label>
+<label class="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-xl cursor-pointer hover:bg-primary/5 transition-colors">
+<input class="text-primary focus:ring-primary h-4 w-4" name="strategy" type="radio"/>
+<span class="text-sm font-semibold">保守保底</span>
+</label>
+</div>
+</div>
+<button class="w-full bg-gradient-to-r from-primary to-primary-container text-white py-4 rounded-xl font-headline font-bold text-sm shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all flex items-center justify-center gap-2 mt-4 group">
+<span class="material-symbols-outlined text-lg">auto_awesome</span>
+                使用 AI 生成
+            </button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<section class="flex-1 p-12 overflow-y-auto">
+<!-- Dashboard Header -->
+<div class="mb-12">
+<div class="flex justify-between items-end mb-8">
+<div>
+<span class="bg-secondary-fixed text-on-secondary-fixed-variant px-3 py-1 rounded-full text-[0.6875rem] font-bold uppercase tracking-widest mb-4 inline-block">分析已完成</span>
+<h1 class="font-headline font-extrabold text-4xl text-on-surface">智能分析报告</h1>
+</div>
+<div class="text-right">
+<p class="text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant">最后计算时间</p>
+<p class="font-headline font-bold text-lg">2024年6月14日 • 14:22</p>
+</div>
+</div>
+<!-- Bento Grid Summary -->
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+<div class="glass-panel p-8 rounded-2xl shadow-sm flex flex-col justify-between border-l-4 border-primary h-40">
+<p class="text-sm font-bold text-on-surface-variant uppercase tracking-widest">总推荐数量</p>
+<p class="font-headline font-extrabold text-5xl text-primary">84</p>
+</div>
+<div class="glass-panel p-8 rounded-2xl shadow-sm flex flex-col justify-between border-l-4 border-error h-40">
+<p class="text-sm font-bold text-on-surface-variant uppercase tracking-widest">冲击型 (冲)</p>
+<p class="font-headline font-extrabold text-5xl text-error">12</p>
+</div>
+<div class="glass-panel p-8 rounded-2xl shadow-sm flex flex-col justify-between border-l-4 border-primary-container h-40">
+<p class="text-sm font-bold text-on-surface-variant uppercase tracking-widest">稳健型 (稳)</p>
+<p class="font-headline font-extrabold text-5xl text-primary-container">42</p>
+</div>
+<div class="glass-panel p-8 rounded-2xl shadow-sm flex flex-col justify-between border-l-4 border-secondary h-40">
+<p class="text-sm font-bold text-on-surface-variant uppercase tracking-widest">保底型 (保)</p>
+<p class="font-headline font-extrabold text-5xl text-secondary">30</p>
+</div>
+</div>
+</div>
+<!-- Recommendations Grid/List -->
+<div class="space-y-6">
+<div class="flex items-center justify-between">
+<h2 class="font-headline font-bold text-2xl">推荐路径</h2>
+<div class="flex gap-4">
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container-highest rounded-lg text-sm font-semibold">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+                        筛选
+                    </button>
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container-highest rounded-lg text-sm font-semibold">
+<span class="material-symbols-outlined text-sm">sort</span>
+                        录取概率
+                    </button>
+</div>
+</div>
+<!-- Card 1: Reach -->
+<div class="bg-surface-container-lowest p-6 rounded-2xl flex items-center gap-8 hover:translate-x-1 transition-transform duration-200 group">
+<div class="w-20 text-center">
+<span class="bg-error-container text-on-error-container px-3 py-1 rounded-full text-[0.6875rem] font-bold uppercase tracking-widest block mb-2">冲</span>
+<p class="text-[0.6875rem] font-bold text-on-surface-variant uppercase tracking-tighter">策略 R-1</p>
+</div>
+<div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-8 items-center">
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">大学</p>
+<h4 class="font-headline font-bold text-lg">清华大学</h4>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">目标专业</p>
+<p class="font-semibold text-on-surface">计算机科学与人工智能</p>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">历史最低位次</p>
+<p class="font-semibold text-on-surface">850</p>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs font-bold uppercase tracking-widest">
+<span>录取概率</span>
+<span class="text-error">15%</span>
+</div>
+<div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-error" style="width: 15%"></div>
+</div>
+</div>
+</div>
+<button class="w-12 h-12 flex items-center justify-center rounded-xl bg-surface-container-highest text-primary hover:bg-primary hover:text-white transition-all">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+<!-- Card 2: Stable -->
+<div class="bg-surface-container-lowest p-6 rounded-2xl flex items-center gap-8 hover:translate-x-1 transition-transform duration-200 group border-l-4 border-primary-container">
+<div class="w-20 text-center">
+<span class="bg-primary-fixed text-on-primary-fixed-variant px-3 py-1 rounded-full text-[0.6875rem] font-bold uppercase tracking-widest block mb-2">稳</span>
+<p class="text-[0.6875rem] font-bold text-on-surface-variant uppercase tracking-tighter">策略 S-4</p>
+</div>
+<div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-8 items-center">
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">大学</p>
+<h4 class="font-headline font-bold text-lg">浙江大学</h4>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">目标专业</p>
+<p class="font-semibold text-on-surface">数字媒体技术</p>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">历史最低位次</p>
+<p class="font-semibold text-on-surface">1,450</p>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs font-bold uppercase tracking-widest">
+<span>录取概率</span>
+<span class="text-primary-container">65%</span>
+</div>
+<div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary-container" style="width: 65%"></div>
+</div>
+</div>
+</div>
+<button class="w-12 h-12 flex items-center justify-center rounded-xl bg-surface-container-highest text-primary hover:bg-primary hover:text-white transition-all">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+<!-- Card 3: Safe -->
+<div class="bg-surface-container-lowest p-6 rounded-2xl flex items-center gap-8 hover:translate-x-1 transition-transform duration-200 group border-l-4 border-secondary">
+<div class="w-20 text-center">
+<span class="bg-secondary-fixed text-on-secondary-fixed-variant px-3 py-1 rounded-full text-[0.6875rem] font-bold uppercase tracking-widest block mb-2">保</span>
+<p class="text-[0.6875rem] font-bold text-on-surface-variant uppercase tracking-tighter">策略 B-2</p>
+</div>
+<div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-8 items-center">
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">大学</p>
+<h4 class="font-headline font-bold text-lg">厦门大学</h4>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">目标专业</p>
+<p class="font-semibold text-on-surface">商业智能</p>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">历史最低位次</p>
+<p class="font-semibold text-on-surface">2,800</p>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs font-bold uppercase tracking-widest">
+<span>录取概率</span>
+<span class="text-secondary">92%</span>
+</div>
+<div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary" style="width: 92%"></div>
+</div>
+</div>
+</div>
+<button class="w-12 h-12 flex items-center justify-center rounded-xl bg-surface-container-highest text-primary hover:bg-primary hover:text-white transition-all">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+<!-- Card 4: AI Pick (Elite/Tertiary) -->
+<div class="relative overflow-hidden bg-surface-container-lowest p-6 rounded-2xl flex items-center gap-8 hover:translate-x-1 transition-transform duration-200 group border-l-4 border-tertiary">
+<div class="absolute top-0 right-0">
+<div class="bg-tertiary text-white px-4 py-1 text-[10px] font-bold uppercase tracking-widest rounded-bl-xl">AI 精选推荐</div>
+</div>
+<div class="w-20 text-center">
+<span class="bg-tertiary-fixed text-on-tertiary-fixed-variant px-3 py-1 rounded-full text-[0.6875rem] font-bold uppercase tracking-widest block mb-2">保</span>
+<p class="text-[0.6875rem] font-bold text-on-surface-variant uppercase tracking-tighter">最佳匹配</p>
+</div>
+<div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-8 items-center">
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">大学</p>
+<h4 class="font-headline font-bold text-lg">四川大学</h4>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">目标专业</p>
+<p class="font-semibold text-on-surface">临床医学</p>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface-variant uppercase mb-1">历史最低位次</p>
+<p class="font-semibold text-on-surface">3,200</p>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-xs font-bold uppercase tracking-widest">
+<span>录取概率</span>
+<span class="text-tertiary">98%</span>
+</div>
+<div class="w-full h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-tertiary" style="width: 98%"></div>
+</div>
+</div>
+</div>
+<button class="w-12 h-12 flex items-center justify-center rounded-xl bg-surface-container-highest text-primary hover:bg-primary hover:text-white transition-all">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer Implementation -->
+<footer class="bg-[#f3f3fe] dark:bg-slate-900 w-full py-12 px-8 mt-auto border-t border-[#c3c5d7]/20">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto">
+<div class="space-y-4">
+<p class="font-['Inter'] text-xs uppercase tracking-widest text-slate-500">法律与透明度</p>
+<div class="flex flex-col gap-2">
+<a class="text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-opacity hover:opacity-80" href="#">研究方法论</a>
+<a class="text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-opacity hover:opacity-80" href="#">数据隐私</a>
+</div>
+</div>
+<div class="space-y-4">
+<p class="font-['Inter'] text-xs uppercase tracking-widest text-slate-500">外部集成</p>
+<div class="flex flex-col gap-2">
+<a class="text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-opacity hover:opacity-80" href="#">高校关系</a>
+<a class="text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-opacity hover:opacity-80" href="#">API 文档</a>
+</div>
+</div>
+<div class="space-y-4">
+<p class="font-['Inter'] text-xs uppercase tracking-widest text-slate-500">支持</p>
+<div class="flex flex-col gap-2">
+<a class="text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-opacity hover:opacity-80" href="#">联系分析师</a>
+</div>
+</div>
+<div class="space-y-4 md:col-span-1 lg:col-span-1">
+<p class="font-['Inter'] text-xs uppercase tracking-widest text-slate-500 leading-relaxed">
+                © 2024 Summit Intelligence. 权威机构数据引擎认证。
+            </p>
+</div>
+</div>
+</footer>
+</body></html>

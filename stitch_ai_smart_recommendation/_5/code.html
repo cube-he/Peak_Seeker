@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>我的志愿方案 | Summit Intelligence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&amp;family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "error-container": "#ffdad6",
+                        "on-error": "#ffffff",
+                        "surface-dim": "#d9d9e4",
+                        "surface-tint": "#1353d8",
+                        "surface": "#faf8ff",
+                        "inverse-surface": "#2e3039",
+                        "secondary": "#006973",
+                        "on-background": "#191b23",
+                        "on-surface": "#191b23",
+                        "surface-variant": "#e2e1ed",
+                        "secondary-fixed": "#92f1ff",
+                        "tertiary": "#723b00",
+                        "inverse-on-surface": "#f0f0fb",
+                        "secondary-container": "#85efff",
+                        "tertiary-fixed": "#ffdcc3",
+                        "tertiary-fixed-dim": "#ffb77d",
+                        "surface-container-highest": "#e2e1ed",
+                        "on-primary-container": "#d4dcff",
+                        "on-secondary": "#ffffff",
+                        "background": "#faf8ff",
+                        "on-surface-variant": "#434654",
+                        "error": "#ba1a1a",
+                        "on-tertiary-container": "#ffd5b6",
+                        "tertiary-container": "#954f00",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed": "#00174d",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container": "#ededf8",
+                        "primary-container": "#1a56db",
+                        "outline-variant": "#c3c5d7",
+                        "primary": "#003fb1",
+                        "on-error-container": "#93000a",
+                        "primary-fixed": "#dbe1ff",
+                        "secondary-fixed-dim": "#6ad6e5",
+                        "surface-container-low": "#f3f3fe",
+                        "primary-fixed-dim": "#b5c4ff",
+                        "on-primary": "#ffffff",
+                        "surface-container-high": "#e7e7f3",
+                        "on-tertiary-fixed": "#2f1500",
+                        "on-secondary-container": "#006d78",
+                        "outline": "#737686",
+                        "inverse-primary": "#b5c4ff",
+                        "surface-bright": "#faf8ff",
+                        "on-primary-fixed-variant": "#003dab",
+                        "on-secondary-fixed": "#001f23",
+                        "on-secondary-fixed-variant": "#004f57"
+                    },
+                    fontFamily: {
+                        "headline": ["Noto Sans SC", "Manrope", "sans-serif"],
+                        "body": ["Noto Sans SC", "Inter", "sans-serif"],
+                        "label": ["Noto Sans SC", "Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-sidebar {
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface antialiased overflow-hidden">
+<div class="flex h-screen w-full">
+<!-- Side Navigation Bar -->
+<aside class="fixed left-0 top-0 h-full flex flex-col p-6 gap-4 bg-[#ffffffcc] dark:bg-slate-900/80 glass-sidebar shadow-[20px_0_40px_rgba(25,27,35,0.04)] w-72 z-40">
+<div class="mb-8 px-2">
+<h1 class="font-headline font-bold text-primary text-xl tracking-tight">录取指挥部</h1>
+<p class="font-label text-xs uppercase tracking-widest text-slate-500 mt-1">精英计划 运行中</p>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body font-medium text-[0.875rem]">控制面板</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-[#003fb1] to-[#1a56db] text-white rounded-xl shadow-lg shadow-blue-500/20 scale-95 active:scale-100 transition-all" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">folder_shared</span>
+<span class="font-body font-medium text-[0.875rem]">我的方案</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">assignment_turned_in</span>
+<span class="font-body font-medium text-[0.875rem]">申请状态</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">record_voice_over</span>
+<span class="font-body font-medium text-[0.875rem]">模拟面试</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">forum</span>
+<span class="font-body font-medium text-[0.875rem]">顾问对话</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body font-medium text-[0.875rem]">设置中心</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-outline-variant/20 flex flex-col gap-2">
+<div class="p-4 bg-tertiary-fixed rounded-xl mb-4">
+<p class="text-on-tertiary-fixed-variant font-bold text-xs uppercase tracking-tighter mb-1">会员权益</p>
+<p class="text-on-tertiary-fixed font-semibold text-sm">升级到铂金会员</p>
+<button class="mt-3 w-full py-2 bg-on-tertiary-fixed text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity">解锁数据引擎</button>
+</div>
+<a class="flex items-center gap-3 px-4 py-2 text-slate-400 hover:text-slate-900 transition-colors" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-body text-xs uppercase tracking-widest">帮助支持</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-slate-400 hover:text-slate-900 transition-colors" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body text-xs uppercase tracking-widest">退出登录</span>
+</a>
+</div>
+</aside>
+<!-- Main Workspace -->
+<main class="ml-72 flex-1 h-screen overflow-y-auto no-scrollbar flex flex-col">
+<!-- Top App Bar -->
+<header class="sticky top-0 z-30 bg-surface/80 backdrop-blur-md flex justify-between items-center w-full px-12 h-20">
+<div>
+<h2 class="font-headline font-extrabold text-2xl tracking-tighter text-primary">我的志愿方案</h2>
+<p class="font-body text-sm text-on-surface-variant">管理您的个性化升学策略</p>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative group">
+<span class="material-symbols-outlined text-outline p-2 hover:bg-surface-container rounded-full cursor-pointer transition-colors">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-surface"></span>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-low p-1.5 pr-4 rounded-full border border-outline-variant/10">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="User profile professional portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5Dh-j0GUT_IJV_jO7nLxfr9QUFgPsD0O_05cDMpZq-Hk-LskreJ-16lu6bto98zMf3tHhLVRb2Fs5Dt07iEKLDsuqHSX_0MHBvXnG_Llc_grH9iuZXWUrt2s6dZpICvK7nxeP_dG9kpmuD64cl_P9VYCv5TT4Br_fHc-D7BAXMMdEwYhh84AbOmzoF_eialtSKtE50HVPyqfWnj1ripIJdE2RAgq_M6Xuhhbi1SsrtPSSryjZUg6B9jTn-VA0J4HJt2OMvmoDtk93"/>
+<span class="font-body font-semibold text-sm">Alexander Chen</span>
+</div>
+</div>
+</header>
+<!-- Dashboard Content -->
+<div class="p-12 max-w-7xl">
+<!-- Quick Stats -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+<div class="bg-surface-container-lowest p-8 rounded-xl shadow-[0_20_40px_rgba(25,27,35,0.04)] relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-6xl" style="font-variation-settings: 'FILL' 1;">insights</span>
+</div>
+<p class="font-label text-xs uppercase tracking-widest text-slate-500 mb-2">方案总数</p>
+<h3 class="font-headline font-extrabold text-4xl text-primary">08</h3>
+<p class="text-xs text-secondary font-medium mt-4 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">trending_up</span> 本周新增 2 个活跃方案
+                        </p>
+</div>
+<div class="bg-surface-container-lowest p-8 rounded-xl shadow-[0_20_40px_rgba(25,27,35,0.04)] relative overflow-hidden">
+<p class="font-label text-xs uppercase tracking-widest text-slate-500 mb-2">名校匹配</p>
+<h3 class="font-headline font-extrabold text-4xl text-tertiary">14</h3>
+<p class="text-xs text-on-surface-variant font-medium mt-4">已覆盖 Top 5% 院校</p>
+</div>
+<div class="bg-surface-container-lowest p-8 rounded-xl shadow-[0_20_40px_rgba(25,27,35,0.04)] relative overflow-hidden">
+<p class="font-label text-xs uppercase tracking-widest text-slate-500 mb-2">AI 准确率</p>
+<h3 class="font-headline font-extrabold text-4xl text-secondary">98.4%</h3>
+<p class="text-xs text-on-surface-variant font-medium mt-4">基于 2024 年官方验证数据</p>
+</div>
+</div>
+<!-- Section Title -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h3 class="font-headline font-bold text-xl text-on-surface">方案工作台</h3>
+<div class="h-1 w-12 bg-primary mt-2 rounded-full"></div>
+</div>
+<div class="flex gap-2">
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-container-high font-body text-sm font-semibold hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-lg">filter_list</span> 筛选
+                        </button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-container-high font-body text-sm font-semibold hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-lg">sort</span> 排序
+                        </button>
+</div>
+</div>
+<!-- Plan Cards Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+<!-- Create New Plan Card (Primary Action) -->
+<button class="relative group h-full min-h-[280px] rounded-2xl border-2 border-dashed border-outline-variant/40 bg-surface-container-low hover:bg-surface-container-high transition-all duration-300 flex flex-col items-center justify-center p-12 text-center">
+<div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary text-3xl">add</span>
+</div>
+<h4 class="font-headline font-bold text-lg text-primary">创建新策略方案</h4>
+<p class="font-body text-sm text-on-surface-variant max-w-[240px] mt-2">启动 AI 引擎，根据您的分数匹配目标院校。</p>
+<div class="absolute inset-0 bg-primary opacity-0 group-active:opacity-5 transition-opacity rounded-2xl"></div>
+</button>
+<!-- Plan Card 1 -->
+<div class="bg-surface-container-lowest rounded-2xl shadow-[0_20px_40px_rgba(25,27,35,0.04)] p-8 border-l-4 border-primary group hover:translate-y-[-4px] transition-transform duration-300">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h4 class="font-headline font-bold text-lg">2024 夏季工科路径</h4>
+<div class="flex gap-4 mt-2">
+<span class="text-xs font-label uppercase tracking-widest text-slate-400">创建于: 2024年6月12日</span>
+<span class="text-xs font-label uppercase tracking-widest text-slate-400">省份: 江苏</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-slate-300 cursor-pointer hover:text-primary transition-colors">more_vert</span>
+</div>
+<div class="grid grid-cols-2 gap-6 mb-8">
+<div class="bg-surface-container-low p-4 rounded-xl">
+<p class="text-[10px] uppercase font-bold text-slate-500 mb-1">分数概况</p>
+<div class="flex items-end gap-2">
+<span class="font-headline font-extrabold text-2xl text-on-surface">642</span>
+<span class="text-xs text-secondary font-bold mb-1">前 2.1%</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-4 rounded-xl">
+<p class="text-[10px] uppercase font-bold text-slate-500 mb-1">最后更新</p>
+<div class="flex items-center gap-2 h-8">
+<span class="material-symbols-outlined text-sm text-slate-400">schedule</span>
+<span class="font-body text-sm font-medium">2 小时前</span>
+</div>
+</div>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-slate-600">
+<span>策略分布</span>
+<span class="text-primary">均衡风险模型</span>
+</div>
+<div class="flex h-3 w-full rounded-full overflow-hidden">
+<div class="h-full bg-error" style="width: 25%" title="冲 (25%)"></div>
+<div class="h-full bg-primary" style="width: 45%" title="稳 (45%)"></div>
+<div class="h-full bg-secondary" style="width: 30%" title="保 (30%)"></div>
+</div>
+<div class="flex gap-6 pt-2">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="text-[10px] font-bold text-slate-500 uppercase">冲</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="text-[10px] font-bold text-slate-500 uppercase">稳</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="text-[10px] font-bold text-slate-500 uppercase">保</span>
+</div>
+</div>
+</div>
+<div class="mt-8 flex gap-3">
+<button class="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-primary to-primary-container text-white font-body text-sm font-semibold shadow-md hover:shadow-lg transition-all">查看详情</button>
+<button class="px-4 py-2.5 rounded-lg bg-surface-container border border-outline-variant/20 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-lg">download</span>
+</button>
+</div>
+</div>
+<!-- Plan Card 2 -->
+<div class="bg-surface-container-lowest rounded-2xl shadow-[0_20px_40px_rgba(25,27,35,0.04)] p-8 border-l-4 border-tertiary group hover:translate-y-[-4px] transition-transform duration-300">
+<div class="flex justify-between items-start mb-6">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<h4 class="font-headline font-bold text-lg">精英经管赛道</h4>
+<span class="bg-tertiary-fixed text-on-tertiary-fixed-variant text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">最优</span>
+</div>
+<div class="flex gap-4 mt-2">
+<span class="text-xs font-label uppercase tracking-widest text-slate-400">创建于: 2024年5月28日</span>
+<span class="text-xs font-label uppercase tracking-widest text-slate-400">省份: 广东</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-slate-300 cursor-pointer hover:text-tertiary transition-colors">more_vert</span>
+</div>
+<div class="grid grid-cols-2 gap-6 mb-8">
+<div class="bg-surface-container-low p-4 rounded-xl">
+<p class="text-[10px] uppercase font-bold text-slate-500 mb-1">分数概况</p>
+<div class="flex items-end gap-2">
+<span class="font-headline font-extrabold text-2xl text-on-surface">618</span>
+<span class="text-xs text-tertiary font-bold mb-1">前 4.8%</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-4 rounded-xl">
+<p class="text-[10px] uppercase font-bold text-slate-500 mb-1">最后更新</p>
+<div class="flex items-center gap-2 h-8">
+<span class="material-symbols-outlined text-sm text-slate-400">schedule</span>
+<span class="font-body text-sm font-medium">3 天前</span>
+</div>
+</div>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-slate-600">
+<span>策略分布</span>
+<span class="text-tertiary">保守稳健策略</span>
+</div>
+<div class="flex h-3 w-full rounded-full overflow-hidden">
+<div class="h-full bg-error" style="width: 10%" title="冲 (10%)"></div>
+<div class="h-full bg-primary" style="width: 30%" title="稳 (30%)"></div>
+<div class="h-full bg-secondary" style="width: 60%" title="保 (60%)"></div>
+</div>
+<div class="flex gap-6 pt-2">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="text-[10px] font-bold text-slate-500 uppercase">冲</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="text-[10px] font-bold text-slate-500 uppercase">稳</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="text-[10px] font-bold text-slate-500 uppercase">保</span>
+</div>
+</div>
+</div>
+<div class="mt-8 flex gap-3">
+<button class="flex-1 py-2.5 rounded-lg bg-surface-container text-on-surface font-body text-sm font-semibold hover:bg-surface-container-high transition-all">查看详情</button>
+<button class="px-4 py-2.5 rounded-lg bg-surface-container border border-outline-variant/20 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-lg">edit</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Footer Component -->
+<footer class="mt-20 py-12 border-t border-outline-variant/20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+<div class="lg:col-span-1">
+<p class="font-body text-xs uppercase tracking-widest text-slate-500 mb-4">© 2024 Summit Intelligence. 权威机构数据验证引擎。</p>
+</div>
+<div>
+<ul class="space-y-2">
+<li><a class="font-body text-xs uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors" href="#">研究方法论</a></li>
+<li><a class="font-body text-xs uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors" href="#">数据隐私</a></li>
+</ul>
+</div>
+<div>
+<ul class="space-y-2">
+<li><a class="font-body text-xs uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors" href="#">院校关系</a></li>
+<li><a class="font-body text-xs uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors" href="#">API 文档</a></li>
+</ul>
+</div>
+<div>
+<ul class="space-y-2">
+<li><a class="font-body text-xs uppercase tracking-widest text-[#003fb1] underline" href="#">联系分析师</a></li>
+</ul>
+</div>
+</footer>
+</div>
+</main>
+</div>
+</body></html>

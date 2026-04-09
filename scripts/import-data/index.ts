@@ -5,7 +5,7 @@
  * 用法:
  *   cd scripts/import-data
  *   pnpm install
- *   tsx index.ts --file="../../2025高考志愿填报--西典学校整合版.xlsx" --province="四川"
+ *   tsx index.ts --file="../../2026四川高考志愿_清洗后.xlsx" --province="四川"
  */
 import * as XLSX from 'xlsx';
 import { PrismaClient } from '@prisma/client';
@@ -13,23 +13,23 @@ import * as path from 'path';
 
 const prisma = new PrismaClient();
 
-// ==================== Excel ��索引 ====================
+// ==================== Excel 列索引 (87列格式 - 2026年) ====================
 const COL = {
-  // 院校信息
+  // 院校信息 (0-4)
   universityName: 0,
   universityCode: 1,
   groupCode: 2,
   universityGroup: 3,
   universityNotes: 4,
 
-  // 专业信息
+  // 专业信息 (5-9)
   majorName: 5,
   majorCode: 6,
   majorClass: 7,
   majorCategory: 8,
   majorNotes: 9,
 
-  // 招生信息
+  // 招生信息 (10-20)
   subject: 10,
   subjectRequirements: 11,
   type: 12,
@@ -42,79 +42,96 @@ const COL = {
   tuition: 19,
   groupMajors: 20,
 
-  // 24年专业组数据
-  group24MinScore: 21,
-  group24MinRank: 22,
-  group24AdmissionCount: 23,
+  // 2025年投档数据 (21-22)
+  filing25MinScore: 21,
+  filing25MinRank: 22,
 
-  // 24年专业录取数据
-  year24: 24,
-  max24_1: 25,
-  maxRank24_1: 26,
-  avg24_1: 27,
-  avgRank24_1: 28,
-  min24: 29,
-  minRank24: 30,
-  avg24: 31,
-  avgRank24: 32,
-  max24: 33,
-  maxRank24: 34,
-  admCount24: 35,
+  // 2025年专业组数据 (23-26)
+  group25MinScore: 23,
+  group25MaxScore: 24,
+  group25MinRank: 25,
+  group25AdmissionCount: 26,
 
-  // 23年专业录取数据
-  year23: 36,
-  max23_1: 37,
-  maxRank23_1: 38,
-  avg23_1: 39,
-  avgRank23_1: 40,
-  min23: 41,
-  minRank23: 42,
-  minRank23_2: 43,
-  avg23: 44,
-  avgRank23: 45,
-  max23: 46,
-  maxRank23: 47,
-  admCount23: 48,
+  // 2025年专业录取数据 (27-33)
+  adm25Count: 27,
+  major25MinScore: 28,
+  major25MinRank: 29,
+  major25AvgScore: 30,
+  major25AvgRank: 31,
+  major25MaxScore: 32,
+  major25MaxRank: 33,
 
-  // 22年专业录取数据
-  year22: 49,
-  max22_1: 50,
-  maxRank22_1: 51,
-  avg22_1: 52,
-  avgRank22_1: 53,
-  max22: 54,
-  maxRank22: 55,
-  avg22: 56,
-  avgRank22: 57,
-  min22: 58,
-  minRank22: 59,
-  admCount22: 60,
+  // 2024年专业组数据 (34-36)
+  group24MinScore: 34,
+  group24MinRank: 35,
+  group24AdmissionCount: 36,
 
-  // 院校详细信息
-  uniProvince: 61,
-  uniCity: 62,
-  cityLevel: 63,
-  uniType: 64,
-  uniNature: 65,
-  uniDepartment: 66,
-  uniTags: 67,
-  uniLevel: 68,
-  uniRank: 69,
-  uniAdmissionGuide: 70,
-  uniRename: 71,
-  uniTransfer: 72,
-  uniPostgradRate: 73,
-  isDoubleFirstClass: 74,
-  disciplineEvaluation: 75,
-  isNationalFeature: 76,
-  majorRank: 77,
-  majorHonor: 78,
-  localMaster: 79,
-  localDoctor: 80,
-  masterCount: 81,
-  masterPrograms: 82,
-  doctoralCount: 83,
-  doctoralPrograms: 84,
+  // 2024年专业录取数据 (37-43)
+  adm24Count: 37,
+  major24MinScore: 38,
+  major24MinRank: 39,
+  major24AvgScore: 40,
+  major24AvgRank: 41,
+  major24MaxScore: 42,
+  major24MaxRank: 43,
+
+  // 2023年专业录取数据 (44-50)
+  adm23Count: 44,
+  major23MinScore: 45,
+  major23MinRank: 46,
+  major23AvgScore: 47,
+  major23AvgRank: 48,
+  major23MaxScore: 49,
+  major23MaxRank: 50,
+
+  // 2022年专业录取数据 (51-57)
+  adm22Count: 51,
+  major22MinScore: 52,
+  major22MinRank: 53,
+  major22AvgScore: 54,
+  major22AvgRank: 55,
+  major22MaxScore: 56,
+  major22MaxRank: 57,
+
+  // 院校地理信息 (58-63)
+  uniProvince: 58,
+  uniCity: 59,
+  cityLevel: 60,
+  uniType: 61,
+  uniNature: 62,
+  uniDepartment: 63,
+
+  // 院校标签和属性 (64-71)
+  uniTags: 64,
+  uniLevel: 65,
+  uniRank: 66,
+  uniAdmissionGuide: 67,
+  uniRename: 68,
+  uniTransfer: 69,
+  uniPostgradRate: 70,
+  isDoubleFirstClass: 71,
+
+  // 学科评估和软科数据 (72-75)
+  disciplineEvaluation: 72,
+  softRating: 73,
+  softRanking: 74,
+  majorLevel: 75,
+
+  // 专业相关信息 (76-80)
+  majorSoftRating: 76,
+  isNationalFeature: 77,
+  majorRank: 78,
+  majorHonor: 79,
+  localMaster: 80,
+
+  // 学位点信息 (81-86)
+  localDoctor: 81,
+  masterCount: 82,
+  masterPrograms: 83,
+  doctoralCount: 84,
+  doctoralPrograms: 85,
+  localMasterPoint: 86,
+  localDoctoralPoint: 87,
 };
 
 // ==================== 工具函数 ====================
@@ -155,8 +172,8 @@ async function importData(filePath: string, sheetName: string) {
   const dataRows = rows.slice(1).filter(r => r[COL.universityName]); // skip header, skip empty
   console.log(`Total data rows: ${dataRows.length}`);
 
-  // Step 1: Extract unique universities
-  console.log('\n=== [1/4] Importing Universities ===');
+  // Step 1: Extract and import unique universities
+  console.log('\n=== [1/5] Importing Universities ===');
   const uniMap = new Map<string, any>(); // code -> data
   for (const row of dataRows) {
     const code = toStr(row[COL.universityCode]);
@@ -184,6 +201,8 @@ async function importData(filePath: string, sheetName: string) {
       masterPrograms: toStr(row[COL.masterPrograms]) ? toStr(row[COL.masterPrograms])!.split('；') : undefined,
       doctoralPrograms: toStr(row[COL.doctoralPrograms]) ? toStr(row[COL.doctoralPrograms])!.split('；') : undefined,
       notes: toStr(row[COL.universityNotes]),
+      softRating: toStr(row[COL.softRating]),
+      softRanking: toInt(row[COL.softRanking]),
     });
   }
   console.log(`  Unique universities: ${uniMap.size}`);
@@ -203,8 +222,8 @@ async function importData(filePath: string, sheetName: string) {
   }
   console.log(`  Imported ${uniCount} universities`);
 
-  // Step 2: Extract unique majors
-  console.log('\n=== [2/4] Importing Majors ===');
+  // Step 2: Extract and import unique majors
+  console.log('\n=== [2/5] Importing Majors ===');
   const majorMap = new Map<string, any>(); // name -> data (use name as key since codes repeat)
   for (const row of dataRows) {
     const name = toStr(row[COL.majorName]);
@@ -219,6 +238,8 @@ async function importData(filePath: string, sheetName: string) {
       type: toStr(row[COL.type]),
       notes: toStr(row[COL.majorNotes]),
       isRestricted: false,
+      majorLevel: toStr(row[COL.majorLevel]),
+      softRating: toStr(row[COL.majorSoftRating]),
     });
   }
   console.log(`  Unique majors: ${majorMap.size}`);
@@ -239,8 +260,8 @@ async function importData(filePath: string, sheetName: string) {
   }
   console.log(`  Imported ${majorCount} majors`);
 
-  // Step 3: Import enrollment plans (2025)
-  console.log('\n=== [3/4] Importing Enrollment Plans (2025) ===');
+  // Step 3: Import enrollment plans (2026)
+  console.log('\n=== [3/5] Importing Enrollment Plans (2026) ===');
   let planCount = 0;
   let planSkipped = 0;
   for (const row of dataRows) {
@@ -255,7 +276,7 @@ async function importData(filePath: string, sheetName: string) {
     const planData = {
       universityId,
       majorId,
-      year: 2025,
+      year: 2026,
       province: sheetName,
       planCount: toInt(row[COL.planCount]),
       planNotes: toStr(row[COL.universityNotes]),
@@ -266,13 +287,15 @@ async function importData(filePath: string, sheetName: string) {
       duration: toStr(row[COL.duration]),
       tuition: toInt(row[COL.tuition]),
       isSinoForeign: false,
+      localMasterPoint: !!toStr(row[COL.localMasterPoint]),
+      localDoctoralPoint: !!toStr(row[COL.localDoctoralPoint]),
     };
 
     try {
       await prisma.enrollmentPlan.upsert({
         where: {
           universityId_majorId_year_province: {
-            universityId, majorId, year: 2025, province: sheetName,
+            universityId, majorId, year: 2026, province: sheetName,
           },
         },
         update: planData,
@@ -286,8 +309,8 @@ async function importData(filePath: string, sheetName: string) {
   }
   console.log(`  Imported ${planCount} enrollment plans (skipped ${planSkipped})`);
 
-  // Step 4: Import admission records (2022, 2023, 2024)
-  console.log('\n=== [4/4] Importing Admission Records ===');
+  // Step 4: Import admission records (2025, 2024, 2023, 2022)
+  console.log('\n=== [4/5] Importing Admission Records ===');
   let admCount = 0;
   let admSkipped = 0;
 
@@ -300,23 +323,56 @@ async function importData(filePath: string, sheetName: string) {
     const majorId = majorIdMap.get(majorName);
     if (!universityId || !majorId) { admSkipped++; continue; }
 
+    // 2025 data (new complete data)
+    const min25 = toInt(row[COL.major25MinScore]);
+    const minRank25 = toInt(row[COL.major25MinRank]);
+    if (min25 || minRank25) {
+      try {
+        const data25 = {
+          universityId, majorId, year: 2025, province: sheetName,
+          majorMinScore: min25,
+          majorMinRank: minRank25,
+          majorAdmissionCount: toInt(row[COL.adm25Count]),
+          majorAvgScore: toInt(row[COL.major25AvgScore]),
+          majorAvgRank: toInt(row[COL.major25AvgRank]),
+          majorMaxScore: toInt(row[COL.major25MaxScore]),
+          majorMaxRank: toInt(row[COL.major25MaxRank]),
+          groupMinScore: toInt(row[COL.group25MinScore]),
+          groupMinRank: toInt(row[COL.group25MinRank]),
+          groupAdmissionCount: toInt(row[COL.group25AdmissionCount]),
+          filingMinScore: toInt(row[COL.filing25MinScore]),
+          filingMinRank: toInt(row[COL.filing25MinRank]),
+        };
+        await prisma.admissionRecord.upsert({
+          where: {
+            universityId_majorId_year_province: {
+              universityId, majorId, year: 2025, province: sheetName,
+            },
+          },
+          update: data25,
+          create: data25,
+        });
+        admCount++;
+      } catch { admSkipped++; }
+    }
+
     // 2024 data
-    const min24 = toInt(row[COL.min24]);
-    const minRank24 = toInt(row[COL.minRank24]);
+    const min24 = toInt(row[COL.major24MinScore]);
+    const minRank24 = toInt(row[COL.major24MinRank]);
     if (min24 || minRank24) {
       try {
         const data24 = {
           universityId, majorId, year: 2024, province: sheetName,
           majorMinScore: min24,
           majorMinRank: minRank24,
-          majorAdmissionCount: toInt(row[COL.admCount24]),
-          universityMinScore: toInt(row[COL.group24MinScore]),
-          universityMinRank: toInt(row[COL.group24MinRank]),
-          universityAvgScore: toInt(row[COL.avg24]),
-          universityAvgRank: toInt(row[COL.avgRank24]),
-          universityMaxScore: toInt(row[COL.max24]),
-          universityMaxRank: toInt(row[COL.maxRank24]),
-          universityAdmissionCount: toInt(row[COL.group24AdmissionCount]),
+          majorAdmissionCount: toInt(row[COL.adm24Count]),
+          majorAvgScore: toInt(row[COL.major24AvgScore]),
+          majorAvgRank: toInt(row[COL.major24AvgRank]),
+          majorMaxScore: toInt(row[COL.major24MaxScore]),
+          majorMaxRank: toInt(row[COL.major24MaxRank]),
+          groupMinScore: toInt(row[COL.group24MinScore]),
+          groupMinRank: toInt(row[COL.group24MinRank]),
+          groupAdmissionCount: toInt(row[COL.group24AdmissionCount]),
         };
         await prisma.admissionRecord.upsert({
           where: {
@@ -332,19 +388,19 @@ async function importData(filePath: string, sheetName: string) {
     }
 
     // 2023 data
-    const min23 = toInt(row[COL.min23]);
-    const minRank23 = toInt(row[COL.minRank23]);
+    const min23 = toInt(row[COL.major23MinScore]);
+    const minRank23 = toInt(row[COL.major23MinRank]);
     if (min23 || minRank23) {
       try {
         const data23 = {
           universityId, majorId, year: 2023, province: sheetName,
           majorMinScore: min23,
           majorMinRank: minRank23,
-          majorAdmissionCount: toInt(row[COL.admCount23]),
-          universityAvgScore: toInt(row[COL.avg23]),
-          universityAvgRank: toInt(row[COL.avgRank23]),
-          universityMaxScore: toInt(row[COL.max23]),
-          universityMaxRank: toInt(row[COL.maxRank23]),
+          majorAdmissionCount: toInt(row[COL.adm23Count]),
+          majorAvgScore: toInt(row[COL.major23AvgScore]),
+          majorAvgRank: toInt(row[COL.major23AvgRank]),
+          majorMaxScore: toInt(row[COL.major23MaxScore]),
+          majorMaxRank: toInt(row[COL.major23MaxRank]),
         };
         await prisma.admissionRecord.upsert({
           where: {
@@ -360,19 +416,19 @@ async function importData(filePath: string, sheetName: string) {
     }
 
     // 2022 data
-    const min22 = toInt(row[COL.min22]);
-    const minRank22 = toInt(row[COL.minRank22]);
+    const min22 = toInt(row[COL.major22MinScore]);
+    const minRank22 = toInt(row[COL.major22MinRank]);
     if (min22 || minRank22) {
       try {
         const data22 = {
           universityId, majorId, year: 2022, province: sheetName,
           majorMinScore: min22,
           majorMinRank: minRank22,
-          majorAdmissionCount: toInt(row[COL.admCount22]),
-          universityAvgScore: toInt(row[COL.avg22]),
-          universityAvgRank: toInt(row[COL.avgRank22]),
-          universityMaxScore: toInt(row[COL.max22]),
-          universityMaxRank: toInt(row[COL.maxRank22]),
+          majorAdmissionCount: toInt(row[COL.adm22Count]),
+          majorAvgScore: toInt(row[COL.major22AvgScore]),
+          majorAvgRank: toInt(row[COL.major22AvgRank]),
+          majorMaxScore: toInt(row[COL.major22MaxScore]),
+          majorMaxRank: toInt(row[COL.major22MaxRank]),
         };
         await prisma.admissionRecord.upsert({
           where: {
@@ -391,17 +447,20 @@ async function importData(filePath: string, sheetName: string) {
   }
   console.log(`  Imported ${admCount} admission records (skipped ${admSkipped})`);
 
+  console.log('\n=== [5/5] Score Segments ===');
+  console.log('  (Import from CSV file - please run score-segments script separately)');
+
   console.log('\n=== Import Complete ===');
   console.log(`  Universities: ${uniCount}`);
   console.log(`  Majors: ${majorCount}`);
-  console.log(`  Enrollment Plans: ${planCount}`);
-  console.log(`  Admission Records: ${admCount}`);
+  console.log(`  Enrollment Plans (2026): ${planCount}`);
+  console.log(`  Admission Records (2025+2024+2023+2022): ${admCount}`);
 }
 
 // ==================== CLI ====================
 async function main() {
   const args = process.argv.slice(2);
-  let filePath = '../../2025高考志愿填报--西典学校整合版.xlsx';
+  let filePath = '../../2026四川高考志愿_清洗后.xlsx';
   let province = '四川';
 
   for (const arg of args) {

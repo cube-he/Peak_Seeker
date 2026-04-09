@@ -57,6 +57,10 @@ model University {
   renameHistory String? @map("rename_history") @db.Text
   postgradRate  String? @map("postgrad_rate") @db.VarChar(50)
 
+  // 软科排名
+  softRating    String? @map("soft_rating") @db.VarChar(50)
+  softRanking   Int?    @map("soft_ranking")
+
   // 备注
   notes String? @db.Text
 
@@ -94,6 +98,10 @@ model Major {
   // 专业属性
   notes        String?  @map("major_notes") @db.Text
   isRestricted Boolean  @default(false) @map("is_restricted")
+
+  // 专业水平和评级
+  majorLevel  String? @map("major_level_detail") @db.VarChar(100)
+  softRating  String? @map("major_soft_rating") @db.VarChar(50)
 
   // 本地学位点
   localMasterPoint   Boolean @default(false) @map("local_master_point")
@@ -145,6 +153,10 @@ model EnrollmentPlan {
   tuition             Int?
   isSinoForeign       Boolean  @default(false) @map("is_sino_foreign")
 
+  // 学位点信息
+  localMasterPoint    String? @map("local_master_point") @db.VarChar(200)
+  localDoctoralPoint  String? @map("local_doctoral_point") @db.VarChar(200)
+
   // 专业组信息
   groupCode      String? @map("group_code") @db.VarChar(50)
   groupName      String? @map("group_name") @db.VarChar(200)
@@ -190,7 +202,24 @@ model AdmissionRecord {
   // 专业录取数据
   majorMinScore       Int? @map("major_min_score")
   majorMinRank        Int? @map("major_min_rank")
+  majorAvgScore       Int? @map("major_avg_score")
+  majorAvgRank        Int? @map("major_avg_rank")
+  majorMaxScore       Int? @map("major_max_score")
+  majorMaxRank        Int? @map("major_max_rank")
   majorAdmissionCount Int? @map("major_admission_count")
+
+  // 专业组录取数据
+  groupMinScore      Int? @map("group_min_score")
+  groupMinRank       Int? @map("group_min_rank")
+  groupAdmissionCount Int? @map("group_admission_count")
+
+  // 投档数据
+  filingMinScore  Int? @map("filing_min_score")
+  filingMinRank   Int? @map("filing_min_rank")
+
+  // 科目和批次信息
+  subjects  String? @db.VarChar(50)
+  batch     String? @db.VarChar(50)
 
   // 院校整体录取数据
   universityMinScore       Int? @map("university_min_score")
@@ -471,6 +500,66 @@ model SystemConfig {
   desc  String? @db.VarChar(500)
 
   @@map("system_configs")
+}
+
+// ==================== 批次线 ====================
+
+model BatchLine {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 基本信息
+  year      Int    @db.SmallInt
+  province  String @db.VarChar(50)
+  batch     String @db.VarChar(50)
+  examType  String @map("exam_type") @db.VarChar(50)
+  batchType String @map("batch_type") @db.VarChar(50)
+
+  // 分数数据
+  score     Int    @db.SmallInt
+
+  @@unique([year, province, batch, examType])
+  @@index([year])
+  @@index([province])
+  @@map("batch_lines")
+}
+
+// ==================== 批次志愿配置 ====================
+
+model BatchConfig {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 基本信息
+  year      Int    @db.SmallInt
+  province  String @db.VarChar(50)
+  batch     String @db.VarChar(100)          // 批次名称，如 "本科提前批A段"
+  examType  String @map("exam_type") @db.VarChar(50)  // 物理/历史/不分科目
+
+  // 志愿模式
+  volunteerMode     String  @map("volunteer_mode") @db.VarChar(20)    // parallel(平行志愿) / sequential(顺序志愿)
+  maxGroupCount     Int     @map("max_group_count")                    // 最大院校专业组数
+  maxMajorPerGroup  Int     @default(6) @map("max_major_per_group")   // 每组最大专业数
+  hasAdjustOption   Boolean @default(true) @map("has_adjust_option")  // 是否有调剂选项
+
+  // 投档规则
+  filingRatio       String? @map("filing_ratio") @db.VarChar(20)     // 调档比例，如 "1:1" 或 "≤120%"
+
+  // 录取顺序(数字越小越先录取)
+  admissionOrder    Int     @map("admission_order")
+
+  // 包含的招生类型说明
+  description       String? @db.Text
+
+  // 同分排序规则(JSON格式)
+  tiebreakRules     Json?   @map("tiebreak_rules")
+
+  @@unique([year, province, batch, examType])
+  @@index([year])
+  @@index([province])
+  @@map("batch_configs")
 }
 
 // ==================== AI 配置 ====================
