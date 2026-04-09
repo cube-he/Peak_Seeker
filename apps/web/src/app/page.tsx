@@ -5,7 +5,7 @@ import MainLayout from '@/components/layout/MainLayout';
 
 export default function HomePage() {
   return (
-    <MainLayout noPadding>
+    <MainLayout noPadding maxWidth="100%">
       {/* Hero Section */}
       <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-[100px]">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
@@ -111,7 +111,7 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="bg-surface-dim py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12">
+      <section className="bg-surface-dim py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12 overflow-hidden">
         <div className="max-w-[1200px] mx-auto">
           <div className="text-[11px] uppercase tracking-[2px] text-accent font-medium">
             核心能力
@@ -224,7 +224,7 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="bg-primary py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12 text-center">
+      <section className="bg-primary py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12 text-center overflow-hidden">
         <h2 className="font-serif text-[24px] sm:text-[30px] lg:text-[36px] font-semibold text-white">
           你的未来，值得一份好方案
         </h2>
