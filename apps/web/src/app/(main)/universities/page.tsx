@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Input, Spin, Pagination, Empty } from 'antd';
+import { Alert, Input, Spin, Pagination, Empty } from 'antd';
 import {
   SearchOutlined,
   EnvironmentOutlined,
@@ -287,7 +287,7 @@ export default function UniversitiesPage() {
     pageSize: 15,
   });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['universities', filters],
     queryFn: () => universityService.getList(filters),
   });
@@ -416,6 +416,15 @@ export default function UniversitiesPage() {
           {isLoading ? (
             <div className="flex justify-center py-20">
               <Spin size="large" />
+            </div>
+          ) : isError ? (
+            <div className="bg-surface rounded-xl shadow-card p-6 sm:p-8">
+              <Alert
+                type="error"
+                showIcon
+                message="院校数据加载失败"
+                description={(error as Error)?.message || '请稍后刷新重试，或检查当前站点网络配置。'}
+              />
             </div>
           ) : universities.length > 0 ? (
             <div className="space-y-3">
