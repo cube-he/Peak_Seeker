@@ -5,7 +5,7 @@ import MainLayout from '@/components/layout/MainLayout';
 
 export default function HomePage() {
   return (
-    <MainLayout noPadding maxWidth="100%">
+    <MainLayout noPadding>
       {/* Hero Section */}
       <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-[100px]">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
@@ -27,13 +27,13 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row gap-3 mt-8">
               <Link
                 href="/recommend"
-                className="w-full sm:w-auto text-center bg-gradient-to-br from-primary to-primary-light text-white px-5 sm:px-7 py-3 sm:py-3.5 rounded-[10px] text-sm sm:text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 no-underline"
+                className="w-full sm:w-auto text-center bg-gradient-to-br from-primary to-primary-light text-white px-7 py-3.5 rounded-[10px] text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 no-underline"
               >
                 开始智能推荐
               </Link>
               <Link
                 href="/universities"
-                className="w-full sm:w-auto text-center bg-surface text-text-secondary px-5 sm:px-7 py-3 sm:py-3.5 rounded-[10px] text-sm sm:text-[15px] font-medium shadow-ring hover:shadow-card-hover transition-all duration-200 no-underline"
+                className="w-full sm:w-auto text-center bg-surface text-text-secondary px-7 py-3.5 rounded-[10px] text-[15px] font-medium shadow-ring hover:shadow-card-hover transition-all duration-200 no-underline"
               >
                 浏览全国院校
               </Link>
@@ -111,7 +111,7 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="bg-surface-dim py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12 overflow-hidden">
+      <section className="bg-surface-dim py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12">
         <div className="max-w-[1200px] mx-auto">
           <div className="text-[11px] uppercase tracking-[2px] text-accent font-medium">
             核心能力
@@ -224,7 +224,7 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="bg-primary py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12 text-center overflow-hidden">
+      <section className="bg-primary py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12 text-center">
         <h2 className="font-serif text-[24px] sm:text-[30px] lg:text-[36px] font-semibold text-white">
           你的未来，值得一份好方案
         </h2>
@@ -233,7 +233,7 @@ export default function HomePage() {
         </p>
         <Link
           href="/recommend"
-          className="w-full sm:w-auto bg-accent text-white px-6 sm:px-9 py-3 sm:py-4 rounded-[10px] text-sm sm:text-base font-medium shadow-glow-accent hover:-translate-y-px transition-all duration-200 mt-7 inline-block no-underline"
+          className="w-full sm:w-auto bg-accent text-white px-9 py-4 rounded-[10px] text-base font-medium shadow-glow-accent hover:-translate-y-px transition-all duration-200 mt-7 inline-block no-underline"
         >
           免费开始使用
         </Link>
