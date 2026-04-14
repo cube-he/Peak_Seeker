@@ -21,6 +21,7 @@ import { QueueModule } from './modules/queue/queue.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { StudentModule } from './modules/student/student.module';
 import { TeacherModule } from './modules/teacher/teacher.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { TeacherModule } from './modules/teacher/teacher.module';
     AuditModule,
     QueueModule,
     NotificationModule,
+    HealthModule,
 
     // 业务模块
     AuthModule,
