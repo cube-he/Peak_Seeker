@@ -5,14 +5,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class HistoryService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(userId: number, type?: string, limit = 50) {
+  async findAll(userId: number, type?: string, limit?: number) {
     const where: any = { userId };
     if (type) where.searchType = type;
 
     return this.prisma.searchHistory.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: limit,
+      take: limit && Number.isFinite(limit) ? limit : 50,
     });
   }
 
