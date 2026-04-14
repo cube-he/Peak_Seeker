@@ -98,6 +98,7 @@ enum AcceptLevel {
   STRICT
   MODERATE
   RELAXED
+  UNDECIDED
 }
 
 enum TuitionBudget {
@@ -321,6 +322,7 @@ model EnrollmentPlan {
   @@index([universityId])
   @@index([majorId])
   @@index([batch])
+  @@index([year, province, batch])
   @@map("enrollment_plans")
 }
 
@@ -493,19 +495,32 @@ model StudentProfile {
   teacher   TeacherProfile? @relation(fields: [teacherId], references: [id])
 
   // --- 基本信息 ---
-  province String?       @db.VarChar(50)
-  city     String?       @db.VarChar(100)
-  school   String?       @db.VarChar(200)
-  classNo  String?       @map("class_no") @db.VarChar(50)
-  status   StudentStatus @default(ACTIVE)
+  province          String?       @default("四川") @db.VarChar(50)
+  city              String?       @db.VarChar(100)
+  highSchool        String?       @map("high_school") @db.VarChar(200)
+  classInfo         String?       @map("class_info") @db.VarChar(50)
+  status            StudentStatus @default(ACTIVE)
+  idNumberEncrypted String?       @map("id_number_encrypted") @db.VarChar(500)
+  parentPhone       String?       @map("parent_phone") @db.VarChar(20)
+  isRural           Boolean       @default(false) @map("is_rural")
 
   // --- 考试成绩 ---
-  examType      NewExamType? @map("exam_type")
-  examYear      Int?         @map("exam_year") @db.SmallInt
-  totalScore    Int?         @map("total_score") @db.SmallInt
-  rank          Int?
-  examSource    ExamSource?  @map("exam_source")
-  subjectScores Json?        @map("subject_scores")
+  examType         NewExamType? @map("exam_type")
+  examYear         Int?         @map("exam_year") @db.SmallInt
+  totalScore       Int?         @map("total_score") @db.SmallInt
+  provincialRank   Int?         @map("provincial_rank")
+  examSource       ExamSource?  @map("exam_source")
+  subjectScores    Json?        @map("subject_scores")
+  firstChoice      String?      @map("first_choice") @db.VarChar(50)
+  reChoices        Json?        @map("re_choices")
+  scoreChinese     Int?         @map("score_chinese") @db.SmallInt
+  scoreMath        Int?         @map("score_math") @db.SmallInt
+  scoreEnglish     Int?         @map("score_english") @db.SmallInt
+  scoreFirstChoice Int?         @map("score_first_choice") @db.SmallInt
+  scoreSub1        Int?         @map("score_sub1") @db.SmallInt
+  scoreSub2        Int?         @map("score_sub2") @db.SmallInt
+  strongSubjects   Json?        @map("strong_subjects")
+  weakSubjects     Json?        @map("weak_subjects")
 
   // --- 身体条件 ---
   height         Decimal? @db.Decimal(5, 1)
@@ -516,19 +531,26 @@ model StudentProfile {
   physicalLimits Json?    @map("physical_limits")
 
   // --- 升学规划 ---
-  careerPlan     CareerPlan?     @map("career_plan")
-  priorityMode   PriorityMode?   @map("priority_mode")
-  stayPreference StayPreference? @map("stay_preference")
+  careerPlan       CareerPlan?     @map("career_plan")
+  priorityMode     PriorityMode?   @map("priority_mode")
+  stayPreference   StayPreference? @map("stay_preference")
+  careerDirection  String?         @map("career_direction") @db.VarChar(500)
+  militaryInterest Boolean         @default(false) @map("military_interest")
+  teacherInterest  Boolean         @default(false) @map("teacher_interest")
 
   // --- 正向偏好 ---
-  preferredProvinces       Json? @map("preferred_provinces")
-  preferredCities          Json? @map("preferred_cities")
-  preferredMajorCategories Json? @map("preferred_major_categories")
-  preferredUniversityTypes Json? @map("preferred_university_types")
-  preferredTags            Json? @map("preferred_tags")
+  stayInProvince           StayPreference? @map("stay_in_province")
+  preferredProvinces       Json?           @map("preferred_provinces")
+  preferredCities          Json?           @map("preferred_cities")
+  preferredMajors          Json?           @map("preferred_majors")
+  preferredUniversities    Json?           @map("preferred_universities")
+  preferredMajorCategories Json?           @map("preferred_major_categories")
+  preferredUniversityTypes Json?           @map("preferred_university_types")
+  preferredTags            Json?           @map("preferred_tags")
 
   // --- 反向排除 ---
   excludedProvinces    Json?        @map("excluded_provinces")
+  excludedCities       Json?        @map("excluded_cities")
   excludedUniversities Json?        @map("excluded_universities")
   excludedMajors       Json?        @map("excluded_majors")
   acceptLevel          AcceptLevel? @map("accept_level")
@@ -536,16 +558,20 @@ model StudentProfile {
   // --- 经济条件 ---
   tuitionBudget     TuitionBudget? @map("tuition_budget")
   acceptSinoForeign Boolean        @default(false) @map("accept_sino_foreign")
+  acceptPrivate     AcceptLevel    @default(UNDECIDED) @map("accept_private")
+  acceptCooperation AcceptLevel    @default(UNDECIDED) @map("accept_cooperation")
+  specialProgram    Json?          @map("special_program")
+  otherRequirements String?        @map("other_requirements") @db.Text
 
   // --- 兴趣性格 ---
   interests       Json?
   personalityType String? @map("personality_type") @db.VarChar(50)
-  careerDirection String? @map("career_direction") @db.Text
+  selfDescription String? @map("self_description") @db.Text
 
   // --- 管理字段 ---
   tags        Json?
-  serviceYear Int?  @map("service_year") @db.SmallInt
-  dataVersion Int   @default(1) @map("data_version")
+  serviceYear Int   @default(2026) @map("service_year") @db.SmallInt
+  dataVersion Int   @default(0) @map("data_version")
 
   // 关联
   volunteerPlans VolunteerPlan[]
@@ -554,6 +580,8 @@ model StudentProfile {
   @@index([province])
   @@index([examYear])
   @@index([status])
+  @@index([examType, totalScore])
+  @@index([serviceYear])
   @@map("student_profiles")
 }
 
@@ -594,35 +622,51 @@ model VolunteerPlan {
   examSource ExamSource? @map("exam_source")
 
   // 版本链
-  version  Int             @default(1)
-  parentId Int?            @map("parent_id")
-  parent   VolunteerPlan?  @relation("PlanVersionChain", fields: [parentId], references: [id])
-  children VolunteerPlan[] @relation("PlanVersionChain")
+  versionNo       Int             @default(1) @map("version_no")
+  parentVersionId Int?            @map("parent_version_id")
+  parent          VolunteerPlan?  @relation("PlanVersionChain", fields: [parentVersionId], references: [id])
+  children        VolunteerPlan[] @relation("PlanVersionChain")
+  versionNote     String?         @map("version_note") @db.VarChar(500)
 
   // 算法参数快照
-  scoreUsed       Int?  @map("score_used") @db.SmallInt
-  rankUsed        Int?  @map("rank_used")
-  algorithmParams Json? @map("algorithm_params")
+  scoreUsed       Int?          @map("score_used") @db.SmallInt
+  rankUsed        Int?          @map("rank_used")
+  algorithmParams Json?         @map("algorithm_params")
+  priorityMode    PriorityMode? @map("priority_mode")
+  rangeUp         Int?          @map("range_up")
+  rangeDown       Int?          @map("range_down")
+  binSize         Int?          @map("bin_size")
+  totalGroups     Int?          @map("total_groups")
+  bonusRules      Json?         @map("bonus_rules")
 
   // AI分析（保留旧字段）
   aiScore    Decimal? @map("ai_score") @db.Decimal(5, 2)
   aiAnalysis Json?    @map("ai_analysis")
   riskLevel  String?  @map("risk_level") @db.VarChar(20)
 
+  // 定稿与导出
+  isFinal     Boolean   @default(false) @map("is_final")
+  finalizedAt DateTime? @map("finalized_at")
+  finalizedBy Int?      @map("finalized_by")
+  exportCount Int       @default(0) @map("export_count")
+  dataVersion Int       @default(0) @map("data_version")
+
   // 备注（保留旧字段）
-  notes String? @db.Text
+  notes    String? @db.Text
+  examNote String? @map("exam_note") @db.VarChar(500)
 
   // 新关联
   planItems   PlanItem[]
   reviews     PlanReview[]
   evaluations PlanEvaluation[]
 
+  @@unique([studentId, batch, versionNo])
   @@index([studentId])
   @@index([createdById])
   @@index([userId])
   @@index([year])
   @@index([status])
-  @@index([parentId])
+  @@index([parentVersionId])
   @@map("volunteer_plans")
 }
 
@@ -657,10 +701,30 @@ model PlanItem {
   majorName String  @map("major_name") @db.VarChar(200)
   majorCode String? @map("major_code") @db.VarChar(50)
 
+  // 锚定专业与专业组
+  anchorMajor        String  @map("anchor_major") @db.VarChar(200)
+  groupMajorCount    Int     @map("group_major_count")
+  recommendedOrder   String? @map("recommended_order") @db.VarChar(500)
+  fullMajorRanking   Json?   @map("full_major_ranking")
+  subjectRequirement String? @map("subject_requirement") @db.VarChar(200)
+
+  // 院校属性快照
+  schoolNature String? @map("school_nature") @db.VarChar(100)
+  schoolTags   String? @map("school_tags") @db.VarChar(500)
+
   // 是否服从调剂
   acceptAdjust Boolean @default(true) @map("accept_adjust")
 
-  // 历史录取数据快照
+  // 历史录取数据快照（25年专业组维度）
+  score25Group     Int? @map("score_25_group")
+  rank25Group      Int? @map("rank_25_group")
+  // 历史录取数据快照（25年专业维度）
+  score25Major     Int? @map("score_25_major")
+  rank25Major      Int? @map("rank_25_major")
+  // 历史录取数据快照（24年专业维度）
+  score24Major     Int? @map("score_24_major")
+  rank24Major      Int? @map("rank_24_major")
+  // 兼容旧字段
   lastYearMinScore Int? @map("last_year_min_score")
   lastYearMinRank  Int? @map("last_year_min_rank")
   lastYearAvgScore Int? @map("last_year_avg_score")
@@ -674,8 +738,14 @@ model PlanItem {
   // 洁净度
   cleanliness Cleanliness?
 
-  // 推荐理由 / 风险提示
-  reasons Json?
+  // 推荐理由 / 风险提示（拆分为三个独立字段）
+  selectionReason  String? @map("selection_reason") @db.Text
+  riskWarning      String? @map("risk_warning") @db.Text
+  adjustmentAdvice String? @map("adjustment_advice") @db.VarChar(500)
+
+  // 手动修改追踪
+  isManuallyModified Boolean @default(false) @map("is_manually_modified")
+  originalItemId     Int?    @map("original_item_id")
 
   // 综合评分
   compositeScore Decimal? @map("composite_score") @db.Decimal(6, 2)
@@ -731,8 +801,10 @@ model PlanEvaluation {
 
   // 匹配信息
   matchedItemSequence Int?     @map("matched_item_sequence") @db.SmallInt
+  matchedGradient     String?  @map("matched_gradient") @db.VarChar(50)
   isInPlan            Boolean  @default(false) @map("is_in_plan")
   evaluationScore     Decimal? @map("evaluation_score") @db.Decimal(5, 2)
+  evaluationNote      String?  @map("evaluation_note") @db.Text
 
   @@index([planId])
   @@index([admissionResultId])
