@@ -15,6 +15,7 @@ import { FavoriteModule } from './modules/favorite/favorite.module';
 import { HistoryModule } from './modules/history/history.module';
 import { DataImportModule } from './modules/data-import/data-import.module';
 import { AiConfigModule } from './modules/ai-config/ai-config.module';
+import { CaslModule } from './modules/casl';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { AiConfigModule } from './modules/ai-config/ai-config.module';
     // 基础设施模块
     PrismaModule,
     RedisModule,
+    CaslModule,
 
     // 业务模块
     AuthModule,
