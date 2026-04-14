@@ -67,10 +67,12 @@ DATABASE_URL="mysql://root:your_password@localhost:3306/volunteer_helper"
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=
+REDIS_QUEUE_DB=1
 
 # JWT 配置
 JWT_SECRET=your_jwt_secret_key_change_this_2024
-JWT_EXPIRES_IN=7d
+JWT_EXPIRES_IN=30m
+JWT_REFRESH_EXPIRES_IN=7d
 
 # 服务端口
 PORT=3001

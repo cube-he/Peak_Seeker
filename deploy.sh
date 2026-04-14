@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 志愿填报助手 - 服务器部署脚本
+# 志愿填报助手 - 服务器部署脚本 (Docker)
 # 使用方法: bash deploy.sh
 
 set -e
@@ -63,12 +63,14 @@ setup_env() {
     if [ ! -f "$APP_DIR/.env" ]; then
         echo "创建环境变量文件..."
         cat > "$APP_DIR/.env" << 'ENVEOF'
-# 数据库配置
-DB_USER=postgres
-DB_PASSWORD=VH_Postgres_2024!
+# MySQL 数据库配置
+DB_ROOT_PASSWORD=VH_MySQL_Root_2024!
+DB_USER=vh_user
+DB_PASSWORD=VH_MySQL_2024!
 
 # Redis 配置
 REDIS_PASSWORD=VH_Redis_2024!
+REDIS_QUEUE_DB=1
 
 # JWT 配置 (请修改为随机字符串)
 JWT_SECRET=your_jwt_secret_key_change_this_in_production_2024
@@ -81,7 +83,8 @@ NEXT_PUBLIC_API_URL=http://localhost/api/v1
 ENVEOF
         echo ""
         echo "⚠️  请编辑 $APP_DIR/.env 文件，修改以下配置："
-        echo "   - DB_PASSWORD: 数据库密码"
+        echo "   - DB_ROOT_PASSWORD: MySQL root 密码"
+        echo "   - DB_PASSWORD: MySQL 应用用户密码"
         echo "   - REDIS_PASSWORD: Redis 密码"
         echo "   - JWT_SECRET: JWT 密钥"
         echo "   - NEXT_PUBLIC_API_URL: 改为你的域名"
@@ -102,9 +105,12 @@ start_services() {
     docker-compose up -d
 
     echo "等待服务启动..."
-    sleep 10
+    sleep 15
 
-    echo "初始化数据库..."
+    echo "生成 Prisma Client..."
+    docker-compose exec -T server npx prisma generate || true
+
+    echo "运行数据库迁移..."
     docker-compose exec -T server npx prisma migrate deploy || true
 
     echo "✓ 服务已启动"

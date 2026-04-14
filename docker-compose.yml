@@ -1,21 +1,23 @@
 version: '3.8'
 
 services:
-  # PostgreSQL 数据库
-  postgres:
-    image: postgres:16-alpine
-    container_name: vh-postgres
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: vh-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
-      POSTGRES_DB: volunteer_helper
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-mysql_root_2024}
+      MYSQL_DATABASE: volunteer_helper
+      MYSQL_USER: ${DB_USER:-vh_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-vh_pass_2024}
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     ports:
-      - "5432:5432"
+      - "3306:3306"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-mysql_root_2024}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -49,19 +51,20 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/volunteer_helper
+      DATABASE_URL: mysql://${DB_USER:-vh_user}:${DB_PASSWORD:-vh_pass_2024}@mysql:3306/volunteer_helper
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      REDIS_QUEUE_DB: ${REDIS_QUEUE_DB:-1}
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
-      JWT_EXPIRES_IN: 15m
+      JWT_EXPIRES_IN: 30m
       JWT_REFRESH_EXPIRES_IN: 7d
       CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
       PORT: 3001
     ports:
       - "3001:3001"
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -102,7 +105,7 @@ services:
       - vh-network
 
 volumes:
-  postgres_data:
+  mysql_data:
   redis_data:
 
 networks:
