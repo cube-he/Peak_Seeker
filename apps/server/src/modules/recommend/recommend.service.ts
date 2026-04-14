@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RecommendEngine } from './algorithms/recommend-engine';
 import { RecommendPlanDto } from './dto/recommend-plan.dto';
@@ -169,5 +169,42 @@ export class RecommendService {
         minRank: r.universityMinRank,
       },
     }));
+  }
+
+  // ---- New helper methods for v4.4 controller ----
+
+  async updateStudentScore(
+    studentId: number,
+    totalScore: number,
+    provincialRank?: number,
+  ): Promise<void> {
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+    });
+
+    if (!student) {
+      throw new NotFoundException(`Student ${studentId} not found`);
+    }
+
+    await this.prisma.studentProfile.update({
+      where: { id: studentId },
+      data: {
+        totalScore,
+        ...(provincialRank !== undefined ? { provincialRank } : {}),
+      },
+    });
+  }
+
+  async getPlanStudentId(planId: number): Promise<number> {
+    const plan = await this.prisma.volunteerPlan.findUnique({
+      where: { id: planId },
+      select: { studentId: true },
+    });
+
+    if (!plan) {
+      throw new NotFoundException(`Plan ${planId} not found`);
+    }
+
+    return plan.studentId;
   }
 }
