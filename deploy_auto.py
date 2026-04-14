@@ -249,7 +249,7 @@ def deploy(ssh):
 
     # 4. 安装服务器依赖
     print('\n[4/6] 安装服务器依赖...')
-    run_remote(ssh, f'cd {REMOTE_PATH} && pnpm install --prod 2>&1 | tail -5')
+    run_remote(ssh, f'cd {REMOTE_PATH} && CI=true pnpm install --prod 2>&1 | tail -5')
     run_remote(ssh, f'cd {REMOTE_PATH}/apps/server && npx prisma generate 2>&1 | tail -3')
 
     # 5. 运行数据库迁移
@@ -301,7 +301,7 @@ def setup_server(ssh):
 
     # 安装依赖
     print('\n  安装依赖...')
-    run_remote(ssh, f'cd {REMOTE_PATH} && pnpm install --prod 2>&1 | tail -5')
+    run_remote(ssh, f'cd {REMOTE_PATH} && CI=true pnpm install --prod 2>&1 | tail -5')
     run_remote(ssh, f'cd {REMOTE_PATH}/apps/server && npx prisma generate 2>&1')
 
     print('\n✓ 服务器初始化完成')

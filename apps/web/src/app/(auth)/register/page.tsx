@@ -32,8 +32,9 @@ export default function RegisterPage() {
     },
   });
 
-  const handleRegister = (values: RegisterParams) => {
-    registerMutation.mutate(values);
+  const handleRegister = (values: RegisterParams & { confirmPassword?: string }) => {
+    const { confirmPassword, ...params } = values;
+    registerMutation.mutate(params);
   };
 
   return (
