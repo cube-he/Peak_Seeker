@@ -3,15 +3,20 @@ import {
   Get,
   Put,
   Body,
+  Param,
+  Query,
   UseGuards,
   Request,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PoliciesGuard, CheckPolicies } from '../casl';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateExamInfoDto } from './dto/update-exam-info.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
+import { PermissionOverride } from '../casl/types';
 
 @ApiTags('用户')
 @Controller('users')
@@ -54,5 +59,57 @@ export class UserController {
     const user = await this.userService.updatePreferences(req.user.id, dto);
     const { passwordHash, ...result } = user;
     return result;
+  }
+
+  // ── Admin endpoints ─────────────────────────────────────
+
+  @Get('admin/all')
+  @ApiOperation({ summary: '管理员获取所有用户列表' })
+  @UseGuards(PoliciesGuard)
+  @CheckPolicies((ability) => ability.can('manage', 'User'))
+  async findAllUsers(
+    @Query('role') role?: string,
+    @Query('keyword') keyword?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const where: Record<string, any> = {};
+
+    if (role) {
+      where.role = role;
+    }
+
+    if (keyword) {
+      where.OR = [
+        { realName: { contains: keyword } },
+        { username: { contains: keyword } },
+        { phone: { contains: keyword } },
+      ];
+    }
+
+    return this.userService.findMany(
+      where,
+      page ? parseInt(page, 10) : 1,
+      pageSize ? parseInt(pageSize, 10) : 20,
+    );
+  }
+
+  @Put('admin/:id/permissions')
+  @ApiOperation({ summary: '管理员设置用户权限覆盖' })
+  @UseGuards(PoliciesGuard)
+  @CheckPolicies((ability) => ability.can('manage', 'User'))
+  async updatePermissions(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('overrides') overrides: PermissionOverride[],
+  ) {
+    return this.userService.updatePermissionOverrides(id, overrides);
+  }
+
+  @Get('admin/:id/permissions')
+  @ApiOperation({ summary: '管理员查看用户有效权限' })
+  @UseGuards(PoliciesGuard)
+  @CheckPolicies((ability) => ability.can('manage', 'User'))
+  async getPermissions(@Param('id', ParseIntPipe) id: number) {
+    return this.userService.getEffectivePermissions(id);
   }
 }

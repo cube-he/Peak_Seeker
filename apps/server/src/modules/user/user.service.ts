@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import { PermissionOverride } from '../casl/types';
 
 @Injectable()
 export class UserService {
@@ -115,5 +117,103 @@ export class UserService {
         vipExpireAt: expireAt,
       },
     });
+  }
+
+  // ── Admin user management ─────────────────────────────
+
+  /**
+   * Paginated user list with optional filter. Includes profiles.
+   */
+  async findMany(
+    where: Prisma.UserWhereInput,
+    page: number = 1,
+    pageSize: number = 20,
+  ) {
+    const [data, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          username: true,
+          realName: true,
+          phone: true,
+          email: true,
+          role: true,
+          gender: true,
+          createdAt: true,
+          lastLoginAt: true,
+          teacherProfile: {
+            select: {
+              id: true,
+              school: true,
+              isSupervisor: true,
+            },
+          },
+          studentProfile: {
+            select: {
+              id: true,
+              status: true,
+              highSchool: true,
+              examYear: true,
+              teacherId: true,
+            },
+          },
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return { data, total, page, pageSize };
+  }
+
+  /**
+   * Count users matching a filter.
+   */
+  async count(where: Prisma.UserWhereInput) {
+    return this.prisma.user.count({ where });
+  }
+
+  /**
+   * Set per-user permission overrides (admin-configured exceptions).
+   */
+  async updatePermissionOverrides(
+    userId: number,
+    overrides: PermissionOverride[],
+  ) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { permissionOverrides: overrides as any },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        permissionOverrides: true,
+      },
+    });
+  }
+
+  /**
+   * Return role defaults merged with per-user overrides.
+   */
+  async getEffectivePermissions(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        permissionOverrides: true,
+      },
+    });
+
+    if (!user) return null;
+
+    return {
+      userId: user.id,
+      role: user.role,
+      overrides: (user.permissionOverrides as PermissionOverride[] | null) ?? [],
+    };
   }
 }
