@@ -22,10 +22,18 @@ export default function LoginPage() {
         refreshToken: data.refreshToken,
       });
       message.success('登录成功！');
-      router.push('/');
+      // 根据角色跳转到对应 dashboard
+      const role = data.user?.role;
+      const dashboards: Record<string, string> = {
+        ADMIN: '/admin/dashboard',
+        TEACHER: '/teacher/dashboard',
+        STUDENT: '/',
+      };
+      router.push(dashboards[role] || '/');
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || '登录失败');
+      const msg = error.response?.data?.message;
+      message.error(Array.isArray(msg) ? msg[0] : msg || '登录失败');
     },
   });
 

@@ -10,7 +10,7 @@ interface User {
   province?: string;
   score?: number;
   rank?: number;
-  vipLevel: string;
+  vipLevel?: string;
   role?: string;
 }
 
@@ -25,6 +25,16 @@ interface AuthState {
   logout: () => void;
 }
 
+// Sync token to cookie so Next.js middleware can read it for auth routing
+function setTokenCookie(token: string | null) {
+  if (typeof document === 'undefined') return;
+  if (token) {
+    document.cookie = `access_token=${token}; path=/; max-age=1800; SameSite=Lax`;
+  } else {
+    document.cookie = 'access_token=; path=/; max-age=0';
+  }
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -33,16 +43,20 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       isLoggedIn: false,
 
-      setAuth: (data) =>
+      setAuth: (data) => {
+        setTokenCookie(data.accessToken);
         set({
           user: data.user,
           accessToken: data.accessToken,
           refreshToken: data.refreshToken,
           isLoggedIn: true,
-        }),
+        });
+      },
 
-      setAccessToken: (token) =>
-        set({ accessToken: token }),
+      setAccessToken: (token) => {
+        setTokenCookie(token);
+        set({ accessToken: token });
+      },
 
       updateUser: (data) => {
         const currentUser = get().user;
@@ -51,13 +65,15 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: () =>
+      logout: () => {
+        setTokenCookie(null);
         set({
           user: null,
           accessToken: null,
           refreshToken: null,
           isLoggedIn: false,
-        }),
+        });
+      },
     }),
     {
       name: 'auth-storage',

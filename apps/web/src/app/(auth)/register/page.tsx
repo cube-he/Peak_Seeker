@@ -25,10 +25,17 @@ export default function RegisterPage() {
         refreshToken: data.refreshToken,
       });
       message.success('注册成功！');
-      router.push('/');
+      const role = data.user?.role;
+      const dashboards: Record<string, string> = {
+        ADMIN: '/admin/dashboard',
+        TEACHER: '/teacher/dashboard',
+        STUDENT: '/',
+      };
+      router.push(dashboards[role] || '/');
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.message || '注册失败');
+      const msg = error.response?.data?.message;
+      message.error(Array.isArray(msg) ? msg[0] : msg || '注册失败');
     },
   });
 
@@ -75,6 +82,7 @@ export default function RegisterPage() {
             rules={[
               { required: true, message: '请输入密码' },
               { min: 6, message: '密码至少6个字符' },
+              { pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, message: '需包含大写字母、小写字母和数字' },
             ]}
           >
             <Input.Password
