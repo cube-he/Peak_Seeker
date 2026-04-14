@@ -289,10 +289,12 @@ def extract_admission_records(df):
         if not uni_code or not major_name:
             continue
 
+        batch = safe_str(get(row, 'batch')) or ''
         base = {
             'universityEnrollCode': uni_code,
             'majorName': major_name,
             'province': '四川',
+            'batch': batch,
         }
 
         # 2025

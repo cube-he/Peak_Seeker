@@ -288,7 +288,7 @@ model EnrollmentPlan {
   planNotes String? @map("plan_notes") @db.Text
 
   // 招生要求
-  batch               String? @db.VarChar(50)
+  batch               String  @default("") @db.VarChar(50)
   level               String? @db.VarChar(50)
   subjects            String? @db.VarChar(100)
   subjectRequirements String? @map("subject_requirements") @db.Text
@@ -316,7 +316,7 @@ model EnrollmentPlan {
   majorRanking      String? @map("major_ranking") @db.VarChar(100)
   majorHonor        String? @map("major_honor") @db.Text
 
-  @@unique([universityId, majorId, year, province])
+  @@unique([universityId, majorId, year, province, batch])
   @@index([year])
   @@index([province])
   @@index([universityId])
@@ -363,7 +363,7 @@ model AdmissionRecord {
 
   // 科目和批次信息
   subjects String? @db.VarChar(50)
-  batch    String? @db.VarChar(50)
+  batch    String  @default("") @db.VarChar(50)
 
   // 院校整体录取数据
   universityMinScore       Int? @map("university_min_score")
@@ -374,7 +374,7 @@ model AdmissionRecord {
   universityMaxRank        Int? @map("university_max_rank")
   universityAdmissionCount Int? @map("university_admission_count")
 
-  @@unique([universityId, majorId, year, province])
+  @@unique([universityId, majorId, year, province, batch])
   @@index([year])
   @@index([province])
   @@index([universityId])
