@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { SlowRequestInterceptor } from './common/interceptors/slow-request.interceptor';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -44,6 +45,9 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);
   }
+
+  // 慢请求监控
+  app.useGlobalInterceptors(new SlowRequestInterceptor());
 
   // 优雅关闭
   app.enableShutdownHooks();
