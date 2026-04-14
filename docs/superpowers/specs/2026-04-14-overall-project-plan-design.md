@@ -1,7 +1,7 @@
 # 智愿家 — 高考志愿填报系统整体规划设计
 
 > 日期：2026-04-14
-> 版本：v1.2（完善补充版）
+> 版本：v1.3（生产就绪版）
 > 目标：2026年6月中旬上线，服务四川高考考生
 
 ---
@@ -274,9 +274,9 @@ model StudentProfile {
   excludedProvinces       Json?
 
   // ---- 第七组：经济与特殊条件 ----
-  tuitionBudget       TuitionBudget? // LOW | MEDIUM | HIGH
-  acceptPrivate       Boolean @default(false)
-  acceptCooperation   Boolean @default(false)
+  tuitionBudget       TuitionBudget @default(UNDECIDED)
+  acceptPrivate       AcceptLevel   @default(UNDECIDED)
+  acceptCooperation   AcceptLevel   @default(UNDECIDED)
   specialProgram      Json?   // ["NATIONAL", "LOCAL", "UNIVERSITY"]
   otherRequirements   String?
 
@@ -284,6 +284,10 @@ model StudentProfile {
   interests           Json?   // ["科技", "文学"]
   personalityType     String?
   selfDescription     String? @db.Text
+
+  // ---- 管理字段 ----
+  tags                Json?   // ["高三5班", "580+组"]（分组标签）
+  dataVersion         Int     @default(0)  // 乐观锁
 
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -334,8 +338,9 @@ model VolunteerPlan {
   finalizedAt       DateTime?
   finalizedBy       Int?
 
-  // 导出
+  // 导出与管理
   exportCount       Int       @default(0)
+  dataVersion       Int       @default(0)  // 乐观锁
 
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -369,7 +374,8 @@ model PlanItem {
   groupName           String    // 院校专业组全称
   anchorMajor         String    // 锚定专业
   groupMajorCount     Int       // 组内专业数
-  recommendedOrder    String?   // 组内推荐排序（前3，逗号分隔）
+  recommendedOrder    String?   // 组内推荐排序（前3，逗号分隔，简要展示用）
+  fullMajorRanking    Json?     // 完整组内专业排序 [{majorName, isAnchor, recommendScore, ...}]
   subjectRequirement  String?   // 选科要求
 
   score25Group        Int?      // 25年组最低分
@@ -669,12 +675,20 @@ enum StayPreference {
   PREFER_LOCAL
   NO_PREFERENCE
   PREFER_OUTSIDE
+  UNDECIDED
+}
+
+enum AcceptLevel {
+  YES
+  NO
+  UNDECIDED
 }
 
 enum TuitionBudget {
   LOW       // <=6000
   MEDIUM    // <=15000
   HIGH      // 不限
+  UNDECIDED // 待确认
 }
 
 enum Batch {
@@ -1444,4 +1458,216 @@ UI标签：
   3. 按老师分组发送通知，附带具体影响和建议操作
   4. 老师 Dashboard 红色提醒条："N份方案受影响 [查看详情]"
      影响分析面板：列出每个受影响志愿 + 变更详情 + 建议 + 直达链接
+```
+
+---
+
+## 十八、生产就绪补充（16项深度审视 Round 2）
+
+### 18.1 文件存储策略
+
+```
+统一抽象层 FileStorageService：
+  当前：LocalFileStorage → /data/uploads/{type}/{year-month}/{uuid}.{ext}
+  后期：可切换 AliyunOSSStorage，接口不变
+  Nginx 配置 /uploads/ 静态目录
+
+新增模型 FileRecord：
+  id, originalName, storagePath, mimeType, size,
+  uploadedBy, relatedType(FILING|ADMISSION|IMPORT), relatedId, createdAt
+
+上传流程：Multer接收 → 校验(类型+大小+magic bytes) → 存储 → 记录
+```
+
+### 18.2 并发编辑冲突（乐观锁）
+
+```
+VolunteerPlan.dataVersion + StudentProfile.dataVersion
+更新时 WHERE id=? AND dataVersion=?，不匹配则 409 Conflict
+前端收到409 → 提示"数据已被修改，请刷新" → 显示差异 → 选择覆盖/放弃/合并
+```
+
+### 18.3 班级批量导入学生
+
+```
+老师端 /teacher/students/batch-import
+  上传Excel → 预览(绿=新建/黄=已存在/红=异常) → 确认 → 批量创建
+  提供标准模板下载
+
+StudentProfile.tags: Json — 支持分组标签（"高三5班"等）
+老师学生列表按标签筛选
+```
+
+### 18.4 学生转移完整规则
+
+```
+已定版/已发布方案 → 保留，新老师可查看
+草稿方案 → createdBy 改为新老师
+审核中方案 → 取消审核回草稿，转给新老师
+通知三方（原老师、新老师、学生）
+审计日志记录
+```
+
+### 18.5 方案分享链接（家长查看）
+
+```
+新增模型 PlanShareLink：
+  planId, token(UUID), expiresAt(7天), createdBy, viewCount
+
+访问 /share/{token} → 不需要登录 → 只读方案视图（含通俗解读）
+老师可随时撤销链接
+```
+
+### 18.6 极端分数段降级策略
+
+```
+if (有效picks < 40 && bin跨度已达下限) {
+  mode = 'degraded'
+  不强制凑55个，展示实际可选数量
+  提示老师："可选志愿有限，建议关注其他批次/放宽偏好"
+}
+```
+
+### 18.7 志愿填报顺序优化
+
+```
+排序规则：
+  梯度间：冲→保（不变）
+  同梯度内：compositeScore 降序（更想去的排前面）
+  同分：位次小的排前面（先尝试更好的学校）
+
+老师可拖拽调整，调整后标记 isManuallyModified=true
+跨梯度调序时弹确认提示
+```
+
+### 18.8 组内完整专业排序
+
+```
+PlanItem.fullMajorRanking: Json
+  [{majorName, majorCode, isAnchor, recommendScore, disciplineScore,
+    rankScore, isExcluded, note}]
+
+卡片简要显示前3个，展开详情显示完整排序，导出Excel包含完整排序
+排除专业标红展示但不隐藏（提示调剂风险）
+```
+
+### 18.9 API 安全防护
+
+```
+接口限流（NestJS ThrottlerModule）：
+  全局 60次/分 | 登录 5次/分 | 方案生成 3次/分
+
+文件上传校验：
+  白名单 MIME 类型 + magic bytes 验证 + 10MB 大小限制
+
+JWT 过期策略：
+  accessToken 30分钟 | refreshToken 7天
+  前端 Axios 拦截器静默刷新
+```
+
+### 18.10 Redis 降级策略
+
+```
+RedisHealthService 每30秒 ping Redis
+不可用时各模块自动降级：
+  Bull队列 → 同步执行（慢但能用）
+  备选池缓存 → 直接重算不缓存
+  SSE → 前端降级为轮询 /notifications/unread
+  JWT黑名单 → 短期忽略（accessToken过期时间本身就短）
+Redis恢复后自动切回正常模式
+```
+
+### 18.11 最小可行监控
+
+```
+1. Winston 统一日志（console + error.log + combined.log）
+2. 慢请求 Interceptor（>1s 记录告警）
+3. Bull Queue Dashboard（/admin/queues，管理员可访问）
+4. 方案生成失败 → 通知老师+管理员
+5. 健康检查 GET /health（数据库+Redis+OCR状态）
+```
+
+### 18.12 数据库备份策略
+
+```
+PostgreSQL：每天凌晨 pg_dump，保留30天
+关键操作前（数据导入）手动快照
+Redis：RDB(5分钟) + AOF(每秒追加)
+每周自动恢复验证
+```
+
+### 18.13 定版撤回机制
+
+```
+FINALIZED/PUBLISHED → DRAFT（撤回）
+条件：管理员或主管 + 无 FilingRecord（未填报）+ 填写撤回原因
+通知老师和学生，审计日志记录
+```
+
+### 18.14 跨模拟考方案对比
+
+```
+API: GET /plans/cross-exam-compare?studentId=123
+返回各 examSource 的定版方案对比：
+  稳定选择（一直在方案里的学校）
+  新增/删除
+  梯度迁移（从冲刺变稳妥等）
+
+老师端：方案演进tab + 横向对比表
+学生端：简化版演进时间线
+```
+
+### 18.15 信息采集"不确定"选项
+
+```
+枚举增加 UNDECIDED：StayPreference, TuitionBudget, AcceptLevel(替代Boolean)
+算法处理：UNDECIDED = 不排除也不加分，风险提示中标注"待确认"
+信息完整度：UNDECIDED 权重 0.5（介于已填和未填之间）
+老师端标黄提示："N项偏好待确认，建议沟通后补充"
+```
+
+### 18.16 推荐引擎分层缓存
+
+```
+冷数据（年度不变）→ 应用内存：一分一段表、推荐清单、批次配置、专业映射
+  应用启动时加载，数据导入后刷新
+温数据（偶尔变）→ Redis缓存(TTL 24h)：征集汇总
+  导入时刷新
+热数据（每次不同）→ 数据库：学生信息（量小）
+候选池查询 → 数据库（复合索引保证效率）
+
+单次数据加载：500ms+ → 200ms以内
+```
+
+---
+
+## 十九、新增数据模型汇总（v1.3新增）
+
+```prisma
+model FileRecord {
+  id            Int      @id @default(autoincrement())
+  originalName  String
+  storagePath   String
+  mimeType      String
+  size          Int
+  uploadedBy    Int
+  relatedType   String?
+  relatedId     Int?
+  createdAt     DateTime @default(now())
+
+  @@index([relatedType, relatedId])
+}
+
+model PlanShareLink {
+  id          Int       @id @default(autoincrement())
+  planId      Int
+  plan        VolunteerPlan @relation(fields: [planId], references: [id])
+  token       String    @unique
+  expiresAt   DateTime
+  createdBy   Int
+  viewCount   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([token])
+}
 ```
