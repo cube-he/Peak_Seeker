@@ -7,14 +7,17 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { UserService } from '../user/user.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
   constructor(
     private userService: UserService,
+    private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private redisService: RedisService,
@@ -38,10 +41,33 @@ export class AuthService {
     // 加密密码
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
-    // 创建用户
-    const user = await this.userService.create({
-      ...dto,
-      passwordHash,
+    const role = (dto.role as Role) || Role.STUDENT;
+
+    // Build profile creation based on role
+    const profileData: Record<string, any> = {};
+    if (role === Role.TEACHER) {
+      profileData.teacherProfile = { create: {} };
+    } else if (role === Role.STUDENT) {
+      profileData.studentProfile = { create: { province: dto.province || '四川' } };
+    }
+    // ADMIN gets no profile
+
+    // 创建用户 with profile via Prisma directly (UserService.create doesn't support nested profile creation)
+    const user = await this.prisma.user.create({
+      data: {
+        username: dto.username,
+        passwordHash,
+        phone: dto.phone,
+        email: dto.email,
+        realName: dto.realName,
+        province: dto.province,
+        role,
+        ...profileData,
+      },
+      include: {
+        teacherProfile: true,
+        studentProfile: true,
+      },
     });
 
     // 生成 token
@@ -89,7 +115,14 @@ export class AuthService {
         secret: this.configService.get('JWT_REFRESH_SECRET', 'refresh-default-secret'),
       });
 
-      const user = await this.userService.findById(payload.sub);
+      // Load user with profiles for fresh token data
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        include: {
+          teacherProfile: true,
+          studentProfile: true,
+        },
+      });
       if (!user) {
         throw new UnauthorizedException('用户不存在');
       }
@@ -101,7 +134,14 @@ export class AuthService {
   }
 
   async validateUser(username: string, password: string) {
-    const user = await this.userService.findByUsername(username);
+    // Load user with profiles so generateTokens has profile IDs
+    const user = await this.prisma.user.findUnique({
+      where: { username },
+      include: {
+        teacherProfile: true,
+        studentProfile: true,
+      },
+    });
     if (!user) {
       return null;
     }
@@ -119,19 +159,23 @@ export class AuthService {
       sub: user.id,
       username: user.username,
       role: user.role,
-      vipLevel: user.vipLevel,
+      teacherProfileId: user.teacherProfile?.id ?? null,
+      studentProfileId: user.studentProfile?.id ?? null,
+      isSupervisor: user.teacherProfile?.isSupervisor ?? false,
     };
 
-    const accessToken = this.jwtService.sign(payload);
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: '30m',
+    });
     const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN', '7d'),
+      expiresIn: '7d',
       secret: this.configService.get('JWT_REFRESH_SECRET', 'refresh-default-secret'),
     });
 
     return {
       accessToken,
       refreshToken,
-      expiresIn: this.configService.get('JWT_EXPIRES_IN', '15m'),
+      expiresIn: '30m',
     };
   }
 
