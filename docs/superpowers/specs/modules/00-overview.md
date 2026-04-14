@@ -32,7 +32,7 @@ C端产品 + 专家工具兼顾的高考志愿填报系统（四川省）。
 │  Import(事务+验证) | Export(exceljs, Bull) | Notification(SSE)│
 │  AuditLog(Prisma Extension) | AI(后期)                       │
 └──────────────────────┬──────────────────────────────────────┘
-│  PostgreSQL(复合索引) | Redis(缓存+队列+SSE) | OCR(FastAPI)    │
+│  MySQL(复合索引)      | Redis(缓存+队列+SSE) | OCR(FastAPI)    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -46,7 +46,7 @@ C端产品 + 专家工具兼顾的高考志愿填报系统（四川省）。
 | 后端框架 | NestJS 10 | — |
 | 权限 | CASL + PoliciesGuard | 数据级权限 |
 | ORM | Prisma 7 | Client Extensions 审计 |
-| 数据库 | PostgreSQL 16 | 复合索引 + 分步迁移 |
+| 数据库 | MySQL (MariaDB 适配器) | 复合索引 + 分步迁移 |
 | 缓存 | Redis 7 | 备选池(7天) + 队列 + SSE |
 | 队列 | Bull (BullMQ) | 方案生成 + 导出 |
 | 通知 | SSE (@Sse) | 后期 AI 对话改 WebSocket |

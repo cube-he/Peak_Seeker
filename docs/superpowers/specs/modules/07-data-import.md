@@ -23,7 +23,7 @@
 
 ```
 上传Excel/CSV → 字段映射确认 → 专业名称标准化
-  → 导入前备份(pg_dump)
+  → 导入前备份(mysqldump)
   → 事务内批量写入(每批500条, createMany+skipDuplicates)
   → 超时5分钟, 失败整体回滚
   → 验证报告(6项自动检查)

@@ -1,6 +1,7 @@
 # 数据模型（唯一权威定义）
 
 > 所有模型以本文件为准。其他文档通过"引用 01-data-models.md#模型名"引用。
+> 数据库：MySQL (Prisma MariaDB 适配器)。现有 schema 使用 `@@map("snake_case")` 映射，新模型保持一致。
 
 ## 模型关系总览
 

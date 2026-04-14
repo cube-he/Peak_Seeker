@@ -94,7 +94,7 @@ RedisHealthService 每30秒 ping：
 
 ## 数据库备份
 
-PostgreSQL：每天凌晨 pg_dump，保留30天
+MySQL：每天凌晨 mysqldump，保留30天
 关键操作前手动快照
 Redis：RDB(5分钟) + AOF(每秒)
 每周自动恢复验证
