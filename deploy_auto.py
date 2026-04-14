@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
 全自动部署脚本 - VolunteerHelper (志愿填报助手)
-参考 CourseAssistant 部署方式，支持 SSH 密钥认证
+本地构建 → SSH 上传 → 远程迁移 → 重启服务
+
 用法:
   python deploy_auto.py              # 完整构建+部署
   python deploy_auto.py --skip-build # 跳过构建，直接部署
   python deploy_auto.py --skip-tests # 跳过测试
   python deploy_auto.py --build-only # 只构建不部署
+  python deploy_auto.py --setup      # 首次服务器初始化
+  python deploy_auto.py --branch dev # 指定分支（默认 master）
 """
 import paramiko
 import os
@@ -14,295 +17,330 @@ import sys
 import subprocess
 import argparse
 
-# Server configuration
+# ==================== 配置 ====================
 HOST = '132.232.245.53'
 USER = 'ubuntu'
 REMOTE_PATH = '/home/ubuntu/apps/volunteer-helper'
 SSH_KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cube.pem')
+DEFAULT_BRANCH = 'master'
 
-# Local paths
+# 本地路径
 LOCAL_ROOT = os.path.dirname(os.path.abspath(__file__))
 LOCAL_WEB = os.path.join(LOCAL_ROOT, 'apps', 'web')
 LOCAL_SERVER = os.path.join(LOCAL_ROOT, 'apps', 'server')
+LOCAL_SHARED = os.path.join(LOCAL_ROOT, 'packages', 'shared')
+
+# 需要上传到服务器的目录/文件清单
+UPLOAD_MAP = {
+    # 后端编译产物
+    'server_dist': {
+        'local': os.path.join(LOCAL_SERVER, 'dist'),
+        'remote': 'apps/server/dist',
+    },
+    # Prisma schema + migrations
+    'prisma': {
+        'local': os.path.join(LOCAL_SERVER, 'prisma'),
+        'remote': 'apps/server/prisma',
+    },
+    # 前端编译产物
+    'web_next': {
+        'local': os.path.join(LOCAL_WEB, '.next'),
+        'remote': 'apps/web/.next',
+        'clean_first': True,
+    },
+    # 前端静态资源
+    'web_public': {
+        'local': os.path.join(LOCAL_WEB, 'public'),
+        'remote': 'apps/web/public',
+    },
+    # 共享类型包
+    'shared': {
+        'local': LOCAL_SHARED,
+        'remote': 'packages/shared',
+    },
+    # OCR 服务
+    'ocr': {
+        'local': os.path.join(LOCAL_ROOT, 'services', 'ocr-service'),
+        'remote': 'services/ocr-service',
+        'files_only': [
+            'main.py', 'ai_parser.py', 'multi_engine_validator.py',
+            'image_preprocessor.py', 'requirements.txt', 'setup.sh',
+        ],
+    },
+}
+
+# 根目录需要上传的配置文件
+ROOT_FILES = [
+    'package.json',
+    'pnpm-workspace.yaml',
+    'pnpm-lock.yaml',
+    'ecosystem.config.js',
+]
 
 
-def run_local_command(cmd, cwd=None):
-    """Run a local command and return success status"""
+def run_local(cmd, cwd=None):
+    """执行本地命令"""
     print(f'  > {cmd}')
-    result = subprocess.run(cmd, shell=True, cwd=cwd or LOCAL_ROOT,
-                            capture_output=True, encoding='utf-8', errors='replace')
+    result = subprocess.run(
+        cmd, shell=True, cwd=cwd or LOCAL_ROOT,
+        capture_output=True, encoding='utf-8', errors='replace',
+    )
     if result.returncode != 0:
-        err = result.stderr.encode('ascii', 'replace').decode('ascii') if result.stderr else ''
-        print(f'  Error: {err[:500]}')
+        err = (result.stderr or '')[:500]
+        print(f'  ✗ {err}')
         return False
     if result.stdout:
-        out = result.stdout[:500].encode('ascii', 'replace').decode('ascii')
-        print(out)
+        print(result.stdout[:300])
     return True
 
 
+def run_remote(ssh, cmd):
+    """执行远程命令"""
+    print(f'  > {cmd}')
+    stdin, stdout, stderr = ssh.exec_command(cmd, timeout=180)
+    out = stdout.read().decode('utf-8', errors='replace')
+    err = stderr.read().decode('utf-8', errors='replace')
+    exit_code = stdout.channel.recv_exit_status()
+    if out:
+        print(out[:500])
+    if err and 'warning' not in err.lower() and exit_code != 0:
+        print(f'  STDERR: {err[:300]}')
+    return exit_code == 0
+
+
 def connect_ssh():
-    """Connect to server using SSH key or environment password"""
-    print('Connecting to server...')
+    """SSH 连接"""
+    print(f'连接服务器 {HOST}...')
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     try:
         if os.path.exists(SSH_KEY_PATH):
             ssh.connect(HOST, username=USER, key_filename=SSH_KEY_PATH, timeout=30)
-            print('Connected (SSH key)')
+            print(f'✓ 已连接 (SSH key: {os.path.basename(SSH_KEY_PATH)})')
         else:
-            # Fallback: try CourseAssistant's key
-            ca_key = os.path.expanduser('~/.ssh/course_assistant_deploy')
-            if os.path.exists(ca_key):
-                ssh.connect(HOST, username=USER, key_filename=ca_key, timeout=30)
-                print('Connected (CourseAssistant SSH key)')
-            else:
-                password = os.environ.get('DEPLOY_PASSWORD')
-                if not password:
-                    print('Error: SSH key not found and DEPLOY_PASSWORD not set')
-                    print(f'Setup SSH key:')
-                    print(f'  ssh-keygen -t ed25519 -f {SSH_KEY_PATH}')
-                    print(f'  ssh-copy-id -i {SSH_KEY_PATH}.pub {USER}@{HOST}')
-                    print(f'Or reuse CourseAssistant key:')
-                    print(f'  cp ~/.ssh/course_assistant_deploy {SSH_KEY_PATH}')
-                    return None
-                ssh.connect(HOST, username=USER, password=password, timeout=30)
-                print('Connected (password)')
+            password = os.environ.get('DEPLOY_PASSWORD')
+            if not password:
+                print(f'✗ SSH key 不存在: {SSH_KEY_PATH}')
+                print(f'  设置方法: ssh-keygen -t ed25519 -f {SSH_KEY_PATH}')
+                print(f'  或设置环境变量: DEPLOY_PASSWORD=xxx')
+                return None
+            ssh.connect(HOST, username=USER, password=password, timeout=30)
+            print('✓ 已连接 (密码)')
         return ssh
     except Exception as e:
-        print(f'Connection failed: {e}')
+        print(f'✗ 连接失败: {e}')
         return None
 
 
 def upload_directory(sftp, local_dir, remote_dir):
-    """Recursively upload a directory"""
+    """递归上传目录"""
     if not os.path.exists(local_dir):
-        print(f'    Warning: {local_dir} does not exist, skipping')
-        return
+        print(f'    跳过 (不存在): {local_dir}')
+        return 0
 
+    count = 0
     for item in os.listdir(local_dir):
         local_path = os.path.join(local_dir, item)
         remote_path = f'{remote_dir}/{item}'
 
+        # 跳过不需要的文件/目录
+        if item in ('node_modules', '__pycache__', '.git', '.env', '.env.local', 'venv'):
+            continue
+
         if os.path.isfile(local_path):
-            print(f'    {item}')
             sftp.put(local_path, remote_path)
+            count += 1
         elif os.path.isdir(local_path):
             try:
                 sftp.stat(remote_path)
-            except:
+            except FileNotFoundError:
                 sftp.mkdir(remote_path)
-            upload_directory(sftp, local_path, remote_path)
+            count += upload_directory(sftp, local_path, remote_path)
 
-
-def run_remote_command(ssh, cmd):
-    """Run a command on the remote server"""
-    print(f'  > {cmd}')
-    stdin, stdout, stderr = ssh.exec_command(cmd, timeout=120)
-    out = stdout.read().decode('utf-8', errors='replace')
-    err = stderr.read().decode('utf-8', errors='replace')
-    if out:
-        out_safe = out[:500].encode('ascii', 'replace').decode('ascii')
-        print(out_safe)
-    if err and 'warning' not in err.lower():
-        err_safe = err[:200].encode('ascii', 'replace').decode('ascii')
-        print(f'  STDERR: {err_safe}')
-    return stdout.channel.recv_exit_status() == 0
+    return count
 
 
 def build_project(skip_tests=False):
-    """Build frontend and backend"""
-    print('\n=== Building Project ===')
+    """本地构建"""
+    print('\n=== 本地构建 ===')
 
-    # Install dependencies
-    print('\n[1/5] Installing dependencies...')
-    if not run_local_command('pnpm install'):
+    print('\n[1/5] 安装依赖...')
+    if not run_local('pnpm install'):
         return False
 
-    # Generate Prisma Client
-    print('\n[2/5] Generating Prisma Client...')
-    if not run_local_command('npx prisma generate', cwd=LOCAL_SERVER):
+    print('\n[2/5] 生成 Prisma Client...')
+    if not run_local('npx prisma generate', cwd=LOCAL_SERVER):
         return False
 
-    # Run tests (optional)
     if not skip_tests:
-        print('\n[3/5] Running tests...')
-        run_local_command('pnpm test')  # Don't fail on test errors
+        print('\n[3/5] 运行测试...')
+        run_local('pnpm test')  # 测试失败不阻断部署
     else:
-        print('\n[3/5] Skipping tests...')
+        print('\n[3/5] 跳过测试')
 
-    # Build backend
-    print('\n[4/5] Building backend...')
-    if not run_local_command('pnpm run build:server'):
+    print('\n[4/5] 构建后端...')
+    if not run_local('pnpm build:server'):
         return False
 
-    # Build frontend
-    print('\n[5/5] Building frontend...')
-    if not run_local_command('pnpm run build:web'):
+    print('\n[5/5] 构建前端...')
+    if not run_local('pnpm build:web'):
         return False
 
-    print('\nBuild completed successfully!')
+    print('\n✓ 构建完成')
     return True
 
 
 def deploy(ssh):
-    """Deploy to server"""
-    print('\n=== Deploying to Server ===')
+    """部署到服务器"""
+    print('\n=== 部署到服务器 ===')
     sftp = ssh.open_sftp()
 
-    # Ensure remote directories exist
-    print('\n[1/8] Preparing remote directories...')
-    run_remote_command(ssh, f'mkdir -p {REMOTE_PATH}/apps/server/dist')
-    run_remote_command(ssh, f'mkdir -p {REMOTE_PATH}/apps/server/prisma')
-    run_remote_command(ssh, f'mkdir -p {REMOTE_PATH}/apps/web/.next')
-    run_remote_command(ssh, f'mkdir -p {REMOTE_PATH}/apps/web/public')
-    run_remote_command(ssh, f'mkdir -p {REMOTE_PATH}/services/ocr-service')
+    # 1. 确保远程目录存在
+    print('\n[1/6] 准备远程目录...')
+    for key, conf in UPLOAD_MAP.items():
+        remote = f"{REMOTE_PATH}/{conf['remote']}"
+        run_remote(ssh, f'mkdir -p {remote}')
 
-    # Upload backend dist
-    print('\n[2/8] Uploading backend...')
-    local_server_dist = os.path.join(LOCAL_SERVER, 'dist')
-    remote_server_dist = f'{REMOTE_PATH}/apps/server/dist'
-    upload_directory(sftp, local_server_dist, remote_server_dist)
-
-    # Upload Prisma schema + migrations
-    print('\n[3/8] Uploading Prisma files...')
-    local_prisma = os.path.join(LOCAL_SERVER, 'prisma')
-    remote_prisma = f'{REMOTE_PATH}/apps/server/prisma'
-    upload_directory(sftp, local_prisma, remote_prisma)
-
-    # Upload frontend build
-    print('\n[4/8] Uploading frontend...')
-    local_web_next = os.path.join(LOCAL_WEB, '.next')
-    remote_web_next = f'{REMOTE_PATH}/apps/web/.next'
-    # Clean old build first
-    run_remote_command(ssh, f'rm -rf {REMOTE_PATH}/apps/web/.next')
-    run_remote_command(ssh, f'mkdir -p {remote_web_next}')
-    upload_directory(sftp, local_web_next, remote_web_next)
-
-    # Upload public assets
-    local_public = os.path.join(LOCAL_WEB, 'public')
-    if os.path.exists(local_public):
-        remote_public = f'{REMOTE_PATH}/apps/web/public'
-        upload_directory(sftp, local_public, remote_public)
-
-    # Upload OCR service
-    print('\n[5/8] Uploading OCR service...')
-    local_ocr = os.path.join(LOCAL_ROOT, 'services', 'ocr-service')
-    remote_ocr = f'{REMOTE_PATH}/services/ocr-service'
-    for f in ['main.py', 'ai_parser.py', 'multi_engine_validator.py', 'image_preprocessor.py', 'requirements.txt', 'setup.sh', 'FORMAT_ANALYSIS.md']:
-        local_file = os.path.join(local_ocr, f)
+    # 2. 上传根目录配置文件
+    print('\n[2/6] 上传配置文件...')
+    for f in ROOT_FILES:
+        local_file = os.path.join(LOCAL_ROOT, f)
         if os.path.exists(local_file):
             print(f'    {f}')
-            sftp.put(local_file, f'{remote_ocr}/{f}')
+            sftp.put(local_file, f'{REMOTE_PATH}/{f}')
 
-    # Upload ecosystem.config.js
-    eco_file = os.path.join(LOCAL_ROOT, 'ecosystem.config.js')
-    if os.path.exists(eco_file):
-        sftp.put(eco_file, f'{REMOTE_PATH}/ecosystem.config.js')
+    # 上传 server 和 web 的 package.json
+    for sub in ['apps/server/package.json', 'apps/web/package.json', 'apps/web/next.config.js']:
+        local_file = os.path.join(LOCAL_ROOT, sub)
+        if os.path.exists(local_file):
+            print(f'    {sub}')
+            sftp.put(local_file, f'{REMOTE_PATH}/{sub}')
+
+    # 3. 上传各模块
+    print('\n[3/6] 上传编译产物...')
+    for key, conf in UPLOAD_MAP.items():
+        local_dir = conf['local']
+        remote_dir = f"{REMOTE_PATH}/{conf['remote']}"
+
+        if not os.path.exists(local_dir):
+            print(f'  [{key}] 跳过 (不存在)')
+            continue
+
+        # 需要先清理旧文件的目录
+        if conf.get('clean_first'):
+            run_remote(ssh, f'rm -rf {remote_dir}')
+            run_remote(ssh, f'mkdir -p {remote_dir}')
+
+        # 只上传指定文件
+        if conf.get('files_only'):
+            for f in conf['files_only']:
+                local_file = os.path.join(local_dir, f)
+                if os.path.exists(local_file):
+                    print(f'    [{key}] {f}')
+                    sftp.put(local_file, f'{remote_dir}/{f}')
+            continue
+
+        print(f'  [{key}] 上传中...')
+        count = upload_directory(sftp, local_dir, remote_dir)
+        print(f'  [{key}] ✓ {count} 个文件')
 
     sftp.close()
 
-    # Run database migrations on server
-    print('\n[6/8] Running database migrations...')
-    run_remote_command(ssh,
-        f'cd {REMOTE_PATH}/apps/server && npx prisma migrate deploy 2>&1 || npx prisma db push 2>&1')
+    # 4. 安装服务器依赖
+    print('\n[4/6] 安装服务器依赖...')
+    run_remote(ssh, f'cd {REMOTE_PATH} && pnpm install --prod 2>&1 | tail -5')
+    run_remote(ssh, f'cd {REMOTE_PATH}/apps/server && npx prisma generate 2>&1 | tail -3')
 
-    # Setup OCR service on server
-    print('\n[7/8] Setting up OCR service...')
-    run_remote_command(ssh, f'cd {REMOTE_PATH}/services/ocr-service && bash setup.sh 2>&1 | tail -10')
+    # 5. 运行数据库迁移
+    print('\n[5/6] 运行数据库迁移...')
+    run_remote(ssh, f'cd {REMOTE_PATH}/apps/server && npx prisma migrate deploy 2>&1')
 
-    # Restart PM2 applications
-    print('\n[8/8] Restarting applications...')
-    run_remote_command(ssh, f'cd {REMOTE_PATH} && pm2 start ecosystem.config.js 2>&1 || pm2 restart all 2>&1')
-    run_remote_command(ssh, 'pm2 list 2>&1 | head -20')
+    # 6. 重启服务
+    print('\n[6/6] 重启服务...')
+    run_remote(ssh, f'cd {REMOTE_PATH} && pm2 restart ecosystem.config.js 2>&1 || pm2 start ecosystem.config.js 2>&1')
+    run_remote(ssh, 'pm2 list 2>&1 | head -20')
 
-    print('\nDeployment completed!')
+    print('\n✓ 部署完成')
     return True
 
 
 def setup_server(ssh):
-    """First-time server setup"""
-    print('\n=== First-time Server Setup ===')
+    """首次服务器初始化"""
+    print('\n=== 首次服务器初始化 ===')
 
-    # Create directory structure
-    run_remote_command(ssh, f'mkdir -p {REMOTE_PATH}/apps/server')
-    run_remote_command(ssh, f'mkdir -p {REMOTE_PATH}/apps/web')
-    run_remote_command(ssh, f'mkdir -p {REMOTE_PATH}/services/ocr-service')
+    # 创建目录结构
+    dirs = [
+        'apps/server/dist', 'apps/server/prisma',
+        'apps/web/.next', 'apps/web/public',
+        'packages/shared',
+        'services/ocr-service',
+        'logs',
+    ]
+    for d in dirs:
+        run_remote(ssh, f'mkdir -p {REMOTE_PATH}/{d}')
 
-    # Upload package.json files for dependency installation
+    # 上传配置文件 + 依赖安装
     sftp = ssh.open_sftp()
-
-    # Root package.json + pnpm workspace
-    for f in ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', 'ecosystem.config.js']:
+    for f in ROOT_FILES:
         local_file = os.path.join(LOCAL_ROOT, f)
         if os.path.exists(local_file):
-            print(f'  Uploading {f}...')
+            print(f'  上传 {f}')
             sftp.put(local_file, f'{REMOTE_PATH}/{f}')
 
-    # Server package.json
-    server_pkg = os.path.join(LOCAL_SERVER, 'package.json')
-    if os.path.exists(server_pkg):
-        sftp.put(server_pkg, f'{REMOTE_PATH}/apps/server/package.json')
-
-    # Web package.json + next.config.js
-    for f in ['package.json', 'next.config.js']:
-        local_file = os.path.join(LOCAL_WEB, f)
+    for sub in ['apps/server/package.json', 'apps/web/package.json']:
+        local_file = os.path.join(LOCAL_ROOT, sub)
         if os.path.exists(local_file):
-            sftp.put(local_file, f'{REMOTE_PATH}/apps/web/{f}')
+            sftp.put(local_file, f'{REMOTE_PATH}/{sub}')
 
-    # Shared package
-    local_shared = os.path.join(LOCAL_ROOT, 'packages', 'shared')
-    if os.path.exists(local_shared):
-        run_remote_command(ssh, f'mkdir -p {REMOTE_PATH}/packages/shared')
-        upload_directory(sftp, local_shared, f'{REMOTE_PATH}/packages/shared')
+    # 上传共享包
+    if os.path.exists(LOCAL_SHARED):
+        upload_directory(sftp, LOCAL_SHARED, f'{REMOTE_PATH}/packages/shared')
 
     sftp.close()
 
-    # Install dependencies on server
-    print('\n  Installing dependencies on server...')
-    run_remote_command(ssh, f'cd {REMOTE_PATH} && pnpm install --prod 2>&1 | tail -5')
+    # 安装依赖
+    print('\n  安装依赖...')
+    run_remote(ssh, f'cd {REMOTE_PATH} && pnpm install --prod 2>&1 | tail -5')
+    run_remote(ssh, f'cd {REMOTE_PATH}/apps/server && npx prisma generate 2>&1')
 
-    # Generate Prisma Client on server
-    print('\n  Generating Prisma Client...')
-    run_remote_command(ssh, f'cd {REMOTE_PATH}/apps/server && npx prisma generate 2>&1')
-
-    print('\nServer setup completed!')
+    print('\n✓ 服务器初始化完成')
     return True
 
 
 def main():
-    parser = argparse.ArgumentParser(description='VolunteerHelper Auto Deploy')
-    parser.add_argument('--skip-build', action='store_true', help='Skip build step')
-    parser.add_argument('--skip-tests', action='store_true', help='Skip tests')
-    parser.add_argument('--build-only', action='store_true', help='Only build, no deploy')
-    parser.add_argument('--setup', action='store_true', help='First-time server setup')
+    parser = argparse.ArgumentParser(description='VolunteerHelper 自动部署')
+    parser.add_argument('--skip-build', action='store_true', help='跳过构建')
+    parser.add_argument('--skip-tests', action='store_true', help='跳过测试')
+    parser.add_argument('--build-only', action='store_true', help='只构建不部署')
+    parser.add_argument('--setup', action='store_true', help='首次服务器初始化')
     args = parser.parse_args()
 
-    # Build
+    print('==========================================')
+    print('  志愿填报助手 - 自动部署')
+    print('==========================================')
+
+    # 构建
     if not args.skip_build and not args.setup:
         if not build_project(skip_tests=args.skip_tests):
-            print('\nBuild failed!')
+            print('\n✗ 构建失败')
             sys.exit(1)
 
-    # Deploy
+    # 部署
     if not args.build_only:
         ssh = connect_ssh()
         if not ssh:
             sys.exit(1)
-
         try:
             if args.setup:
-                if not setup_server(ssh):
-                    print('\nServer setup failed!')
-                    sys.exit(1)
+                setup_server(ssh)
             if not deploy(ssh):
-                print('\nDeployment failed!')
+                print('\n✗ 部署失败')
                 sys.exit(1)
         finally:
             ssh.close()
 
-    print('\n=== All Done! ===')
+    print('\n=== 完成 ===')
 
 
 if __name__ == '__main__':
