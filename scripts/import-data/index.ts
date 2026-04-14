@@ -14,124 +14,124 @@ import * as path from 'path';
 const prisma = new PrismaClient();
 
 // ==================== Excel 列索引 (87列格式 - 2026年) ====================
+// 已按 2026四川高考志愿_清洗后.xlsx 实际列名校验修正
 const COL = {
   // 院校信息 (0-4)
-  universityName: 0,
-  universityCode: 1,
-  groupCode: 2,
-  universityGroup: 3,
-  universityNotes: 4,
+  universityName: 0,       // 院校
+  universityCode: 1,       // 院校代码 (四川招生代码, 非国标)
+  groupCode: 2,            // 专业组代码
+  universityGroup: 3,      // 院校专业组
+  universityNotes: 4,      // 院校备注
 
   // 专业信息 (5-9)
-  majorName: 5,
-  majorCode: 6,
-  majorClass: 7,
-  majorCategory: 8,
-  majorNotes: 9,
+  majorName: 5,            // 专业
+  majorCode: 6,            // 专业代码
+  majorClass: 7,           // 专业类
+  majorCategory: 8,        // 门类
+  majorNotes: 9,           // 专业备注
 
   // 招生信息 (10-20)
-  subject: 10,
-  subjectRequirements: 11,
-  type: 12,
-  batch: 13,
-  oldBatch: 14,
-  isNew: 15,
-  groupPlanCount: 16,
-  planCount: 17,
-  duration: 18,
-  tuition: 19,
-  groupMajors: 20,
+  subject: 10,             // 科目
+  subjectRequirements: 11, // 选科要求
+  type: 12,                // 类型
+  batch: 13,               // 批次
+  oldBatch: 14,            // 老批次
+  isNew: 15,               // 是否新增
+  groupPlanCount: 16,      // 25专业组计划
+  planCount: 17,           // 计划人数
+  duration: 18,            // 学制
+  tuition: 19,             // 学费
+  groupMajors: 20,         // 组内专业
 
   // 2025年投档数据 (21-22)
-  filing25MinScore: 21,
-  filing25MinRank: 22,
+  filing25MinScore: 21,    // 25投档最低分
+  filing25MinRank: 22,     // 25投档最低位次
 
-  // 2025年专业组数据 (23-26)
-  group25MinScore: 23,
-  group25MaxScore: 24,
-  group25MinRank: 25,
-  group25AdmissionCount: 26,
+  // 2025年专业组数据 (23-25) — 注意: 只有3列, 无maxScore
+  group25AdmissionCount: 23, // 25专业组录取人数
+  group25MinScore: 24,       // 25专业组最低分
+  group25MinRank: 25,        // 25专业组最低位次
 
-  // 2025年专业录取数据 (27-33)
-  adm25Count: 27,
-  major25MinScore: 28,
-  major25MinRank: 29,
-  major25AvgScore: 30,
-  major25AvgRank: 31,
-  major25MaxScore: 32,
-  major25MaxRank: 33,
+  // 2025年专业录取数据 (26-32)
+  adm25Count: 26,          // 25录取人数
+  major25MinScore: 27,     // 25最低分
+  major25MinRank: 28,      // 25最低位次
+  major25AvgScore: 29,     // 25平均分
+  major25AvgRank: 30,      // 25平均位次
+  major25MaxScore: 31,     // 25最高分
+  major25MaxRank: 32,      // 25最高位次
 
-  // 2024年专业组数据 (34-36)
-  group24MinScore: 34,
-  group24MinRank: 35,
-  group24AdmissionCount: 36,
+  // 2024年专业组数据 (33-35)
+  group24MinScore: 33,     // 24专业组最低分
+  group24MinRank: 34,      // 24专业组最低分位次
+  group24AdmissionCount: 35, // 24专业组录取人数
 
-  // 2024年专业录取数据 (37-43)
-  adm24Count: 37,
-  major24MinScore: 38,
-  major24MinRank: 39,
-  major24AvgScore: 40,
-  major24AvgRank: 41,
-  major24MaxScore: 42,
-  major24MaxRank: 43,
+  // 2024年专业录取数据 (36-42)
+  adm24Count: 36,          // 24录取人数
+  major24MinScore: 37,     // 24最低分
+  major24MinRank: 38,      // 24最低分位次
+  major24AvgScore: 39,     // 24平均分
+  major24AvgRank: 40,      // 24平均位
+  major24MaxScore: 41,     // 24最高分
+  major24MaxRank: 42,      // 24最高位
 
-  // 2023年专业录取数据 (44-50)
-  adm23Count: 44,
-  major23MinScore: 45,
-  major23MinRank: 46,
-  major23AvgScore: 47,
-  major23AvgRank: 48,
-  major23MaxScore: 49,
-  major23MaxRank: 50,
+  // 2023年专业录取数据 (43-49)
+  adm23Count: 43,          // 23录取人数
+  major23MinScore: 44,     // 23最低分
+  major23MinRank: 45,      // 23最低分位次
+  major23AvgScore: 46,     // 23平均分
+  major23AvgRank: 47,      // 23平均位
+  major23MaxScore: 48,     // 23最高分
+  major23MaxRank: 49,      // 23最高位
 
-  // 2022年专业录取数据 (51-57)
-  adm22Count: 51,
-  major22MinScore: 52,
-  major22MinRank: 53,
-  major22AvgScore: 54,
-  major22AvgRank: 55,
-  major22MaxScore: 56,
-  major22MaxRank: 57,
+  // 2022年专业录取数据 (50-56)
+  adm22Count: 50,          // 22录取人数
+  major22MinScore: 51,     // 22最低分
+  major22MinRank: 52,      // 22最低分位次
+  major22AvgScore: 53,     // 22平均分
+  major22AvgRank: 54,      // 22平均分位次
+  major22MaxScore: 55,     // 22最高分
+  major22MaxRank: 56,      // 22最高分位次
 
-  // 院校地理信息 (58-63)
-  uniProvince: 58,
-  uniCity: 59,
-  cityLevel: 60,
-  uniType: 61,
-  uniNature: 62,
-  uniDepartment: 63,
+  // 院校地理信息 (57-62)
+  uniProvince: 57,         // 院校省份
+  uniCity: 58,             // 院校城市
+  cityLevel: 59,           // 城市等级
+  uniType: 60,             // 院校类型
+  uniNature: 61,           // 办学性质
+  uniDepartment: 62,       // 隶属部门
 
-  // 院校标签和属性 (64-71)
-  uniTags: 64,
-  uniLevel: 65,
-  uniRank: 66,
-  uniAdmissionGuide: 67,
-  uniRename: 68,
-  uniTransfer: 69,
-  uniPostgradRate: 70,
-  isDoubleFirstClass: 71,
+  // 院校标签和属性 (63-70)
+  uniTags: 63,             // 院校标签
+  uniLevel: 64,            // 院校层级
+  uniRank: 65,             // 院校排名
+  uniAdmissionGuide: 66,   // 招生简章
+  uniRename: 67,           // 更名合并情况
+  uniTransfer: 68,         // 转专业情况
+  uniPostgradRate: 69,     // 保研率
+  isDoubleFirstClass: 70,  // 是否双一流
 
-  // 学科评估和软科数据 (72-75)
-  disciplineEvaluation: 72,
-  softRating: 73,
-  softRanking: 74,
-  majorLevel: 75,
+  // 学科评估和软科数据 (71-74)
+  disciplineEvaluation: 71, // 学科评估等级
+  softRating: 72,          // 软科评级
+  softRanking: 73,         // 软科排名
+  disciplineEval2: 74,     // 学科评估
 
-  // 专业相关信息 (76-80)
-  majorSoftRating: 76,
-  isNationalFeature: 77,
-  majorRank: 78,
-  majorHonor: 79,
-  localMaster: 80,
+  // 专业相关信息 (75-78)
+  majorLevel: 75,          // 专业水平
+  isNationalFeature: 76,   // 是否国家特色
+  majorRank: 77,           // 专业排名
+  majorHonor: 78,          // 专业荣誉
 
-  // 学位点信息 (81-86)
-  localDoctor: 81,
-  masterCount: 82,
-  masterPrograms: 83,
-  doctoralCount: 84,
-  doctoralPrograms: 85,
-  localMasterPoint: 86,
-  localDoctoralPoint: 87,
+  // 学位点信息 (79-86)
+  localMaster: 79,         // 本校硕士
+  localDoctor: 80,         // 本校博士
+  masterCount: 81,         // 硕士点数量
+  masterPrograms: 82,      // 硕士点专业
+  doctoralCount: 83,       // 博士点数量
+  doctoralPrograms: 84,    // 博士点专业
+  localMasterPoint: 85,    // 本专业硕士点
+  localDoctoralPoint: 86,  // 本专业博士点
 };
 
 // ==================== 工具函数 ====================

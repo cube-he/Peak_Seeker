@@ -51,3 +51,18 @@ prisma/migrations/*_migration_lock.toml
 优志愿*.html
 掌上高考*.html
 阳光高考*.html
+
+# 原始数据目录（大文件，不入库）
+data/
+
+# 数据处理中间产物（保留最终output）
+scripts/data-processing/output/*.sql
+scripts/data-processing/output/admission_records.json
+scripts/data-processing/output/enrollment_plans.json
+scripts/data-processing/output/universities.json
+scripts/data-processing/output/majors.json
+scripts/data-processing/output/*_report.json
+
+# SSH密钥
+*.pem
+scripts/data-processing/output/data_bundle.tar.gz

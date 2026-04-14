@@ -1,0 +1,212 @@
+{
+  "description": "数据处理管道配置 - 所有年份/路径/映射集中管理",
+
+  "current_year": 2026,
+  "province": "四川",
+  "province_code": 51,
+
+  "gaokao_reform": {
+    "description": "2025年四川新高考改革，科类和批次名变更",
+    "reform_year": 2025,
+    "old_exam_types": ["文科", "理科"],
+    "new_exam_types": ["历史", "物理"],
+    "old_batches": ["本一", "本二", "专科"],
+    "new_batches": ["本科B", "本科A(国家专项)", "本科A(地方专项)", "本科(高校专项)", "本科(区域均衡专项)", "专科"]
+  },
+
+  "data_sources": {
+    "master_table": {
+      "description": "03专家版主表 - 核心数据源，每年供应商交付",
+      "path": "data/03_专家版主表/2026四川高考志愿_清洗后.xlsx",
+      "sheet": "四川",
+      "version": "2026_cleaned",
+      "rows": 48132,
+      "cols": 87,
+      "plan_year": 2026,
+      "history_years": [2025, 2024, 2023, 2022],
+      "notes": "2027年更新时替换此文件路径，列名如有变化需同步更新 column_mapping"
+    },
+
+    "api_score_lines": {
+      "description": "01 API专业分数线 - 按年份独立文件",
+      "files": {
+        "2022": "data/01_核心录取数据/专业分数线_四川_2022.json",
+        "2023": "data/01_核心录取数据/专业分数线_四川_2023.json",
+        "2024": "data/01_核心录取数据/专业分数线_四川_2024.json",
+        "2025": "data/01_核心录取数据/专业分数线_四川_2025.json"
+      },
+      "score_field_rule": {
+        "description": "01 API的分数字段在2025年发生翻转",
+        "before_2025": { "minScore": "uMinScore", "maxScore": "uMaxScore", "minRank": "uMinRank", "avgScore": "uAvgScore" },
+        "from_2025": { "minScore": "minScore", "maxScore": "maxScore", "minRank": "minRank", "avgScore": "avgScore" }
+      },
+      "notes": "2026年数据到来时在files中添加2026条目"
+    },
+
+    "score_segments": {
+      "description": "一分一段表",
+      "full_version": "data/01_核心录取数据/一分一段表_四川_2017_2025_完整.json",
+      "api_version": "data/01_核心录取数据/一分一段表_四川_2022-2025.json",
+      "preferred": "full_version",
+      "notes": "2026年高考后会有新的一分一段表，追加到完整版或新建2026文件"
+    },
+
+    "batch_lines": {
+      "description": "批次线",
+      "api_source": "data/01_核心录取数据/批次线_四川.json",
+      "extended_source": "data/07_政策文件/四川省历年批次线_2020_2025.json",
+      "notes": "API源覆盖2023-2025，扩展源覆盖2020-2025"
+    },
+
+    "enrollment_groups": {
+      "description": "04专业组数据",
+      "merged_file": "data/04_新高考专业组/2025新高考专业组模拟文理合并.xlsx",
+      "notes": "2026年招生计划公布后会有新的专业组文件"
+    },
+
+    "national_db": {
+      "description": "02全国基础库 - 教育部/阳光高考数据",
+      "university_db": "data/02_全国基础库/院校库_全国.json",
+      "major_db": "data/02_全国基础库/专业库详情_全国_阳光高考.json",
+      "discipline_eval": "data/02_全国基础库/学科评估_全国.json",
+      "rankings": "data/02_全国基础库/大学排名_全国.json",
+      "satisfaction": "data/02_全国基础库/院校满意度_全国_阳光高考.json",
+      "charter": "data/02_全国基础库/招生章程结构化_全国_2025.json",
+      "notes": "每年招生季前更新招生章程，其他数据按需更新"
+    },
+
+    "policy": {
+      "description": "07政策文件 - 规则性数据",
+      "health_restrictions": "data/07_政策文件/体检受限专业对照表.json",
+      "batch_order": "data/07_政策文件/2025志愿录取顺序.xlsx",
+      "historical_batch_lines": "data/07_政策文件/四川省历年批次线_2020_2025.json",
+      "qiangji_admissions": "data/07_政策文件/强基计划院校 在川录取信息 .xlsx",
+      "qiangji_schools": "data/07_政策文件/39所强基院校.xlsx",
+      "eligible_regions": {
+        "public_teacher": "data/07_政策文件/2 2024省级公费师范生范围.xlsx",
+        "poverty_counties": "data/07_政策文件/3 四川省原集中连片特殊困难县和原国家级扶贫开发重点县名单.xlsx",
+        "rural_revitalization": "data/07_政策文件/4 四川省乡村振兴实施范围县(市、区)名单.xlsx",
+        "deep_poverty": "data/07_政策文件/5 四川省原深度贫困县名单.xlsx",
+        "ethnic_border": "data/07_政策文件/6 四川省民族地区、原集中连片特殊困难地区和革命老区、艰苦边远地区名单.xlsx",
+        "national_teacher": "data/07_政策文件/1 四川省2024年部属师范大学本研衔接师范生公费教育分专业履约任教范围分配表.xlsx"
+      },
+      "employment": "data/07_政策文件/就业质量报告数据_2024届.json",
+      "curriculum": "data/07_政策文件/专业课程设置数据_完整版.json",
+      "notes": "地区名单和录取顺序每年可能微调，强基数据每年追加新年份"
+    },
+
+    "code_mapping": {
+      "description": "招生代码→国标代码映射",
+      "path": "data/08_数据治理记录/编码映射表_招生代码_国标代码.csv",
+      "notes": "每年新增院校时需更新此映射表"
+    }
+  },
+
+  "column_mapping": {
+    "description": "03主表列名→语义字段的映射，列名变化时只需更新此处",
+    "version": "2026_87col",
+    "university": {
+      "name": "院校", "code": "院校代码", "group_code": "专业组代码",
+      "group_name": "院校专业组", "notes": "院校备注",
+      "province": "院校省份", "city": "院校城市", "city_level": "城市等级",
+      "type": "院校类型", "nature": "办学性质", "department": "隶属部门",
+      "tags": "院校标签", "level": "院校层级", "ranking": "院校排名",
+      "admission_guide": "招生简章", "rename_history": "更名合并情况",
+      "transfer": "转专业情况", "postgrad_rate": "保研率",
+      "is_double_first": "是否双一流", "discipline_eval": "学科评估等级",
+      "soft_rating": "软科评级", "soft_ranking": "软科排名",
+      "master_count": "硕士点数量", "master_programs": "硕士点专业",
+      "doctoral_count": "博士点数量", "doctoral_programs": "博士点专业"
+    },
+    "major": {
+      "name": "专业", "code": "专业代码", "class": "专业类",
+      "category": "门类", "notes": "专业备注",
+      "level": "专业水平", "is_national_feature": "是否国家特色",
+      "ranking": "专业排名", "honor": "专业荣誉",
+      "local_master": "本专业硕士点", "local_doctor": "本专业博士点",
+      "discipline_eval": "学科评估"
+    },
+    "enrollment": {
+      "subject": "科目", "subject_req": "选科要求", "type": "类型",
+      "batch": "批次", "old_batch": "老批次", "is_new": "是否新增",
+      "group_plan_count": "25专业组计划", "plan_count": "计划人数",
+      "duration": "学制", "tuition": "学费", "group_majors": "组内专业"
+    },
+    "admission_by_year": {
+      "description": "录取数据列名模板，{YY}替换为年份后两位",
+      "filing_min_score": "{YY}投档最低分",
+      "filing_min_rank": "{YY}投档最低位次",
+      "group_adm_count": "{YY}专业组录取人数",
+      "group_min_score": "{YY}专业组最低分",
+      "group_min_rank": "{YY}专业组最低位次",
+      "adm_count": "{YY}录取人数",
+      "min_score": "{YY}最低分",
+      "min_rank": "{YY}最低位次",
+      "avg_score": "{YY}平均分",
+      "avg_rank": "{YY}平均位次",
+      "max_score": "{YY}最高分",
+      "max_rank": "{YY}最高位次"
+    },
+    "admission_years_config": {
+      "2025": {
+        "has_filing": true,
+        "has_group": true,
+        "group_fields": ["group_adm_count", "group_min_score", "group_min_rank"],
+        "rank_suffix": "位次"
+      },
+      "2024": {
+        "has_filing": false,
+        "has_group": true,
+        "group_fields": ["group_min_score", "group_min_rank", "group_adm_count"],
+        "rank_suffix": "位次",
+        "rank_alt_suffix": "位"
+      },
+      "2023": {
+        "has_filing": false,
+        "has_group": false,
+        "rank_suffix": "位次",
+        "rank_alt_suffix": "位"
+      },
+      "2022": {
+        "has_filing": false,
+        "has_group": false,
+        "rank_suffix": "位次",
+        "rank_alt_suffix": "分位次"
+      }
+    }
+  },
+
+  "batch_name_mapping": {
+    "description": "01 API批次名 → 03主表批次名的双向映射",
+    "api_to_master": {
+      "本科B": "本科批B段",
+      "专科": "专科批",
+      "本科A(国家专项)": "本科批A段(国家专项)",
+      "本科A(地方专项)": "本科批A段(地方专项)",
+      "本科(高校专项)": "本科批(高校专项)",
+      "本科(区域均衡专项)": "本科批(区域教育均衡发展专项)",
+      "本科(高水平运动队)": "本科批(高水平运动队)"
+    },
+    "old_to_new": {
+      "description": "旧高考→新高考批次参照(非精确对应)",
+      "本一": "本科批B段",
+      "本二": "本科批B段",
+      "专科": "专科批"
+    }
+  },
+
+  "update_guide": {
+    "description": "每年数据更新操作指南",
+    "annual_cycle": [
+      "1. [3-4月] 供应商交付新年专家版主表 → 更新 master_table.path",
+      "2. [5月] 招生计划公布 → 更新 enrollment_groups 文件",
+      "3. [6月] 高考结束 → 等待一分一段表和批次线",
+      "4. [7月] 一分一段表公布 → 追加到 score_segments",
+      "5. [7-8月] 录取进行中 → API分数线数据逐批更新",
+      "6. [9月] 录取结束 → 完整年度数据归档",
+      "7. [10月] 招生章程更新 → 重新采集02招生章程数据"
+    ],
+    "when_column_changes": "如果供应商交付的主表列名有变化，更新 column_mapping 即可，处理脚本不需要改",
+    "when_adding_year": "在 api_score_lines.files 中添加新年份，在 admission_years_config 中添加新年份的字段配置"
+  }
+}
