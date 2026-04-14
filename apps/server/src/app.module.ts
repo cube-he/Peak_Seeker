@@ -16,6 +16,9 @@ import { HistoryModule } from './modules/history/history.module';
 import { DataImportModule } from './modules/data-import/data-import.module';
 import { AiConfigModule } from './modules/ai-config/ai-config.module';
 import { CaslModule } from './modules/casl';
+import { AuditModule } from './modules/audit/audit.module';
+import { QueueModule } from './modules/queue/queue.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -37,6 +40,9 @@ import { CaslModule } from './modules/casl';
     PrismaModule,
     RedisModule,
     CaslModule,
+    AuditModule,
+    QueueModule,
+    NotificationModule,
 
     // 业务模块
     AuthModule,
