@@ -9,6 +9,148 @@ datasource db {
   provider = "mysql"
 }
 
+// ==================== 枚举定义 ====================
+
+// --- 保留的旧枚举（向后兼容） ---
+
+enum VipLevel {
+  FREE
+  BASIC
+  PREMIUM
+  EXPERT
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+// --- 替换旧 UserRole ---
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+// --- 替换旧 PlanStatus（扩展生命周期） ---
+
+enum PlanStatus {
+  DRAFT
+  PENDING_REVIEW
+  REVIEWING
+  APPROVED
+  REJECTED
+  FINALIZED
+  PUBLISHED
+  OUTDATED
+}
+
+// --- 新增枚举 ---
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum StudentStatus {
+  ACTIVE
+  GRADUATED
+  DROPPED
+  SUSPENDED
+}
+
+// 避免与 BatchConfig/ScoreSegment 的 examType String 冲突
+enum NewExamType {
+  PHYSICS
+  HISTORY
+  COMPREHENSIVE_LIBERAL
+  COMPREHENSIVE_SCIENCE
+}
+
+enum PriorityMode {
+  UNIVERSITY_FIRST
+  MAJOR_FIRST
+  CITY_FIRST
+  BALANCED
+}
+
+enum CareerPlan {
+  POSTGRADUATE
+  EMPLOYMENT
+  ABROAD
+  PUBLIC_SERVANT
+  UNDECIDED
+}
+
+enum StayPreference {
+  LOCAL_ONLY
+  PREFER_LOCAL
+  NO_PREFERENCE
+  PREFER_OUTSIDE
+}
+
+enum AcceptLevel {
+  STRICT
+  MODERATE
+  RELAXED
+}
+
+enum TuitionBudget {
+  LOW
+  MEDIUM
+  HIGH
+  UNLIMITED
+}
+
+enum Batch {
+  EARLY_BATCH
+  FIRST_BATCH
+  SECOND_BATCH
+  SPECIAL_BATCH
+}
+
+enum ExamSource {
+  REAL_EXAM
+  MOCK_EXAM
+  ESTIMATED
+}
+
+enum Gradient {
+  CHONG
+  WEN
+  BAO
+}
+
+enum Cleanliness {
+  CLEAN
+  MINOR_ISSUE
+  MODERATE_ISSUE
+  MAJOR_ISSUE
+}
+
+enum ReviewerRole {
+  TEACHER
+  SUPERVISOR
+}
+
+enum ReviewAction {
+  APPROVE
+  REJECT
+  REQUEST_CHANGE
+  COMMENT
+}
+
+enum RecommendType {
+  AI_GENERATED
+  MANUAL
+  HYBRID
+}
+
 // ==================== 院校相关 ====================
 
 model University {
@@ -36,13 +178,13 @@ model University {
   grade              String? @map("university_grade") @db.VarChar(50)
 
   // 学科建设
-  disciplineEvaluationLevel String?  @map("discipline_evaluation_level") @db.VarChar(50)
-  hasMasterProgram          Boolean  @default(false) @map("has_master_program")
-  hasDoctoralProgram        Boolean  @default(false) @map("has_doctoral_program")
-  masterProgramCount        Int?     @map("master_program_count")
-  masterPrograms            Json?    @map("master_programs")
-  doctoralProgramCount      Int?     @map("doctoral_program_count")
-  doctoralPrograms          Json?    @map("doctoral_programs")
+  disciplineEvaluationLevel String? @map("discipline_evaluation_level") @db.VarChar(50)
+  hasMasterProgram          Boolean @default(false) @map("has_master_program")
+  hasDoctoralProgram        Boolean @default(false) @map("has_doctoral_program")
+  masterProgramCount        Int?    @map("master_program_count")
+  masterPrograms            Json?   @map("master_programs")
+  doctoralProgramCount      Int?    @map("doctoral_program_count")
+  doctoralPrograms          Json?   @map("doctoral_programs")
 
   // 其他属性
   campusArea               Decimal? @map("campus_area") @db.Decimal(10, 2)
@@ -51,15 +193,15 @@ model University {
   isFeatured               Boolean  @default(false) @map("is_featured")
 
   // 新增字段
-  department    String? @db.VarChar(200)
-  ranking       String? @db.VarChar(50)
+  department     String? @db.VarChar(200)
+  ranking        String? @db.VarChar(50)
   admissionGuide String? @map("admission_guide") @db.Text
-  renameHistory String? @map("rename_history") @db.Text
-  postgradRate  String? @map("postgrad_rate") @db.VarChar(50)
+  renameHistory  String? @map("rename_history") @db.Text
+  postgradRate   String? @map("postgrad_rate") @db.VarChar(50)
 
   // 软科排名
-  softRating    String? @map("soft_rating") @db.VarChar(50)
-  softRanking   Int?    @map("soft_ranking")
+  softRating  String? @map("soft_rating") @db.VarChar(50)
+  softRanking Int?    @map("soft_ranking")
 
   // 备注
   notes String? @db.Text
@@ -96,12 +238,12 @@ model Major {
   type       String? @map("major_type") @db.VarChar(50)
 
   // 专业属性
-  notes        String?  @map("major_notes") @db.Text
-  isRestricted Boolean  @default(false) @map("is_restricted")
+  notes        String? @map("major_notes") @db.Text
+  isRestricted Boolean @default(false) @map("is_restricted")
 
   // 专业水平和评级
-  majorLevel  String? @map("major_level_detail") @db.VarChar(100)
-  softRating  String? @map("major_soft_rating") @db.VarChar(50)
+  majorLevel String? @map("major_level_detail") @db.VarChar(100)
+  softRating String? @map("major_soft_rating") @db.VarChar(50)
 
   // 本地学位点
   localMasterPoint   Boolean @default(false) @map("local_master_point")
@@ -145,17 +287,17 @@ model EnrollmentPlan {
   planNotes String? @map("plan_notes") @db.Text
 
   // 招生要求
-  batch               String?  @db.VarChar(50)
-  level               String?  @db.VarChar(50)
-  subjects            String?  @db.VarChar(100)
-  subjectRequirements String?  @map("subject_requirements") @db.Text
-  duration            String?  @db.VarChar(20)
+  batch               String? @db.VarChar(50)
+  level               String? @db.VarChar(50)
+  subjects            String? @db.VarChar(100)
+  subjectRequirements String? @map("subject_requirements") @db.Text
+  duration            String? @db.VarChar(20)
   tuition             Int?
-  isSinoForeign       Boolean  @default(false) @map("is_sino_foreign")
+  isSinoForeign       Boolean @default(false) @map("is_sino_foreign")
 
   // 学位点信息
-  localMasterPoint    String? @map("local_master_point") @db.VarChar(200)
-  localDoctoralPoint  String? @map("local_doctoral_point") @db.VarChar(200)
+  localMasterPoint   String? @map("local_master_point") @db.VarChar(200)
+  localDoctoralPoint String? @map("local_doctoral_point") @db.VarChar(200)
 
   // 专业组信息
   groupCode      String? @map("group_code") @db.VarChar(50)
@@ -168,10 +310,10 @@ model EnrollmentPlan {
   oldBatch String? @map("old_batch") @db.VarChar(50)
 
   // 院校+专业维度评价
-  disciplineEval    String?  @map("discipline_eval") @db.VarChar(50)
-  isNationalFeature Boolean  @default(false) @map("is_national_feature")
-  majorRanking      String?  @map("major_ranking") @db.VarChar(100)
-  majorHonor        String?  @map("major_honor") @db.Text
+  disciplineEval    String? @map("discipline_eval") @db.VarChar(50)
+  isNationalFeature Boolean @default(false) @map("is_national_feature")
+  majorRanking      String? @map("major_ranking") @db.VarChar(100)
+  majorHonor        String? @map("major_honor") @db.Text
 
   @@unique([universityId, majorId, year, province])
   @@index([year])
@@ -209,17 +351,17 @@ model AdmissionRecord {
   majorAdmissionCount Int? @map("major_admission_count")
 
   // 专业组录取数据
-  groupMinScore      Int? @map("group_min_score")
-  groupMinRank       Int? @map("group_min_rank")
+  groupMinScore       Int? @map("group_min_score")
+  groupMinRank        Int? @map("group_min_rank")
   groupAdmissionCount Int? @map("group_admission_count")
 
   // 投档数据
-  filingMinScore  Int? @map("filing_min_score")
-  filingMinRank   Int? @map("filing_min_rank")
+  filingMinScore Int? @map("filing_min_score")
+  filingMinRank  Int? @map("filing_min_rank")
 
   // 科目和批次信息
-  subjects  String? @db.VarChar(50)
-  batch     String? @db.VarChar(50)
+  subjects String? @db.VarChar(50)
+  batch    String? @db.VarChar(50)
 
   // 院校整体录取数据
   universityMinScore       Int? @map("university_min_score")
@@ -237,6 +379,8 @@ model AdmissionRecord {
   @@index([majorId])
   @@index([majorMinScore])
   @@index([majorMinRank])
+  @@index([batch])
+  @@index([year, province, batch])
   @@map("admission_records")
 }
 
@@ -258,8 +402,9 @@ model User {
   gender    String?   @db.VarChar(10)
   birthDate DateTime? @map("birth_date") @db.Date
   avatar    String?   @db.VarChar(500)
+  ethnicity String?   @db.VarChar(50)
 
-  // 考生信息
+  // 考生信息（旧字段，向后兼容）
   province String? @db.VarChar(50)
   city     String? @db.VarChar(100)
   examType String? @map("exam_type") @db.VarChar(50)
@@ -269,7 +414,7 @@ model User {
   subjects Json?
   batch    String? @db.VarChar(50)
 
-  // 兴趣偏好
+  // 兴趣偏好（旧字段，向后兼容）
   preferredProvinces       Json?   @map("preferred_provinces")
   preferredCities          Json?   @map("preferred_cities")
   preferredMajors          Json?   @map("preferred_majors")
@@ -280,19 +425,30 @@ model User {
   vipLevel    VipLevel  @default(FREE) @map("vip_level")
   vipExpireAt DateTime? @map("vip_expire_at")
 
-  // 角色
-  role UserRole @default(USER)
+  // 角色（新枚举）
+  role Role @default(STUDENT)
+
+  // 权限覆盖
+  permissionOverrides Json? @map("permission_overrides")
 
   // 登录信息
   lastLoginAt DateTime? @map("last_login_at")
   lastLoginIp String?   @map("last_login_ip") @db.VarChar(50)
 
-  // 关联
-  volunteerPlans  VolunteerPlan[]
+  // 关联（旧）
+  volunteerPlans  VolunteerPlan[] @relation("LegacyUserPlans")
   searchHistories SearchHistory[]
   favorites       Favorite[]
   comparisons     Comparison[]
   orders          Order[]
+
+  // 关联（新）
+  teacherProfile TeacherProfile?
+  studentProfile StudentProfile?
+  createdPlans   VolunteerPlan[] @relation("PlanCreator")
+  reviews        PlanReview[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
 
   @@index([province])
   @@index([examYear])
@@ -300,17 +456,105 @@ model User {
   @@map("users")
 }
 
-enum VipLevel {
-  FREE
-  BASIC
-  PREMIUM
-  EXPERT
+// ==================== 教师档案 ====================
+
+model TeacherProfile {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联用户
+  userId Int  @unique @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
+
+  // 教师信息
+  school       String? @db.VarChar(200)
+  isSupervisor Boolean @default(false) @map("is_supervisor")
+
+  // 关联学生
+  students StudentProfile[]
+
+  @@map("teacher_profiles")
 }
 
-enum UserRole {
-  USER
-  ADMIN
-  SUPER_ADMIN
+// ==================== 学生档案 ====================
+
+model StudentProfile {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联用户
+  userId Int  @unique @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
+
+  // 管理关系
+  teacherId Int?            @map("teacher_id")
+  teacher   TeacherProfile? @relation(fields: [teacherId], references: [id])
+
+  // --- 基本信息 ---
+  province String?       @db.VarChar(50)
+  city     String?       @db.VarChar(100)
+  school   String?       @db.VarChar(200)
+  classNo  String?       @map("class_no") @db.VarChar(50)
+  status   StudentStatus @default(ACTIVE)
+
+  // --- 考试成绩 ---
+  examType      NewExamType? @map("exam_type")
+  examYear      Int?         @map("exam_year") @db.SmallInt
+  totalScore    Int?         @map("total_score") @db.SmallInt
+  rank          Int?
+  examSource    ExamSource?  @map("exam_source")
+  subjectScores Json?        @map("subject_scores")
+
+  // --- 身体条件 ---
+  height         Decimal? @db.Decimal(5, 1)
+  weight         Decimal? @db.Decimal(5, 1)
+  vision         String?  @db.VarChar(50)
+  colorBlind     Boolean  @default(false) @map("color_blind")
+  colorWeak      Boolean  @default(false) @map("color_weak")
+  physicalLimits Json?    @map("physical_limits")
+
+  // --- 升学规划 ---
+  careerPlan     CareerPlan?     @map("career_plan")
+  priorityMode   PriorityMode?   @map("priority_mode")
+  stayPreference StayPreference? @map("stay_preference")
+
+  // --- 正向偏好 ---
+  preferredProvinces       Json? @map("preferred_provinces")
+  preferredCities          Json? @map("preferred_cities")
+  preferredMajorCategories Json? @map("preferred_major_categories")
+  preferredUniversityTypes Json? @map("preferred_university_types")
+  preferredTags            Json? @map("preferred_tags")
+
+  // --- 反向排除 ---
+  excludedProvinces    Json?        @map("excluded_provinces")
+  excludedUniversities Json?        @map("excluded_universities")
+  excludedMajors       Json?        @map("excluded_majors")
+  acceptLevel          AcceptLevel? @map("accept_level")
+
+  // --- 经济条件 ---
+  tuitionBudget     TuitionBudget? @map("tuition_budget")
+  acceptSinoForeign Boolean        @default(false) @map("accept_sino_foreign")
+
+  // --- 兴趣性格 ---
+  interests       Json?
+  personalityType String? @map("personality_type") @db.VarChar(50)
+  careerDirection String? @map("career_direction") @db.Text
+
+  // --- 管理字段 ---
+  tags        Json?
+  serviceYear Int?  @map("service_year") @db.SmallInt
+  dataVersion Int   @default(1) @map("data_version")
+
+  // 关联
+  volunteerPlans VolunteerPlan[]
+
+  @@index([teacherId])
+  @@index([province])
+  @@index([examYear])
+  @@index([status])
+  @@map("student_profiles")
 }
 
 // ==================== 志愿方案 ====================
@@ -320,41 +564,179 @@ model VolunteerPlan {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // 关联
-  userId Int  @map("user_id")
-  user   User @relation(fields: [userId], references: [id])
+  // 新关联：学生档案（必填）
+  studentId Int            @map("student_id")
+  student   StudentProfile @relation(fields: [studentId], references: [id])
 
-  // 方案信息
+  // 新关联：创建者
+  createdById Int  @map("created_by_id")
+  createdBy   User @relation("PlanCreator", fields: [createdById], references: [id])
+
+  // 旧关联：保留向后兼容
+  userId     Int?  @map("user_id")
+  legacyUser User? @relation("LegacyUserPlans", fields: [userId], references: [id])
+
+  // 方案信息（保留旧字段）
   name     String  @db.VarChar(200)
   year     Int     @db.SmallInt
   province String? @db.VarChar(50)
 
-  // 方案内容 - JSON结构
-  items    Json
-  strategy String? @db.VarChar(50)
+  // 旧方案内容（JSON）— Prisma 字段名改为 legacyItems，DB 列名不变
+  legacyItems Json?   @map("items")
+  strategy    String? @db.VarChar(50)
 
-  // 方案状态
+  // 方案状态（扩展枚举）
   status     PlanStatus @default(DRAFT)
   isFavorite Boolean    @default(false) @map("is_favorite")
 
-  // AI分析
+  // 批次与考试来源
+  batch      Batch?      @map("plan_batch")
+  examSource ExamSource? @map("exam_source")
+
+  // 版本链
+  version  Int             @default(1)
+  parentId Int?            @map("parent_id")
+  parent   VolunteerPlan?  @relation("PlanVersionChain", fields: [parentId], references: [id])
+  children VolunteerPlan[] @relation("PlanVersionChain")
+
+  // 算法参数快照
+  scoreUsed       Int?  @map("score_used") @db.SmallInt
+  rankUsed        Int?  @map("rank_used")
+  algorithmParams Json? @map("algorithm_params")
+
+  // AI分析（保留旧字段）
   aiScore    Decimal? @map("ai_score") @db.Decimal(5, 2)
   aiAnalysis Json?    @map("ai_analysis")
   riskLevel  String?  @map("risk_level") @db.VarChar(20)
 
-  // 备注
+  // 备注（保留旧字段）
   notes String? @db.Text
 
+  // 新关联
+  planItems   PlanItem[]
+  reviews     PlanReview[]
+  evaluations PlanEvaluation[]
+
+  @@index([studentId])
+  @@index([createdById])
   @@index([userId])
   @@index([year])
   @@index([status])
+  @@index([parentId])
   @@map("volunteer_plans")
 }
 
-enum PlanStatus {
-  DRAFT
-  SUBMITTED
-  ARCHIVED
+// ==================== 方案志愿项 ====================
+
+model PlanItem {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联方案
+  planId Int           @map("plan_id")
+  plan   VolunteerPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  // 志愿序号
+  sequence Int @db.SmallInt
+
+  // 梯度
+  gradient Gradient
+
+  // 院校信息
+  universityId   Int     @map("university_id")
+  universityName String  @map("university_name") @db.VarChar(200)
+  universityCode String? @map("university_code") @db.VarChar(50)
+
+  // 专业组信息
+  groupCode String? @map("group_code") @db.VarChar(50)
+  groupName String? @map("group_name") @db.VarChar(200)
+
+  // 专业信息
+  majorId   Int     @map("major_id")
+  majorName String  @map("major_name") @db.VarChar(200)
+  majorCode String? @map("major_code") @db.VarChar(50)
+
+  // 是否服从调剂
+  acceptAdjust Boolean @default(true) @map("accept_adjust")
+
+  // 历史录取数据快照
+  lastYearMinScore Int? @map("last_year_min_score")
+  lastYearMinRank  Int? @map("last_year_min_rank")
+  lastYearAvgScore Int? @map("last_year_avg_score")
+  lastYearAvgRank  Int? @map("last_year_avg_rank")
+  avgMinRank3y     Int? @map("avg_min_rank_3y")
+
+  // 当年招生计划
+  planCount Int? @map("plan_count")
+  tuition   Int?
+
+  // 洁净度
+  cleanliness Cleanliness?
+
+  // 推荐理由 / 风险提示
+  reasons Json?
+
+  // 综合评分
+  compositeScore Decimal? @map("composite_score") @db.Decimal(6, 2)
+  scoreBreakdown Json?    @map("score_breakdown")
+
+  @@unique([planId, sequence])
+  @@index([planId])
+  @@index([universityId])
+  @@index([majorId])
+  @@map("plan_items")
+}
+
+// ==================== 方案审核 ====================
+
+model PlanReview {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 关联方案
+  planId Int           @map("plan_id")
+  plan   VolunteerPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  // 审核人
+  reviewerId   Int          @map("reviewer_id")
+  reviewer     User         @relation(fields: [reviewerId], references: [id])
+  reviewerRole ReviewerRole @map("reviewer_role")
+
+  // 审核动作
+  action  ReviewAction
+  comment String?      @db.Text
+
+  // 逐项批注（JSON: { sequence: number, annotation: string }[]）
+  itemAnnotations Json? @map("item_annotations")
+
+  @@index([planId])
+  @@index([reviewerId])
+  @@map("plan_reviews")
+}
+
+// ==================== 方案评估（录取追踪） ====================
+
+model PlanEvaluation {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 关联方案
+  planId Int           @map("plan_id")
+  plan   VolunteerPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  // 关联录取结果
+  admissionResultId Int?             @map("admission_result_id")
+  admissionResult   AdmissionResult? @relation(fields: [admissionResultId], references: [id])
+
+  // 匹配信息
+  matchedItemSequence Int?     @map("matched_item_sequence") @db.SmallInt
+  isInPlan            Boolean  @default(false) @map("is_in_plan")
+  evaluationScore     Decimal? @map("evaluation_score") @db.Decimal(5, 2)
+
+  @@index([planId])
+  @@index([admissionResultId])
+  @@map("plan_evaluations")
 }
 
 // ==================== 查询历史 ====================
@@ -455,14 +837,6 @@ model Order {
   @@map("orders")
 }
 
-enum PaymentStatus {
-  PENDING
-  PAID
-  FAILED
-  REFUNDED
-  CANCELLED
-}
-
 // ==================== 一分一段表 ====================
 
 model ScoreSegment {
@@ -473,11 +847,11 @@ model ScoreSegment {
   // 基本维度
   year     Int    @db.SmallInt
   province String @db.VarChar(50)
-  examType String @map("exam_type") @db.VarChar(50) // 物理��/历史类/理科/文科
+  examType String @map("exam_type") @db.VarChar(50) // 物理类/历史类/理科/文科
 
   // 分数数据
-  score           Int @db.SmallInt          // 分数
-  count           Int @default(0)           // 该分人数
+  score           Int @db.SmallInt // 分数
+  count           Int @default(0) // 该分人数
   cumulativeCount Int @map("cumulative_count") // 累计人数
 
   @@unique([year, province, examType, score])
@@ -517,7 +891,7 @@ model BatchLine {
   batchType String @map("batch_type") @db.VarChar(50)
 
   // 分数数据
-  score     Int    @db.SmallInt
+  score Int @db.SmallInt
 
   @@unique([year, province, batch, examType])
   @@index([year])
@@ -533,28 +907,32 @@ model BatchConfig {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // 基本信息
-  year      Int    @db.SmallInt
-  province  String @db.VarChar(50)
-  batch     String @db.VarChar(100)          // 批次名称，如 "本科提前批A段"
-  examType  String @map("exam_type") @db.VarChar(50)  // 物理/历史/不分科目
+  year     Int    @db.SmallInt
+  province String @db.VarChar(50)
+  batch    String @db.VarChar(100) // 批次名称，如 "本科提前批A段"
+  examType String @map("exam_type") @db.VarChar(50) // 物理/历史/不分科目
 
   // 志愿模式
-  volunteerMode     String  @map("volunteer_mode") @db.VarChar(20)    // parallel(平行志愿) / sequential(顺序志愿)
-  maxGroupCount     Int     @map("max_group_count")                    // 最大院校专业组数
-  maxMajorPerGroup  Int     @default(6) @map("max_major_per_group")   // 每组最大专业数
-  hasAdjustOption   Boolean @default(true) @map("has_adjust_option")  // 是否有调剂选项
+  volunteerMode    String  @map("volunteer_mode") @db.VarChar(20) // parallel(平行志愿) / sequential(顺序志愿)
+  maxGroupCount    Int     @map("max_group_count") // 最大院校专业组数
+  maxMajorPerGroup Int     @default(6) @map("max_major_per_group") // 每组最大专业数
+  hasAdjustOption  Boolean @default(true) @map("has_adjust_option") // 是否有调剂选项
 
   // 投档规则
-  filingRatio       String? @map("filing_ratio") @db.VarChar(20)     // 调档比例，如 "1:1" 或 "≤120%"
+  filingRatio String? @map("filing_ratio") @db.VarChar(20) // 调档比例，如 "1:1" 或 "≤120%"
 
   // 录取顺序(数字越小越先录取)
-  admissionOrder    Int     @map("admission_order")
+  admissionOrder Int @map("admission_order")
 
   // 包含的招生类型说明
-  description       String? @db.Text
+  description String? @db.Text
 
   // 同分排序规则(JSON格式)
-  tiebreakRules     Json?   @map("tiebreak_rules")
+  tiebreakRules Json? @map("tiebreak_rules")
+
+  // 新增字段
+  eligibilityRules Json? @map("eligibility_rules")
+  algorithmConfig  Json? @map("algorithm_config")
 
   @@unique([year, province, batch, examType])
   @@index([year])
@@ -601,4 +979,269 @@ model AiConfigModel {
 
   @@index([configId])
   @@map("ai_config_models")
+}
+
+// ==================== 专业推荐 ====================
+
+model MajorRecommendation {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联学生
+  studentProfileId Int @map("student_profile_id")
+
+  // 推荐类型
+  recommendType RecommendType @map("recommend_type")
+
+  // 推荐内容
+  majorCategory String  @map("major_category") @db.VarChar(100)
+  majorName     String  @map("major_name") @db.VarChar(200)
+  matchScore    Decimal @map("match_score") @db.Decimal(5, 2)
+  reasons       Json?
+
+  @@index([studentProfileId])
+  @@index([recommendType])
+  @@map("major_recommendations")
+}
+
+// ==================== 专业名称映射 ====================
+
+model MajorNameMapping {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 原始名称 → 标准名称
+  rawName      String  @map("raw_name") @db.VarChar(200)
+  standardName String  @map("standard_name") @db.VarChar(200)
+  source       String? @db.VarChar(100)
+
+  @@unique([rawName, source])
+  @@index([rawName])
+  @@index([standardName])
+  @@map("major_name_mappings")
+}
+
+// ==================== 征集志愿记录 ====================
+
+model SupplementaryRecord {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 基本信息
+  year        Int    @db.SmallInt
+  province    String @db.VarChar(50)
+  batch       String @db.VarChar(100)
+  roundNumber Int    @default(1) @map("round_number") @db.SmallInt
+
+  // 院校专业信息
+  universityId   Int     @map("university_id")
+  universityName String  @map("university_name") @db.VarChar(200)
+  majorId        Int?    @map("major_id")
+  majorName      String? @map("major_name") @db.VarChar(200)
+
+  // 征集信息
+  planCount      Int?    @map("plan_count")
+  requirements   String? @db.Text
+  filingMinScore Int?    @map("filing_min_score")
+  filingMinRank  Int?    @map("filing_min_rank")
+
+  @@index([year, province, batch])
+  @@index([universityId])
+  @@map("supplementary_records")
+}
+
+// ==================== 征集志愿汇总（物理表，TRUNCATE+INSERT 刷新） ====================
+
+model SupplementarySummary {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 维度
+  year         Int    @db.SmallInt
+  province     String @db.VarChar(50)
+  batch        String @db.VarChar(100)
+  universityId Int    @map("university_id")
+
+  // 汇总数据
+  totalRounds       Int      @default(0) @map("total_rounds") @db.SmallInt
+  totalPlanCount    Int      @default(0) @map("total_plan_count")
+  supplementaryRate Decimal? @map("supplementary_rate") @db.Decimal(5, 2)
+
+  @@unique([year, province, batch, universityId])
+  @@index([universityId])
+  @@map("supplementary_summaries")
+}
+
+// ==================== 通知 ====================
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 接收人
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
+
+  // 通知内容
+  title   String  @db.VarChar(200)
+  content String  @db.Text
+  type    String  @db.VarChar(50)
+  refType String? @map("ref_type") @db.VarChar(50)
+  refId   Int?    @map("ref_id")
+
+  // 状态
+  isRead Boolean   @default(false) @map("is_read")
+  readAt DateTime? @map("read_at")
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ==================== 审计日志 ====================
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 操作人
+  userId Int?  @map("user_id")
+  user   User? @relation(fields: [userId], references: [id])
+
+  // 操作信息
+  action     String  @db.VarChar(100)
+  entityType String  @map("entity_type") @db.VarChar(50)
+  entityId   Int?    @map("entity_id")
+  oldValue   Json?   @map("old_value")
+  newValue   Json?   @map("new_value")
+  ipAddress  String? @map("ip_address") @db.VarChar(50)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ==================== 文件记录 ====================
+
+model FileRecord {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 文件信息
+  fileName    String @map("file_name") @db.VarChar(500)
+  fileSize    Int    @map("file_size")
+  mimeType    String @map("mime_type") @db.VarChar(100)
+  storagePath String @map("storage_path") @db.VarChar(1000)
+  storageType String @default("local") @map("storage_type") @db.VarChar(50)
+
+  // 关联
+  uploadedById Int?    @map("uploaded_by_id")
+  entityType   String? @map("entity_type") @db.VarChar(50)
+  entityId     Int?    @map("entity_id")
+
+  @@index([uploadedById])
+  @@index([entityType, entityId])
+  @@map("file_records")
+}
+
+// ==================== 投档记录 ====================
+
+model FilingRecord {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 基本信息
+  year     Int    @db.SmallInt
+  province String @db.VarChar(50)
+  batch    String @db.VarChar(100)
+  examType String @map("exam_type") @db.VarChar(50)
+
+  // 院校信息
+  universityId   Int     @map("university_id")
+  universityName String  @map("university_name") @db.VarChar(200)
+  groupCode      String? @map("group_code") @db.VarChar(50)
+
+  // 投档数据
+  filingMinScore Int? @map("filing_min_score")
+  filingMinRank  Int? @map("filing_min_rank")
+  filingCount    Int? @map("filing_count")
+  planCount      Int? @map("plan_count")
+
+  @@index([year, province, batch])
+  @@index([universityId])
+  @@map("filing_records")
+}
+
+// ==================== 录取结果（学生实际录取） ====================
+
+model AdmissionResult {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联学生
+  studentProfileId Int @map("student_profile_id")
+
+  // 录取信息
+  year           Int     @db.SmallInt
+  universityName String  @map("university_name") @db.VarChar(200)
+  majorName      String  @map("major_name") @db.VarChar(200)
+  batch          String  @db.VarChar(100)
+  isAdjusted     Boolean @default(false) @map("is_adjusted")
+
+  // 方案评估
+  evaluations PlanEvaluation[]
+
+  @@index([studentProfileId])
+  @@index([year])
+  @@map("admission_results")
+}
+
+// ==================== 方案分享链接 ====================
+
+model PlanShareLink {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 关联方案
+  planId Int @map("plan_id")
+
+  // 分享信息
+  token     String    @unique @db.VarChar(100)
+  expiresAt DateTime? @map("expires_at")
+  isActive  Boolean   @default(true) @map("is_active")
+  viewCount Int       @default(0) @map("view_count")
+
+  @@index([planId])
+  @@index([token])
+  @@map("plan_share_links")
+}
+
+// ==================== 算法配置 ====================
+
+model AlgorithmConfig {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 配置名称
+  name    String @db.VarChar(100)
+  version String @db.VarChar(20)
+
+  // 算法参数
+  weights      Json
+  thresholds   Json
+  gradientRule Json @map("gradient_rule")
+
+  // 状态
+  isDefault Boolean @default(false) @map("is_default")
+  isActive  Boolean @default(true) @map("is_active")
+
+  @@unique([name, version])
+  @@map("algorithm_configs")
 }
