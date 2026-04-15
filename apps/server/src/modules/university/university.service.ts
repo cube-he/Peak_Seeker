@@ -102,9 +102,17 @@ export class UniversityService {
       throw new NotFoundException('院校不存在');
     }
 
-    await this.redis.setCache(cacheKey, university, 3600);
+    // 查询强基计划录取数据，按专业名+年份降序排列
+    const qiangjiAdmissions = await this.prisma.qiangjiAdmission.findMany({
+      where: { school: university.name },
+      orderBy: [{ major: 'asc' }, { year: 'desc' }],
+    });
 
-    return university;
+    const result = { ...university, qiangjiAdmissions };
+
+    await this.redis.setCache(cacheKey, result, 3600);
+
+    return result;
   }
 
   async findMajors(id: number, year?: number) {
