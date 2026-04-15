@@ -276,7 +276,7 @@ export class DataImportService {
             majorId: major.id,
             year,
             province,
-            batch: row.batch || '',
+            batch,
           },
         },
         update: {
