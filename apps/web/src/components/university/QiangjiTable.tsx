@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, Table } from 'antd';
+import { Table } from 'antd';
 
 interface QiangjiRow {
   id: number;
