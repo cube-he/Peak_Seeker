@@ -16,6 +16,7 @@
     "db:generate": "pnpm --filter server prisma generate",
     "db:studio": "pnpm --filter server prisma studio",
     "import:data": "cd scripts/import-data && tsx index.ts",
+    "import:enriched": "npx ts-node --transpile-only --compiler-options \"{\\\"module\\\":\\\"commonjs\\\",\\\"moduleResolution\\\":\\\"node\\\"}\" scripts/import-enriched.ts",
     "db:deploy": "pnpm --filter server prisma migrate deploy",
     "db:push": "pnpm --filter server prisma db push"
   },
