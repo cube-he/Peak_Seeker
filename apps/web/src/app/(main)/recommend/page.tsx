@@ -412,9 +412,17 @@ export default function RecommendPage() {
                             {item.scoreBreakdown?.prospectEmployment >= 2.5 && (
                               <Tag color="green" className="text-xs">就业率高</Tag>
                             )}
-                            {item.scoreBreakdown?.careerAlignmentBonus > 0 && (
-                              <Tag color="purple" className="text-xs">匹配方向</Tag>
+                            {item.scoreBreakdown?.prospectSatisfaction >= 2.5 && (
+                              <Tag color="blue" className="text-xs">满意度高</Tag>
                             )}
+                            {item.scoreBreakdown?.prospectRanking >= 2 && (
+                              <Tag color="gold" className="text-xs">排名靠前</Tag>
+                            )}
+                            {item.scoreBreakdown?.careerAlignmentBonus >= 3 ? (
+                              <Tag color="purple" className="text-xs">强匹配方向</Tag>
+                            ) : item.scoreBreakdown?.careerAlignmentBonus >= 1.5 ? (
+                              <Tag color="purple" className="text-xs">匹配方向</Tag>
+                            ) : null}
                           </div>
                         </div>
                       </div>

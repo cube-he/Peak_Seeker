@@ -47,6 +47,11 @@ export class UpdateStudentProfileDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsString()
+  county?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsBoolean()
   isRural?: boolean;
 
