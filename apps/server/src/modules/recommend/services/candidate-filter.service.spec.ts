@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CandidateFilterService } from './candidate-filter.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { HealthFilterService } from './health-filter.service';
+import { RegionFilterService } from './region-filter.service';
 import { StudentProfileSnapshot } from '../interfaces/recommend.types';
 
 describe('CandidateFilterService', () => {
@@ -89,6 +91,20 @@ describe('CandidateFilterService', () => {
     };
   }
 
+  // Mock health filter: no exclusions by default
+  const mockHealthFilter = {
+    loadRestrictions: jest.fn().mockResolvedValue(undefined),
+    mapLegacyConditions: jest.fn().mockReturnValue([]),
+    checkCandidate: jest.fn().mockReturnValue({ excluded: false, risks: [] }),
+  };
+
+  // Mock region filter: no special programs by default
+  const mockRegionFilter = {
+    loadRegions: jest.fn().mockResolvedValue(undefined),
+    detectSpecialProgram: jest.fn().mockReturnValue(null),
+    isEligible: jest.fn().mockReturnValue({ eligible: true }),
+  };
+
   beforeEach(async () => {
     prisma = {
       admissionRecord: {
@@ -119,10 +135,20 @@ describe('CandidateFilterService', () => {
       },
     };
 
+    // Reset mocks between tests
+    mockHealthFilter.loadRestrictions.mockClear();
+    mockHealthFilter.mapLegacyConditions.mockClear().mockReturnValue([]);
+    mockHealthFilter.checkCandidate.mockClear().mockReturnValue({ excluded: false, risks: [] });
+    mockRegionFilter.loadRegions.mockClear();
+    mockRegionFilter.detectSpecialProgram.mockClear().mockReturnValue(null);
+    mockRegionFilter.isEligible.mockClear().mockReturnValue({ eligible: true });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CandidateFilterService,
         { provide: PrismaService, useValue: prisma },
+        { provide: HealthFilterService, useValue: mockHealthFilter },
+        { provide: RegionFilterService, useValue: mockRegionFilter },
       ],
     }).compile();
 

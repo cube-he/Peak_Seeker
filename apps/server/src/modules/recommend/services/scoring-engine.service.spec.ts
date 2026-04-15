@@ -1,4 +1,6 @@
 import { ScoringEngineService } from './scoring-engine.service';
+import { ProspectScorerService } from './prospect-scorer.service';
+import { CareerAlignmentService } from './career-alignment.service';
 import {
   RawCandidate,
   StudentProfileSnapshot,
@@ -96,7 +98,10 @@ describe('ScoringEngineService', () => {
   }
 
   beforeEach(() => {
-    service = new ScoringEngineService();
+    // Real instances — both are pure calculators with no DB/Redis dependencies
+    const prospectScorer = new ProspectScorerService();
+    const careerAlignment = new CareerAlignmentService();
+    service = new ScoringEngineService(prospectScorer, careerAlignment);
   });
 
   // ---- Weight function W(t, start, end) ----

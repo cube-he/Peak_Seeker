@@ -20,6 +20,10 @@ import { RiskGeneratorService } from './services/risk-generator.service';
 import { SmartReplacerService } from './services/smart-replacer.service';
 import { ExportFormatterService } from './services/export-formatter.service';
 import { PlanGeneratorService } from './services/plan-generator.service';
+import { HealthFilterService } from './services/health-filter.service';
+import { RegionFilterService } from './services/region-filter.service';
+import { ProspectScorerService } from './services/prospect-scorer.service';
+import { CareerAlignmentService } from './services/career-alignment.service';
 
 // Bull processor
 import { PlanGenerationProcessor } from './processors/plan-generation.processor';
@@ -53,6 +57,10 @@ import { DataImportModule } from '../data-import/data-import.module';
     SmartReplacerService,
     ExportFormatterService,
     PlanGeneratorService,
+    HealthFilterService,
+    RegionFilterService,
+    ProspectScorerService,
+    CareerAlignmentService,
 
     // Bull processor
     PlanGenerationProcessor,

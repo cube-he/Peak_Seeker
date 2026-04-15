@@ -54,6 +54,13 @@ export class RiskGeneratorService {
       warnings.push('近三年录取位次波动较大，预测参考性有限');
     }
 
+    // 7. Health restriction warnings
+    if (candidate.healthRisks?.length) {
+      for (const risk of candidate.healthRisks) {
+        warnings.push(risk);
+      }
+    }
+
     return warnings.join('；');
   }
 

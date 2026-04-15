@@ -6,6 +6,8 @@ import {
   RangeResult,
   TuitionBudgetLevel,
 } from '../interfaces/recommend.types';
+import { HealthFilterService, CheckResult } from './health-filter.service';
+import { RegionFilterService } from './region-filter.service';
 
 /**
  * Sub-module 4: Candidate Filter (CRITICAL)
@@ -33,13 +35,24 @@ export class CandidateFilterService {
     UNLIMITED: Infinity,
   };
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly healthFilter: HealthFilterService,
+    private readonly regionFilter: RegionFilterService,
+  ) {}
 
   async filter(
     student: StudentProfileSnapshot,
     range: RangeResult,
     batch?: string,
   ): Promise<RawCandidate[]> {
+    // Initialize health and region filters (idempotent — only loads once)
+    await this.healthFilter.loadRestrictions();
+    await this.regionFilter.loadRegions();
+    const studentConditions = this.healthFilter.mapLegacyConditions(
+      student.colorBlind, student.colorWeak, student.physicalLimits,
+    );
+
     const { provincialRank, province, examYear } = student;
     const year = examYear - 1; // Use previous year's admission data as reference
 
@@ -112,8 +125,24 @@ export class CandidateFilterService {
       // Filter: Subject matching
       if (ep && !this.matchesSubjects(ep, student)) continue;
 
-      // Filter: Physical condition restrictions
-      if (this.hasPhysicalRestriction(major, student)) continue;
+      // Filter: Health restriction (replaces old hasPhysicalRestriction)
+      const healthCheck = this.healthFilter.checkCandidate(studentConditions, {
+        majorCategory: major.category,
+        majorCode: major.code,
+      });
+      if (healthCheck.excluded) continue;
+
+      // Filter: Region eligibility
+      const specialProgram = this.regionFilter.detectSpecialProgram(
+        record.batch, ep?.planNotes,
+      );
+      if (specialProgram) {
+        const eligibility = this.regionFilter.isEligible(specialProgram, {
+          city: student.city || null,
+          county: student.county || null,
+        });
+        if (!eligibility.eligible) continue;
+      }
 
       // Filter: Tuition budget
       if (ep && !this.withinTuitionBudget(ep, student)) continue;
@@ -129,7 +158,7 @@ export class CandidateFilterService {
         continue;
       }
 
-      candidates.push(this.buildCandidate(record, uni, major, ep));
+      candidates.push(this.buildCandidate(record, uni, major, ep, healthCheck, specialProgram));
     }
 
     this.logger.debug(
@@ -210,28 +239,6 @@ export class CandidateFilterService {
     return studentSubjects.has(requirements.trim());
   }
 
-  /**
-   * Physical condition restrictions: color blindness, color weakness, vision.
-   * Certain majors restrict enrollment for students with these conditions.
-   */
-  private hasPhysicalRestriction(
-    major: any,
-    student: StudentProfileSnapshot,
-  ): boolean {
-    if (!major.isRestricted) return false;
-
-    const notes = (major.notes || '').toLowerCase();
-
-    // Color blindness restriction
-    if (student.colorBlind && notes.includes('色盲')) return true;
-
-    // Color weakness restriction
-    if (student.colorWeak && (notes.includes('色弱') || notes.includes('色盲')))
-      return true;
-
-    return false;
-  }
-
   private withinTuitionBudget(
     ep: any,
     student: StudentProfileSnapshot,
@@ -289,6 +296,8 @@ export class CandidateFilterService {
     uni: any,
     major: any,
     ep: any | undefined,
+    healthCheck: CheckResult,
+    specialProgram: string | null,
   ): RawCandidate {
     return {
       admissionRecordId: record.id,
@@ -337,6 +346,24 @@ export class CandidateFilterService {
       isNationalFeature: ep?.isNationalFeature ?? false,
       majorRanking: ep?.majorRanking ?? null,
       majorHonor: ep?.majorHonor ?? null,
+
+      // Enriched university data
+      universityEmploymentRate: uni.employmentRate ?? null,
+      universityFurtherStudyRate: uni.furtherStudyRate ?? null,
+      universityAvgSalary: uni.avgSalary ?? null,
+      universitySatisfactionOverall: uni.satisfactionOverall ?? null,
+      universityRankingAlumni: uni.rankingAlumni ?? null,
+      universityRankingQS: uni.rankingQS ?? null,
+      universityRankingUSNews: uni.rankingUSNews ?? null,
+
+      // Enriched major data
+      majorCareerDirections: major.careerDirections ?? null,
+      majorPostgraduateDirections: major.postgraduateDirections ?? null,
+      majorSatisfactionScore: major.satisfactionScore ?? null,
+
+      // Filter metadata
+      healthRisks: healthCheck.risks,
+      specialProgram: specialProgram,
     };
   }
 }

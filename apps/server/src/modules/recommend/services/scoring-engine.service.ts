@@ -7,6 +7,8 @@ import {
   PriorityMode,
   TOTAL_GROUPS,
 } from '../interfaces/recommend.types';
+import { ProspectScorerService, ProspectScore } from './prospect-scorer.service';
+import { CareerAlignmentService } from './career-alignment.service';
 
 /**
  * Sub-module 5: Scoring Engine (CRITICAL)
@@ -25,6 +27,11 @@ import {
 @Injectable()
 export class ScoringEngineService {
   private readonly logger = new Logger(ScoringEngineService.name);
+
+  constructor(
+    private readonly prospectScorer: ProspectScorerService,
+    private readonly careerAlignment: CareerAlignmentService,
+  ) {}
 
   /**
    * Score a batch of candidates.
@@ -52,6 +59,25 @@ export class ScoringEngineService {
       this.calcOtherScore(candidate, student);
     const bonus = this.calcBonus(candidate, student);
 
+    // ---- 5th Dimension: Prospect ----
+    const prospect = this.prospectScorer.score(candidate, student.careerPlan);
+
+    // ---- Career alignment bonus ----
+    const careerBonus = this.careerAlignment.calcBonus(
+      {
+        careerDirection: student.careerDirection,
+        careerPlan: student.careerPlan,
+        teacherInterest: student.teacherInterest ?? false,
+        militaryInterest: student.militaryInterest ?? false,
+      },
+      {
+        careerDirections: candidate.majorCareerDirections,
+        postgraduateDirections: candidate.majorPostgraduateDirections,
+        majorCategory: candidate.majorCategory,
+        batch: candidate.batch,
+      },
+    );
+
     // ---- Dynamic weights based on t and mode ----
     let tierWeight: number;
     let natureWeight: number;
@@ -72,12 +98,23 @@ export class ScoringEngineService {
       otherWeight = this.W(t, 1.5, 2.5);
     }
 
+    // Prospect weight varies by mode
+    let prospectWeight: number;
+    if (mode === 'MAJOR_FIRST') {
+      prospectWeight = this.W(t, 1.5, 2.5);
+    } else if (mode === 'CITY_FIRST' || mode === 'BALANCED') {
+      prospectWeight = this.W(t, 1.0, 2.0);
+    } else {
+      prospectWeight = this.W(t, 1.0, 2.5); // UNIVERSITY_FIRST default
+    }
+
     const rawTotal =
       tierRaw * tierWeight +
       natureRaw * natureWeight +
       majorRaw * majorWeight +
       otherRaw * otherWeight +
-      bonus;
+      prospect.prospectRaw * prospectWeight +
+      bonus + careerBonus;
 
     const breakdown: ScoreBreakdown = {
       tier: tierRaw * tierWeight,
@@ -93,10 +130,22 @@ export class ScoringEngineService {
       otherPlanScore: planScore,
       otherPostgradScore: postgradScore,
       otherLocationScore: locationScore,
-      bonus,
+      bonus: bonus + careerBonus,
       rawTotal,
       adjustedTotal: rawTotal, // Will be corrected later by stability/reliability
       weight_t: t,
+
+      // 5th dimension: prospect
+      prospect: prospect.prospectRaw * prospectWeight,
+      prospectRaw: prospect.prospectRaw,
+      prospectEmployment: prospect.prospectEmployment,
+      prospectSalary: prospect.prospectSalary,
+      prospectSatisfaction: prospect.prospectSatisfaction,
+      prospectConditional: prospect.prospectConditional,
+      prospectRanking: prospect.prospectRanking,
+
+      // Career alignment
+      careerAlignmentBonus: careerBonus,
     };
 
     return {

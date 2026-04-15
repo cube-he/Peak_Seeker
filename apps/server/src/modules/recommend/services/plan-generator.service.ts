@@ -450,6 +450,14 @@ export class PlanGeneratorService {
       acceptPrivate: sp.acceptPrivate,
       careerPlan: sp.careerPlan,
       stayPreference: sp.stayPreference,
+
+      // Extended fields for region eligibility and career alignment
+      city: sp.city,
+      county: sp.county,
+      careerDirection: sp.careerDirection,
+      teacherInterest: sp.teacherInterest,
+      militaryInterest: sp.militaryInterest,
+      isRural: sp.isRural,
     };
   }
 

@@ -101,6 +101,37 @@ export class ReasonGeneratorService {
       segments.push('目标院校');
     }
 
+    // 10. Employment rate
+    if (candidate.universityEmploymentRate) {
+      const rate = parseFloat(candidate.universityEmploymentRate);
+      if (!isNaN(rate) && rate >= 85) {
+        segments.push(`就业率${rate.toFixed(0)}%`);
+      }
+    }
+
+    // 11. Further study rate (for postgrad students)
+    if (student.careerPlan === 'POSTGRADUATE' && candidate.universityFurtherStudyRate) {
+      const rate = parseFloat(candidate.universityFurtherStudyRate);
+      if (!isNaN(rate) && rate >= 40) {
+        segments.push(`深造率${rate.toFixed(0)}%`);
+      }
+    }
+
+    // 12. Satisfaction
+    if (candidate.universitySatisfactionOverall && candidate.universitySatisfactionOverall >= 4.0) {
+      segments.push(`满意度${candidate.universitySatisfactionOverall.toFixed(1)}`);
+    }
+
+    // 13. Career match
+    if (candidate.scoreBreakdown?.careerAlignmentBonus > 0) {
+      segments.push('匹配职业方向');
+    }
+
+    // 14. Special program eligibility
+    if (candidate.specialProgram) {
+      segments.push('符合专项计划资格');
+    }
+
     // Add cleanliness note if relevant
     if (cleanliness === CleanlinessLevel.MIXED) {
       segments.push('部分专业需注意');
