@@ -1,12 +1,13 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Card, Tabs, Table, Spin, Descriptions } from 'antd';
-import { BankOutlined, HistoryOutlined } from '@ant-design/icons';
+import { Card, Tabs, Table, Spin, Descriptions, Typography } from 'antd';
+import { BankOutlined, HistoryOutlined, RocketOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import { majorService } from '@/services/major';
+import CareerTab from '@/components/major/CareerTab';
 
 export default function MajorDetailPage() {
   const params = useParams();
@@ -145,6 +146,17 @@ export default function MajorDetailPage() {
         />
       ),
     },
+    {
+      key: 'career',
+      label: <span><RocketOutlined className="mr-1" />就业与发展</span>,
+      children: (
+        <CareerTab
+          careerDirections={m.careerDirections}
+          postgraduateDirections={m.postgraduateDirections}
+          coreCourses={m.coreCourses}
+        />
+      ),
+    },
   ];
 
   return (
@@ -178,6 +190,14 @@ export default function MajorDetailPage() {
             {[m.category, m.discipline].filter(Boolean).join(' · ')}
           </p>
         )}
+        {m.description && (
+          <Typography.Paragraph
+            ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}
+            className="text-text-secondary text-sm mb-4"
+          >
+            {m.description}
+          </Typography.Paragraph>
+        )}
         <Descriptions bordered column={{ xs: 1, sm: 2, md: 4 }} size="small">
           <Descriptions.Item label="专业代码">{m.code || '-'}</Descriptions.Item>
           <Descriptions.Item label="门类">{m.category || '-'}</Descriptions.Item>
@@ -195,6 +215,20 @@ export default function MajorDetailPage() {
               <span className="text-text-muted">无</span>
             )}
           </Descriptions.Item>
+          {m.degree && (
+            <Descriptions.Item label="授予学位">{m.degree}</Descriptions.Item>
+          )}
+          {m.standardDuration && (
+            <Descriptions.Item label="学制">{m.standardDuration}年</Descriptions.Item>
+          )}
+          {m.satisfactionScore && (
+            <Descriptions.Item label="满意度">
+              <span className="font-semibold">{Number(m.satisfactionScore).toFixed(1)}/5</span>
+            </Descriptions.Item>
+          )}
+          {m.studentScale && (
+            <Descriptions.Item label="毕业生规模">{m.studentScale}</Descriptions.Item>
+          )}
           {m.employmentRate && (
             <Descriptions.Item label="就业率">
               <span className="font-semibold text-safe">{`${m.employmentRate}%`}</span>
