@@ -22,6 +22,8 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { StudentModule } from './modules/student/student.module';
 import { TeacherModule } from './modules/teacher/teacher.module';
 import { HealthModule } from './modules/health/health.module';
+import { HealthRestrictionModule } from './modules/health-restriction/health-restriction.module';
+import { EligibleRegionModule } from './modules/eligible-region/eligible-region.module';
 
 @Module({
   imports: [
@@ -62,6 +64,8 @@ import { HealthModule } from './modules/health/health.module';
     HistoryModule,
     DataImportModule,
     AiConfigModule,
+    HealthRestrictionModule,
+    EligibleRegionModule,
   ],
   providers: [
     // 全局应用限流守卫
