@@ -86,19 +86,27 @@ ROOT_FILES = [
 ]
 
 
+def safe_print(text):
+    """安全打印，处理 Windows GBK 编码问题"""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        print(text.encode('ascii', errors='replace').decode('ascii'))
+
+
 def run_local(cmd, cwd=None):
     """执行本地命令"""
-    print(f'  > {cmd}')
+    safe_print(f'  > {cmd}')
     result = subprocess.run(
         cmd, shell=True, cwd=cwd or LOCAL_ROOT,
         capture_output=True, encoding='utf-8', errors='replace',
     )
     if result.returncode != 0:
         err = (result.stderr or '')[:500]
-        print(f'  ✗ {err}')
+        safe_print(f'  X {err}')
         return False
     if result.stdout:
-        print(result.stdout[:300])
+        safe_print(result.stdout[:300])
     return True
 
 
@@ -125,19 +133,19 @@ def connect_ssh():
     try:
         if os.path.exists(SSH_KEY_PATH):
             ssh.connect(HOST, username=USER, key_filename=SSH_KEY_PATH, timeout=30)
-            print(f'✓ 已连接 (SSH key: {os.path.basename(SSH_KEY_PATH)})')
+            print(f'[OK] 已连接 (SSH key: {os.path.basename(SSH_KEY_PATH)})')
         else:
             password = os.environ.get('DEPLOY_PASSWORD')
             if not password:
-                print(f'✗ SSH key 不存在: {SSH_KEY_PATH}')
+                print(f'[FAIL] SSH key 不存在: {SSH_KEY_PATH}')
                 print(f'  设置方法: ssh-keygen -t ed25519 -f {SSH_KEY_PATH}')
                 print(f'  或设置环境变量: DEPLOY_PASSWORD=xxx')
                 return None
             ssh.connect(HOST, username=USER, password=password, timeout=30)
-            print('✓ 已连接 (密码)')
+            print('[OK] 已连接 (密码)')
         return ssh
     except Exception as e:
-        print(f'✗ 连接失败: {e}')
+        print(f'[FAIL] 连接失败: {e}')
         return None
 
 
@@ -195,7 +203,7 @@ def build_project(skip_tests=False):
     if not run_local('pnpm build:web'):
         return False
 
-    print('\n✓ 构建完成')
+    print('\n[OK] 构建完成')
     return True
 
 
@@ -259,7 +267,7 @@ def deploy(ssh, run_enriched_import=False):
 
         print(f'  [{key}] 上传中...')
         count = upload_directory(sftp, local_dir, remote_dir)
-        print(f'  [{key}] ✓ {count} 个文件')
+        print(f'  [{key}] [OK] {count} 个文件')
 
     sftp.close()
 
@@ -279,7 +287,7 @@ def deploy(ssh, run_enriched_import=False):
         print('\n[6/7] 导入丰富数据...')
         success = run_remote(ssh, f'cd {REMOTE_PATH} && npx ts-node scripts/import-enriched.ts 2>&1')
         if not success:
-            print('  ⚠ 丰富数据导入失败，可稍后手动运行: pnpm import:enriched')
+            print('  [WARN] 丰富数据导入失败，可稍后手动运行: pnpm import:enriched')
     else:
         print('\n[6/7] 跳过丰富数据导入 (使用 --import-enriched 启用)')
 
@@ -288,7 +296,7 @@ def deploy(ssh, run_enriched_import=False):
     run_remote(ssh, f'cd {REMOTE_PATH} && pm2 restart ecosystem.config.js 2>&1 || pm2 start ecosystem.config.js 2>&1')
     run_remote(ssh, 'pm2 list 2>&1 | head -20')
 
-    print('\n✓ 部署完成')
+    print('\n[OK] 部署完成')
     return True
 
 
@@ -331,7 +339,7 @@ def setup_server(ssh):
     run_remote(ssh, f'cd {REMOTE_PATH} && CI=true pnpm install --prod 2>&1 | tail -5')
     run_remote(ssh, f'cd {REMOTE_PATH}/apps/server && npx prisma generate 2>&1')
 
-    print('\n✓ 服务器初始化完成')
+    print('\n[OK] 服务器初始化完成')
     return True
 
 
@@ -351,7 +359,7 @@ def main():
     # 构建
     if not args.skip_build and not args.setup:
         if not build_project(skip_tests=args.skip_tests):
-            print('\n✗ 构建失败')
+            print('\n[FAIL] 构建失败')
             sys.exit(1)
 
     # 部署
@@ -363,7 +371,7 @@ def main():
             if args.setup:
                 setup_server(ssh)
             if not deploy(ssh, run_enriched_import=args.import_enriched):
-                print('\n✗ 部署失败')
+                print('\n[FAIL] 部署失败')
                 sys.exit(1)
         finally:
             ssh.close()

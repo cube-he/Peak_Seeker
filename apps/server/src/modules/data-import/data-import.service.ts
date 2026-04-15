@@ -271,11 +271,12 @@ export class DataImportService {
       // 3. 插入或更新招生计划
       await this.prisma.enrollmentPlan.upsert({
         where: {
-          universityId_majorId_year_province: {
+          universityId_majorId_year_province_batch: {
             universityId: university.id,
             majorId: major.id,
             year,
             province,
+            batch: row.batch || '',
           },
         },
         update: {
