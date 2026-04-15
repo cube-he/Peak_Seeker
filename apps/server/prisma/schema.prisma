@@ -204,6 +204,35 @@ model University {
   softRating  String? @map("soft_rating") @db.VarChar(50)
   softRanking Int?    @map("soft_ranking")
 
+  // 人口统计
+  maleRatio             Int?    @map("male_ratio")
+  femaleRatio           Int?    @map("female_ratio")
+  createdYear           String? @map("created_year") @db.VarChar(20)
+  logoUrl               String? @map("logo_url") @db.VarChar(500)
+
+  // A类学科数量
+  aClassDisciplineCount Int?    @map("a_class_discipline_count")
+
+  // 多维排名
+  rankingAlumni         Int?    @map("ranking_alumni")
+  rankingQS             Int?    @map("ranking_qs")
+  rankingUSNews         Int?    @map("ranking_us_news")
+
+  // 满意度
+  satisfactionOverall   Float?  @map("satisfaction_overall")
+  satisfactionLife      Float?  @map("satisfaction_life")
+  satisfactionEnviron   Float?  @map("satisfaction_environ")
+  satisfactionCount     Int?    @map("satisfaction_count")
+
+  // 就业
+  employmentRate        String? @map("employment_rate") @db.VarChar(50)
+  furtherStudyRate      String? @map("further_study_rate") @db.VarChar(50)
+  avgSalary             String? @map("avg_salary") @db.VarChar(50)
+  topEmployers          String? @map("top_employers") @db.Text
+
+  // 招生章程
+  charterInfo           Json?   @map("charter_info")
+
   // 备注
   notes String? @db.Text
 
@@ -249,6 +278,18 @@ model Major {
   // 本地学位点
   localMasterPoint   Boolean @default(false) @map("local_master_point")
   localDoctoralPoint Boolean @default(false) @map("local_doctoral_point")
+
+  // 专业详情
+  description            String? @map("major_description") @db.Text
+  maleRatio              Int?    @map("male_ratio")
+  femaleRatio            Int?    @map("female_ratio")
+  studentScale           String? @map("student_scale") @db.VarChar(50)
+  careerDirections       Json?   @map("career_directions")
+  postgraduateDirections Json?   @map("postgraduate_directions")
+  satisfactionScore      Float?  @map("satisfaction_score")
+  coreCourses            Json?   @map("core_courses")
+  degree                 String? @map("degree") @db.VarChar(100)
+  standardDuration       String? @map("standard_duration") @db.VarChar(20)
 
   // 就业信息
   employmentRate      Decimal? @map("employment_rate") @db.Decimal(5, 2)
@@ -497,6 +538,7 @@ model StudentProfile {
   // --- 基本信息 ---
   province          String?       @default("四川") @db.VarChar(50)
   city              String?       @db.VarChar(100)
+  county            String?       @db.VarChar(100)
   highSchool        String?       @map("high_school") @db.VarChar(200)
   classInfo         String?       @map("class_info") @db.VarChar(50)
   status            StudentStatus @default(ACTIVE)
@@ -932,6 +974,61 @@ model ScoreSegment {
   @@index([examType])
   @@index([score])
   @@map("score_segments")
+}
+
+// ==================== 体检受限 ====================
+
+model HealthRestriction {
+  id               Int     @id @default(autoincrement())
+  conditionCode    String  @map("condition_code") @db.VarChar(50)
+  conditionName    String  @map("condition_name") @db.Text
+  restrictionType  String  @map("restriction_type") @db.VarChar(50)
+  severity         String  @db.VarChar(20)
+  section          String? @db.VarChar(100)
+  restrictionScope String  @map("restriction_scope") @db.VarChar(20)
+  majorCategory    String? @map("major_category") @db.VarChar(100)
+  majorCode        String? @map("major_code") @db.VarChar(50)
+  majorName        String? @map("major_name") @db.VarChar(200)
+
+  @@index([conditionCode])
+  @@index([majorCode])
+  @@index([majorCategory])
+  @@map("health_restrictions")
+}
+
+// ==================== 地区资格 ====================
+
+model EligibleRegion {
+  id           Int     @id @default(autoincrement())
+  program      String  @db.VarChar(50)
+  programLabel String  @map("program_label") @db.VarChar(100)
+  area         String  @db.VarChar(100)
+  county       String? @db.VarChar(100)
+  detail       String? @db.Text
+
+  @@index([program, area])
+  @@index([program, area, county])
+  @@map("eligible_regions")
+}
+
+// ==================== 强基计划 ====================
+
+model QiangjiAdmission {
+  id              Int     @id @default(autoincrement())
+  school          String  @db.VarChar(200)
+  major           String  @db.VarChar(200)
+  subject         String? @db.VarChar(100)
+  admissionMethod String? @map("admission_method") @db.VarChar(200)
+  year            Int     @db.SmallInt
+  entryScore      Int?    @map("entry_score")
+  admitScore      Int?    @map("admit_score")
+  gaokaoScore     Int?    @map("gaokao_score")
+  gaokaoRank      Int?    @map("gaokao_rank")
+
+  @@unique([school, major, year])
+  @@index([school])
+  @@index([year])
+  @@map("qiangji_admissions")
 }
 
 // ==================== 系统配置 ====================
