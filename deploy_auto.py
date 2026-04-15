@@ -4,12 +4,12 @@
 本地构建 → SSH 上传 → 远程迁移 → 重启服务
 
 用法:
-  python deploy_auto.py              # 完整构建+部署
-  python deploy_auto.py --skip-build # 跳过构建，直接部署
-  python deploy_auto.py --skip-tests # 跳过测试
-  python deploy_auto.py --build-only # 只构建不部署
-  python deploy_auto.py --setup      # 首次服务器初始化
-  python deploy_auto.py --branch dev # 指定分支（默认 master）
+  python deploy_auto.py                        # 完整构建+部署
+  python deploy_auto.py --skip-build           # 跳过构建，直接部署
+  python deploy_auto.py --skip-tests           # 跳过测试
+  python deploy_auto.py --build-only           # 只构建不部署
+  python deploy_auto.py --setup                # 首次服务器初始化
+  python deploy_auto.py --import-enriched      # 部署后导入丰富数据（首次需要）
 """
 import paramiko
 import os
@@ -66,6 +66,14 @@ UPLOAD_MAP = {
             'main.py', 'ai_parser.py', 'multi_engine_validator.py',
             'image_preprocessor.py', 'requirements.txt', 'setup.sh',
         ],
+    },
+}
+
+# 需要上传的脚本文件
+SCRIPT_FILES = {
+    'import_enriched': {
+        'local': os.path.join(LOCAL_ROOT, 'scripts', 'import-enriched.ts'),
+        'remote': 'scripts/import-enriched.ts',
     },
 }
 
@@ -191,19 +199,20 @@ def build_project(skip_tests=False):
     return True
 
 
-def deploy(ssh):
+def deploy(ssh, run_enriched_import=False):
     """部署到服务器"""
     print('\n=== 部署到服务器 ===')
     sftp = ssh.open_sftp()
 
     # 1. 确保远程目录存在
-    print('\n[1/6] 准备远程目录...')
+    print('\n[1/7] 准备远程目录...')
     for key, conf in UPLOAD_MAP.items():
         remote = f"{REMOTE_PATH}/{conf['remote']}"
         run_remote(ssh, f'mkdir -p {remote}')
+    run_remote(ssh, f'mkdir -p {REMOTE_PATH}/scripts')
 
     # 2. 上传根目录配置文件
-    print('\n[2/6] 上传配置文件...')
+    print('\n[2/7] 上传配置文件...')
     for f in ROOT_FILES:
         local_file = os.path.join(LOCAL_ROOT, f)
         if os.path.exists(local_file):
@@ -217,8 +226,15 @@ def deploy(ssh):
             print(f'    {sub}')
             sftp.put(local_file, f'{REMOTE_PATH}/{sub}')
 
+    # 上传脚本文件
+    for key, conf in SCRIPT_FILES.items():
+        local_file = conf['local']
+        if os.path.exists(local_file):
+            print(f'    {conf["remote"]}')
+            sftp.put(local_file, f'{REMOTE_PATH}/{conf["remote"]}')
+
     # 3. 上传各模块
-    print('\n[3/6] 上传编译产物...')
+    print('\n[3/7] 上传编译产物...')
     for key, conf in UPLOAD_MAP.items():
         local_dir = conf['local']
         remote_dir = f"{REMOTE_PATH}/{conf['remote']}"
@@ -248,16 +264,27 @@ def deploy(ssh):
     sftp.close()
 
     # 4. 安装服务器依赖
-    print('\n[4/6] 安装服务器依赖...')
+    print('\n[4/7] 安装服务器依赖...')
     run_remote(ssh, f'cd {REMOTE_PATH} && CI=true pnpm install --prod 2>&1 | tail -5')
+    # ts-node 用于运行导入脚本，安装为全局或临时依赖
+    run_remote(ssh, f'cd {REMOTE_PATH} && pnpm add -D ts-node typescript 2>&1 | tail -3')
     run_remote(ssh, f'cd {REMOTE_PATH}/apps/server && npx prisma generate 2>&1 | tail -3')
 
     # 5. 运行数据库迁移
-    print('\n[5/6] 运行数据库迁移...')
+    print('\n[5/7] 运行数据库迁移...')
     run_remote(ssh, f'cd {REMOTE_PATH}/apps/server && npx prisma migrate deploy 2>&1')
 
-    # 6. 重启服务
-    print('\n[6/6] 重启服务...')
+    # 6. 导入丰富数据（首次或指定时运行）
+    if run_enriched_import:
+        print('\n[6/7] 导入丰富数据...')
+        success = run_remote(ssh, f'cd {REMOTE_PATH} && npx ts-node scripts/import-enriched.ts 2>&1')
+        if not success:
+            print('  ⚠ 丰富数据导入失败，可稍后手动运行: pnpm import:enriched')
+    else:
+        print('\n[6/7] 跳过丰富数据导入 (使用 --import-enriched 启用)')
+
+    # 7. 重启服务
+    print('\n[7/7] 重启服务...')
     run_remote(ssh, f'cd {REMOTE_PATH} && pm2 restart ecosystem.config.js 2>&1 || pm2 start ecosystem.config.js 2>&1')
     run_remote(ssh, 'pm2 list 2>&1 | head -20')
 
@@ -314,6 +341,7 @@ def main():
     parser.add_argument('--skip-tests', action='store_true', help='跳过测试')
     parser.add_argument('--build-only', action='store_true', help='只构建不部署')
     parser.add_argument('--setup', action='store_true', help='首次服务器初始化')
+    parser.add_argument('--import-enriched', action='store_true', help='部署后导入丰富数据（体检/地区资格/院校专业增强）')
     args = parser.parse_args()
 
     print('==========================================')
@@ -334,7 +362,7 @@ def main():
         try:
             if args.setup:
                 setup_server(ssh)
-            if not deploy(ssh):
+            if not deploy(ssh, run_enriched_import=args.import_enriched):
                 print('\n✗ 部署失败')
                 sys.exit(1)
         finally:
