@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Form, InputNumber, Select, message } from 'antd';
+import { Form, InputNumber, Select, Tag, message } from 'antd';
 import { BulbOutlined, SaveOutlined, ExportOutlined } from '@ant-design/icons';
 import { useMutation } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
@@ -408,6 +408,14 @@ export default function RecommendPage() {
                             />
                           </div>
                           <div className="text-[10px] text-text-faint sm:mt-1 shrink-0">录取概率</div>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {item.scoreBreakdown?.prospectEmployment >= 2.5 && (
+                              <Tag color="green" className="text-xs">就业率高</Tag>
+                            )}
+                            {item.scoreBreakdown?.careerAlignmentBonus > 0 && (
+                              <Tag color="purple" className="text-xs">匹配方向</Tag>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

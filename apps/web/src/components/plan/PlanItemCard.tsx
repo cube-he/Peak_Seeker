@@ -6,6 +6,7 @@ import {
   UpOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
+import ProspectRow from './ProspectRow';
 
 interface PlanItem {
   id: number;
@@ -18,6 +19,7 @@ interface PlanItem {
   historicalMinRank?: number;
   notes?: string;
   explanation?: string;
+  scoreBreakdown?: any;
 }
 
 interface PlanItemCardProps {
@@ -112,6 +114,8 @@ export default function PlanItemCard({
               备注: {item.notes}
             </p>
           )}
+
+          <ProspectRow scoreBreakdown={item.scoreBreakdown} />
 
           {!readOnly && onDelete && (
             <div className="flex justify-end mt-2 pt-2 border-t border-border-subtle">
