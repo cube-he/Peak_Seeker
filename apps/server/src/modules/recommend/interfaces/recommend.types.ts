@@ -46,6 +46,16 @@ export interface StudentProfileSnapshot {
   // Career
   careerPlan?: string | null;
   stayPreference?: string | null;
+
+  // Location (extended — needed for region eligibility filter)
+  city?: string | null;
+  county?: string | null;
+
+  // Career (extended)
+  careerDirection?: string | null;
+  teacherInterest?: boolean;
+  militaryInterest?: boolean;
+  isRural?: boolean;
 }
 
 export type PriorityMode =
@@ -127,6 +137,24 @@ export interface RawCandidate {
   isNationalFeature: boolean;
   majorRanking?: string | null;
   majorHonor?: string | null;
+
+  // Enriched university data (for prospect scoring)
+  universityEmploymentRate?: string | null;
+  universityFurtherStudyRate?: string | null;
+  universityAvgSalary?: string | null;
+  universitySatisfactionOverall?: number | null;
+  universityRankingAlumni?: number | null;
+  universityRankingQS?: number | null;
+  universityRankingUSNews?: number | null;
+
+  // Enriched major data (for career alignment)
+  majorCareerDirections?: string[] | null;
+  majorPostgraduateDirections?: string[] | null;
+  majorSatisfactionScore?: number | null;
+
+  // Filter results (passed through pipeline)
+  healthRisks?: string[];
+  specialProgram?: string | null;
 }
 
 // ---- Scored candidate ----
@@ -158,6 +186,18 @@ export interface ScoreBreakdown {
   rawTotal: number;
   adjustedTotal: number;
   weight_t: number; // the t value (bin position)
+
+  // 5th dimension: prospect
+  prospect: number;
+  prospectRaw: number;
+  prospectEmployment: number;
+  prospectSalary: number;
+  prospectSatisfaction: number;
+  prospectConditional: number;
+  prospectRanking: number;
+
+  // Career alignment
+  careerAlignmentBonus: number;
 }
 
 // ---- Gradient classification ----
