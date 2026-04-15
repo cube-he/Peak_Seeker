@@ -22,6 +22,8 @@ import {
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
+import HealthCheckboxGroup from '@/components/student/HealthCheckboxGroup';
+import CountyCascader from '@/components/student/CountyCascader';
 
 const EXAM_TYPE_OPTIONS = [
   { label: '理科', value: 'SCIENCE' },
@@ -147,12 +149,11 @@ export default function StudentProfilePage() {
       ),
       children: (
         <div className="space-y-4">
-          <Form.Item name="physicalConditions" label="身体状况">
-            <Select mode="multiple" placeholder="如有体检受限项请选择" allowClear>
-              <Select.Option value="色觉异常">色觉异常</Select.Option>
-              <Select.Option value="视力不达标">视力不达标</Select.Option>
-              <Select.Option value="无">无限制</Select.Option>
-            </Select>
+          <Form.Item name="physicalLimits" label="体检受限项">
+            <HealthCheckboxGroup />
+          </Form.Item>
+          <Form.Item name="county" label="区县">
+            <CountyCascader />
           </Form.Item>
           <Form.Item name="economicLevel" label="经济承受能力">
             <Radio.Group>
