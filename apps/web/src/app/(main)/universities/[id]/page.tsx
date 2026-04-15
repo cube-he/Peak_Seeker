@@ -7,11 +7,16 @@ import {
   BookOutlined,
   HistoryOutlined,
   EnvironmentOutlined,
+  TrophyOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import { universityService } from '@/services/university';
+import RankingCard from '@/components/university/RankingCard';
+import SatisfactionCard from '@/components/university/SatisfactionCard';
+import EmploymentCard from '@/components/university/EmploymentCard';
+import QiangjiTable from '@/components/university/QiangjiTable';
 
 export default function UniversityDetailPage() {
   const params = useParams();
@@ -149,28 +154,49 @@ export default function UniversityDetailPage() {
       key: 'info',
       label: <span><BankOutlined className="mr-1" />基本信息</span>,
       children: (
-        <Descriptions bordered column={{ xs: 1, sm: 2 }} size="small">
-          <Descriptions.Item label="院校代码">{u.code || '-'}</Descriptions.Item>
-          <Descriptions.Item label="省份/城市">{[u.province, u.city].filter(Boolean).join(' · ') || '-'}</Descriptions.Item>
-          <Descriptions.Item label="类型">{u.type || '-'}</Descriptions.Item>
-          <Descriptions.Item label="层次">{u.level || '-'}</Descriptions.Item>
-          <Descriptions.Item label="办学性质">{u.runningNature || '-'}</Descriptions.Item>
-          <Descriptions.Item label="主管部门">{u.department || '-'}</Descriptions.Item>
-          <Descriptions.Item label="院校排名">{u.ranking ? <span className="font-semibold text-primary">第 {u.ranking} 名</span> : '-'}</Descriptions.Item>
-          <Descriptions.Item label="考研率">{u.postgradRate || '-'}</Descriptions.Item>
-          <Descriptions.Item label="转专业难度">{u.transferDifficulty || '-'}</Descriptions.Item>
-          <Descriptions.Item label="学科评估">{u.disciplineEvaluationLevel || '-'}</Descriptions.Item>
-          <Descriptions.Item label="硕士点">{u.hasMasterProgram ? `${u.masterProgramCount || ''}个` : '无'}</Descriptions.Item>
-          <Descriptions.Item label="博士点">{u.hasDoctoralProgram ? `${u.doctoralProgramCount || ''}个` : '无'}</Descriptions.Item>
-          {u.renameHistory && (
-            <Descriptions.Item label="更名信息" span={2}>{u.renameHistory}</Descriptions.Item>
-          )}
-          {u.admissionGuide && (
-            <Descriptions.Item label="招生章程" span={2}>
-              <div className="max-h-[200px] overflow-auto whitespace-pre-wrap text-[13px]">{u.admissionGuide}</div>
-            </Descriptions.Item>
-          )}
-        </Descriptions>
+        <>
+          <Descriptions bordered column={{ xs: 1, sm: 2 }} size="small">
+            <Descriptions.Item label="院校代码">{u.code || '-'}</Descriptions.Item>
+            <Descriptions.Item label="省份/城市">{[u.province, u.city].filter(Boolean).join(' · ') || '-'}</Descriptions.Item>
+            <Descriptions.Item label="类型">{u.type || '-'}</Descriptions.Item>
+            <Descriptions.Item label="层次">{u.level || '-'}</Descriptions.Item>
+            <Descriptions.Item label="办学性质">{u.runningNature || '-'}</Descriptions.Item>
+            <Descriptions.Item label="主管部门">{u.department || '-'}</Descriptions.Item>
+            <Descriptions.Item label="院校排名">{u.ranking ? <span className="font-semibold text-primary">第 {u.ranking} 名</span> : '-'}</Descriptions.Item>
+            <Descriptions.Item label="考研率">{u.postgradRate || '-'}</Descriptions.Item>
+            <Descriptions.Item label="转专业难度">{u.transferDifficulty || '-'}</Descriptions.Item>
+            <Descriptions.Item label="学科评估">{u.disciplineEvaluationLevel || '-'}</Descriptions.Item>
+            <Descriptions.Item label="硕士点">{u.hasMasterProgram ? `${u.masterProgramCount || ''}个` : '无'}</Descriptions.Item>
+            <Descriptions.Item label="博士点">{u.hasDoctoralProgram ? `${u.doctoralProgramCount || ''}个` : '无'}</Descriptions.Item>
+            {u.renameHistory && (
+              <Descriptions.Item label="更名信息" span={2}>{u.renameHistory}</Descriptions.Item>
+            )}
+            {u.admissionGuide && (
+              <Descriptions.Item label="招生章程" span={2}>
+                <div className="max-h-[200px] overflow-auto whitespace-pre-wrap text-[13px]">{u.admissionGuide}</div>
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+          <RankingCard
+            rankingSoft={u.rankingSoft ?? null}
+            rankingAlumni={u.rankingAlumni ?? null}
+            rankingQS={u.rankingQS ?? null}
+            rankingUSNews={u.rankingUSNews ?? null}
+            aClassDisciplineCount={u.aClassDisciplineCount ?? null}
+          />
+          <SatisfactionCard
+            overall={u.satisfactionOverall ?? null}
+            life={u.satisfactionLife ?? null}
+            environ={u.satisfactionEnviron ?? null}
+            count={u.satisfactionCount ?? null}
+          />
+          <EmploymentCard
+            employmentRate={u.employmentRate ?? null}
+            furtherStudyRate={u.furtherStudyRate ?? null}
+            avgSalary={u.avgSalary ?? null}
+            topEmployers={u.topEmployers ?? null}
+          />
+        </>
       ),
     },
     {
@@ -201,6 +227,16 @@ export default function UniversityDetailPage() {
         />
       ),
     },
+    // Only show the tab when there is qiangji data
+    ...(u.qiangjiAdmissions?.length > 0
+      ? [
+          {
+            key: 'qiangji',
+            label: <span><TrophyOutlined className="mr-1" />强基计划</span>,
+            children: <QiangjiTable data={u.qiangjiAdmissions} />,
+          },
+        ]
+      : []),
   ];
 
   return (
