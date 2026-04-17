@@ -72,3 +72,8 @@
 - Task 8 p1_baseline 实现：commit 0b4217d 初版 → review 发现 xlsx/csv 语义不一致（header 是否计入）→ commit d24a0dd 修复 + 补 2 个 test（7/7 pass）
   - 真实基线生成：03(9 files/56789 records) / 01(36/660128) / 13(2346/29104)
   - 实际 delta 等于 xlsx 工作表数，修复验证闭环
+- Task 9 p1_patch_03 实现：commit adf7a19，6/6 test pass（spec ✅ + quality ✅）
+  - fixture 验证三类修复逻辑（去重/分数异常/专业代码缺失）全工作
+  - 真实 03 dry-run：48131 rows, 0 dup, 0 score anomaly, 2 missing major code
+  - **重大发现**（登记为 ISSUE-010）：03 主表已是清洗后产物，审计报告 34/232 基于早期版本。防御性代码保留，P2 scope 将收紧
+  - 附带：.gitignore 加 `!scripts/data_integration/tests/fixtures/*.xlsx` 负规则以允许 fixture 进仓
