@@ -26,6 +26,11 @@ class BatchDictMissingError(LookupError):
     """字典本身未注册 (year, course) 组合。区别于名称未知。"""
     pass
 
+
+class AmbiguousBatchError(ValueError):
+    """模糊别名在 strict 模式下被拒绝。"""
+    pass
+
 SPECS_DIR = Path(__file__).resolve().parents[3] / "docs" / "superpowers" / "specs"
 
 DICT_FILES = {
@@ -116,6 +121,17 @@ _ALIASES: dict[tuple[str, str], dict[str, str]] = {
     },
 }
 
+# --- Ambiguous aliases (strict mode rejects these) ----------------------------
+# These aliases are "假设性默认" mappings that rely on assumptions
+# (e.g., "本科批" defaults to B 段when segment is missing). In strict mode,
+# these are rejected to avoid silent drift across years/sources.
+_AMBIGUOUS_ALIASES: set[tuple[str, str, str]] = {
+    ("2025", "物理", "本科批"),
+    ("2025", "物理", "本科批次"),
+    ("2025", "物理", "普通类 本科批次"),
+    ("2025", "物理", "本科A"),  # 默认映射到"国家专项"，但真实可能指任意 A 段
+}
+
 
 def load_batch_dict(year: str, course: str) -> list[dict]:
     """Load batch dictionary for a given year+course from the spec markdown.
@@ -185,26 +201,32 @@ def _parse_markdown_table(md: str) -> list[dict]:
     return out
 
 
-def normalize_batch_name(name: str, year: int | str, course: str) -> str:
+def normalize_batch_name(
+    name: str, year: int | str, course: str, strict: bool = False
+) -> str:
     """Normalize a batch name from any source to the canonical project form.
 
     Lookup order:
       1. Check if (year, course) key exists in CANONICAL_NAMES or ALIASES.
          If not, raise BatchDictMissingError (dict not registered).
-      2. Direct match in CANONICAL_NAMES → return as-is.
-      3. Alias mapping → return canonical target.
-      4. Not found → raise ValueError (dict exists but name unknown).
+      2. If strict=True and (year, course, name) is in _AMBIGUOUS_ALIASES,
+         raise AmbiguousBatchError.
+      3. Direct match in CANONICAL_NAMES → return as-is.
+      4. Alias mapping → return canonical target.
+      5. Not found → raise ValueError (dict exists but name unknown).
 
     Args:
         name: Raw batch name from a data source.
         year: Four-digit year as int or str.
         course: Course category string, e.g. "物理" or "理科".
+        strict: If True, reject ambiguous aliases (假设性默认映射).
 
     Returns:
         Canonical batch name string.
 
     Raises:
         BatchDictMissingError: If (year, course) is not registered in the dict.
+        AmbiguousBatchError: If strict=True and name is an ambiguous alias.
         ValueError: If name cannot be resolved (dict exists but name unknown).
     """
     key = (str(year), course)
@@ -212,6 +234,14 @@ def normalize_batch_name(name: str, year: int | str, course: str) -> str:
         raise BatchDictMissingError(
             f"字典未注册: year={year} course={course}（需在 _CANONICAL_NAMES / _ALIASES 中补录）"
         )
+
+    # Check strict mode: reject ambiguous aliases before lookup
+    if strict and (str(year), course, name) in _AMBIGUOUS_ALIASES:
+        raise AmbiguousBatchError(
+            f"模糊别名拒绝映射(strict): {name!r} year={year} course={course}；"
+            f"需在源头消歧或显式 strict=False"
+        )
+
     canonical_set = _CANONICAL_NAMES.get(key, set())
     aliases = _ALIASES.get(key, {})
 

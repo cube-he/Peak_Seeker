@@ -47,3 +47,20 @@ def test_normalize_raises_name_unknown_when_dict_exists_but_name_not_found():
     with pytest.raises(ValueError) as exc_info:
         normalize_batch_name("完全不存在的批次XYZ", year=2025, course="物理")
     assert "未知批次" in str(exc_info.value)
+
+
+def test_normalize_strict_rejects_ambiguous_aliases():
+    """strict=True 时，'本科批' 这类模糊别名拒绝默认映射到 B 段。"""
+    from scripts.data_integration.lib.batch_dict import AmbiguousBatchError
+
+    # 非严格模式：保持现有行为
+    assert normalize_batch_name("本科批", year=2025, course="物理") == "本科批B段"
+
+    # 严格模式：抛错
+    with pytest.raises(AmbiguousBatchError):
+        normalize_batch_name("本科批", year=2025, course="物理", strict=True)
+
+
+def test_normalize_strict_allows_unambiguous_aliases():
+    """明确的别名（如 '本一'→'本科一批'）在 strict=True 下仍成功。"""
+    assert normalize_batch_name("本一", year=2024, course="理科", strict=True) == "本科一批"
