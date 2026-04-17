@@ -108,6 +108,27 @@
   - ✅ 移除无效成本项
   - ⚠️ 那 1 个 all_one 文件需单独观察
 
+## D-P3-004：xlsx 引擎偏好 mimo > claude > 多引擎
+
+- **状态**：已采纳（2026-04-17）
+- **背景**：同一页可能有 3 套 OCR 变体：`_mimo-v2-omni.xlsx` / `_claude.xlsx` / `_多引擎.xlsx` (PaddleOCR-VL-1.5)。初版 repair 只跳过 claude，不跳过 多引擎，导致 4414 文件夹 (无 mimo 变体) 输出 1,541 条空码 malformed
+- **调查**：`_多引擎.xlsx` 首行为引擎元数据注释 (引擎名/时间/耗时)，第 2 行才是真正表头。pandas 默认将首行当 header，列名解析为 Unnamed:N，`院校代码` 列整列为空
+- **决策**：`_select_preferred_engine` 按 `mimo > claude > 多引擎` 优先级去重。同文件夹基名相同时保留最高优先级
+- **后果**：
+  - ✅ 4414 案例由 1,541 malformed → 正确解析，total malformed 从 1,546 → 5
+  - ✅ 命中率 49.1% → 52.4%
+  - ⚠️ 若未来需要比对多引擎结果，加 `--include-all-engines` 开关覆盖
+
+## D-P3-005：院校代码多专业行前向填充
+
+- **状态**：已采纳（2026-04-17）
+- **背景**：OCR 模式下，同院校首行印 院校代码/名称/地址，后续专业行留空。直接分类会把后续行判为 malformed
+- **决策**：`_forward_fill_college` 当且仅当 `专业代码` 非空时下填 `院校代码/名称/地址`。`专业代码` 为空视作分隔行/真空行，不填
+- **后果**：
+  - ✅ 3,629 条修复记录
+  - ✅ 避免了"分隔行误填"反向 bug
+  - ⚠️ 已在 `test_repair_df_forward_fill_does_not_fill_real_blank_row` 单测钉死边界
+
 ---
 
 _待决策项进入下方，有结论后移到上方_
