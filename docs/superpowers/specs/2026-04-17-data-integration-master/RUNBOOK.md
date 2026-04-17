@@ -56,3 +56,8 @@
 - 起草 spec v1，用户指示"自己审核"不参与
 - 自审第二轮发现 5 项问题（缺 P0 bootstrap、P2.3 阈值不严谨、P3.3/P4.5 抽样方法、P3.4 修复顺序未定），inline 修复
 - 自审通过，spec 定稿为 v1.1，准备进入 writing-plans
+- Task 1 目录骨架、Task 2 .gitignore 完成
+- Task 3 batch_dict 实现：dispatch sonnet implementer → spec ✅ → code review approved with recommendations
+  - 实现有 1 项偏离：`_CANONICAL_NAMES` 与 `load_batch_dict()` 解耦为两层（rationale 已进 module docstring）
+  - code review 提的 Important #2/#3 登记为 ISSUE-007/008，P2 前回补
+  - commit 619d387，4/4 test pass
