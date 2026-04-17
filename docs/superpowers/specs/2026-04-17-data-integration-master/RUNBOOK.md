@@ -135,7 +135,13 @@
 - Task 12 `P2_report.md` + `coverage_uplift.md`：含输入 SHA / 分布 / anomaly 字段拆解 / 20 条抽样 / 4 条待审决策
 - Task 13 收尾：RUNBOOK + ISSUES 更新，95/95 tests pass
 
-**P2 阶段关闭（2025 slice）** — 待用户验收 P2_report.md
+**P2.6 ISSUE-014 根因修复（P2 close 前）**
+- 核验 rank anomaly：97.2%（16,851/17,328）的 01 值 = 0（而非口径差异猜测）
+- 修复：`source_01` 加载时分数/位次 0 值归 NaN（commit a6df7e3，1 新测试）
+- 效果：anomaly 17,328→492 (-97%)、field_fill 4,167→291 (-93%)、diff 30,267→19,495
+- 决策：录取人数/计划人数 的 0 保留（真实"计划未录取"语义，构成有效 anomaly 信号）
+
+**P2 阶段关闭（2025 slice）** — 96/96 tests，D1-D4 技术决策已落地，待用户验收 P2_report.md
 
 ## P2 交付清单（2025 slice）
 
