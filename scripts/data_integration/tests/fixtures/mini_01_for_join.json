@@ -1,0 +1,30 @@
+[
+  {
+    "collegeCode": "100011",
+    "collegeName": "北京大学",
+    "professionEnrollCode": "41",
+    "professionName": "环境科学",
+    "batch": "本科B",
+    "course": "物理",
+    "uMinScore": 0, "uAvgScore": 0, "uMaxScore": 0,
+    "minScore": 690, "avgScore": 695, "maxScore": 700,
+    "uMinRank": 400, "uAvgRank": 350, "uMaxRank": 280,
+    "enrollCount": 5, "planCount": 5,
+    "uZjText": "", "pressureScore": 560,
+    "collegeType": "公办", "collegeCategory": "综合"
+  },
+  {
+    "collegeCode": "999999",
+    "collegeName": "虚构大学",
+    "professionEnrollCode": "99",
+    "professionName": "测试专业",
+    "batch": "本科B",
+    "course": "物理",
+    "uMinScore": 0, "uAvgScore": 0, "uMaxScore": 0,
+    "minScore": 500, "avgScore": 505, "maxScore": 510,
+    "uMinRank": 5000, "uAvgRank": 4800, "uMaxRank": 4500,
+    "enrollCount": 3, "planCount": 3,
+    "uZjText": "", "pressureScore": 450,
+    "collegeType": "公办", "collegeCategory": "综合"
+  }
+]
