@@ -113,4 +113,16 @@
 - 缺失分布：2022/118 > 2023/82 > 2024/58 > 2025/22（省属/艺术/职业院校为主）
 - 登记 ISSUE-012：**P2.1 scope 调整** — 125 条不再手工补全，让 outer join 走 `right_only` 路径，P2.4 作补缺候选处理
 
-**当前累计：40/40 tests pass；7 commits since P1 close（6343322, 805f22b, f718cc7, 86de50b, b15a896, 6170944, de26190, 075e9a8）**
+**P2.2 Outer join（2025 slice）**
+- Task 7 `lib/source_03.py` + `p2_join.py`：03 宽表 → 2025 长表切片 → 与 01 2025 outer join；CodeMapper 桥接 + batch/course 归一化（commits 6210d36, 8f4fad9）
+- Task 7.5 batch_dict 扩充：补 (2025,历史) 条目 + '专科'→'专科批次' 别名（commit 2c55985，2 新测试）
+- schema + ISSUE-011 修复：修正 `_FIELD_MAP` 用真实 schema（uEnterNum/enterNum/planNum），补 `drop_empty=True` 参数（commit 7545f2e，3 新测试）
+- 2025 join 分布：**both=11133 / left_only=2028 / right_only=7362**（修前 right_only=33745，-78%）
+
+**P2.3 Diff report**
+- Task 8 `lib/diff_rules.py`：按字段分类阈值（score/rank/count/text）+ null 跳过（commit 5f1bd86，8 tests）
+- Task 9 `p2_diff_report.py`：both 行 × 10 字段 → 差异表 + anomaly 表（commit da1fdd5，6 tests）
+- 真实 dry-run：30267 差异行，17328 anomaly（57.3%）→ 登记 ISSUE-014（位次字段口径差异嫌疑，分数/人数 anomaly 543/228 才是真实审核信号）
+- 产物：`data/_pipeline/P2/cross_diff_report_2025.xlsx` + `anomaly_diff_2025.xlsx`
+
+**当前累计：80/80 tests pass；11 commits since P2 open**
