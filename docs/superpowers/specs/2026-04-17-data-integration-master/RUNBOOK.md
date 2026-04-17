@@ -69,3 +69,6 @@
 - Task 6 subagent contract 写入（commit 84ba955）
 - Task 7 P0 smoke：lib imports OK + 16/16 tests pass + `data/_pipeline/` 确认 gitignore 生效
 - **P0 Bootstrap 阶段关闭**，进入 P1 基线与 03 自洽
+- Task 8 p1_baseline 实现：commit 0b4217d 初版 → review 发现 xlsx/csv 语义不一致（header 是否计入）→ commit d24a0dd 修复 + 补 2 个 test（7/7 pass）
+  - 真实基线生成：03(9 files/56789 records) / 01(36/660128) / 13(2346/29104)
+  - 实际 delta 等于 xlsx 工作表数，修复验证闭环
