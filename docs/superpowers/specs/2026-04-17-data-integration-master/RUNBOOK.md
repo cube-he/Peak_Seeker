@@ -38,7 +38,7 @@
 | 阶段 | 状态 | 开始日期 | 完成日期 | 备注 |
 |---|---|---|---|---|
 | Spec 起草 | ✅ 完成 | 2026-04-17 | 2026-04-17 | 用户"自己审核"模式，自审通过推进 |
-| P0 Bootstrap | ⏸ 未开始 | - | - | 工程准备（目录+lib+contract） |
+| P0 Bootstrap | ✅ 完成 | 2026-04-17 | 2026-04-17 | 目录+3 lib+contract+smoke (16/16 tests) |
 | P1 基线与自洽 | ⏸ 未开始 | - | - | 依赖 P0 |
 | P2 03×01 交叉校验 | ⏸ 未开始 | - | - | 依赖 P1 |
 | P3 13 征集治理 | ⏸ 未开始 | - | - | 依赖 P2 |
@@ -66,3 +66,6 @@
   - code review Important 登记为 ISSUE-009，P2.1 前回补
   - commit f10a2a1，7/7 test pass
 - Task 5 lineage 实现（haiku mechanical）：spec ✅ + quality ✅ 双通过，commit 28dc0ab，5/5 test pass
+- Task 6 subagent contract 写入（commit 84ba955）
+- Task 7 P0 smoke：lib imports OK + 16/16 tests pass + `data/_pipeline/` 确认 gitignore 生效
+- **P0 Bootstrap 阶段关闭**，进入 P1 基线与 03 自洽
