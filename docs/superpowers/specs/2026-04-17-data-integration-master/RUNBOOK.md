@@ -61,3 +61,7 @@
   - 实现有 1 项偏离：`_CANONICAL_NAMES` 与 `load_batch_dict()` 解耦为两层（rationale 已进 module docstring）
   - code review 提的 Important #2/#3 登记为 ISSUE-007/008，P2 前回补
   - commit 619d387，4/4 test pass
+- Task 4 code_mapper 实现：spec ✅ → code review approved
+  - smoke test 真实治理表 2224 条，BOM 处理正确
+  - code review Important 登记为 ISSUE-009，P2.1 前回补
+  - commit f10a2a1，7/7 test pass

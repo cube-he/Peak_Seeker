@@ -64,6 +64,14 @@
 - **解决方案**：P2 开工前为 `normalize_batch_name` 增加"字典缺失"专用异常路径，并补测试用例
 - **状态**：已登记，P2 前修复
 
+### ISSUE-009：CodeMapper 重复映射静默覆盖
+- **发现时间**：2026-04-17（Task 4 code review）
+- **影响阶段**：P2.1
+- **描述**：`CodeMapper.from_csv` 若治理表同一 `national_code` 出现多次，后者覆盖前者无告警；`add_patch` 亦无冲突检测
+- **影响**：P2.1 做 01↔03 交叉校验时，治理表若存在历史重复可能 silent data loss
+- **解决方案**：P2.1 前加 `conflicts: list` 收集 + WARNING 日志，或 `add_patch(overwrite=False)` 默认严格
+- **状态**：已登记，P2.1 前复核
+
 ### ISSUE-008：batch_dict 隐式"本科批→B段"默认映射
 - **发现时间**：2026-04-17（Task 3 code review）
 - **影响阶段**：P2
