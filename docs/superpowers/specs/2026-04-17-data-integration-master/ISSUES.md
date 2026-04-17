@@ -90,4 +90,26 @@
 - **描述**：`_ALIASES[("2025","物理")]` 的 `"本科批": "本科批B段"` 基于假设"无段别时默认 B 段（主体最大）"。若某年/某数据源的"本科批"实际指 A 段或 A/B 合并，会被静默错误映射
 - **影响**：P2 批次对齐可能产生跨年跨源的 silent drift
 - **解决方案**：(a) 在 P2 首次出 conflict report 时按年份核对真实语义；(b) 若发现歧义，加 `strict=True` 参数禁用模糊默认 + 测试覆盖歧义别名
-- **状态**：已登记，P2 首次跑 conflict report 时复核
+- **状态**：✅ 已修复（commit f718cc7，AmbiguousBatchError + strict 参数 + _AMBIGUOUS_ALIASES 集合）
+
+### ISSUE-007：batch_dict 错误诊断可定位性不足
+- **状态更新**：✅ 已修复（commit 805f22b，BatchDictMissingError + 字典键存在性检查）
+
+### ISSUE-009：CodeMapper 重复映射静默覆盖
+- **状态更新**：✅ 已修复（commit 86de50b，conflicts 列表 + strict add_patch overwrite 默认拒绝）
+
+### ISSUE-001：2025 分数字段翻转（01 数据）
+- **状态更新**：✅ 已处理（commit b15a896，source_01 loader 显式分年份取字段，2025 从 minScore 取、drop uMinScore）
+
+### ISSUE-011：01 2025 存在大量 minScore=0 空录取记录
+- **发现时间**：2026-04-17（Task 4-5 source_01 真实数据 smoke）
+- **影响阶段**：P2.3（差异报告）、P2.4（独有字段）
+- **描述**：`data/01_核心录取数据/专业分数线_四川_2025.json` 44986 行中 26569 行（59%）minScore/maxScore/avgScore/uMinScore 全为 0、enrollCount/planCount 均为 None。按批次分布：专科批 14021 + 本科B 10911 + 本科A 各段合计 ~1600
+- **根因**：推断为"招生计划未产生实际录取"的占位记录（2022-2024 各年仅 ~1000 行 0 分，2025 显著激增）
+- **影响**：
+  - P2.3 差异报告：0 分 vs 03 真实分数会被误判为"巨大差异"
+  - P2.4 独有字段合入：这些行作为 01-only 行合入 03 会污染主表
+- **解决方案**：
+  - `source_01` 加 `drop_empty=True` 参数（默认开启），丢弃 `minScore==0 and enrollCount is None` 的行
+  - 或在 loader 统一把 `minScore==0 and enrollCount is None` 的分数字段改为 NaN，保留行但让差异检测走 null 分支
+- **状态**：待 P2.3 前决策取哪种策略
