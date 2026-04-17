@@ -52,6 +52,22 @@
 
 ---
 
+## ADR-006：保留 .gitignore 中 data/_pipeline/ 冗余规则
+
+- **状态**：已采纳（2026-04-17）
+- **背景**：.gitignore 第 64 行已有 `data/` 宽规则，第 79 行新增 `data/_pipeline/` 技术冗余。code quality reviewer 建议删除
+- **决策**：保留新规则 + 显式注释 `# Data integration pipeline intermediate artifacts (not versioned)`
+- **理由**：
+  - 显式注释让开发者快速理解 `_pipeline/` 是流程中间产物，无需推断 `data/` 宽规则的涵盖
+  - 功能无害（实际 ignore 行为由 line 64 生效）
+  - 修改 line 64 注释属于 unrelated refactoring
+  - spec 明确要求追加此规则
+- **后果**：
+  - ✅ 配置文件文档价值提升
+  - ⚠️ 存在一条技术冗余规则（已备案）
+
+---
+
 _待决策项进入下方，有结论后移到上方_
 
 ## 待决策
