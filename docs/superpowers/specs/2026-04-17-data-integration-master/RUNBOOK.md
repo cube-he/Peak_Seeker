@@ -39,7 +39,7 @@
 |---|---|---|---|---|
 | Spec 起草 | ✅ 完成 | 2026-04-17 | 2026-04-17 | 用户"自己审核"模式，自审通过推进 |
 | P0 Bootstrap | ✅ 完成 | 2026-04-17 | 2026-04-17 | 目录+3 lib+contract+smoke (16/16 tests) |
-| P1 基线与自洽 | ⏸ 未开始 | - | - | 依赖 P0 |
+| P1 基线与自洽 | ✅ 完成 | 2026-04-17 | 2026-04-17 | 29/29 tests pass；03 已干净(ISSUE-010)；待用户验收 |
 | P2 03×01 交叉校验 | ⏸ 未开始 | - | - | 依赖 P1 |
 | P3 13 征集治理 | ⏸ 未开始 | - | - | 依赖 P2 |
 | P4 三源合一 | ⏸ 未开始 | - | - | 依赖 P1/P2/P3 |
@@ -77,3 +77,21 @@
   - 真实 03 dry-run：48131 rows, 0 dup, 0 score anomaly, 2 missing major code
   - **重大发现**（登记为 ISSUE-010）：03 主表已是清洗后产物，审计报告 34/232 基于早期版本。防御性代码保留，P2 scope 将收紧
   - 附带：.gitignore 加 `!scripts/data_integration/tests/fixtures/*.xlsx` 负规则以允许 fixture 进仓
+- Task 10 p1_report 实现：commit 892dc73，P1_report.md 生成（含 2 条 missing_major_code 样本）
+- Task 11 P1 收尾：全量测试 29/29 pass（batch_dict 4 + code_mapper 7 + lineage 5 + p1_baseline 7 + p1_patch_03 6）
+- **P1 阶段关闭**，等待用户验收 P1_report.md
+
+## P0+P1 交付清单
+
+- **代码**：`scripts/data_integration/` 下 3 个 lib + 3 个 P1 脚本 + 对应 tests（29 tests 全绿）
+- **数据产物**（gitignored，本地生成）：
+  - `data/_pipeline/P1/03_patched.xlsx`（48131 行）
+  - `data/_pipeline/P1/patch_log.csv`（2 条：均为 missing_major_code）
+  - `data/_pipeline/P1/unresolvable.csv`（2 条：专业代码缺失）
+- **基线快照**：`docs/.../baselines/2026-04-17-baseline.json`（~957KB，03/01/13 三源文件全盘 SHA256）
+- **验收报告**：`docs/.../P1_report.md`
+- **方法论文档**：RUNBOOK.md（进度+日志）、DECISIONS.md（6 ADR）、ISSUES.md（10 issues）、contracts/subagent_output.md
+- **关键发现**（需用户关注）：
+  - 03 主表已是清洗产物，ADR-001 SSoT 假设成立（见 ISSUE-010）
+  - 代码 fixture 验证三类修复逻辑均工作；防御性代码保留，P2 scope 可收紧
+  - 登记 ISSUE-007/008/009/010 为 P2 开工前须复核事项
