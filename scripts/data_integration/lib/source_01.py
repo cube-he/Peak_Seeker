@@ -63,9 +63,11 @@ def load_01_major_scores(path: str | Path, year: int) -> pd.DataFrame:
     actual_map = {k: v for k, v in field_map.items() if k in df.columns}
     df = df.rename(columns=actual_map)
 
-    # Ensure 院校代码_国标 is zero-padded 6-char string (matches 03 schema)
+    # Normalize 院校代码_国标 to string preserving original digit count.
+    # 注：国标代码实际混合 5 位和 6 位（如清华 10003 / 北京邮电宏福校区 100132）；
+    # 编码映射表_招生代码_国标代码.csv 保留原始长度，zfill(6) 会破坏匹配。
     if "院校代码_国标" in df.columns:
-        df["院校代码_国标"] = df["院校代码_国标"].astype(str).str.zfill(6)
+        df["院校代码_国标"] = df["院校代码_国标"].astype(str).str.strip()
 
     df["数据年份"] = int(year)
     return df
