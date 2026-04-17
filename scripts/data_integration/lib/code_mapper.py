@@ -27,6 +27,7 @@ class CodeMapper:
     enroll_to_nat: dict[str, str] = field(default_factory=dict)
     nat_to_enroll: dict[str, str] = field(default_factory=dict)
     enroll_to_name: dict[str, str] = field(default_factory=dict)
+    conflicts: list[dict] = field(default_factory=list)
 
     @classmethod
     def from_csv(cls, path: Path) -> "CodeMapper":
@@ -50,10 +51,33 @@ class CodeMapper:
                 ).strip()
                 if not enroll or not national:
                     continue
-                cm.enroll_to_nat[enroll] = national
-                cm.nat_to_enroll[national] = enroll
-                if name:
-                    cm.enroll_to_name[enroll] = name
+
+                # Check for conflicts: enroll code already exists or national code already mapped
+                conflict_detected = False
+                if enroll in cm.enroll_to_nat:
+                    # Enroll code already has a mapping
+                    cm.conflicts.append({
+                        "national_code": national,
+                        "existing_enroll": enroll,
+                        "new_enroll": enroll,
+                    })
+                    conflict_detected = True
+                if national in cm.nat_to_enroll:
+                    # National code already mapped to a different enroll
+                    existing_enroll = cm.nat_to_enroll[national]
+                    cm.conflicts.append({
+                        "national_code": national,
+                        "existing_enroll": existing_enroll,
+                        "new_enroll": enroll,
+                    })
+                    conflict_detected = True
+
+                # First-wins: skip overwrite if conflict detected
+                if not conflict_detected:
+                    cm.enroll_to_nat[enroll] = national
+                    cm.nat_to_enroll[national] = enroll
+                    if name:
+                        cm.enroll_to_name[enroll] = name
         return cm
 
     def size(self) -> int:
@@ -68,8 +92,12 @@ class CodeMapper:
     def name_by_enroll(self, code: str | int) -> Optional[str]:
         return self.enroll_to_name.get(_normalize_enroll(code))
 
-    def add_patch(self, *, enroll: str, national: str, name: Optional[str] = None) -> None:
+    def add_patch(self, *, enroll: str, national: str, name: Optional[str] = None, overwrite: bool = False) -> None:
         enroll_n = _normalize_enroll(enroll)
+        # Check if enroll code already has a mapping; reject unless overwrite=True
+        if enroll_n in self.enroll_to_nat and not overwrite:
+            existing_nat = self.enroll_to_nat[enroll_n]
+            raise ValueError(f"已有映射: enroll={enroll_n} → {existing_nat}, 用 overwrite=True 显式覆盖")
         self.enroll_to_nat[enroll_n] = national
         self.nat_to_enroll[national] = enroll_n
         if name:

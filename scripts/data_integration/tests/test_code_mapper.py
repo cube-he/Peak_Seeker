@@ -45,3 +45,34 @@ def test_enroll_code_preserves_leading_zero():
     cm = CodeMapper.from_csv(FIXTURE)
     assert cm.enroll_to_national(1) == "10001"
     assert cm.enroll_to_national("1") == "10001"
+
+
+def test_from_csv_collects_conflicts_when_national_code_duplicated(tmp_path):
+    """同一 national_code 出现多次：记录到 conflicts 列表，保留首个值。"""
+    csv = tmp_path / "dup.csv"
+    csv.write_text(
+        "招生代码,国标代码,院校\n"
+        "1001,100001,A大学\n"
+        "1002,100001,A大学（分部）\n",
+        encoding="utf-8-sig",
+    )
+    m = CodeMapper.from_csv(csv)
+    assert len(m.conflicts) == 1
+    conflict = m.conflicts[0]
+    assert conflict["national_code"] == "100001"
+    assert conflict["existing_enroll"] == "1001"  # first wins
+    assert conflict["new_enroll"] == "1002"
+    # first mapping preserved
+    assert m.national_to_enroll("100001") == "1001"
+
+
+def test_add_patch_rejects_overwrite_by_default():
+    """add_patch 默认不覆盖已有映射；需要 overwrite=True 显式允许。"""
+    m = CodeMapper()
+    m.add_patch(enroll="0001", national="100001", name="A大学")
+    with pytest.raises(ValueError) as exc:
+        m.add_patch(enroll="0001", national="999999", name="冲突")
+    assert "已有映射" in str(exc.value) or "exists" in str(exc.value).lower()
+    # overwrite=True 允许
+    m.add_patch(enroll="0001", national="999999", name="覆盖", overwrite=True)
+    assert m.enroll_to_national("0001") == "999999"
