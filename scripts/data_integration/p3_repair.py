@@ -70,10 +70,41 @@ def load_xlsx_str(path: Path) -> pd.DataFrame:
     return pd.read_excel(path, dtype=str)
 
 
+def _forward_fill_college(df: pd.DataFrame, file_rel: str, log: list[dict]) -> pd.DataFrame:
+    """Forward-fill 院校代码 / 院校名称 / 院校地址 downward for multi-major rows.
+
+    Typical OCR pattern: 院校 only printed on first major line, subsequent majors leave blank.
+    We forward-fill ONLY when: 专业代码 has a value (i.e., this is a continuation row).
+    """
+    college_cols = [c for c in ("院校代码", "院校名称", "院校地址") if c in df.columns]
+    if not college_cols or "专业代码" not in df.columns:
+        return df
+
+    for col in college_cols:
+        last = None
+        for i in range(len(df)):
+            v = df.iloc[i][col]
+            major = df.iloc[i].get("专业代码")
+            if pd.isna(v) or (isinstance(v, str) and v.strip() == ""):
+                if last is not None and major is not None and str(major).strip() != "":
+                    df.iat[i, df.columns.get_loc(col)] = last
+                    log.append({
+                        "file": file_rel, "row": i, "col": col,
+                        "fix_type": "forward_fill_college",
+                        "old": "", "new": str(last),
+                    })
+            else:
+                last = v
+    return df
+
+
 def repair_df(df: pd.DataFrame, file_rel: str) -> tuple[pd.DataFrame, list[dict]]:
     """Apply the full repair pipeline to a single xlsx dataframe."""
     log: list[dict] = []
     df = df.copy()
+
+    # Step 0: forward-fill 院校 columns for continuation rows (before code fixes)
+    df = _forward_fill_college(df, file_rel, log)
 
     # Step 1: character normalization on text columns
     for col in TEXT_COLS:
@@ -116,25 +147,79 @@ def repair_df(df: pd.DataFrame, file_rel: str) -> tuple[pd.DataFrame, list[dict]
     return df, log
 
 
-def run_all(include_claude_engine=False):
+_ENGINE_SUFFIXES = ("_mimo-v2-omni.xlsx", "_claude.xlsx", "_多引擎.xlsx")
+# Preference order: mimo > claude > 多引擎
+# Rationale:
+#   - mimo-v2-omni is the canonical engine
+#   - claude has standard header format
+#   - 多引擎 has an extra metadata row that breaks column parsing
+_ENGINE_PRIORITY = {suffix: i for i, suffix in enumerate(_ENGINE_SUFFIXES)}
+
+
+def _engine_suffix(name: str) -> str | None:
+    for s in _ENGINE_SUFFIXES:
+        if name.endswith(s):
+            return s
+    return None
+
+
+def _select_preferred_engine(xlsx_files: list[Path]) -> dict[Path, str]:
+    """Group xlsx files by (folder, base_name) and pick highest-priority engine.
+
+    Returns {path: keep_or_skip_reason}. 'keep' means process; else the skip reason.
+    """
+    # Group by (parent, base_name_without_engine_suffix)
+    groups: dict[tuple, list[Path]] = {}
+    ungrouped: list[Path] = []
+    for p in xlsx_files:
+        suf = _engine_suffix(p.name)
+        if suf is None:
+            ungrouped.append(p)
+            continue
+        base = p.name[: -len(suf)]
+        groups.setdefault((p.parent, base), []).append(p)
+
+    result: dict[Path, str] = {p: "keep" for p in ungrouped}
+    for _, members in groups.items():
+        # Sort by engine priority (lower index wins)
+        members_sorted = sorted(members, key=lambda m: _ENGINE_PRIORITY[_engine_suffix(m.name)])
+        winner = members_sorted[0]
+        result[winner] = "keep"
+        winner_suf = _engine_suffix(winner.name)
+        for loser in members_sorted[1:]:
+            loser_suf = _engine_suffix(loser.name)
+            result[loser] = f"duplicate_engine (kept {winner_suf}, dropped {loser_suf})"
+    return result
+
+
+def run_all(include_all_engines=False):
     all_rows = []
     all_log = []
     file_count = 0
     skipped = []
 
-    for xlsx in sorted(DATA_ROOT.rglob("*.xlsx")):
+    all_xlsx = sorted(DATA_ROOT.rglob("*.xlsx"))
+    # First filter: exclude 补充数据 (different format)
+    candidates = []
+    for xlsx in all_xlsx:
         rel = str(xlsx.relative_to(DATA_ROOT))
         if "补充数据" in rel:
             skipped.append((rel, "supplementary_different_format"))
             continue
-        # If both mimo and claude engines exist for same folder, prefer mimo (canonical)
-        # unless include_claude_engine=True
-        if not include_claude_engine and "_claude.xlsx" in rel:
-            # Check if sibling mimo exists
-            sibling = xlsx.parent / xlsx.name.replace("_claude.xlsx", "_mimo-v2-omni.xlsx")
-            if sibling.exists():
-                skipped.append((rel, "duplicate_of_mimo_engine"))
-                continue
+        candidates.append(xlsx)
+
+    # Second filter: engine preference
+    if include_all_engines:
+        decisions = {p: "keep" for p in candidates}
+    else:
+        decisions = _select_preferred_engine(candidates)
+
+    for xlsx in candidates:
+        rel = str(xlsx.relative_to(DATA_ROOT))
+        status = decisions.get(xlsx, "keep")
+        if status != "keep":
+            skipped.append((rel, status))
+            continue
 
         meta = parse_folder_metadata(xlsx.parent.name)
         try:
@@ -188,12 +273,12 @@ def write_outputs(combined, log, skipped, out_dir: Path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", default="data/_pipeline/P3")
-    parser.add_argument("--include-claude", action="store_true",
-                        help="include claude-engine xlsx (default: prefer mimo when both exist)")
+    parser.add_argument("--include-all-engines", action="store_true",
+                        help="keep all engine variants (default: prefer mimo > claude > 多引擎)")
     args = parser.parse_args()
 
     print(f"[{datetime.utcnow().isoformat()}] P3.4 repair start")
-    combined, log, skipped = run_all(include_claude_engine=args.include_claude)
+    combined, log, skipped = run_all(include_all_engines=args.include_all_engines)
 
     if combined is None:
         print("No xlsx processed")
