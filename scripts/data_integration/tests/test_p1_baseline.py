@@ -44,3 +44,26 @@ def test_scan_directory_yields_all_files(tmp_path):
     (tmp_path / "sub" / "b.txt").write_text("b")
     results = list(scan_directory(tmp_path))
     assert len(results) == 2
+
+
+def test_scan_directory_skips_office_lock_files(tmp_path):
+    """Office 临时锁文件（~$ 前缀）应被跳过。"""
+    (tmp_path / "real.xlsx").write_bytes(b"x")  # bytes contents irrelevant; we only verify it's listed
+    (tmp_path / "~$real.xlsx").write_bytes(b"lock")
+    results = list(scan_directory(tmp_path))
+    paths = [r["path"] for r in results]
+    assert any(p.endswith("real.xlsx") and not p.endswith("~$real.xlsx") for p in paths)
+    assert not any("~$" in p for p in paths)
+
+
+def test_count_records_xlsx_excludes_header(tmp_path):
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["col1", "col2"])  # header
+    ws.append([1, "a"])
+    ws.append([2, "b"])
+    ws.append([3, "c"])
+    out = tmp_path / "mini.xlsx"
+    wb.save(out)
+    assert count_records(out) == 3  # 3 data rows, not 4

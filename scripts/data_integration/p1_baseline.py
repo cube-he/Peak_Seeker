@@ -64,7 +64,7 @@ def count_records(path: Path) -> Optional[int]:
         if suffix in {".xlsx", ".xls"}:
             from openpyxl import load_workbook
             wb = load_workbook(path, read_only=True, data_only=True)
-            total = sum(ws.max_row for ws in wb.worksheets)
+            total = sum(max(0, ws.max_row - 1) for ws in wb.worksheets)
             wb.close()
             return total
         if suffix == ".csv":
