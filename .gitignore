@@ -44,6 +44,14 @@ prisma/migrations/*_migration_lock.toml
 # Claude flow (开发工具)
 .claude-flow/
 
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 临时分析产物（下划线前缀约定）
+scripts/_*.json
+scripts/_*.txt
+
 # 参考资料文件（不需要上传）
 *.xlsx
 *.docx
