@@ -65,3 +65,4 @@
   - smoke test 真实治理表 2224 条，BOM 处理正确
   - code review Important 登记为 ISSUE-009，P2.1 前回补
   - commit f10a2a1，7/7 test pass
+- Task 5 lineage 实现（haiku mechanical）：spec ✅ + quality ✅ 双通过，commit 28dc0ab，5/5 test pass
