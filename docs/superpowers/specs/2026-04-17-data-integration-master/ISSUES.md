@@ -149,6 +149,5 @@
   - P2.3 差异报告：0 分 vs 03 真实分数会被误判为"巨大差异"
   - P2.4 独有字段合入：这些行作为 01-only 行合入 03 会污染主表
 - **解决方案**：
-  - `source_01` 加 `drop_empty=True` 参数（默认开启），丢弃 `minScore==0 and enrollCount is None` 的行
-  - 或在 loader 统一把 `minScore==0 and enrollCount is None` 的分数字段改为 NaN，保留行但让差异检测走 null 分支
-- **状态**：待 P2.3 前决策取哪种策略
+  - `source_01` 加 `drop_empty=True` 参数（默认开启），丢弃 `minScore==0 and enterNum==0` 的行
+- **状态**：✅ 已修复（commit 7545f2e）。同时发现并修复了字段映射 bug：原 `_FIELD_MAP_DEFAULT` 用 `enrollCount/planCount`，但真实 schema 是 `uEnterNum/enterNum/planNum`，导致原映射项从未命中；2025 还需映射 `enterNum/minRank/avgRank/maxRank`。修复后 2025 join 的 right_only 从 33745 → 7362（-78%），both=11133，left_only=2028。
