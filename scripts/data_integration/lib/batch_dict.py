@@ -21,6 +21,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+
+class BatchDictMissingError(LookupError):
+    """字典本身未注册 (year, course) 组合。区别于名称未知。"""
+    pass
+
 SPECS_DIR = Path(__file__).resolve().parents[3] / "docs" / "superpowers" / "specs"
 
 DICT_FILES = {
@@ -184,9 +189,11 @@ def normalize_batch_name(name: str, year: int | str, course: str) -> str:
     """Normalize a batch name from any source to the canonical project form.
 
     Lookup order:
-      1. Direct match in CANONICAL_NAMES → return as-is.
-      2. Alias mapping → return canonical target.
-      3. Not found → raise ValueError (no silent swallowing of bad data).
+      1. Check if (year, course) key exists in CANONICAL_NAMES or ALIASES.
+         If not, raise BatchDictMissingError (dict not registered).
+      2. Direct match in CANONICAL_NAMES → return as-is.
+      3. Alias mapping → return canonical target.
+      4. Not found → raise ValueError (dict exists but name unknown).
 
     Args:
         name: Raw batch name from a data source.
@@ -197,9 +204,14 @@ def normalize_batch_name(name: str, year: int | str, course: str) -> str:
         Canonical batch name string.
 
     Raises:
-        ValueError: If name cannot be resolved.
+        BatchDictMissingError: If (year, course) is not registered in the dict.
+        ValueError: If name cannot be resolved (dict exists but name unknown).
     """
     key = (str(year), course)
+    if key not in _CANONICAL_NAMES and key not in _ALIASES:
+        raise BatchDictMissingError(
+            f"字典未注册: year={year} course={course}（需在 _CANONICAL_NAMES / _ALIASES 中补录）"
+        )
     canonical_set = _CANONICAL_NAMES.get(key, set())
     aliases = _ALIASES.get(key, {})
 

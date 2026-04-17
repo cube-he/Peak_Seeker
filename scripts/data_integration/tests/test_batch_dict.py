@@ -29,3 +29,21 @@ def test_normalize_unknown_raises():
     """未知批次抛异常，避免静默错误。"""
     with pytest.raises(ValueError, match="未知批次"):
         normalize_batch_name("火星批次", year=2025, course="物理")
+
+
+def test_normalize_raises_dict_missing_when_year_course_not_registered():
+    """(year, course) 组合不在 _CANONICAL_NAMES / _ALIASES 中：专用错误路径。"""
+    from scripts.data_integration.lib.batch_dict import BatchDictMissingError
+
+    with pytest.raises(BatchDictMissingError) as exc_info:
+        normalize_batch_name("本科批", year=2023, course="理科")
+    msg = str(exc_info.value)
+    assert "2023" in msg and "理科" in msg
+    assert "字典未注册" in msg or "dict" in msg.lower()
+
+
+def test_normalize_raises_name_unknown_when_dict_exists_but_name_not_found():
+    """字典存在但名称不认识：保留原 ValueError 语义。"""
+    with pytest.raises(ValueError) as exc_info:
+        normalize_batch_name("完全不存在的批次XYZ", year=2025, course="物理")
+    assert "未知批次" in str(exc_info.value)
