@@ -40,7 +40,7 @@
 | Spec 起草 | ✅ 完成 | 2026-04-17 | 2026-04-17 | 用户"自己审核"模式，自审通过推进 |
 | P0 Bootstrap | ✅ 完成 | 2026-04-17 | 2026-04-17 | 目录+3 lib+contract+smoke (16/16 tests) |
 | P1 基线与自洽 | ✅ 完成 | 2026-04-17 | 2026-04-17 | 29/29 tests pass；03 已干净(ISSUE-010)；待用户验收 |
-| P2 03×01 交叉校验 | 🚧 进行中 | 2026-04-17 | - | P2.0 preflight ✅ + P2.1 loader+probe ✅；卡点：ISSUE-012 scope 调整 |
+| P2 03×01 交叉校验 | ✅ 完成（2025 slice） | 2026-04-17 | 2026-04-17 | 95/95 tests; P2_report.md + coverage_uplift.md 已出；历史年份转 Task 7b |
 | P3 13 征集治理 | ⏸ 未开始 | - | - | 依赖 P2 |
 | P4 三源合一 | ⏸ 未开始 | - | - | 依赖 P1/P2/P3 |
 
@@ -125,4 +125,33 @@
 - 真实 dry-run：30267 差异行，17328 anomaly（57.3%）→ 登记 ISSUE-014（位次字段口径差异嫌疑，分数/人数 anomaly 543/228 才是真实审核信号）
 - 产物：`data/_pipeline/P2/cross_diff_report_2025.xlsx` + `anomaly_diff_2025.xlsx`
 
-**当前累计：80/80 tests pass；11 commits since P2 open**
+**P2.4 Enrich + backfill**
+- Task 10 `p2_enrich.py`：加 `_backfill_notes` 列 + Group C 列加 `_01` 后缀，不改 03 值（commit 984fa76，7 tests）
+- Task 11 `p2_backfill.py`：三桶切分 (new_rows / field_fill / no_action) + lineage 列（commit 4f2dad5，8 tests）
+- 2025 分布：new_rows=7362 / field_fill=4167 / no_action=8994
+- 产物：`data/_pipeline/P2/backfill_new_rows_2025.xlsx` + `backfill_field_fill_2025.xlsx`
+
+**P2.5 报告**
+- Task 12 `P2_report.md` + `coverage_uplift.md`：含输入 SHA / 分布 / anomaly 字段拆解 / 20 条抽样 / 4 条待审决策
+- Task 13 收尾：RUNBOOK + ISSUES 更新，95/95 tests pass
+
+**P2 阶段关闭（2025 slice）** — 待用户验收 P2_report.md
+
+## P2 交付清单（2025 slice）
+
+- **代码**：`source_01/03 loader` + `diff_rules` + 4 个 P2 脚本（`p2_join, p2_code_mapping, p2_diff_report, p2_enrich, p2_backfill`）+ 对应 tests（95 tests 全绿）
+- **数据产物**（gitignored）：
+  - `data/_pipeline/P2/cross_diff_report_2025.xlsx`（30,267 行）
+  - `data/_pipeline/P2/anomaly_diff_2025.xlsx`（17,328 行，按 |差值| 降序）
+  - `data/_pipeline/P2/backfill_new_rows_2025.xlsx`（7,362 行）
+  - `data/_pipeline/P2/backfill_field_fill_2025.xlsx`（4,167 行）
+  - `data/_pipeline/P2/missing_college_codes.csv`（22 + 125 条缺桥接国标追踪）
+- **验收报告**：`P2_report.md`（主报告） + `coverage_uplift.md`（覆盖率变化）
+- **关键发现**：
+  - ISSUE-011 + 字段映射 bug 修复后 right_only 从 33745 → 7362（-78%）
+  - 新增 ISSUE-014：位次字段 anomaly 率 97%（16,785/17,328），疑口径差异需核验
+  - 分数/人数 anomaly 仅 543 条，属真实审核信号
+- **延展（已登记）**：
+  - Task 7b: 2022-2024 历史年份 join（需批次反向字典 + 科目转换）
+  - 提前批 pipeline: 独立工单
+  - ISSUE-012 125 条缺桥接: 需要时手工 web search 补
