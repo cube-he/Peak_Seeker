@@ -8,8 +8,8 @@
     "course": "物理",
     "uMinScore": 0, "uAvgScore": 0, "uMaxScore": 0,
     "minScore": 690, "avgScore": 695, "maxScore": 700,
-    "uMinRank": 400, "uAvgRank": 350, "uMaxRank": 280,
-    "enrollCount": 5, "planCount": 5,
+    "uMinRank": 0, "minRank": 400, "avgRank": 350, "maxRank": 280,
+    "uEnterNum": 0, "enterNum": 5, "planNum": 5,
     "uZjText": "", "pressureScore": 553,
     "collegeType": "公办", "collegeCategory": "综合"
   },
@@ -22,8 +22,8 @@
     "course": "历史",
     "uMinScore": 0, "uAvgScore": 0, "uMaxScore": 0,
     "minScore": 620, "avgScore": 625, "maxScore": 628,
-    "uMinRank": 300, "uAvgRank": 250, "uMaxRank": 200,
-    "enrollCount": 3, "planCount": 3,
+    "uMinRank": 0, "minRank": 300, "avgRank": 250, "maxRank": 200,
+    "uEnterNum": 0, "enterNum": 3, "planNum": 3,
     "uZjText": "", "pressureScore": 527,
     "collegeType": "公办", "collegeCategory": "综合"
   }

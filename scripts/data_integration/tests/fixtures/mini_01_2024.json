@@ -8,7 +8,7 @@
     "course": "理科",
     "uMinScore": 680, "uAvgScore": 685, "uMaxScore": 690,
     "uMinRank": 500, "uAvgRank": 400, "uMaxRank": 300,
-    "enrollCount": 5, "planCount": 5,
+    "uEnterNum": 5, "planNum": 5,
     "uZjText": "", "pressureScore": 539,
     "collegeType": "公办", "collegeCategory": "综合"
   },
@@ -21,7 +21,7 @@
     "course": "文科",
     "uMinScore": 620, "uAvgScore": null, "uMaxScore": 625,
     "uMinRank": 200, "uAvgRank": null, "uMaxRank": 150,
-    "enrollCount": 3, "planCount": 3,
+    "uEnterNum": 3, "planNum": 3,
     "uZjText": "", "pressureScore": 527,
     "collegeType": "公办", "collegeCategory": "综合"
   },
@@ -34,7 +34,7 @@
     "course": "理科",
     "uMinScore": 600, "uAvgScore": 605, "uMaxScore": 610,
     "uMinRank": 8000, "uAvgRank": 7500, "uMaxRank": 7000,
-    "enrollCount": 10, "planCount": 10,
+    "uEnterNum": 10, "planNum": 10,
     "uZjText": "征集", "pressureScore": 459,
     "collegeType": "公办", "collegeCategory": "理工"
   }
