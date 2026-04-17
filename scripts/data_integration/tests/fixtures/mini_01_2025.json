@@ -1,0 +1,30 @@
+[
+  {
+    "collegeCode": "100001",
+    "collegeName": "北京大学",
+    "professionEnrollCode": "01",
+    "professionName": "哲学类",
+    "batch": "本科A",
+    "course": "物理",
+    "uMinScore": 0, "uAvgScore": 0, "uMaxScore": 0,
+    "minScore": 690, "avgScore": 695, "maxScore": 700,
+    "uMinRank": 400, "uAvgRank": 350, "uMaxRank": 280,
+    "enrollCount": 5, "planCount": 5,
+    "uZjText": "", "pressureScore": 553,
+    "collegeType": "公办", "collegeCategory": "综合"
+  },
+  {
+    "collegeCode": "100002",
+    "collegeName": "中国人民大学",
+    "professionEnrollCode": "02",
+    "professionName": "经济学类",
+    "batch": "本科B",
+    "course": "历史",
+    "uMinScore": 0, "uAvgScore": 0, "uMaxScore": 0,
+    "minScore": 620, "avgScore": 625, "maxScore": 628,
+    "uMinRank": 300, "uAvgRank": 250, "uMaxRank": 200,
+    "enrollCount": 3, "planCount": 3,
+    "uZjText": "", "pressureScore": 527,
+    "collegeType": "公办", "collegeCategory": "综合"
+  }
+]
