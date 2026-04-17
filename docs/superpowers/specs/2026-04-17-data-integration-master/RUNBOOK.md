@@ -40,7 +40,7 @@
 | Spec 起草 | ✅ 完成 | 2026-04-17 | 2026-04-17 | 用户"自己审核"模式，自审通过推进 |
 | P0 Bootstrap | ✅ 完成 | 2026-04-17 | 2026-04-17 | 目录+3 lib+contract+smoke (16/16 tests) |
 | P1 基线与自洽 | ✅ 完成 | 2026-04-17 | 2026-04-17 | 29/29 tests pass；03 已干净(ISSUE-010)；待用户验收 |
-| P2 03×01 交叉校验 | ⏸ 未开始 | - | - | 依赖 P1 |
+| P2 03×01 交叉校验 | 🚧 进行中 | 2026-04-17 | - | P2.0 preflight ✅ + P2.1 loader+probe ✅；卡点：ISSUE-012 scope 调整 |
 | P3 13 征集治理 | ⏸ 未开始 | - | - | 依赖 P2 |
 | P4 三源合一 | ⏸ 未开始 | - | - | 依赖 P1/P2/P3 |
 
@@ -95,3 +95,22 @@
   - 03 主表已是清洗产物，ADR-001 SSoT 假设成立（见 ISSUE-010）
   - 代码 fixture 验证三类修复逻辑均工作；防御性代码保留，P2 scope 可收紧
   - 登记 ISSUE-007/008/009/010 为 P2 开工前须复核事项
+
+---
+
+### 2026-04-17（P2 进行中）
+
+**P2.0 Pre-flight（3 个 ISSUE 回补）**
+- Task 1 修复 ISSUE-007：`BatchDictMissingError` 区分"字典未注册"vs"名称未知"（commit 805f22b，6/6 tests）
+- Task 2 修复 ISSUE-008：`normalize_batch_name(strict=True)` + `_AMBIGUOUS_ALIASES` 集合拒绝"本科批"等模糊默认（commit f718cc7，8/8 tests）
+- Task 3 修复 ISSUE-009：`CodeMapper.conflicts` 列表 + `add_patch(overwrite=False)` 严格默认（commit 86de50b，9/9 tests）
+
+**P2.1 loader + probe**
+- Task 4-5 `lib/source_01.py`：01 专业分数线 json → 03 口径 DataFrame；2025 字段翻转处理（drop uMinScore, use minScore）；fixtures 2024/2025（commit b15a896，5/5 tests）
+- 真实数据 smoke：2022-2025 每年 44K+ 行 load 正常；2025 有 26569 条 minScore=0 空记录（登记 ISSUE-011）
+- source_01 修正：`str.zfill(6)` 破坏了 5 位国标（如清华 10003），改为 `str.strip()` + 补回归测试（commit de26190，6/6 tests）
+- Task 6 `p2_code_mapping.py` probe：扫 2299 unique 国标 × 治理表 2215 条 → **覆盖率 94.56%，125 条缺失**（远低于 spec 假设 99.37%）
+- 缺失分布：2022/118 > 2023/82 > 2024/58 > 2025/22（省属/艺术/职业院校为主）
+- 登记 ISSUE-012：**P2.1 scope 调整** — 125 条不再手工补全，让 outer join 走 `right_only` 路径，P2.4 作补缺候选处理
+
+**当前累计：40/40 tests pass；7 commits since P1 close（6343322, 805f22b, f718cc7, 86de50b, b15a896, 6170944, de26190, 075e9a8）**
