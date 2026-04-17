@@ -64,3 +64,15 @@ def test_normalize_strict_rejects_ambiguous_aliases():
 def test_normalize_strict_allows_unambiguous_aliases():
     """明确的别名（如 '本一'→'本科一批'）在 strict=True 下仍成功。"""
     assert normalize_batch_name("本一", year=2024, course="理科", strict=True) == "本科一批"
+
+
+def test_normalize_supports_2025_history_course():
+    """2025 历史口径与物理共享批次结构。"""
+    assert normalize_batch_name("本科B", year=2025, course="历史") == "本科批B段"
+    assert normalize_batch_name("本科批B段", year=2025, course="历史") == "本科批B段"
+
+
+def test_normalize_zhuanke_short_alias_both_courses():
+    """01 用 '专科' 简写映射到 '专科批次'（2025 物理/历史均支持）。"""
+    assert normalize_batch_name("专科", year=2025, course="物理") == "专科批次"
+    assert normalize_batch_name("专科", year=2025, course="历史") == "专科批次"

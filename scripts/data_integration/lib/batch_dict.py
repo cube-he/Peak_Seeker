@@ -121,6 +121,15 @@ _ALIASES: dict[tuple[str, str], dict[str, str]] = {
     },
 }
 
+# 2025 历史口径复用 2025 物理的批次结构（新高考 物理组/历史组 批次相同）
+_CANONICAL_NAMES[("2025", "历史")] = _CANONICAL_NAMES[("2025", "物理")]
+_ALIASES[("2025", "历史")] = dict(_ALIASES[("2025", "物理")])
+
+# 短名 "专科" → "专科批次"（01 源用简写，见 ISSUE-013 → right_only inflation fix）
+for _c in ("物理", "历史"):
+    _ALIASES.setdefault(("2025", _c), {})["专科"] = "专科批次"
+del _c
+
 # --- Ambiguous aliases (strict mode rejects these) ----------------------------
 # These aliases are "假设性默认" mappings that rely on assumptions
 # (e.g., "本科批" defaults to B 段when segment is missing). In strict mode,
