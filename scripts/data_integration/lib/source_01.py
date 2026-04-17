@@ -94,6 +94,16 @@ def load_01_major_scores(
     actual_map = {k: v for k, v in field_map.items() if k in df.columns}
     df = df.rename(columns=actual_map)
 
+    # Score/rank 0 → NaN。01 侧部分行虽有 enterNum>0 但分数/位次留 0，
+    # 这些 0 不是真实成绩，是记录缺失占位。若保留会在 diff 报告中产生
+    # 大量假 anomaly（ISSUE-014：17328 anomaly 中 16851 = 97.2% 来自 01 值=0）。
+    # 策略：enterNum>0 的行保留（仍有录取信息），但把分数/位次 0 归一成 NaN
+    # 让差异判定走"一侧空"分支（不算 anomaly）。
+    _ZERO_TO_NAN_COLS = ["最低分", "平均分", "最高分", "最低位次", "平均位次", "最高位次"]
+    for c in _ZERO_TO_NAN_COLS:
+        if c in df.columns:
+            df.loc[df[c] == 0, c] = pd.NA
+
     # Normalize 院校代码_国标 to string preserving original digit count.
     # 注：国标代码实际混合 5 位和 6 位（如清华 10003 / 北京邮电宏福校区 100132）；
     # 编码映射表_招生代码_国标代码.csv 保留原始长度，zfill(6) 会破坏匹配。

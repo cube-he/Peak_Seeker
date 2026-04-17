@@ -124,6 +124,34 @@ def test_load_01_2024_drop_empty_uses_uMinScore(tmp_path):
     assert df.iloc[0]["院校代码_国标"] == "100001"
 
 
+def test_load_01_converts_score_rank_zeros_to_nan(tmp_path):
+    """ISSUE-014: 01 分数/位次字段值为 0 归一成 NaN（非真实成绩，避免假 anomaly）。
+    但 录取人数/计划人数 的 0 保留（"计划未录取"是真实信号）。"""
+    import json
+    p = tmp_path / "mini_zeros.json"
+    p.write_text(json.dumps([
+        {
+            "collegeCode": "100001", "collegeName": "X",
+            "professionEnrollCode": "01", "professionName": "真实",
+            "batch": "本科A", "course": "物理",
+            "uMinScore": 0, "uAvgScore": 0, "uMaxScore": 0,
+            "minScore": 600, "avgScore": 0, "maxScore": 620,  # 平均分 0 → NaN
+            "uMinRank": 0, "minRank": 500, "avgRank": 0, "maxRank": 400,  # 平均位次 0 → NaN
+            "uEnterNum": 0, "enterNum": 0, "planNum": 3,  # 录取人数 0 保留
+        },
+    ], ensure_ascii=False), encoding="utf-8")
+    df = load_01_major_scores(p, year=2025)
+    row = df.iloc[0]
+    assert row["最低分"] == 600
+    assert pd.isna(row["平均分"])      # 0 → NaN
+    assert row["最高分"] == 620
+    assert pd.isna(row["平均位次"])    # 0 → NaN
+    assert row["最低位次"] == 500
+    assert row["最高位次"] == 400
+    assert row["录取人数"] == 0        # 0 保留（非分数字段）
+    assert row["计划人数"] == 3
+
+
 def test_load_01_preserves_5digit_college_code(tmp_path):
     """国标代码实际混合 5 位和 6 位；不得 zfill(6) 破坏 5 位码（如清华 10003）。"""
     import json
