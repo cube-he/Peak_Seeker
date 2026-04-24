@@ -87,6 +87,7 @@ E:\Soft\Cube\
 ### 2.1 命名与 front-matter 规范
 
 - **文件名**：英文 kebab-case（`prod-a.md`、`casl-rbac.md`）
+- **Inbox 命名**：`YYYY-MM-DD-<slug>.md`（保持捕获时序）
 - **front-matter 必填字段**：`tags`（≥1）、`updated`（YYYY-MM-DD）、`type`（project/area/resource/server/person/card/decision/tool/moc）
 - **链接**：优先使用 `[[wiki 链接]]`
 - **MOC**：每个主要目录一个 `_Index.md`（Dataview 查询自动聚合）
@@ -272,10 +273,10 @@ type: reference
 
 | Phase | 内容 | 交付物 |
 |---|---|---|
-| **P1 基础设施** | git 初始化 + `.gitignore` + 清理根目录遗留 + 装 Obsidian Git/Periodic Notes | Vault 可提交、可回溯 |
-| **P2 结构与模板** | 建新目录 + 写 7 个新模板 + 弃用"项目笔记.md" | Claude 可按模板落位 |
+| **P1 基础设施** | git 初始化 + `.gitignore` + 删除根目录空壳文件（`欢迎.md` / `创建链接.md` / `LocalOCR.md`）+ 装 Obsidian Git/Periodic Notes | Vault 可提交、可回溯 |
+| **P2 结构与模板** | 建新目录（VolunteerHelper、Personal、Infrastructure、knowledge 等）+ 写 7 个新模板 + 弃用"项目笔记.md" | Claude 可按模板落位 |
 | **P3 Claude 接入** | 写 6 个 skill 到 `.claude/skills/` | Claude 可自主读写 Vault |
-| **P4 存量迁移** | 迁 7 条 Memory 条目 + 建项目首页 + Personal/profile + `_Index.md` | Vault 有初始内容，Memory 改指针 |
+| **P4 存量迁移** | 迁 7 条 Memory 条目 + 建项目首页 + 把 `About Me.md` 迁入 `20-Areas/Personal/profile.md` 后删除 + 建 `_Index.md` | Vault 有初始内容，Memory 改指针 |
 
 依赖：P1 → P2 → P3 → P4（线性）。
 
