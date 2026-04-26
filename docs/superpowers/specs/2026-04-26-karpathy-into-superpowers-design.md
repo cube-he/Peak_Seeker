@@ -1,8 +1,16 @@
 # 集成 Karpathy-skills 到 Superpowers 体系（设计文档）
 
 - 日期：2026-04-26
-- 状态：设计已确认，待落地
+- 状态：**已落地（方案 B）**
 - 上游：<https://github.com/forrestchang/andrej-karpathy-skills>
+
+> **2026-04-26 后续修订**：原设计的"独立 skill + CLAUDE.md 双层"方案落地失败 —
+> 在 `~/.claude/skills/coding-discipline/` 直接放 SKILL.md 不被 Claude Code 识别（该目录非注册位置）；
+> 尝试在 `~/.claude/plugins/cache/personal/.../` 自建 plugin scaffold 并直写 `installed_plugins.json` 也未被启动时识别。
+> 切换为**纯 CLAUDE.md 方案（Plan B）**：把 Karpathy Rule #2/#3/#4 全部 inline 进 `~/.claude/CLAUDE.md`，
+> 三段标题分别为「外科手术式改动」「最小代码原则」「目标驱动执行」。
+> Rule #1（Think Before Coding）仍未集成（与 brainstorming 重叠）。
+> 验证只需重启 Claude Code 加载 CLAUDE.md 即可，无 plugin 注册环节。
 
 ## 背景
 
