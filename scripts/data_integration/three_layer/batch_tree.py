@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Layer 1: 批次树生成器 — 2025 四川新高考。
 
-生成完整的 39 叶节点批次树，作为三层数据结构的主干：
+生成完整的 37 叶节点批次树，作为三层数据结构的主干：
   - Layer 1: batch_tree (本文件)
   - Layer 2: batch_mapping（志愿填报表格映射）
   - Layer 3: enrollment_data（录取数据，通过 batchNodeId 引用 Layer 1）
@@ -176,16 +176,10 @@ def _本科批次() -> dict:
                     _leaf("bkp_smzyy_yk", "预科", "少数民族语言授课为主·预科", 2, data="no_data"),
                 ],
             },
-            # 原"加授少数民族语文" — 有数据（本科/预科均有）
             {
-                "id": "bkp_jsmzyw",
-                "name": '原"加授少数民族语文"',
-                "order": 6,
+                **_leaf("bkp_jsmzyw", '原"加授少数民族语文"',
+                        "加授少数民族语文", 6, data="no_data"),
                 "volunteerSettings": {"mode": "parallel", "count": 6},
-                "children": [
-                    _leaf("bkp_jsmzyw_bk", "本科", "加授少数民族语文·本科", 1),
-                    _leaf("bkp_jsmzyw_yk", "预科", "加授少数民族语文·预科", 2),
-                ],
             },
             {
                 **_leaf("bkp_qyjh", "区域教育均衡发展专项计划",
@@ -229,21 +223,14 @@ def _高职专科批次() -> dict:
                 **_leaf("zkp_pt", "普通类高职(专科)", "普通类高职(专科)", 1),
                 "volunteerSettings": {"mode": "parallel", "count": 45},
             },
-            # 原"少数民族语言授课为主" — 专科/预科两类，有数据
             {
-                "id": "zkp_smzyy",
-                "name": '原"少数民族语言授课为主"',
-                "order": 2,
+                **_leaf("zkp_smzyy", '原"少数民族语言授课为主"',
+                        "少数民族语言授课为主·专科", 2, data="no_data"),
                 "volunteerSettings": {"mode": "parallel", "count": 6},
-                "children": [
-                    _leaf("zkp_smzyy_zk", "专科", "少数民族语言授课为主·专科", 1),
-                    _leaf("zkp_smzyy_yk", "预科", "少数民族语言授课为主·预科", 2),
-                ],
             },
-            # 原"加授少数民族语文" — 单节点，有数据
             {
                 **_leaf("zkp_jsmzyw", '原"加授少数民族语文"',
-                        "加授少数民族语文·专科", 3),
+                        "加授少数民族语文·专科", 3, data="no_data"),
                 "volunteerSettings": {"mode": "parallel", "count": 6},
             },
         ],
@@ -260,14 +247,13 @@ def build_batch_tree() -> dict:
     使用 tree[] 键存放顶层批次列表，与 JSON 输出格式保持一致。
     """
     return {
-        "id": "root_2025_sc",
         "year": 2025,
         "province": "四川",
         "examReform": "新高考",
         "volunteerUnit": "院校专业组",
         "source": "2025年招生考试报·高考指南",
         "scope": ["物理", "历史"],
-        "children": [
+        "tree": [
             _本科提前批次(),
             _本科批次(),
             _高职专科提前批次(),
