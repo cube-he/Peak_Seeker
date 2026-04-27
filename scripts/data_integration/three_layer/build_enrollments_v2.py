@@ -173,12 +173,19 @@ def build_enrollments() -> dict:
                 continue
 
             # Find matching major in skeleton
-            # Try all batch nodes for this school+subject (old gaokao batch may differ)
+            # Must match BOTH profCode AND profName to avoid old→new gaokao code reuse
+            prof_name = r.get("professionName", "")
             found = False
             for batch_node in skeleton[code][subject]:
                 for group_code in skeleton[code][subject][batch_node]:
                     if prof_code in skeleton[code][subject][batch_node][group_code]:
-                        major = skeleton[code][subject][batch_node][group_code][prof_code]
+                        candidate = skeleton[code][subject][batch_node][group_code][prof_code]
+                        # Verify name matches (exact or very close)
+                        cand_name = candidate.get("name", "")
+                        if prof_name and cand_name and prof_name != cand_name:
+                            # Code reused for different major in new gaokao, skip
+                            continue
+                        major = candidate
                         major["yearly"][year] = {
                             "plan": _safe_int(r.get("planNum")),
                             "enrolled": _safe_int(r.get("enterNum")),
