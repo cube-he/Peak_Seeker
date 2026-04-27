@@ -55,12 +55,12 @@ def _score_match(src: dict, candidate: dict) -> float:
 
     # Fast path: exact name match is overwhelmingly likely to be the same major
     if src_name and cand_name and src_name == cand_name:
-        # Bonus from supporting fields
+        # Bonus from stable identity fields (not year-varying values)
         bonus = 0.0
-        if str(src.get("learnYear", "")).strip() == str(candidate.get("duration", "")).strip():
-            bonus += 0.03
-        if str(src.get("cost", "")).strip() == str(candidate.get("tuition", "")).strip():
-            bonus += 0.02
+        src_mc = str(src.get("majorCode", "")).strip()
+        cand_mc = str(candidate.get("majorCode", "")).strip()
+        if src_mc and cand_mc and src_mc == cand_mc:
+            bonus += 0.05
         return min(0.95 + bonus, 1.0)
 
     # Name highly similar (>0.8 fuzzy) — likely same major with minor naming change
@@ -68,26 +68,33 @@ def _score_match(src: dict, candidate: dict) -> float:
     if name_sim >= 0.8:
         return round(0.75 + name_sim * 0.15, 4)
 
-    # General weighted comparison
+    # General weighted comparison — only use identity fields (not year-varying values)
+    # 学费/计划人数年年变，不能跨年比对；学制理论上不变但01源全空，也跳过
     total_weight = 0.0
     total_score = 0.0
 
     fields = [
-        ("professionName", "name", 50, "string"),
-        ("majorCode", "majorCode", 15, "string"),
-        ("planNum", "plan_2025", 10, "numeric"),
-        ("cost", "tuition", 10, "numeric"),
-        ("learnYear", "duration", 10, "numeric"),
-        ("remark", "majorNote", 5, "string"),
+        ("professionName", "name", 60, "string"),       # 专业名称：核心身份特征
+        ("majorCode", "majorCode", 25, "string"),        # 学科代码：稳定标识
+        ("remark", "majorNote", 15, "string"),           # 备注：含方向信息，有助区分同名专业
     ]
 
     for src_field, cand_field, weight, ftype in fields:
         sv = src.get(src_field)
         cv = candidate.get(cand_field)
 
+        # Normalize empty-ish values to None
+        if sv is not None and str(sv).strip() in ("", "0", "None"):
+            sv = None
+        if cv is not None and str(cv).strip() in ("", "0", "None"):
+            cv = None
+
+        # Both empty → skip this field entirely (no free points)
         if sv is None and cv is None:
-            sim = 1.0
-        elif sv is None or cv is None:
+            continue
+
+        # One side empty → penalize
+        if sv is None or cv is None:
             sim = 0.0
         elif ftype == "string":
             sim = compare_string(str(sv), str(cv))
