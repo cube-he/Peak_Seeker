@@ -282,9 +282,10 @@ def merge_assessment(registry: dict, nc_map: dict, reporter: ConflictReporter):
         school = registry["schools"][reg_code]
 
         # Build assessment summary: "A+:数学,物理; A:化学; B+:生物"
+        # 等级在"层级"字段(A+/A/A-/B+等)，不是"评估类型名称"(那是轮次：第四轮/第五轮)
         by_grade: dict[str, list] = {}
         for rec in records:
-            grade = _safe_str(rec.get("评估类型名称"))
+            grade = _safe_str(rec.get("层级"))
             subject = _safe_str(rec.get("名称")) or _safe_str(rec.get("专业名称"))
             if grade and subject:
                 by_grade.setdefault(grade, []).append(subject)
