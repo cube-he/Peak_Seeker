@@ -20,11 +20,20 @@ const prisma = new PrismaClient({
 
 // 默认数据目录
 let DATA_DIR = path.resolve(__dirname, 'output');
+let MODE: 'replace' | 'upsert' = 'replace';
 
 // 解析CLI参数
 for (const arg of process.argv.slice(2)) {
   if (arg.startsWith('--data=')) {
     DATA_DIR = path.resolve(arg.slice(7));
+  }
+  if (arg.startsWith('--mode=')) {
+    const m = arg.slice(7);
+    if (m !== 'replace' && m !== 'upsert') {
+      console.error(`Invalid mode: ${m}. Use 'replace' or 'upsert'.`);
+      process.exit(1);
+    }
+    MODE = m as 'replace' | 'upsert';
   }
 }
 
@@ -237,12 +246,15 @@ async function importEnrollmentPlans(
         planNotes: toStr(p.planNotes),
         batch: toStr(p.batch) || '',
         level: toStr(p.level),
-        subjects: toStr(p.subjects),
+        subjects: toStr(p.subjects) || '',
         subjectRequirements: toStr(p.subjectRequirements),
         duration: toStr(p.duration),
         tuition: toInt(p.tuition),
         isSinoForeign: false,
-        groupCode: toStr(p.groupCode),
+        recruitType: toStr(p.recruitType) || '',
+        majorCode: toStr(p.majorCode) || '',
+        majorName: toStr(p.majorName) || '',
+        groupCode: toStr(p.groupCode) || '',
         groupName: toStr(p.groupName),
         groupMajors: toStr(p.groupMajors),
         groupPlanCount: toInt(p.groupPlanCount),
@@ -257,7 +269,31 @@ async function importEnrollmentPlans(
       });
     }
 
-    if (records.length > 0) {
+    if (records.length === 0) continue;
+
+    if (MODE === 'upsert') {
+      for (const record of records) {
+        try {
+          await prisma.enrollmentPlan.upsert({
+            where: {
+              universityId_subjects_batch_recruitType_groupCode_majorCode_majorName_year: {
+                universityId: record.universityId,
+                subjects: record.subjects,
+                batch: record.batch,
+                recruitType: record.recruitType,
+                groupCode: record.groupCode,
+                majorCode: record.majorCode,
+                majorName: record.majorName,
+                year: record.year,
+              },
+            },
+            update: record,
+            create: record,
+          });
+          count++;
+        } catch { skipped++; }
+      }
+    } else {
       try {
         await prisma.enrollmentPlan.createMany({ data: records, skipDuplicates: true });
         count += records.length;
@@ -315,7 +351,11 @@ async function importAdmissionRecords(
         groupAdmissionCount: toInt(r.groupAdmissionCount),
         filingMinScore: toInt(r.filingMinScore),
         filingMinRank: toInt(r.filingMinRank),
-        subjects: toStr(r.subjects),
+        recruitType: toStr(r.recruitType) || '',
+        groupCode: toStr(r.groupCode) || '',
+        majorCode: toStr(r.majorCode) || '',
+        majorName: toStr(r.majorName) || '',
+        subjects: toStr(r.subjects) || '',
         universityMinScore: toInt(r.universityMinScore),
         universityMinRank: toInt(r.universityMinRank),
         universityAvgScore: toInt(r.universityAvgScore),
@@ -326,7 +366,31 @@ async function importAdmissionRecords(
       });
     }
 
-    if (records.length > 0) {
+    if (records.length === 0) continue;
+
+    if (MODE === 'upsert') {
+      for (const record of records) {
+        try {
+          await prisma.admissionRecord.upsert({
+            where: {
+              universityId_subjects_batch_recruitType_groupCode_majorCode_majorName_year: {
+                universityId: record.universityId,
+                subjects: record.subjects,
+                batch: record.batch,
+                recruitType: record.recruitType,
+                groupCode: record.groupCode,
+                majorCode: record.majorCode,
+                majorName: record.majorName,
+                year: record.year,
+              },
+            },
+            update: record,
+            create: record,
+          });
+          count++;
+        } catch { skipped++; }
+      }
+    } else {
       try {
         await prisma.admissionRecord.createMany({ data: records, skipDuplicates: true });
         count += records.length;
@@ -465,6 +529,7 @@ async function main() {
   console.log('║        智愿家 数据导入 (JSON → MySQL via Prisma)        ║');
   console.log('╚══════════════════════════════════════════════════════════╝');
   console.log(`Data dir: ${DATA_DIR}`);
+  console.log(`Mode: ${MODE}`);
 
   const start = Date.now();
 
