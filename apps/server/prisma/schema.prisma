@@ -331,18 +331,23 @@ model EnrollmentPlan {
   // 招生要求
   batch               String  @default("") @db.VarChar(50)
   level               String? @db.VarChar(50)
-  subjects            String? @db.VarChar(100)
+  subjects            String  @default("") @db.VarChar(100)
   subjectRequirements String? @map("subject_requirements") @db.Text
   duration            String? @db.VarChar(20)
   tuition             Int?
   isSinoForeign       Boolean @default(false) @map("is_sino_foreign")
+
+  // 自然主键字段（冗余存储用于唯一约束和展示）
+  recruitType String  @default("") @map("recruit_type") @db.VarChar(100)
+  majorCode   String  @default("") @map("major_code") @db.VarChar(50)
+  majorName   String  @default("") @map("major_name") @db.VarChar(200)
 
   // 学位点信息
   localMasterPoint   String? @map("local_master_point") @db.VarChar(200)
   localDoctoralPoint String? @map("local_doctoral_point") @db.VarChar(200)
 
   // 专业组信息
-  groupCode      String? @map("group_code") @db.VarChar(50)
+  groupCode      String  @default("") @map("group_code") @db.VarChar(50)
   groupName      String? @map("group_name") @db.VarChar(200)
   groupMajors    String? @map("group_majors") @db.Text
   groupPlanCount Int?    @map("group_plan_count")
@@ -357,7 +362,7 @@ model EnrollmentPlan {
   majorRanking      String? @map("major_ranking") @db.VarChar(100)
   majorHonor        String? @map("major_honor") @db.Text
 
-  @@unique([universityId, majorId, year, province, batch])
+  @@unique([universityId, subjects, batch, recruitType, groupCode, majorCode, majorName, year])
   @@index([year])
   @@index([province])
   @@index([universityId])
@@ -402,8 +407,14 @@ model AdmissionRecord {
   filingMinScore Int? @map("filing_min_score")
   filingMinRank  Int? @map("filing_min_rank")
 
+  // 自然主键字段
+  recruitType String  @default("") @map("recruit_type") @db.VarChar(100)
+  groupCode   String  @default("") @map("group_code") @db.VarChar(50)
+  majorCode   String  @default("") @map("major_code") @db.VarChar(50)
+  majorName   String  @default("") @map("major_name") @db.VarChar(200)
+
   // 科目和批次信息
-  subjects String? @db.VarChar(50)
+  subjects String  @default("") @db.VarChar(50)
   batch    String  @default("") @db.VarChar(50)
 
   // 院校整体录取数据
@@ -415,7 +426,7 @@ model AdmissionRecord {
   universityMaxRank        Int? @map("university_max_rank")
   universityAdmissionCount Int? @map("university_admission_count")
 
-  @@unique([universityId, majorId, year, province, batch])
+  @@unique([universityId, subjects, batch, recruitType, groupCode, majorCode, majorName, year])
   @@index([year])
   @@index([province])
   @@index([universityId])
