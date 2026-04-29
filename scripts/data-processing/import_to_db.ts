@@ -191,17 +191,19 @@ async function importMajors(): Promise<Map<string, number>> {
   await prisma.major.deleteMany();
   console.log('  Cleared');
 
+  // key = "name|level" to distinguish 本科/专科 with same name
   const nameToId = new Map<string, number>();
   let count = 0;
 
   for (const m of data) {
     try {
+      const level = toStr(m.level) || '本科';
       const major = await prisma.major.create({
         data: {
           name: m.name,
           code: toStr(m.code),
           category: toStr(m.category),
-          level: toStr(m.level) === '本科' ? '本科' : (toStr(m.level) || '本科'),
+          level,
           discipline: toStr(m.discipline),
           type: toStr(m.type),
           notes: toStr(m.notes),
@@ -210,6 +212,8 @@ async function importMajors(): Promise<Map<string, number>> {
           isRestricted: false,
         },
       });
+      nameToId.set(`${m.name}|${level}`, major.id);
+      // 也存纯 name 作为 fallback（后录入的覆盖前面的）
       nameToId.set(m.name, major.id);
       count++;
     } catch (e: any) {
@@ -238,8 +242,9 @@ async function importEnrollmentPlans(
 
     for (const p of batch) {
       const uniId = uniCodeToId.get(String(p.universityEnrollCode));
-      const majorId = majorNameToId.get(p.majorName);
-      if (!uniId || !majorId) { skipped++; continue; }
+      const level = toStr(p.level) || '本科';
+      const majorId = majorNameToId.get(`${p.majorName}|${level}`) || majorNameToId.get(p.majorName);
+      if (!uniId) { skipped++; continue; }
 
       records.push({
         universityId: uniId,
@@ -334,8 +339,9 @@ async function importAdmissionRecords(
 
     for (const r of batch) {
       const uniId = uniCodeToId.get(String(r.universityEnrollCode));
-      const majorId = majorNameToId.get(r.majorName);
-      if (!uniId || !majorId) { skipped++; continue; }
+      const level = toStr(r.level) || '本科';
+      const majorId = majorNameToId.get(`${r.majorName}|${level}`) || majorNameToId.get(r.majorName);
+      if (!uniId) { skipped++; continue; }
 
       records.push({
         universityId: uniId,

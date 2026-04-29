@@ -146,22 +146,34 @@ def convert_university_row(row: tuple) -> dict:
 # Major converter
 # ---------------------------------------------------------------------------
 
+def _infer_level(batch_str: str) -> str:
+    """从录取批次推断学历层级：含'专科'→专科，否则→本科。"""
+    if batch_str and '专科' in batch_str:
+        return '专科'
+    return '本科'
+
+
 def convert_majors_from_main_table(rows: list[tuple]) -> list[dict]:
-    """Deduplicate majors by 专业(col 12) and return unique major dicts."""
+    """Deduplicate majors by (专业名, 层级) and return unique major dicts."""
     seen = set()
     majors = []
 
     for row in rows:
         name = _str(row[12])
-        if not name or name in seen:
+        if not name:
             continue
-        seen.add(name)
+        batch = _str(row[5]) or ''
+        level = _infer_level(batch)
+        key = (name, level)
+        if key in seen:
+            continue
+        seen.add(key)
 
         majors.append({
             'name': name,
             'code': _str(row[4]),
             'category': _str(row[15]),      # 门类
-            'level': '本科',
+            'level': level,
             'discipline': _str(row[14]),     # 专业类
             'type': None,
             'notes': _str(row[16]),          # 专业备注
@@ -191,7 +203,7 @@ def convert_enrollment_plans_from_row(row: tuple) -> list[dict]:
         'batch': _str(row[5]),
         'recruitType': _str(row[9]),
         'province': '四川',
-        'level': '本科',
+        'level': _infer_level(_str(row[5]) or ''),
         'subjectRequirements': _str(row[19]),
         'isNew': _bool_from_str(row[18]),
         'oldBatch': _str(row[7]),
@@ -265,6 +277,7 @@ def convert_admission_records_from_row(row: tuple) -> list[dict]:
         'batch': _str(row[5]),
         'recruitType': _str(row[9]),
         'province': '四川',
+        'level': _infer_level(_str(row[5]) or ''),
     }
 
     records = []
