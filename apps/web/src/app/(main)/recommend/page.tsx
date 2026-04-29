@@ -139,7 +139,15 @@ export default function RecommendPage() {
   return (
     <MainLayout>
       {/* Page Title */}
-      <div className="mb-8">
+      <div
+        className="mb-8 -mx-4 sm:-mx-6 lg:-mx-12 -mt-6 px-4 sm:px-6 lg:px-12 pt-8 pb-6"
+        style={{
+          backgroundImage: `linear-gradient(to bottom, transparent 40%, var(--color-bg) 100%), url('/images/bg-recommend-header.webp')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center top',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
         <h2 className="font-serif text-xl font-semibold text-text mb-1">智能推荐</h2>
         <p className="text-sm text-text-secondary">输入分数和位次，AI 智能生成冲稳保方案</p>
       </div>

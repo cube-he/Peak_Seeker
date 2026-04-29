@@ -20,7 +20,15 @@ export default function AuthLayout({
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
       {/* Left Brand Panel */}
-      <div className="hidden lg:flex lg:w-[45%] bg-primary relative flex-col justify-between p-12 overflow-hidden">
+      <div
+        className="hidden lg:flex lg:w-[45%] bg-primary relative flex-col justify-between p-12 overflow-hidden"
+        style={{
+          backgroundImage: `url('/images/bg-auth-panel.webp')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
         <div className="relative z-10">
           {/* Brand Logo */}
           <Link href="/" className="no-underline">

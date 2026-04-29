@@ -42,7 +42,15 @@ export default function StudentDashboardPage() {
   return (
     <div className="space-y-4">
       {/* Greeting */}
-      <div className="mb-2">
+      <div
+        className="mb-2 rounded-xl p-5 -mx-1"
+        style={{
+          backgroundImage: `url('/images/bg-student-welcome.webp')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
         <h1 className="font-serif text-xl font-semibold text-text">
           你好，{user?.realName || user?.username || '同学'} 👋
         </h1>
