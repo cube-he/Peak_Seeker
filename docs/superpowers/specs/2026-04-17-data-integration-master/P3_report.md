@@ -28,9 +28,9 @@ P3.6 clean  ← P3.5 align vs 03 master
 | P3.1 重命名 | rename_plan + execute_rename.py | 175/175 成功, 幂等 |
 | P3.2 试点扫描 | p3_pilot_2023_2024.py | 69 文件, 11 列签名, 2 空表 |
 | P3.3 错误量化 | ocr_error_catalog.md | 27,724 行, bracket_unbalanced 61, malformed 25 |
-| P3.4 修复 | 13_normalized.xlsx | 23,014 行 (去 duplicate-engine 后) |
-| P3.5 对齐 | 13_aligned.xlsx | 命中率 **52.4%**, malformed 仅 5 |
-| P3.6 汇总 | 13_clean.xlsx | **23,009 行** (排除 5 malformed) |
+| P3.4 修复 | 征集志愿_规范化.xlsx | 23,014 行 (去 duplicate-engine 后) |
+| P3.5 对齐 | 征集志愿_已对齐.xlsx | 命中率 **52.4%**, malformed 仅 5 |
+| P3.6 汇总 | 征集志愿_已清洗.xlsx | **23,009 行** (排除 5 malformed) |
 
 ## 3. P3.4 修复分布
 
@@ -89,13 +89,13 @@ OCR 导出的多专业行模式: 同院校首行印 院校代码/名称/地址�
 
 ```
 data/_pipeline/P3/
-├── 13_normalized.xlsx       23,014 rows, 84 cols (含 _meta_* + _source_file)
-├── 13_aligned.xlsx          同上 + _in_master + _miss_kind
-├── 13_clean.xlsx            23,009 rows, 最终交付给 P4
-├── P3_fix_log.csv           8,156 修复记录
-├── P3_skipped.csv           17 skip 条目 (含 9 补充数据 + 7 engine-duplicate + 2 empty)
-├── not_in_master.csv        10,948 legit_miss
-└── needs_human_review.csv   5 malformed (2K/0T/1A/9C + 1 列错位)
+├── 征集志愿_规范化.xlsx       23,014 rows, 84 cols (含 _meta_* + _source_file)
+├── 征集志愿_已对齐.xlsx          同上 + _in_master + _miss_kind
+├── 征集志愿_已清洗.xlsx            23,009 rows, 最终交付给 P4
+├── 征集志愿_修复日志.csv           8,156 修复记录
+├── 征集志愿_已跳过.csv           17 skip 条目 (含 9 补充数据 + 7 engine-duplicate + 2 empty)
+├── 主表未命中_合法补录.csv        10,948 legit_miss
+└── 待人工复核.csv   5 malformed (2K/0T/1A/9C + 1 列错位)
 ```
 
 ## 8. 遗留事项

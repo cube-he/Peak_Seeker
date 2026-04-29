@@ -80,7 +80,7 @@ def main():
 
     # Save missing codes csv
     missing_df = pd.DataFrame(result["missing_codes"])
-    out = OUT_DIR / "missing_college_codes.csv"
+    out = OUT_DIR / "无桥接院校码.csv"
     missing_df.to_csv(out, index=False, encoding="utf-8-sig")
 
     # Print summary

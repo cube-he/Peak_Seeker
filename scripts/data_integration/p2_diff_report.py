@@ -2,10 +2,10 @@
 """P2 Task 9: Cross-source diff report for 2025 data.
 
 Generates two xlsx artefacts from the 2025 outer-join result:
-  cross_diff_report_2025.xlsx — every field-level diff between 03 and 01 for
-                                rows where both sources matched (merge == 'both')
-  anomaly_diff_2025.xlsx      — filtered subset: only rows exceeding anomaly
-                                thresholds (sorted by |差值| desc, NaN last)
+  交叉差异报告_2025.xlsx — every field-level diff between 03 and 01 for
+                          rows where both sources matched (merge == 'both')
+  异常差异_2025.xlsx      — filtered subset: only rows exceeding anomaly
+                          thresholds (sorted by |差值| desc, NaN last)
 
 Why two files: the full diff log is the audit trail; the anomaly list is the
 actionable "must-check" shortlist for data reviewers.
@@ -154,8 +154,8 @@ def main() -> None:
     out_dir = _REPO_ROOT / "data" / "_pipeline" / "P2"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cross_path = out_dir / "cross_diff_report_2025.xlsx"
-    anomaly_path = out_dir / "anomaly_diff_2025.xlsx"
+    cross_path = out_dir / "交叉差异报告_2025.xlsx"
+    anomaly_path = out_dir / "异常差异_2025.xlsx"
 
     diff_df.to_excel(cross_path, index=False, engine="openpyxl")
     logger.info("P2 diff report: wrote %s (%d rows)", cross_path, total_diffs)

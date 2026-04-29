@@ -15,9 +15,9 @@ import pandas as pd
 sys.stdout.reconfigure(encoding="utf-8")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-LOG = REPO_ROOT / "data" / "_pipeline" / "P1" / "patch_log.csv"
-UNRES = REPO_ROOT / "data" / "_pipeline" / "P1" / "unresolvable.csv"
-OUT_XLSX = REPO_ROOT / "data" / "_pipeline" / "P1" / "03_patched.xlsx"
+LOG = REPO_ROOT / "data" / "_pipeline" / "P1" / "修复日志.csv"
+UNRES = REPO_ROOT / "data" / "_pipeline" / "P1" / "无法修复项.csv"
+OUT_XLSX = REPO_ROOT / "data" / "_pipeline" / "P1" / "主表_修复_2025.xlsx"
 REPORT = (
     REPO_ROOT / "docs" / "superpowers" / "specs"
     / "2026-04-17-data-integration-master" / "P1_report.md"
@@ -37,10 +37,10 @@ def main() -> int:
     lines.append("# P1 报告：基线与 03 主表自洽")
     lines.append("")
     lines.append(f"- **生成时间**：{datetime.now(tz=timezone.utc).isoformat()}")
-    lines.append(f"- **产物**：`data/_pipeline/P1/03_patched.xlsx` (rows={patched_rows})")
-    lines.append(f"- **日志**：`data/_pipeline/P1/patch_log.csv` (entries={len(log)})")
+    lines.append(f"- **产物**：`data/_pipeline/P1/主表_修复_2025.xlsx` (rows={patched_rows})")
+    lines.append(f"- **日志**：`data/_pipeline/P1/修复日志.csv` (entries={len(log)})")
     if not unres.empty:
-        lines.append(f"- **未解决**：`data/_pipeline/P1/unresolvable.csv` (entries={len(unres)})")
+        lines.append(f"- **未解决**：`data/_pipeline/P1/无法修复项.csv` (entries={len(unres)})")
     lines.append("")
 
     lines.append("## 修复动作汇总")
@@ -72,7 +72,7 @@ def main() -> int:
     lines.append("## 待处置事项")
     lines.append("")
     if not unres.empty:
-        lines.append(f"- {len(unres)} 条未解决（类型分布见 `unresolvable.csv`），将在 P2 阶段用 01 反查修复")
+        lines.append(f"- {len(unres)} 条未解决（类型分布见 `无法修复项.csv`），将在 P2 阶段用 01 反查修复")
     else:
         lines.append("_无_")
     lines.append("")
@@ -82,7 +82,7 @@ def main() -> int:
     lines.append("- [ ] 重复记录去除数量与审计报告一致（34 条）")
     lines.append("- [ ] 分数异常标记数量与审计报告一致（约 161+71=232 条）")
     lines.append("- [ ] 抽样 20 条修正记录，人工核对合理")
-    lines.append("- [ ] `03_patched.xlsx` 行数 = 48131 - 去重数")
+    lines.append("- [ ] `主表_修复_2025.xlsx` 行数 = 48131 - 去重数")
     lines.append("")
 
     REPORT.parent.mkdir(parents=True, exist_ok=True)

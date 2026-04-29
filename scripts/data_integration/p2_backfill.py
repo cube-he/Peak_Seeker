@@ -101,8 +101,8 @@ def main() -> None:
     out_dir = _REPO_ROOT / "data" / "_pipeline" / "P2"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    new_path = out_dir / "backfill_new_rows_2025.xlsx"
-    fill_path = out_dir / "backfill_field_fill_2025.xlsx"
+    new_path = out_dir / "新增行_01独有_2025.xlsx"
+    fill_path = out_dir / "字段补缺候选_2025.xlsx"
 
     buckets["new_rows"].to_excel(new_path, index=False, engine="openpyxl")
     logger.info("P2 backfill: wrote %s (%d rows)", new_path, new_count)

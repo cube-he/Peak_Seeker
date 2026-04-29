@@ -295,6 +295,7 @@ def extract_admission_records(df):
             'majorName': major_name,
             'province': '四川',
             'batch': batch,
+            'subjects': safe_str(get(row, 'subject')),
         }
 
         # 2025

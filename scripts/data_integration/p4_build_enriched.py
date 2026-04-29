@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-P4.1 — 以 03_patched 为基表，左联 01 候选列(_01 后缀)，并追加 01 独有新行。
+P4.1 — 以主表_修复 为基表，左联 01 候选列(_01 后缀)，并追加 01 独有新行。
 
 输入:
-  - data/_pipeline/P1/03_patched.xlsx            (48131 行, 03 + P1 修复)
-  - data/_pipeline/P2/backfill_field_fill_2025.xlsx  (291 行, 03 有对应但 01 也提供候选)
-  - data/_pipeline/P2/backfill_new_rows_2025.xlsx    (7362 行, 01 独有)
+  - data/_pipeline/P1/主表_修复_2025.xlsx            (48131 行, 03 + P1 修复)
+  - data/_pipeline/P2/字段补缺候选_2025.xlsx         (291 行, 03 有对应但 01 也提供候选)
+  - data/_pipeline/P2/新增行_01独有_2025.xlsx        (7362 行, 01 独有)
 
 产出:
-  - data/_pipeline/P4/03_enriched_2025.xlsx  (48131+7362 = 55493 行)
+  - data/_pipeline/P4/专业招生主表_统一_2025.xlsx  (48131+7362 = 55493 行)
     - 所有原 03 列保留
     - 追加 _01 后缀列 (仅 291 行有值)
     - 新增 _lineage_source 列: '03' / '03+01候选' / '01'
@@ -21,9 +21,9 @@ from pathlib import Path
 import pandas as pd
 
 
-PATCHED_PATH = Path("data/_pipeline/P1/03_patched.xlsx")
-FIELD_FILL_PATH = Path("data/_pipeline/P2/backfill_field_fill_2025.xlsx")
-NEW_ROWS_PATH = Path("data/_pipeline/P2/backfill_new_rows_2025.xlsx")
+PATCHED_PATH = Path("data/_pipeline/P1/主表_修复_2025.xlsx")
+FIELD_FILL_PATH = Path("data/_pipeline/P2/字段补缺候选_2025.xlsx")
+NEW_ROWS_PATH = Path("data/_pipeline/P2/新增行_01独有_2025.xlsx")
 
 # Join key: (数据年份, 院校代码, 专业代码, 批次, 科目)
 JOIN_KEYS = ("数据年份", "院校代码", "专业代码", "批次", "科目")
@@ -34,7 +34,7 @@ def build_enriched(
     field_fill: pd.DataFrame,
     new_rows: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Build 03_enriched_2025.
+    """Build 专业招生主表_统一_2025.
 
     Strategy:
       1. Start with patched (all 48131 rows, all original 03 cols)
@@ -79,15 +79,15 @@ def main():
     parser.add_argument("--out-dir", default="data/_pipeline/P4")
     args = parser.parse_args()
 
-    print("Loading P1 03_patched...")
+    print("Loading P1 主表_修复...")
     patched = pd.read_excel(PATCHED_PATH, dtype=str)
     print(f"  {len(patched)} rows, {len(patched.columns)} cols")
 
-    print("Loading P2 backfill_field_fill...")
+    print("Loading P2 字段补缺候选...")
     field_fill = pd.read_excel(FIELD_FILL_PATH, dtype=str)
     print(f"  {len(field_fill)} rows")
 
-    print("Loading P2 backfill_new_rows...")
+    print("Loading P2 新增行_01独有...")
     new_rows = pd.read_excel(NEW_ROWS_PATH, dtype=str)
     print(f"  {len(new_rows)} rows")
 
@@ -95,10 +95,10 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "03_enriched_2025.xlsx"
+    out_path = out_dir / "专业招生主表_统一_2025.xlsx"
     enriched.to_excel(out_path, index=False)
 
-    print(f"\n03_enriched_2025: {len(enriched)} rows, {len(enriched.columns)} cols")
+    print(f"\n专业招生主表_统一_2025: {len(enriched)} rows, {len(enriched.columns)} cols")
     print(f"  lineage distribution:")
     print(enriched["_lineage_source"].value_counts().to_dict())
     print(f"→ {out_path}")

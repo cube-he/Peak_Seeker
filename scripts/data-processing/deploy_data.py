@@ -31,6 +31,7 @@ DATA_FILES = [
     'enrollment_plans_enriched.json',
     'admission_records_filled.json',
     'health_restrictions.json',
+    'supplementary_records.json',  # 征集志愿 (2023-2025)
     # 辅助数据（可选）
     'batch_order.json',
     'eligible_regions.json',
@@ -156,7 +157,8 @@ def verify(ssh):
         UNION ALL SELECT 'enrollment_plans', COUNT(*) FROM enrollment_plans
         UNION ALL SELECT 'admission_records', COUNT(*) FROM admission_records
         UNION ALL SELECT 'score_segments', COUNT(*) FROM score_segments
-        UNION ALL SELECT 'batch_lines', COUNT(*) FROM batch_lines;
+        UNION ALL SELECT 'batch_lines', COUNT(*) FROM batch_lines
+        UNION ALL SELECT 'supplementary_records', COUNT(*) FROM supplementary_records;
     " 2>&1 | grep -v Warning'''
 
     out, _, _ = ssh_exec(ssh, cmd)

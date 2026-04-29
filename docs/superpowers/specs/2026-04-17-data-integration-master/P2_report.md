@@ -20,7 +20,7 @@
 
 - `CodeMapper`（四川招生码 ↔ 国标码）治理表 2224 条
 - 01 2025 国标覆盖率：22 条缺桥接 → 走 `right_only` 路径
-  - 详见 `data/_pipeline/P2/missing_college_codes.csv`
+  - 详见 `data/_pipeline/P2/无桥接院校码.csv`
   - 决策（ISSUE-012）：不手工补全，留待有需求时单独工单处理
 
 ### 2.2 Outer join 分布（P2.2）
@@ -58,8 +58,8 @@
 修复后 anomaly 从 17,328 → 492（-97%）。
 
 产物：
-- `data/_pipeline/P2/cross_diff_report_2025.xlsx`（19,495 行）
-- `data/_pipeline/P2/anomaly_diff_2025.xlsx`（492 行，按 |差值| 降序）
+- `data/_pipeline/P2/交叉差异报告_2025.xlsx`（19,495 行）
+- `data/_pipeline/P2/异常差异_2025.xlsx`（492 行，按 |差值| 降序）
 
 ### 2.4 独有字段合入 + 补缺候选（P2.4）
 
@@ -75,8 +75,8 @@
 | **合计** | **20,523** | |
 
 产物：
-- `data/_pipeline/P2/backfill_new_rows_2025.xlsx`（7,362 行，2.7 MB）
-- `data/_pipeline/P2/backfill_field_fill_2025.xlsx`（291 行，~100 KB）
+- `data/_pipeline/P2/新增行_01独有_2025.xlsx`（7,362 行，2.7 MB）
+- `data/_pipeline/P2/字段补缺候选_2025.xlsx`（291 行，~100 KB）
 - `no_action` 不落盘
 
 **ADR-003 约束**：所有候选仅作标注，不修改 03 既有值。入库决策由 P4 阶段统一处理。

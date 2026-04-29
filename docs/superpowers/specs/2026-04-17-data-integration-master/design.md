@@ -119,7 +119,7 @@ P1: 基线与 03 自洽
     ├─ P1.2 03 重复记录去除（34 条）
     ├─ P1.3 03 分数逻辑异常修复（161+71 条）
     └─ P1.4 03 专业代码补齐（2 条）
-    产出: 03_patched.xlsx + patch_log.csv + P1_report.md
+    产出: 主表_修复_2025.xlsx + 修复日志.csv + P1_report.md
     验收点: 用户抽查 20 条修正记录
     ↓
 P2: 03 × 01 交叉校验与补缺
@@ -138,7 +138,7 @@ P3: 13 征集志愿治理
     ├─ P3.4 批量修复脚本（按错误类型分类）
     ├─ P3.5 与 03_enriched 对齐（院校/专业须在主表能查到）
     └─ P3.6 人工复核不可自动修复条目
-    产出: 13_clean.xlsx + ocr_error_catalog.md + unresolvable_images.csv
+    产出: 征集志愿_已清洗.xlsx + ocr_error_catalog.md + unresolvable_images.csv
     验收点: 用户抽查 30 条修正记录 + 错误分类报告
     ↓
 P4: 三源合一
@@ -177,7 +177,7 @@ P4: 三源合一
     "task_id": "P1.2",
     "status": "success|partial|failed",
     "counts": {"input": 48131, "changed": 34, "flagged": 0},
-    "artifacts": ["data/_pipeline/P1/patch_log.csv"],
+    "artifacts": ["data/_pipeline/P1/修复日志.csv"],
     "issues": [{"severity": "warn", "message": "..."}],
     "decisions_needed": []
   }
@@ -205,7 +205,7 @@ P4: 三源合一
 **P1.2 重复记录去除**
 - 按主键 `(数据年份, 院校代码, 专业组代码, 专业代码, 批次, 科目)` 识别重复
 - 重复组内保留"最完整"记录（非空字段最多的一条）
-- 记录到 `patch_log.csv`（原记录 + 保留哪条 + 删除哪些）
+- 记录到 `修复日志.csv`（原记录 + 保留哪条 + 删除哪些）
 
 **P1.3 分数逻辑修复**
 - 校验规则：
@@ -215,15 +215,15 @@ P4: 三源合一
 - 对违反记录：
   - 优先用 01 对应记录修复
   - 01 无对应则标记为"待人工核对"，保留原值但加 `_quality_flag` 列
-- 所有修改记入 `patch_log.csv`
+- 所有修改记入 `修复日志.csv`
 
 **P1.4 专业代码补齐**
 - 2 条缺失（通过 院校+专业名+批次 反查 01 或同校其他记录补齐）
-- 无法补齐则记入 `unresolvable.csv`
+- 无法补齐则记入 `无法修复项.csv`
 
 **产出**：
-- `data/_pipeline/P1/03_patched.xlsx`
-- `data/_pipeline/P1/patch_log.csv`
+- `data/_pipeline/P1/主表_修复_2025.xlsx`
+- `data/_pipeline/P1/修复日志.csv`
 - `docs/superpowers/specs/2026-04-17-data-integration-master/P1_report.md`
 
 **验收标准**：
@@ -334,7 +334,7 @@ P4: 三源合一
    - 括号归属（Rule 1）：按印刷版式决定括号内容归属院校行还是专业行
 4. **完整性校验**（最后一步）
    - 备注截断检测：末尾含未闭合括号/分号未结束→标记疑似截断
-   - 每修复一步都在 `P3_fix_log.csv` 追加一行（记录 xlsx、行号、字段、旧值、新值、修复类型）
+   - 每修复一步都在 `征集志愿_修复日志.csv` 追加一行（记录 xlsx、行号、字段、旧值、新值、修复类型）
 
 - `页码全为 1` 红旗：先在 P3.3 根因调查（查 `scripts/` 下 OCR 相关脚本代码/日志，定位归一化逻辑），结果写入 DECISIONS.md；决策是：(a) 重新 OCR、(b) 按图片序号回填、(c) 接受现状仅标注
 
@@ -344,16 +344,16 @@ P4: 三源合一
   - 主表能查到 → 正常
   - 主表查不到 → 分类处置：
     - 代码形态明显异常（如院校代码非 4 位数字、专业代码非"数字/大写字母"）→ 优先尝试修正（P3.4 的修复规则）
-    - 代码形态合法但主表无此条 → 合理情形（征集是对未完成计划的追加/补充；也可能是专项目录中才出现的组合），记入 `not_in_master.csv` 仅作提示，不视为错误
+    - 代码形态合法但主表无此条 → 合理情形（征集是对未完成计划的追加/补充；也可能是专项目录中才出现的组合），记入 `主表未命中_合法补录.csv` 仅作提示，不视为错误
     - 人工可判定的少量离群 → 进入 P3.6 人工复核
 
 **P3.6 人工复核**
-- 所有自动修复置信度不足的条目汇总到 `needs_human_review.csv`
+- 所有自动修复置信度不足的条目汇总到 `待人工复核.csv`
 - 子 agent 做一轮人工复核（读原图 + 判断）
 - 无法判断的最终进入 `unresolvable_images.csv`
 
 **产出**：
-- `data/_pipeline/P3/13_clean.xlsx`
+- `data/_pipeline/P3/征集志愿_已清洗.xlsx`
 - `data/_pipeline/P3/rename_execution_log.md`
 - `docs/superpowers/specs/2026-04-17-data-integration-master/ocr_error_catalog.md`
 - `docs/superpowers/specs/2026-04-17-data-integration-master/unresolvable_images.csv`
@@ -373,7 +373,7 @@ P4: 三源合一
 
 **P4.1 最终主表拼装**
 - 基表：P2 产出的 `03_enriched.xlsx`
-- 合入：P3 的 `13_clean.xlsx`（作为新增列 `征集志愿_轮次N_计划数` 等，或作为独立关联表）
+- 合入：P3 的 `征集志愿_已清洗.xlsx`（作为新增列 `征集志愿_轮次N_计划数` 等，或作为独立关联表）
 - 决策点：征集志愿是作为主表列还是作为关联表？→ 见 DECISIONS.md
 
 **P4.2 血缘标记**
@@ -383,7 +383,7 @@ P4: 三源合一
   - `13`：来自征集志愿治理
   - `manual`：人工修复
   - `patched`：自动修复（P1 质量修复）
-- 存储方式：独立 `lineage.json`，不污染主表行结构
+- 存储方式：独立 `血缘.json`，不污染主表行结构
 
 **P4.3 数据字典**
 - `data_dictionary.md`：每个字段的名称、类型、来源、含义、取值范围、缺失率、样例
@@ -401,7 +401,7 @@ P4: 三源合一
   - 每个 (年份, 批次) 组合至少 3 条
   - 必须包含纯 03 来源、03+01 融合、13 征集、质量 flag 标记等不同血缘类型
 - 子 agent 对每条：
-  - 在 03 原始文件（patched 前）查到对应行，确认 03 来源字段一致（如被 P1 修复，对照 `patch_log.csv`）
+  - 在 03 原始文件（patched 前）查到对应行，确认 03 来源字段一致（如被 P1 修复，对照 `修复日志.csv`）
   - 在 01 对应 JSON 查到对应记录，确认补缺字段与 01 一致
   - 若该条有征集记录，在 13_clean 中确认一致
   - 检查血缘标签与实际数据源一致
@@ -409,7 +409,7 @@ P4: 三源合一
 
 **产出**：
 - `data/_pipeline/P4/admission_master.parquet`（或 xlsx）
-- `data/_pipeline/P4/lineage.json`
+- `data/_pipeline/P4/血缘.json`
 - `docs/superpowers/specs/2026-04-17-data-integration-master/data_dictionary.md`
 - `docs/superpowers/specs/2026-04-17-data-integration-master/data_quality_dashboard.md`
 - `docs/superpowers/specs/2026-04-17-data-integration-master/P4_report.md`

@@ -13,8 +13,8 @@
     "unresolvable": 0
   },
   "artifacts": [
-    "data/_pipeline/P1/03_patched.xlsx",
-    "data/_pipeline/P1/patch_log.csv"
+    "data/_pipeline/P1/主表_修复_2025.xlsx",
+    "data/_pipeline/P1/修复日志.csv"
   ],
   "issues": [
     {"severity": "warn", "message": "5 条记录无法通过 01 修复，标记为 needs_review"}

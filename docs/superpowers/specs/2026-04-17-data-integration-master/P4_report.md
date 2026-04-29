@@ -10,10 +10,10 @@
 
 ```
 data/_pipeline/P4/
-├── 03_enriched_2025.xlsx      55,493 行, 113 列  (主表)
-├── 13_relation_2025.xlsx      12,277 行          (征集志愿关联表)
-├── 13_historical.xlsx         10,732 行          (2023/2024 holdback)
-└── lineage.json                                  (字段级血缘)
+├── 专业招生主表_统一_2025.xlsx      55,493 行, 113 列  (主表)
+├── 征集志愿关联表_2025.xlsx      12,277 行          (征集志愿关联表)
+├── 征集志愿_历史年份.xlsx         10,732 行          (2023/2024 holdback)
+└── 血缘.json                                  (字段级血缘)
 
 docs/superpowers/specs/2026-04-17-data-integration-master/
 ├── P4_report.md                                  (本文件)
@@ -31,17 +31,17 @@ docs/superpowers/specs/2026-04-17-data-integration-master/
   - 征集志愿有 "轮次" 维度 (第一次/第二次/第三次)，主键 (年份, 院校, 专业) 不唯一
   - 征集志愿本质是事件 (某次补录公告)，不是属性
   - 主表保持干净的 star schema，关联表承载时序事件
-- **落地**: `13_relation_2025.xlsx` via `_meta_轮次` 区分多轮
+- **落地**: `征集志愿关联表_2025.xlsx` via `_meta_轮次` 区分多轮
 
 ### D-P4-002: 2023/2024 holdback 直至 Task 7b
 
 - **决策**: 2023/2024 年份的 13 数据 (10,732 行) 暂不纳入 P4 统一产物
 - **理由**: 03 主表仅含 2025 数据；在 01 2023/2024 历史反哺 03 前，13 historical 无主表承接
-- **落地**: `13_historical.xlsx` 独立产物，Task 7b 完成后重跑 P4 管道
+- **落地**: `征集志愿_历史年份.xlsx` 独立产物，Task 7b 完成后重跑 P4 管道
 
 ### D-P4-003: 血缘存储方式
 
-- **决策**: lineage 存独立 `lineage.json` (column-level summary + patched_rows 明细)，不在主表每行加血缘列
+- **决策**: lineage 存独立 `血缘.json` (column-level summary + patched_rows 明细)，不在主表每行加血缘列
 - **理由**: 避免列数爆炸 (113 列已经紧张)，但 `_lineage_source` 行级血缘保留在主表供 SQL-like 查询
 
 ## 3. 主表统计
@@ -102,7 +102,7 @@ docs/superpowers/specs/2026-04-17-data-integration-master/
 ## 8. 验收结论
 
 - ✅ 三源合一数据集就绪 (55,493 行主表 + 12,277 行 2025 征集关联表)
-- ✅ 血缘标注完整 (行级 `_lineage_source` + 字段级 `lineage.json`)
+- ✅ 血缘标注完整 (行级 `_lineage_source` + 字段级 `血缘.json`)
 - ✅ 数据字典 + 质量仪表板生成
 - ✅ Smoke test 100/100 通过
 - ✅ 152 单测全通过

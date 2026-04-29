@@ -137,11 +137,12 @@ def clean_for_match(s: str) -> str:
 def determine_round(
     file_info: dict,
     row_main_batch: str | None,
+    row_main_type: str | None = None,
 ) -> tuple[int | None, str]:
-    """根据文件名+行的主表批次, 返回 (轮次号, 备注).
+    """根据文件名+行的主表批次+招生类型, 返回 (轮次号, 备注).
 
     - 单轮文件 → 返回全局轮次
-    - 多段文件 → 按主表批次匹配段关键词
+    - 多段文件 → 用 (批次关键词, 招生类型关键词) 双向匹配段关键词
     - 无法判定 → 返回 None + 备注
     """
     rounds = file_info.get("global_rounds", [])
@@ -153,11 +154,36 @@ def determine_round(
     if len(rounds) == 1:
         return rounds[0], ""
 
-    # 多轮 + 多段
+    # 多轮 + 多段: 段关键词须同时与行的批次+类型存在语义重合
     if seg_map and row_main_batch:
         cleaned_batch = clean_for_match(row_main_batch)
-        hits = [(kw, rnum) for kw, rnum in seg_map.items()
-                if clean_for_match(kw) and clean_for_match(kw) in cleaned_batch]
+        cleaned_type = clean_for_match(row_main_type or "")
+        # 段关键词 (如 "A段国家专项第二次"): 分拆成 批次侧/类型侧 片段
+        # 匹配要求: 段关键词的批次部分 ⊆ 行批次, 且 (无类型关键词 或 类型部分 ⊆ 行类型)
+        TYPE_TOKENS = [
+            "国家专项", "地方专项", "高校专项", "区域教育均衡",
+            "省级公费师范", "国家公费师范", "国家优师", "地方优师",
+            "乡村振兴", "军事", "公安", "司法", "航海", "预科", "民族班",
+            "消防救援", "定向培养军士", "定向培养士官", "农村订单",
+        ]
+        hits = []
+        for kw, rnum in seg_map.items():
+            ckw = clean_for_match(kw)
+            if not ckw:
+                continue
+            # 段内含的类型 token (若有)
+            seg_type_tokens = [tt for tt in TYPE_TOKENS if tt in kw]
+            # 批次侧必须匹配
+            batch_ok = ckw in cleaned_batch or any(
+                tok in row_main_batch for tok in ["A段", "B段"] if tok in kw
+            )
+            if not batch_ok:
+                continue
+            # 类型侧: 段有明确类型 token 时要求也命中 (任一匹配)
+            if seg_type_tokens:
+                if not any(tt in (row_main_type or "") for tt in seg_type_tokens):
+                    continue
+            hits.append((kw, rnum))
         if len(hits) == 1:
             return hits[0][1], f"INFO-段匹配:{hits[0][0]}"
         if len(hits) > 1:
@@ -201,7 +227,7 @@ def build_indices(df: pd.DataFrame) -> dict:
     for i, row in df.iterrows():
         cc = norm_college_code(row["院校代码"])
         subj = norm_text(row["科目"])
-        batch = norm_text(row["批次"])
+        batch = norm_text(row["录取批次"])
         atype = norm_text(row["招生类型"])
         gc = norm_group_code(row["专业组代码"])
         mc = norm_major_code(row["专业代码"])
@@ -395,7 +421,8 @@ def process_file(fp: Path, df: pd.DataFrame, idx: dict, logs: Logs) -> dict:
 
         # 归一化
         cc = norm_college_code(row.get("院校代码"))
-        kelei = norm_text(row.get("科类"))
+        # 源文件二轮复核后使用 `科目` (历史/物理); 兼容旧 `科类` (文科/理科)
+        kelei = norm_text(row.get("科目")) or norm_text(row.get("科类"))
         supp_type_raw = norm_text(row.get("招生类型"))
         gc = norm_group_code(row.get("专业组代码"))
         mc = norm_major_code(row.get("专业代码"))
@@ -438,7 +465,7 @@ def process_file(fp: Path, df: pd.DataFrame, idx: dict, logs: Logs) -> dict:
             old_batch_candidates = map_2324_old_batch(fp.name, supp_type_raw)
 
         # 确定轮次
-        rnum, round_note = determine_round(info, m_batch)
+        rnum, round_note = determine_round(info, m_batch, m_type)
         if rnum is None:
             logs.row_errors.append({**source, "错误": f"轮次无法判定: {round_note}"})
             stats["row_errors"] += 1
@@ -450,11 +477,51 @@ def process_file(fp: Path, df: pd.DataFrame, idx: dict, logs: Logs) -> dict:
             old_batch_candidates=old_batch_candidates,
         )
 
+        # 名称一致性校验:
+        #  - 2025: 降级级别 (DOWNGRADE-*) 易误匹配 → 校验名称
+        #  - 2023/2024: **所有级别** 均校验 (主表以 2025 mc 为基, 23-24 同 mc 跨年可能指向不同专业)
+        needs_name_check = hit_idx is not None and match_level and (
+            (year in (2023, 2024)) or ("DOWNGRADE" in match_level)
+        )
+        if needs_name_check:
+            m_pname = norm_text(df.at[hit_idx, "专业"])
+            if mname and m_pname and not (
+                m_pname == mname or mname in m_pname or m_pname in mname
+            ):
+                match_level = f"REJECT-名称不一致:{match_level}:主表={m_pname},征集={mname}"
+                hit_idx = None
+
+        # 专项一致性校验: 征集源类型为专项 (国家/地方/高校/区域均衡/省属帮扶/优师/公费师范/乡村振兴)
+        # 时, 主表命中行须同为同类型 (在老批次或招生类型中含同关键词), 否则拒绝.
+        # 避免专项数据被写入普通类行.
+        if hit_idx is not None and year in (2023, 2024):
+            SPECIAL_TOKENS = [
+                "国家专项", "地方专项", "高校专项", "区域教育均衡",
+                "省属高校帮扶", "省级公费师范", "国家公费师范",
+                "国家优师", "地方优师", "乡村振兴",
+                "军事", "公安", "司法", "航海", "消防",
+                "定向培养军士", "定向培养士官", "农村订单", "免费医学",
+            ]
+            src_type_raw = (supp_type_raw or "") + " " + fp.name
+            src_tokens = [tok for tok in SPECIAL_TOKENS if tok in src_type_raw]
+            if src_tokens:
+                m_old = str(df.at[hit_idx, "老批次"] or "")
+                m_atype = str(df.at[hit_idx, "招生类型"] or "")
+                m_combined = m_old + " " + m_atype
+                # 源有专项 token, 主表行需含任一 token (或语义同族)
+                matched_token = any(tok in m_combined for tok in src_tokens)
+                if not matched_token:
+                    match_level = (
+                        f"REJECT-专项不一致:{match_level}:src_tokens={src_tokens},"
+                        f"主表老批次={m_old},招生类型={m_atype}"
+                    )
+                    hit_idx = None
+
         if hit_idx is None:
             logs.unmatched.append({
                 **source,
                 "year": year, "轮次": rnum,
-                "院校代码": cc, "科目": subj, "批次": m_batch,
+                "院校代码": cc, "科目": subj, "录取批次": m_batch,
                 "招生类型": m_type, "专业组代码": gc, "专业代码": mc,
                 "专业名称": mname, "计划数": plan,
                 "失败原因": match_level,
@@ -474,13 +541,22 @@ def process_file(fp: Path, df: pd.DataFrame, idx: dict, logs: Logs) -> dict:
         track_key = (hit_idx, year, rnum)
         existing = [w for w in logs.written if (w["行号"], w["year"], w["轮次"]) == track_key]
         if existing:
+            # 同值 (现值==新值) → 冗余写入, 降级 INFO (OCR 重读或文件重叠); 异值 → ERROR
+            existing_plan = df.at[hit_idx, target_col]
+            is_same_value = (
+                pd.notna(existing_plan)
+                and pd.notna(plan)
+                and int(existing_plan) == int(plan)
+            )
+            level = "INFO" if is_same_value else "ERROR"
+            cat = "重复写入(同值)" if is_same_value else "重复写入"
             logs.validation.append({
                 **source,
-                "level": "ERROR",
-                "category": "重复写入",
+                "level": level,
+                "category": cat,
                 "主表行号": hit_idx,
                 "列": target_col,
-                "现值": df.at[hit_idx, target_col],
+                "现值": existing_plan,
                 "新值": plan,
                 "首次来源": existing[0]["源文件"] + f"#{existing[0]['源行号']}",
             })
@@ -583,7 +659,7 @@ def build_sampling(logs: Logs, df: pd.DataFrame, n: int = 30) -> pd.DataFrame:
             "主表院校代码": df.at[i, "院校代码"],
             "主表院校名称": df.at[i, "院校名称"],
             "主表专业": df.at[i, "专业"],
-            "主表批次": df.at[i, "批次"],
+            "主表批次": df.at[i, "录取批次"],
             "主表招生类型": df.at[i, "招生类型"],
             "主表科目": df.at[i, "科目"],
             "主表专业组代码": df.at[i, "专业组代码"],

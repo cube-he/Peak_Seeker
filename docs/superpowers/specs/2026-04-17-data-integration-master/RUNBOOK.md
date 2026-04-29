@@ -85,9 +85,9 @@
 
 - **代码**：`scripts/data_integration/` 下 3 个 lib + 3 个 P1 脚本 + 对应 tests（29 tests 全绿）
 - **数据产物**（gitignored，本地生成）：
-  - `data/_pipeline/P1/03_patched.xlsx`（48131 行）
-  - `data/_pipeline/P1/patch_log.csv`（2 条：均为 missing_major_code）
-  - `data/_pipeline/P1/unresolvable.csv`（2 条：专业代码缺失）
+  - `data/_pipeline/P1/主表_修复_2025.xlsx`（48131 行）
+  - `data/_pipeline/P1/修复日志.csv`（2 条：均为 missing_major_code）
+  - `data/_pipeline/P1/无法修复项.csv`（2 条：专业代码缺失）
 - **基线快照**：`docs/.../baselines/2026-04-17-baseline.json`（~957KB，03/01/13 三源文件全盘 SHA256）
 - **验收报告**：`docs/.../P1_report.md`
 - **方法论文档**：RUNBOOK.md（进度+日志）、DECISIONS.md（6 ADR）、ISSUES.md（10 issues）、contracts/subagent_output.md
@@ -123,13 +123,13 @@
 - Task 8 `lib/diff_rules.py`：按字段分类阈值（score/rank/count/text）+ null 跳过（commit 5f1bd86，8 tests）
 - Task 9 `p2_diff_report.py`：both 行 × 10 字段 → 差异表 + anomaly 表（commit da1fdd5，6 tests）
 - 真实 dry-run：30267 差异行，17328 anomaly（57.3%）→ 登记 ISSUE-014（位次字段口径差异嫌疑，分数/人数 anomaly 543/228 才是真实审核信号）
-- 产物：`data/_pipeline/P2/cross_diff_report_2025.xlsx` + `anomaly_diff_2025.xlsx`
+- 产物：`data/_pipeline/P2/交叉差异报告_2025.xlsx` + `异常差异_2025.xlsx`
 
 **P2.4 Enrich + backfill**
 - Task 10 `p2_enrich.py`：加 `_backfill_notes` 列 + Group C 列加 `_01` 后缀，不改 03 值（commit 984fa76，7 tests）
 - Task 11 `p2_backfill.py`：三桶切分 (new_rows / field_fill / no_action) + lineage 列（commit 4f2dad5，8 tests）
 - 2025 分布：new_rows=7362 / field_fill=4167 / no_action=8994
-- 产物：`data/_pipeline/P2/backfill_new_rows_2025.xlsx` + `backfill_field_fill_2025.xlsx`
+- 产物：`data/_pipeline/P2/新增行_01独有_2025.xlsx` + `字段补缺候选_2025.xlsx`
 
 **P2.5 报告**
 - Task 12 `P2_report.md` + `coverage_uplift.md`：含输入 SHA / 分布 / anomaly 字段拆解 / 20 条抽样 / 4 条待审决策
@@ -147,11 +147,11 @@
 
 - **代码**：`source_01/03 loader` + `diff_rules` + 4 个 P2 脚本（`p2_join, p2_code_mapping, p2_diff_report, p2_enrich, p2_backfill`）+ 对应 tests（95 tests 全绿）
 - **数据产物**（gitignored）：
-  - `data/_pipeline/P2/cross_diff_report_2025.xlsx`（30,267 行）
-  - `data/_pipeline/P2/anomaly_diff_2025.xlsx`（17,328 行，按 |差值| 降序）
-  - `data/_pipeline/P2/backfill_new_rows_2025.xlsx`（7,362 行）
-  - `data/_pipeline/P2/backfill_field_fill_2025.xlsx`（4,167 行）
-  - `data/_pipeline/P2/missing_college_codes.csv`（22 + 125 条缺桥接国标追踪）
+  - `data/_pipeline/P2/交叉差异报告_2025.xlsx`（30,267 行）
+  - `data/_pipeline/P2/异常差异_2025.xlsx`（17,328 行，按 |差值| 降序）
+  - `data/_pipeline/P2/新增行_01独有_2025.xlsx`（7,362 行）
+  - `data/_pipeline/P2/字段补缺候选_2025.xlsx`（4,167 行）
+  - `data/_pipeline/P2/无桥接院校码.csv`（22 + 125 条缺桥接国标追踪）
 - **验收报告**：`P2_report.md`（主报告） + `coverage_uplift.md`（覆盖率变化）
 - **关键发现**：
   - ISSUE-011 + 字段映射 bug 修复后 right_only 从 33745 → 7362（-78%）

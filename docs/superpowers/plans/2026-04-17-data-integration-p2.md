@@ -633,7 +633,7 @@ def main():
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     missing_df = probe_coverage(args.years)
-    out = OUT_DIR / "missing_college_codes.csv"
+    out = OUT_DIR / "无桥接院校码.csv"
     missing_df.to_csv(out, index=False, encoding="utf-8-sig")
     print(f"Missing: {len(missing_df)} codes → {out}")
     # 覆盖率
@@ -655,11 +655,11 @@ if __name__ == "__main__":
 - [ ] **Step 2: 真实 dry-run probe**
 
 Run: `python -m scripts.data_integration.p2_code_mapping --years 2022 2023 2024 2025`
-Expected: 打印 missing 数量；`data/_pipeline/P2/missing_college_codes.csv` 生成。
+Expected: 打印 missing 数量；`data/_pipeline/P2/无桥接院校码.csv` 生成。
 
 - [ ] **Step 3: 派子 agent 手工补全 missing codes**
 
-主 agent 将 `missing_college_codes.csv` 交给子 agent（sonnet），要求：
+主 agent 将 `无桥接院校码.csv` 交给子 agent（sonnet），要求：
 - 根据 `college_name` 网搜/推断对应的四川招生代码
 - 无法确定的打标 `needs_human_review`
 - 产出 `data/_pipeline/P2/code_mapping_patches.csv`（新条目 only）

@@ -2,7 +2,7 @@
 """
 P4.3 + P4.4 — 自动生成数据字典与质量仪表板
 
-读取 03_enriched_2025.xlsx + lineage.json:
+读取 专业招生主表_统一_2025.xlsx + 血缘.json:
   - data_dictionary.md: 逐列 (name / type / source / missing% / example)
   - data_quality_dashboard.md: 总览 / 按血缘分布 / 年份-批次-科目覆盖 / open issues
 """
@@ -15,9 +15,9 @@ from pathlib import Path
 import pandas as pd
 
 
-ENRICHED_PATH = Path("data/_pipeline/P4/03_enriched_2025.xlsx")
-LINEAGE_PATH = Path("data/_pipeline/P4/lineage.json")
-RELATION_13_PATH = Path("data/_pipeline/P4/13_relation_2025.xlsx")
+ENRICHED_PATH = Path("data/_pipeline/P4/专业招生主表_统一_2025.xlsx")
+LINEAGE_PATH = Path("data/_pipeline/P4/血缘.json")
+RELATION_13_PATH = Path("data/_pipeline/P4/征集志愿关联表_2025.xlsx")
 
 
 # 关键字段元信息 (name → description)
@@ -64,13 +64,13 @@ def guess_type(series: pd.Series) -> str:
 
 
 def build_data_dictionary(enriched: pd.DataFrame, lineage: dict) -> str:
-    lines = ["# 数据字典 — admission_master (03_enriched_2025 + 13_relation_2025)",
+    lines = ["# 数据字典 — 专业招生主表_统一_2025 + 征集志愿关联表_2025",
              "",
              f"**生成**: 2026-04-17  ",
              f"**主表行数**: {len(enriched):,}  ",
              f"**字段数**: {len(enriched.columns)}  ",
              "",
-             "## 主表字段 (03_enriched_2025)",
+             "## 主表字段 (专业招生主表_统一_2025.xlsx)",
              "",
              "| 字段 | 类型 | 来源(非空数) | 缺失率 | 说明 | 示例 |",
              "|---|---|---|---:|---|---|"]
@@ -103,13 +103,13 @@ def build_data_dictionary(enriched: pd.DataFrame, lineage: dict) -> str:
         lines.append(f"| `{col_safe}` | {tp} | {src_str} | {miss_rate:.1f}% | {desc} | {example} |")
 
     lines.append("")
-    lines.append("## 关联表 (13_relation_2025)")
+    lines.append("## 关联表 (征集志愿关联表_2025)")
     lines.append("")
-    lines.append("`13_relation_2025.xlsx` 存储 2025 年征集志愿事件 (12,277 行)，以 (数据年份, 院校代码, 专业代码) 关联主表，附加 `_meta_轮次` 区分第一次/第二次征集。不合入主表因其具有时序维度。")
+    lines.append("`征集志愿关联表_2025.xlsx` 存储 2025 年征集志愿事件 (12,277 行)，以 (数据年份, 院校代码, 专业代码) 关联主表，附加 `_meta_轮次` 区分第一次/第二次征集。不合入主表因其具有时序维度。")
     lines.append("")
     lines.append("## Holdback")
     lines.append("")
-    lines.append("`13_historical.xlsx` (2023/2024, 10,732 行) 暂不纳入 P4 统一数据集，等待 Task 7b 完成 01×03 历史年份反哺后再合入。")
+    lines.append("`征集志愿_历史年份.xlsx` (2023/2024, 10,732 行) 暂不纳入 P4 统一数据集，等待 Task 7b 完成 01×03 历史年份反哺后再合入。")
 
     return "\n".join(lines)
 
@@ -194,10 +194,10 @@ def build_quality_dashboard(enriched: pd.DataFrame, lineage: dict, rel13_rows: i
     lines += ["",
               "## 7. 未解决问题",
               "",
-              "- **5 条 OCR malformed** (`data/_pipeline/P3/needs_human_review.csv`): 对口/艺术类特殊代码，需人工复核 OCR 图像",
+              "- **5 条 OCR malformed** (`data/_pipeline/P3/待人工复核.csv`): 对口/艺术类特殊代码，需人工复核 OCR 图像",
               "- **118 条无法桥接的四川招生码** (P2 遗留): 未入 01 配对，保留于 03 中仅占 03 独有一侧",
-              "- **22 条 missing_college_codes** (`data/_pipeline/P2/missing_college_codes.csv`): 01 国标码无对应四川招生码",
-              "- **2023/2024 历史数据** (`13_historical.xlsx` 10,732 行): 等 Task 7b 01×03 反哺后合入",
+              "- **22 条 无桥接院校码** (`data/_pipeline/P2/无桥接院校码.csv`): 01 国标码无对应四川招生码",
+              "- **2023/2024 历史数据** (`征集志愿_历史年份.xlsx` 10,732 行): 等 Task 7b 01×03 反哺后合入",
               "- **补充数据 (9 文件)**: 另属 P3 工单之外的独立数据源，单独解析",
               ""]
 

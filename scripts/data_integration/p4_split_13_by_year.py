@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 
 
-INPUT_PATH = Path("data/_pipeline/P3/13_clean.xlsx")
+INPUT_PATH = Path("data/_pipeline/P3/征集志愿_已清洗.xlsx")
 
 
 def split_by_year(df: pd.DataFrame, current_year: str = "2025") -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -35,8 +35,8 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    cur_path = out_dir / f"13_relation_{args.current_year}.xlsx"
-    hist_path = out_dir / "13_historical.xlsx"
+    cur_path = out_dir / f"征集志愿关联表_{args.current_year}.xlsx"
+    hist_path = out_dir / "征集志愿_历史年份.xlsx"
 
     current.to_excel(cur_path, index=False)
     historical.to_excel(hist_path, index=False)

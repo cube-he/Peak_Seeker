@@ -24,9 +24,9 @@ from pathlib import Path
 import pandas as pd
 
 
-ENRICHED_PATH = Path("data/_pipeline/P4/03_enriched_2025.xlsx")
-PATCHED_PATH = Path("data/_pipeline/P1/03_patched.xlsx")
-NEW_ROWS_PATH = Path("data/_pipeline/P2/backfill_new_rows_2025.xlsx")
+ENRICHED_PATH = Path("data/_pipeline/P4/专业招生主表_统一_2025.xlsx")
+PATCHED_PATH = Path("data/_pipeline/P1/主表_修复_2025.xlsx")
+NEW_ROWS_PATH = Path("data/_pipeline/P2/新增行_01独有_2025.xlsx")
 
 KEY_COLS = ("数据年份", "院校代码", "专业代码", "批次", "科目")
 

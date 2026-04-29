@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 `data/13_征集志愿/普通高考/` 下 99 个 OCR xlsx 清洗、标准化、与 03_enriched 主表对齐，产出可信的 `13_clean.xlsx`。
+**Goal:** 将 `data/13_征集志愿/普通高考/` 下 99 个 OCR xlsx 清洗、标准化、与 03_enriched 主表对齐，产出可信的 `征集志愿_已清洗.xlsx`。
 
-**Architecture:** 六阶段串行流水线（rename → pilot → OCR 错误量化 → 批量修复 → 主表对齐 → 人工复核）；每阶段独立脚本 + 测试，落盘中间件到 `data/_pipeline/P3/`；修复日志 `P3_fix_log.csv` 追加写入；遵循 ADR-003（不覆盖原始 OCR 文件，新文件走 `_pipeline/P3/`）。
+**Architecture:** 六阶段串行流水线（rename → pilot → OCR 错误量化 → 批量修复 → 主表对齐 → 人工复核）；每阶段独立脚本 + 测试，落盘中间件到 `data/_pipeline/P3/`；修复日志 `征集志愿_修复日志.csv` 追加写入；遵循 ADR-003（不覆盖原始 OCR 文件，新文件走 `_pipeline/P3/`）。
 
 **Tech Stack:** Python 3.11 + pandas + openpyxl + pytest；复用 `scripts/data_integration/lib/`。
 
@@ -31,13 +31,13 @@ data/_pipeline/P3/
   ocr_sample_index.csv             # P3.3 抽样索引
   ocr_error_catalog.md             # P3.3
   page_one_investigation.md        # P3.3 页码全为 1 根因
-  P3_fix_log.csv                   # P3.4 修复追加日志
-  13_normalized.xlsx               # P3.4 字符+代码+结构修复后
-  13_aligned.xlsx                  # P3.5 含主表对齐列
-  not_in_master.csv                # P3.5 合法离群
-  needs_human_review.csv           # P3.5→P3.6
+  征集志愿_修复日志.csv                   # P3.4 修复追加日志
+  征集志愿_规范化.xlsx               # P3.4 字符+代码+结构修复后
+  征集志愿_已对齐.xlsx                  # P3.5 含主表对齐列
+  主表未命中_合法补录.csv                # P3.5 合法离群
+  待人工复核.csv           # P3.5→P3.6
   unresolvable_images.csv          # P3.6
-  13_clean.xlsx                    # P3 终产物
+  征集志愿_已清洗.xlsx                    # P3 终产物
 docs/superpowers/specs/2026-04-17-data-integration-master/
   P3_report.md                     # 验收报告
 ```
@@ -417,8 +417,8 @@ git commit -m "feat: P3.3 OCR error rate quantification + page anomaly investiga
 **Files:**
 - Create: `scripts/data_integration/p3_repair.py`
 - Create: `scripts/data_integration/lib/ocr_fixes.py` (字符/代码/结构层)
-- Output: `data/_pipeline/P3/13_normalized.xlsx`
-- Output: `data/_pipeline/P3/P3_fix_log.csv`
+- Output: `data/_pipeline/P3/征集志愿_规范化.xlsx`
+- Output: `data/_pipeline/P3/征集志愿_修复日志.csv`
 
 **Design:** 严格顺序
 1. **字符标准化**（幂等）：繁→简、括号统一、空白归一
@@ -524,7 +524,7 @@ def repair_pipeline(raw_df, year):
     return df, log_all
 ```
 
-- [ ] **Step 7: 全量跑 → 产出 13_normalized.xlsx + P3_fix_log.csv**
+- [ ] **Step 7: 全量跑 → 产出 征集志愿_规范化.xlsx + 征集志愿_修复日志.csv**
 
 - [ ] **Step 8: 提交**
 
@@ -538,8 +538,8 @@ git commit -m "feat: P3.4 batch repair pipeline (char/code/structural/completene
 
 **Files:**
 - Create: `scripts/data_integration/p3_align_to_master.py`
-- Input: `data/_pipeline/P3/13_normalized.xlsx` + P2 `03_enriched`
-- Output: `data/_pipeline/P3/13_aligned.xlsx`, `not_in_master.csv`, `needs_human_review.csv`
+- Input: `data/_pipeline/P3/征集志愿_规范化.xlsx` + P2 `03_enriched`
+- Output: `data/_pipeline/P3/征集志愿_已对齐.xlsx`, `主表未命中_合法补录.csv`, `待人工复核.csv`
 
 **Design:**
 - 对 13_normalized 每行 `(院校代码, 专业代码, 年份)` 在 03_enriched 查存在性
@@ -575,14 +575,14 @@ def test_align_classifies_miss():
 ## Task 6: P3.6 人工复核（子 agent 辅助）
 
 **Files:**
-- Input: `data/_pipeline/P3/needs_human_review.csv`
+- Input: `data/_pipeline/P3/待人工复核.csv`
 - Output: `data/_pipeline/P3/unresolvable_images.csv`
-- Output: `data/_pipeline/P3/13_clean.xlsx` （13_aligned 去除 unresolvable + 合并人工修正）
+- Output: `data/_pipeline/P3/征集志愿_已清洗.xlsx` （13_aligned 去除 unresolvable + 合并人工修正）
 
 **Design:** 派遣子 agent 读 needs_human_review + 对应原图 → 判定是"可修正"还是"不可判读"。
 
 - [ ] **Step 1: 派遣子 agent 批处理 review 记录**
-- [ ] **Step 2: 合并修正 → 产出 13_clean.xlsx**
+- [ ] **Step 2: 合并修正 → 产出 征集志愿_已清洗.xlsx**
 - [ ] **Step 3: 提交**
 
 ---

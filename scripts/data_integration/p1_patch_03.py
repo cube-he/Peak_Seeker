@@ -5,9 +5,9 @@ Usage:
     python -m scripts.data_integration.p1_patch_03
 
 Outputs:
-    data/_pipeline/P1/03_patched.xlsx
-    data/_pipeline/P1/patch_log.csv
-    data/_pipeline/P1/unresolvable.csv (if any)
+    data/_pipeline/P1/主表_修复_2025.xlsx
+    data/_pipeline/P1/修复日志.csv
+    data/_pipeline/P1/无法修复项.csv (if any)
 """
 from __future__ import annotations
 
@@ -22,9 +22,9 @@ sys.stdout.reconfigure(encoding="utf-8")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC = REPO_ROOT / "data" / "03_专家版主表" / "output" / "专业招生主表.xlsx"
 OUT_DIR = REPO_ROOT / "data" / "_pipeline" / "P1"
-OUT_XLSX = OUT_DIR / "03_patched.xlsx"
-OUT_LOG = OUT_DIR / "patch_log.csv"
-OUT_UNRES = OUT_DIR / "unresolvable.csv"
+OUT_XLSX = OUT_DIR / "主表_修复_2025.xlsx"
+OUT_LOG = OUT_DIR / "修复日志.csv"
+OUT_UNRES = OUT_DIR / "无法修复项.csv"
 
 PRIMARY_KEY = ["数据年份", "院校代码", "专业组代码", "专业代码", "批次", "科目"]
 

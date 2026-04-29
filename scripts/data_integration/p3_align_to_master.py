@@ -4,8 +4,8 @@ P3.5 — 13_normalized 与 03 主表对齐校验。
 
 对 13 每行 (year, 院校代码, 专业代码) 在 03 主表做存在性检查:
   - 命中          → _in_master=True
-  - 未命中 + 畸形 → needs_human_review.csv
-  - 未命中 + 合法 → not_in_master.csv (征集对未完成计划的补充，合理)
+  - 未命中 + 畸形 → 待人工复核.csv
+  - 未命中 + 合法 → 主表未命中_合法补录.csv (征集对未完成计划的补充，合理)
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import pandas as pd
 
 
 MASTER_PATH = Path("data/03_专家版主表/output/专业招生主表.xlsx")
-INPUT_PATH = Path("data/_pipeline/P3/13_normalized.xlsx")
+INPUT_PATH = Path("data/_pipeline/P3/征集志愿_规范化.xlsx")
 
 
 def classify_miss(college_code, major_code) -> str:
@@ -95,9 +95,9 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    aligned_path = out_dir / "13_aligned.xlsx"
-    not_in_m_path = out_dir / "not_in_master.csv"
-    needs_rev_path = out_dir / "needs_human_review.csv"
+    aligned_path = out_dir / "征集志愿_已对齐.xlsx"
+    not_in_m_path = out_dir / "主表未命中_合法补录.csv"
+    needs_rev_path = out_dir / "待人工复核.csv"
 
     aligned.to_excel(aligned_path, index=False)
     not_in_m.to_csv(not_in_m_path, index=False, encoding="utf-8")

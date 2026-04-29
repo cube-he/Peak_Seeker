@@ -49,6 +49,10 @@ function toStr(val: any): string | null {
   return s || null;
 }
 
+function fsExists(p: string): boolean {
+  try { fs.accessSync(p); return true; } catch { return false; }
+}
+
 // ==================== Step 1: Score Segments ====================
 async function importScoreSegments() {
   console.log('\n=== [1/7] Score Segments ===');
@@ -99,7 +103,7 @@ async function importBatchLines() {
 }
 
 // ==================== Step 3: Universities ====================
-async function importUniversities(): Promise<Map<string, number>> {
+async function importUniversities(): Promise<{ codeToId: Map<string, number>; nameToId: Map<string, number> }> {
   console.log('\n=== [3/7] Universities ===');
   const data = loadJSON<any[]>('universities_enriched.json');
 
@@ -107,10 +111,12 @@ async function importUniversities(): Promise<Map<string, number>> {
   console.log('  Clearing dependent tables...');
   await prisma.admissionRecord.deleteMany();
   await prisma.enrollmentPlan.deleteMany();
+  try { await prisma.$executeRawUnsafe('TRUNCATE TABLE supplementary_records'); } catch {}
   await prisma.university.deleteMany();
   console.log('  Cleared');
 
   const codeToId = new Map<string, number>();
+  const nameToId = new Map<string, number>();
   let count = 0;
 
   for (const u of data) {
@@ -151,6 +157,9 @@ async function importUniversities(): Promise<Map<string, number>> {
         },
       });
       codeToId.set(code, uni.id);
+      // Zero-padded variants so lookups match whether caller uses "382" or "0382"
+      codeToId.set(code.padStart(4, '0'), uni.id);
+      if (u.name) nameToId.set(String(u.name), uni.id);
       count++;
       if (count % 200 === 0) process.stdout.write(`  ${count}/${data.length}\r`);
     } catch (e: any) {
@@ -158,7 +167,7 @@ async function importUniversities(): Promise<Map<string, number>> {
     }
   }
   console.log(`  Imported ${count} universities`);
-  return codeToId;
+  return { codeToId, nameToId };
 }
 
 // ==================== Step 4: Majors ====================
@@ -306,6 +315,14 @@ async function importAdmissionRecords(
         groupAdmissionCount: toInt(r.groupAdmissionCount),
         filingMinScore: toInt(r.filingMinScore),
         filingMinRank: toInt(r.filingMinRank),
+        subjects: toStr(r.subjects),
+        universityMinScore: toInt(r.universityMinScore),
+        universityMinRank: toInt(r.universityMinRank),
+        universityAvgScore: toInt(r.universityAvgScore),
+        universityAvgRank: toInt(r.universityAvgRank),
+        universityMaxScore: toInt(r.universityMaxScore),
+        universityMaxRank: toInt(r.universityMaxRank),
+        universityAdmissionCount: toInt(r.universityAdmissionCount),
       });
     }
 
@@ -374,6 +391,74 @@ async function importHealthRestrictions() {
   console.log(`  Imported ${count} health restrictions`);
 }
 
+// ==================== Step 8: Supplementary Records (征集志愿) ====================
+async function importSupplementaryRecords(
+  uniCodeToId: Map<string, number>,
+  uniNameToId: Map<string, number>,
+  majorNameToId: Map<string, number>,
+) {
+  console.log('\n=== [8] Supplementary Records (征集志愿) ===');
+  const path = `${DATA_DIR}/supplementary_records.json`;
+  if (!fsExists(path)) {
+    console.log('  跳过: supplementary_records.json 不存在');
+    return;
+  }
+  const data = loadJSON<any[]>('supplementary_records.json');
+  console.log(`  Loaded ${data.length} supplementary records`);
+
+  // TRUNCATE before refresh
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE supplementary_records');
+
+  const batchSize = 300;
+  let count = 0;
+  let skipped = 0;
+
+  for (let i = 0; i < data.length; i += batchSize) {
+    const batch = data.slice(i, i + batchSize);
+    const records: any[] = [];
+
+    for (const r of batch) {
+      // Match by enrollCode first, fallback to name
+      let uniId = uniCodeToId.get(String(r.universityEnrollCode ?? ''));
+      if (!uniId && r.universityName) uniId = uniNameToId.get(r.universityName);
+      if (!uniId) { skipped++; continue; }
+
+      const majorId = r.majorName ? (majorNameToId.get(r.majorName) ?? null) : null;
+
+      records.push({
+        year: r.year,
+        province: r.province || '四川',
+        batch: toStr(r.batch) || '',
+        roundNumber: toInt(r.roundNumber) ?? 1,
+        universityId: uniId,
+        universityName: r.universityName,
+        majorId,
+        majorName: r.majorName || null,
+        planCount: toInt(r.planCount),
+        requirements: toStr(r.requirements),
+        filingMinScore: toInt(r.filingMinScore),
+        filingMinRank: toInt(r.filingMinRank),
+      });
+    }
+
+    if (records.length > 0) {
+      try {
+        await prisma.supplementaryRecord.createMany({ data: records, skipDuplicates: true });
+        count += records.length;
+      } catch {
+        for (const r of records) {
+          try {
+            await prisma.supplementaryRecord.create({ data: r });
+            count++;
+          } catch { skipped++; }
+        }
+      }
+    }
+    if ((i / batchSize) % 10 === 0) process.stdout.write(`  ${count}/${data.length}\r`);
+  }
+  console.log(`  Imported ${count} supplementary records (skipped ${skipped})`);
+}
+
 // ==================== Main ====================
 async function main() {
   console.log('╔══════════════════════════════════════════════════════════╗');
@@ -392,15 +477,18 @@ async function main() {
     await importBatchLines();
 
     // 3-4: 主实体（返回ID映射）
-    const uniMap = await importUniversities();
+    const uniMaps = await importUniversities();
     const majorMap = await importMajors();
 
     // 5-6: 依赖表
-    await importEnrollmentPlans(uniMap, majorMap);
-    await importAdmissionRecords(uniMap, majorMap);
+    await importEnrollmentPlans(uniMaps.codeToId, majorMap);
+    await importAdmissionRecords(uniMaps.codeToId, majorMap);
 
     // 7: 扩展表
     await importHealthRestrictions();
+
+    // 8: 征集志愿
+    await importSupplementaryRecords(uniMaps.codeToId, uniMaps.nameToId, majorMap);
 
     const elapsed = ((Date.now() - start) / 1000).toFixed(0);
     console.log(`\n${'='.repeat(60)}`);

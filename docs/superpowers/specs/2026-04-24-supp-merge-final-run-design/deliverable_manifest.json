@@ -1,0 +1,42 @@
+{
+  "phase": "E_方案A",
+  "generated_at": "2026-04-24T22:59:06",
+  "master_frozen": {
+    "path": "data\\03_专家版主表\\output\\专业招生主表.xlsx",
+    "sha256": "2412fe17542956c8a804d9cd9e3fda9b5b0644acbe674d31c7eeb04053e92334"
+  },
+  "merged_preview": {
+    "path": "scripts\\data_integration\\_p5_out\\专业招生主表_含征集_20260424_225205.xlsx",
+    "sha256": "b44bf9b0c8d1a4525c9733bae34261334624d21ed86550af46b5113071028cd8"
+  },
+  "stats": {
+    "合并时间戳": "20260424_225205",
+    "征集总行数": 23579,
+    "已写入": 17231,
+    "未匹配": 6139,
+    "写入成功率": "73.1%",
+    "重复写入_ERROR": 30,
+    "重复写入_INFO_同值": 122,
+    "字段不一致_INFO": 1063,
+    "征集超计划_INFO": 1824,
+    "轮次断档_INFO": 1992,
+    "计划数递增_INFO": 599,
+    "未匹配_UNMATCHED": 2949,
+    "未匹配_REJECT_名称不一致": 2577,
+    "未匹配_REJECT_专项不一致": 234,
+    "未匹配_WARN_名称多命中": 332,
+    "未匹配_WARN_去类型多命中": 42,
+    "未匹配_KEY_INCOMPLETE": 5,
+    "phase_d_sample": 100,
+    "phase_d_pass": 100,
+    "phase_d_pass_rate": "100.0%"
+  },
+  "deliverables": [
+    "docs\\superpowers\\specs\\2026-04-24-supp-merge-final-run-design\\final_report.md",
+    "scripts\\data_integration\\_p5_out\\phase_e\\待审_重复写入.xlsx",
+    "scripts\\data_integration\\_p5_out\\phase_e\\待审_字段不一致.xlsx",
+    "scripts\\data_integration\\_p5_out\\phase_e\\待审_超计划.xlsx",
+    "scripts\\data_integration\\_p5_out\\phase_e\\未匹配_REJECT分类.xlsx",
+    "scripts\\data_integration\\_p5_out\\phase_e\\phase_d_核对报告_100条.xlsx"
+  ]
+}

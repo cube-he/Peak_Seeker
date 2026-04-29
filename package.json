@@ -23,7 +23,8 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "prisma": "^7.4.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "xlsx": "^0.18.5"
   },
   "engines": {
     "node": ">=20.0.0",

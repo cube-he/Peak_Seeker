@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-P3.6 — 汇总 13_aligned 为最终 13_clean.xlsx。
+P3.6 — 汇总 征集志愿_已对齐 为最终 征集志愿_已清洗.xlsx。
 
 规则:
   - 保留 _in_master=True 的行 (与 03 主表命中)
@@ -15,8 +15,8 @@ from pathlib import Path
 import pandas as pd
 
 
-INPUT_PATH = Path("data/_pipeline/P3/13_aligned.xlsx")
-REVIEW_PATH = Path("data/_pipeline/P3/needs_human_review.csv")
+INPUT_PATH = Path("data/_pipeline/P3/征集志愿_已对齐.xlsx")
+REVIEW_PATH = Path("data/_pipeline/P3/待人工复核.csv")
 
 
 def build_clean(aligned: pd.DataFrame) -> pd.DataFrame:
@@ -37,7 +37,7 @@ def main():
     clean = build_clean(aligned)
 
     out_dir = Path(args.out_dir)
-    clean_path = out_dir / "13_clean.xlsx"
+    clean_path = out_dir / "征集志愿_已清洗.xlsx"
     clean.to_excel(clean_path, index=False)
 
     total = len(aligned)

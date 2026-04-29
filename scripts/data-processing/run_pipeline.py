@@ -29,6 +29,7 @@ STEPS = [
     ('step7_supplementary.py',     '体检受限数据'),
     ('step8_validate.py',          '数据验证'),
     ('step9_policy_data.py',       '政策文件处理'),
+    ('step10_supplementary_collection.py', '征集志愿数据整合'),
 ]
 
 

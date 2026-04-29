@@ -93,8 +93,8 @@
 
 ## 7. 未解决问题
 
-- **5 条 OCR malformed** (`data/_pipeline/P3/needs_human_review.csv`): 对口/艺术类特殊代码，需人工复核 OCR 图像
+- **5 条 OCR malformed** (`data/_pipeline/P3/待人工复核.csv`): 对口/艺术类特殊代码，需人工复核 OCR 图像
 - **118 条无法桥接的四川招生码** (P2 遗留): 未入 01 配对，保留于 03 中仅占 03 独有一侧
-- **22 条 missing_college_codes** (`data/_pipeline/P2/missing_college_codes.csv`): 01 国标码无对应四川招生码
-- **2023/2024 历史数据** (`13_historical.xlsx` 10,732 行): 等 Task 7b 01×03 反哺后合入
+- **22 条 无桥接院校码** (`data/_pipeline/P2/无桥接院校码.csv`): 01 国标码无对应四川招生码
+- **2023/2024 历史数据** (`征集志愿_历史年份.xlsx` 10,732 行): 等 Task 7b 01×03 反哺后合入
 - **补充数据 (9 文件)**: 另属 P3 工单之外的独立数据源，单独解析

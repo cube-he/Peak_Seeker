@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-P3.4 — 批量修复 13 征集志愿 xlsx，合并为 13_normalized.xlsx + P3_fix_log.csv。
+P3.4 — 批量修复 13 征集志愿 xlsx，合并为 征集志愿_规范化.xlsx + 征集志愿_修复日志.csv。
 
 严格修复顺序:
   1. 加载 (dtype=str 避免 float 污染)
@@ -11,8 +11,8 @@ P3.4 — 批量修复 13 征集志愿 xlsx，合并为 13_normalized.xlsx + P3_f
 
 输入: data/13_征集志愿/普通高考/**/*.xlsx (排除补充数据)
 产出:
-  - data/_pipeline/P3/13_normalized.xlsx
-  - data/_pipeline/P3/P3_fix_log.csv
+  - data/_pipeline/P3/征集志愿_规范化.xlsx
+  - data/_pipeline/P3/征集志愿_修复日志.csv
 """
 from __future__ import annotations
 
@@ -249,10 +249,10 @@ def run_all(include_all_engines=False):
 
 def write_outputs(combined, log, skipped, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
-    xlsx_path = out_dir / "13_normalized.xlsx"
+    xlsx_path = out_dir / "征集志愿_规范化.xlsx"
     combined.to_excel(xlsx_path, index=False)
 
-    log_path = out_dir / "P3_fix_log.csv"
+    log_path = out_dir / "征集志愿_修复日志.csv"
     with log_path.open("w", encoding="utf-8", newline="") as f:
         fields = ["file", "row", "col", "fix_type", "old", "new"]
         w = csv.DictWriter(f, fieldnames=fields)
@@ -260,7 +260,7 @@ def write_outputs(combined, log, skipped, out_dir: Path):
         for row in log:
             w.writerow(row)
 
-    skip_path = out_dir / "P3_skipped.csv"
+    skip_path = out_dir / "征集志愿_已跳过.csv"
     with skip_path.open("w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         w.writerow(["file", "reason"])

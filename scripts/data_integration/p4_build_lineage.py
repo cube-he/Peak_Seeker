@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-P4.2 — 构建血缘文件 lineage.json
+P4.2 — 构建血缘文件 血缘.json
 
 策略:
   - 每个 (数据年份, 院校代码, 专业代码, 批次, 科目) + 列 = 一个单元
@@ -12,7 +12,7 @@ P4.2 — 构建血缘文件 lineage.json
     * P1 patch_log 记录的 (行,列) → 'patched'
 
 输出:
-  - lineage.json: 只存 column-level summary + 特例行 (patched 行)
+  - 血缘.json: 只存 column-level summary + 特例行 (patched 行)
     {
       "column_source_summary": {"col1": {"03": N, "01": M, ...}, ...},
       "patched_rows": [{"key": "...", "col": "...", "from": "", "to": ""}]
@@ -27,8 +27,8 @@ from pathlib import Path
 import pandas as pd
 
 
-ENRICHED_PATH = Path("data/_pipeline/P4/03_enriched_2025.xlsx")
-PATCH_LOG_PATH = Path("data/_pipeline/P1/patch_log.csv")
+ENRICHED_PATH = Path("data/_pipeline/P4/专业招生主表_统一_2025.xlsx")
+PATCH_LOG_PATH = Path("data/_pipeline/P1/修复日志.csv")
 
 KEY_COLS = ("数据年份", "院校代码", "专业代码", "批次", "科目")
 
@@ -110,11 +110,11 @@ def main():
 
     lineage = build_lineage(enriched, patch_log)
 
-    out_path = Path(args.out_dir) / "lineage.json"
+    out_path = Path(args.out_dir) / "血缘.json"
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(lineage, f, ensure_ascii=False, indent=2)
 
-    print(f"\nlineage.json: {lineage['totals']}")
+    print(f"\n血缘.json: {lineage['totals']}")
     print(f"→ {out_path}")
 
     # Print top columns by 01 contribution
