@@ -8,10 +8,17 @@
  *   python scripts/data-processing/deploy_data.py
  */
 import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import * as fs from 'fs';
 import * as path from 'path';
+import { config } from 'dotenv';
 
+// 加载 apps/server/.env 中的 DATABASE_URL
+config({ path: path.resolve(__dirname, '..', '..', 'apps', 'server', '.env') });
+
+const adapter = new PrismaMariaDb(process.env.DATABASE_URL!);
 const prisma = new PrismaClient({
+  adapter,
   log: ['warn', 'error'],
 });
 
