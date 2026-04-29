@@ -269,14 +269,23 @@ export class DataImportService {
       involvedMajors.add(`${row.major_code}_${row.major_name}`);
 
       // 3. 插入或更新招生计划
+      const subjects = rowExamType || '';
+      const recruitType = '征集志愿';
+      const groupCode = '';
+      const majorCode = row.major_code || '';
+      const majorName = row.major_name || '';
+
       await this.prisma.enrollmentPlan.upsert({
         where: {
-          universityId_majorId_year_province_batch: {
+          universityId_subjects_batch_recruitType_groupCode_majorCode_majorName_year: {
             universityId: university.id,
-            majorId: major.id,
-            year,
-            province,
+            subjects,
             batch,
+            recruitType,
+            groupCode,
+            majorCode,
+            majorName,
+            year,
           },
         },
         update: {
@@ -290,6 +299,11 @@ export class DataImportService {
           year,
           province,
           batch,
+          subjects,
+          recruitType,
+          groupCode,
+          majorCode,
+          majorName,
           planCount: row.plan_count,
           planNotes: '征集志愿',
         },
