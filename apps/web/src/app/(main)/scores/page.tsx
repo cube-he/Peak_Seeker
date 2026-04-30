@@ -205,7 +205,7 @@ export default function ScoresPage() {
   // 过滤器状态
   const [filterBatch, setFilterBatch] = useState<string | undefined>();
   const [filterSubjects, setFilterSubjects] = useState<string | undefined>(
-    examInfo.subjects || undefined,
+    examInfo.subjects?.length ? examInfo.subjects.join(',') : undefined,
   );
   const [filterRecruitType, setFilterRecruitType] = useState<string | undefined>();
   const [featureFilters, setFeatureFilters] = useState<{
