@@ -1,6 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AdmissionService } from './admission.service';
+import { FindAggregatedDto } from './dto/find-aggregated.dto';
 
 @ApiTags('录取数据')
 @Controller('admissions')
@@ -46,5 +47,11 @@ export class AdmissionController {
     @Query('year') year?: number,
   ) {
     return this.admissionService.getStatistics(province, year);
+  }
+
+  @Get('aggregated')
+  @ApiOperation({ summary: '聚合查询录取数据（多年趋势+招生计划）' })
+  async findAggregated(@Query() dto: FindAggregatedDto) {
+    return this.admissionService.findAggregated(dto);
   }
 }
