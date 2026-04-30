@@ -41,7 +41,135 @@ function getActiveIndex(events: TimelineEvent[]): number {
   return 0;
 }
 
-export default function TimelineTracker() {
+function formatDateRange(start: string | null, end: string | null): string {
+  if (!start) return '';
+  const s = new Date(start);
+  const startStr = `${s.getMonth() + 1}/${s.getDate()}`;
+  if (!end) return `${startStr} 起`;
+  const e = new Date(end);
+  return `${startStr} - ${e.getMonth() + 1}/${e.getDate()}`;
+}
+
+// ---- 倒计时徽章（Hero 左栏顶部） ----
+
+export function CountdownBadge({ events }: { events: TimelineEvent[] }) {
+  const activeIndex = useMemo(() => getActiveIndex(events), [events]);
+  if (events.length === 0) return null;
+
+  const activeEvent = events[activeIndex];
+  const config = getStatusConfig(activeEvent.status);
+  const days = activeEvent.status === 'countdown' ? getDaysUntil(activeEvent.startDate) : null;
+
+  const startDate = activeEvent.startDate ? new Date(activeEvent.startDate) : null;
+  const dateStr = startDate
+    ? `${startDate.getMonth() + 1}月${startDate.getDate()}日`
+    : '';
+  const endDate = activeEvent.endDate ? new Date(activeEvent.endDate) : null;
+  const fullDateStr = endDate
+    ? `${dateStr}-${endDate.getDate()}日`
+    : dateStr;
+
+  return (
+    <div className="inline-flex items-center gap-2.5 bg-accent/15 border border-accent/25 rounded-[10px] px-4 py-2 mb-5">
+      {days !== null ? (
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-accent to-accent-light flex flex-col items-center justify-center text-white shadow-[0_0_0_3px_rgba(184,134,11,0.2)] animate-pulse-ring flex-shrink-0">
+          <span className="font-serif text-[15px] font-bold leading-none">{days}</span>
+          <span className="text-[7px] font-medium opacity-80">天</span>
+        </div>
+      ) : (
+        <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center animate-pulse-ring flex-shrink-0">
+          <span className="w-2.5 h-2.5 bg-white rounded-full" />
+        </div>
+      )}
+      <div>
+        <div className="text-accent-light text-[13px] font-semibold leading-tight">
+          {days !== null ? `距 ${new Date().getFullYear()} 高考还有 ${days} 天` : `${activeEvent.name} · ${config.label}`}
+        </div>
+        <div className="text-white/40 text-[10px] mt-0.5">
+          {fullDateStr} · 四川省教育考试院
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- 右栏垂直时间轴 ----
+
+function TimelineNode({ event, isActive, isLast }: { event: TimelineEvent; isActive: boolean; isLast: boolean }) {
+  const config = getStatusConfig(event.status);
+  const days = event.status === 'countdown' ? getDaysUntil(event.startDate) : null;
+
+  const renderDot = () => {
+    if (config.type === 'completed') {
+      return (
+        <div className={`${isActive ? 'w-6 h-6' : 'w-[18px] h-[18px]'} rounded-full bg-safe/80 flex items-center justify-center text-white flex-shrink-0`}>
+          <span className={isActive ? 'text-[10px]' : 'text-[8px]'}>✓</span>
+        </div>
+      );
+    }
+    if (event.status === 'countdown' && days !== null) {
+      return (
+        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-accent to-accent-light flex items-center justify-center text-white shadow-[0_0_0_3px_rgba(184,134,11,0.2)] animate-pulse-ring flex-shrink-0">
+          <span className="font-serif text-[10px] font-bold">{days}</span>
+        </div>
+      );
+    }
+    if (config.type === 'active') {
+      return (
+        <div className="w-6 h-6 rounded-full bg-accent flex items-center justify-center shadow-[0_0_0_3px_rgba(184,134,11,0.2)] animate-pulse-ring flex-shrink-0">
+          <span className="w-2 h-2 bg-white rounded-full" />
+        </div>
+      );
+    }
+    return (
+      <div className={`${isActive ? 'w-6 h-6' : 'w-[18px] h-[18px]'} rounded-full bg-white/[0.12] flex-shrink-0 ${!isActive ? 'mx-[3px]' : ''}`} />
+    );
+  };
+
+  const lineColor = config.type === 'completed'
+    ? 'bg-safe/30'
+    : config.type === 'active'
+      ? 'bg-accent/30'
+      : 'bg-white/[0.06]';
+
+  return (
+    <div className="flex gap-2.5 items-start">
+      <div className="flex flex-col items-center flex-shrink-0">
+        {renderDot()}
+        {!isLast && <div className={`w-[1.5px] h-[18px] ${lineColor}`} />}
+      </div>
+      <div className="pt-0.5 pb-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[13px] font-medium ${
+            config.type === 'completed'
+              ? 'text-white/60'
+              : isActive
+                ? 'text-white'
+                : 'text-white/35'
+          }`}>
+            {event.name}
+          </span>
+          {isActive && (
+            <span className="text-[10px] text-accent-light font-medium">
+              {days !== null ? `${days}天` : config.label}
+            </span>
+          )}
+          {config.type === 'completed' && !isActive && (
+            <span className="text-[9px] text-safe/60">{config.label}</span>
+          )}
+          {config.type === 'pending' && (
+            <span className="text-[9px] text-white/20">{config.label}</span>
+          )}
+        </div>
+        <div className={`text-[10px] mt-0.5 ${isActive ? 'text-white/40' : 'text-white/20'}`}>
+          {formatDateRange(event.startDate, event.endDate)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function TimelinePanel() {
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const { data, isLoading } = useQuery({
     queryKey: ['timeline', currentYear],
@@ -54,97 +182,20 @@ export default function TimelineTracker() {
 
   if (isLoading || events.length === 0) return null;
 
-  // 当前活跃事件的描述文字
-  const activeEvent = events[activeIndex];
-  const activeConfig = getStatusConfig(activeEvent.status);
-  const days = activeEvent.status === 'countdown' ? getDaysUntil(activeEvent.startDate) : null;
-
-  // 活跃节点的摘要文字
-  const activeSummary = days !== null
-    ? `距${activeEvent.name}还有 ${days} 天`
-    : `${activeEvent.name} · ${activeConfig.label}`;
-
   return (
-    <div className="bg-[#162d4a] border-b border-white/[0.06]">
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12">
-        <div className="flex items-center h-10 sm:h-11 gap-3 sm:gap-0 sm:justify-between overflow-x-auto scrollbar-none">
-
-          {/* 左侧：活跃状态摘要（移动端主显示） */}
-          <div className="flex items-center gap-2 flex-shrink-0 sm:hidden">
-            <div className="w-2 h-2 rounded-full bg-accent animate-pulse-ring flex-shrink-0" />
-            <span className="text-[13px] text-white font-medium whitespace-nowrap">{activeSummary}</span>
-          </div>
-
-          {/* 桌面端：完整节点列表 */}
-          <div className="hidden sm:flex items-center gap-1 flex-1 justify-between">
-            {events.map((event, i) => {
-              const config = getStatusConfig(event.status);
-              const isActive = i === activeIndex;
-              const eventDays = event.status === 'countdown' ? getDaysUntil(event.startDate) : null;
-
-              return (
-                <div key={event.key} className="flex items-center gap-1">
-                  {/* 节点间连线 */}
-                  {i > 0 && (
-                    <div className={`w-4 lg:w-8 xl:w-12 h-[1.5px] rounded-full mx-0.5 ${
-                      getStatusConfig(events[i - 1].status).type === 'completed'
-                        ? 'bg-safe/50'
-                        : getStatusConfig(events[i - 1].status).type === 'active'
-                          ? 'bg-accent/40'
-                          : 'bg-white/10'
-                    }`} />
-                  )}
-
-                  {/* 节点 */}
-                  <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-colors ${
-                    isActive ? 'bg-white/[0.08]' : ''
-                  }`}>
-                    {/* 圆点 */}
-                    {config.type === 'completed' ? (
-                      <div className="w-4 h-4 rounded-full bg-safe/80 flex items-center justify-center flex-shrink-0">
-                        <span className="text-[8px] text-white">✓</span>
-                      </div>
-                    ) : isActive && eventDays !== null ? (
-                      <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center flex-shrink-0 animate-pulse-ring">
-                        <span className="text-[10px] text-white font-bold font-serif">{eventDays}</span>
-                      </div>
-                    ) : isActive ? (
-                      <div className="w-4 h-4 rounded-full bg-accent flex items-center justify-center flex-shrink-0 animate-pulse-ring">
-                        <span className="w-1.5 h-1.5 bg-white rounded-full" />
-                      </div>
-                    ) : (
-                      <div className="w-3.5 h-3.5 rounded-full bg-white/15 flex-shrink-0" />
-                    )}
-
-                    {/* 文字 */}
-                    <span className={`text-[12px] lg:text-[13px] whitespace-nowrap ${
-                      config.type === 'completed'
-                        ? 'text-white/60'
-                        : isActive
-                          ? 'text-white font-medium'
-                          : 'text-white/35'
-                    }`}>
-                      {event.name}
-                    </span>
-
-                    {/* 活跃节点额外信息 */}
-                    {isActive && (
-                      <span className="text-[10px] lg:text-[11px] text-accent-light font-medium whitespace-nowrap">
-                        {eventDays !== null ? `${eventDays}天` : activeConfig.label}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 右侧数据来源 */}
-          <span className="hidden lg:inline text-[10px] text-white/25 flex-shrink-0 ml-3">
-            四川省教育考试院
-          </span>
-        </div>
+    <div className="bg-white/[0.05] border border-white/[0.08] rounded-xl p-5">
+      <div className="text-[10px] text-white/40 uppercase tracking-[1.5px] mb-3.5">
+        录取进度
       </div>
+      {events.map((event, i) => (
+        <TimelineNode
+          key={event.key}
+          event={event}
+          isActive={i === activeIndex}
+          isLast={i === events.length - 1}
+        />
+      ))}
     </div>
   );
 }
+

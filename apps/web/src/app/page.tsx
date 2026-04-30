@@ -2,14 +2,22 @@
 
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
-import TimelineTracker from '@/components/home/TimelineTracker';
+import { CountdownBadge, TimelinePanel } from '@/components/home/TimelineTracker';
+import { useQuery } from '@tanstack/react-query';
+import { timelineApi } from '@/services/timeline-api';
+import { useMemo } from 'react';
 
 export default function HomePage() {
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const { data: timelineData } = useQuery({
+    queryKey: ['timeline', currentYear],
+    queryFn: () => timelineApi.getTimeline(currentYear),
+    staleTime: 60 * 60 * 1000,
+  });
+  const events = timelineData?.events ?? [];
+
   return (
     <MainLayout noPadding>
-      {/* Timeline Banner */}
-      <TimelineTracker />
-
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-primary">
         <div
@@ -28,93 +36,72 @@ export default function HomePage() {
           }}
         />
 
-        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-14 lg:py-[72px]">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-[72px]">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 lg:gap-10 items-start">
             {/* Left Column */}
             <div>
-              <div className="inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-full px-4 py-1.5 text-xs text-white/70 mb-6">
-                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
-                2026 四川在川招生数据已更新
-              </div>
-              <h1 className="font-serif text-[28px] sm:text-[36px] lg:text-[48px] font-bold leading-[1.15] tracking-tight text-white">
+              {/* Countdown Badge */}
+              <CountdownBadge events={events} />
+
+              <h1 className="font-serif text-[28px] sm:text-[36px] lg:text-[42px] font-bold leading-[1.15] tracking-tight text-white">
                 每一个志愿，
                 <br />
                 都值得被<span className="text-accent-light">认真对待</span>。
               </h1>
-              <p className="text-[15px] sm:text-[17px] text-white/70 leading-relaxed mt-5 max-w-[480px]">
-                智愿家汇集 2022-2025 年四川在川招生录取数据，结合智能推荐算法，帮助四川考生做出更有把握的志愿决策。
+              <p className="text-[15px] sm:text-[16px] text-white/65 leading-relaxed mt-4 max-w-[440px]">
+                汇集 2022-2025 年四川在川招生录取数据，帮助四川考生做出更有把握的志愿决策。
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 mt-8">
+              <div className="flex flex-col sm:flex-row gap-3 mt-7">
                 <Link
                   href="/recommend"
-                  className="w-full sm:w-auto text-center bg-accent hover:bg-accent-light text-white px-7 py-3.5 rounded-[10px] text-[15px] font-semibold shadow-glow-accent hover:-translate-y-px transition-all duration-200 no-underline"
+                  className="w-full sm:w-auto text-center bg-accent hover:bg-accent-light text-white px-7 py-3 rounded-[10px] text-[15px] font-semibold shadow-glow-accent hover:-translate-y-px transition-all duration-200 no-underline"
                 >
                   开始智能推荐
                 </Link>
                 <Link
                   href="/universities"
-                  className="w-full sm:w-auto text-center bg-white/10 text-white border border-white/20 px-7 py-3.5 rounded-[10px] text-[15px] font-medium hover:bg-white/20 transition-all duration-200 no-underline"
+                  className="w-full sm:w-auto text-center bg-white/10 text-white border border-white/20 px-7 py-3 rounded-[10px] text-[15px] font-medium hover:bg-white/20 transition-all duration-200 no-underline"
                 >
                   浏览在川招生院校
                 </Link>
               </div>
-            </div>
 
-            {/* Right Column — Data Cards */}
-            <div className="hidden lg:block relative h-[340px]">
-              <div className="absolute top-0 left-5 right-5 bg-white/90 backdrop-blur rounded-xl p-5 shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs text-text-muted">在川招生院校</div>
-                    <div className="font-serif text-[32px] font-semibold text-primary tabular-nums">
-                      2,237 所
+              {/* Stats row */}
+              <div className="flex gap-6 sm:gap-8 mt-8 pt-7 border-t border-white/10">
+                {[
+                  { value: '2,237', label: '在川招生院校' },
+                  { value: '14.4万', label: '录取记录' },
+                  { value: '1,434', label: '专业覆盖' },
+                  { value: '4年', label: '数据纵深' },
+                ].map((item, i) => (
+                  <div key={i}>
+                    <div className="font-serif text-lg sm:text-xl font-semibold text-white tabular-nums">
+                      {item.value}
+                    </div>
+                    <div className="text-[11px] text-white/40 mt-0.5">
+                      {item.label}
                     </div>
                   </div>
-                  <div className="flex gap-1.5">
-                    <span className="bg-rush/10 text-rush text-xs font-medium px-2.5 py-1 rounded-full">冲</span>
-                    <span className="bg-stable/10 text-stable text-xs font-medium px-2.5 py-1 rounded-full">稳</span>
-                    <span className="bg-safe/10 text-safe text-xs font-medium px-2.5 py-1 rounded-full">保</span>
-                  </div>
-                </div>
-                <div className="h-1.5 rounded-full overflow-hidden bg-border mt-4 flex">
-                  <div className="bg-rush h-full" style={{ width: '25%' }} />
-                  <div className="bg-stable h-full" style={{ width: '42%' }} />
-                  <div className="bg-safe h-full" style={{ width: '33%' }} />
-                </div>
+                ))}
               </div>
-              <div className="absolute top-[130px] left-0 w-[48%] bg-white/90 backdrop-blur rounded-xl p-5 shadow-lg">
-                <div className="text-xs text-text-muted">录取数据</div>
-                <div className="font-serif text-[28px] font-semibold text-accent tabular-nums">14.4 万条</div>
-                <div className="text-xs text-text-muted mt-1">2022-2025 四年真实录取</div>
-              </div>
-              <div className="absolute top-[240px] left-[15%] right-[15%] bg-white/90 backdrop-blur rounded-xl p-5 shadow-lg">
-                <div className="text-xs text-text-muted">招生计划</div>
-                <div className="font-serif text-[28px] font-semibold text-text tabular-nums">11.8 万条</div>
-                <div className="text-xs text-text-muted mt-1">四川考生专属 · 全国院校在川招生数据</div>
-              </div>
+            </div>
+
+            {/* Right Column — Timeline Panel (desktop only) */}
+            <div className="hidden lg:block pt-2">
+              <TimelinePanel />
             </div>
           </div>
         </div>
       </section>
 
-      {/* Trust Bar */}
-      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-20 flex flex-wrap justify-center gap-6 sm:gap-8 lg:gap-12">
-        {[
-          { value: '2,237', label: '在川招生院校' },
-          { value: '1,434', label: '专业覆盖' },
-          { value: '4年', label: '录取数据（2022-2025）' },
-          { value: '14.4万', label: '录取记录' },
-        ].map((item, i) => (
-          <div key={i}>
-            <div className="font-serif text-xl sm:text-[28px] font-semibold text-primary tabular-nums text-center">
-              {item.value}
-            </div>
-            <div className="text-[13px] text-text-muted mt-1 text-center">
-              {item.label}
-            </div>
+      {/* Mobile Timeline (below hero) */}
+      {events.length > 0 && (
+        <section className="lg:hidden bg-primary/95 px-4 pb-4">
+          <div className="max-w-md mx-auto">
+            <TimelinePanel />
           </div>
-        ))}
-      </section>
+        </section>
+      )}
 
       {/* Features Section */}
       <section className="bg-surface-dim py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12">
