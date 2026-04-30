@@ -122,7 +122,7 @@ function TimelineNode({ event, isActive, isLast }: { event: TimelineEvent; isAct
       );
     }
     return (
-      <div className={`${isActive ? 'w-6 h-6' : 'w-[18px] h-[18px]'} rounded-full bg-white/[0.12] flex-shrink-0 ${!isActive ? 'mx-[3px]' : ''}`} />
+      <div className={`${isActive ? 'w-6 h-6' : 'w-[18px] h-[18px]'} rounded-full border-2 border-white/15 bg-white/[0.04] flex-shrink-0 ${!isActive ? 'mx-[3px]' : ''}`} />
     );
   };
 
@@ -183,11 +183,17 @@ export function TimelinePanel() {
   if (isLoading || events.length === 0) return null;
 
   return (
-    <div className="bg-white/[0.05] border border-white/[0.08] rounded-xl p-5 flex flex-col w-full">
-      <div className="text-[10px] text-white/40 uppercase tracking-[1.5px] mb-auto">
-        录取进度
+    <div
+      className="bg-white/[0.04] backdrop-blur-md border border-white/[0.12] rounded-xl p-5 flex flex-col w-full"
+      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px -12px rgba(0,0,0,0.4)' }}
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-[2px] h-3 bg-accent-light rounded-full" />
+        <span className="text-[10px] text-white/50 uppercase tracking-[1.5px]">
+          录取进度
+        </span>
       </div>
-      <div className="flex flex-col justify-between flex-1 mt-3">
+      <div className="flex flex-col justify-between flex-1">
         {events.map((event, i) => (
           <TimelineNode
             key={event.key}

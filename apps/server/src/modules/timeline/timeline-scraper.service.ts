@@ -9,7 +9,7 @@ export interface ScrapedAnnouncement {
 }
 
 export interface StatusMatch {
-  key: string;       // 'gaokao' | 'score_query' | 'early_batch' | 'regular_batch' | 'vocational_batch'
+  key: string;       // 与 timeline.service seedYear 中的 key 对齐
   status: string;    // 目标状态
   sourceUrl: string; // 公告链接
 }
@@ -52,6 +52,7 @@ export class TimelineScraperService {
   /**
    * 标题 → (节点key, 目标状态) 的匹配逻辑
    * 基于2025年四川省教育考试院真实公告标题模式
+   * 与 timeline.service seedYear 的 10 节点结构对齐
    */
   matchTitle(title: string): { key: string; status: string } | null {
     // 全部录取结束 → 所有节点完成（调用方需特殊处理）
@@ -71,39 +72,96 @@ export class TimelineScraperService {
 
     // 志愿填报时间
     if (/志愿填报时间/.test(title)) {
-      return { key: 'score_query', status: 'available' };
+      return { key: 'volunteer_filling', status: 'filling' };
     }
 
-    // --- 专科批（先匹配，避免被"本科"误匹配） ---
+    // --- 专科批 / 高职专科批（先匹配，避免被"本科"误匹配） ---
     if (/(专科|高职)/.test(title)) {
-      if (/征集志愿/.test(title)) {
-        const round = this.extractRound(title);
-        return { key: 'vocational_batch', status: `collecting_${round}` };
+      // 高职/专科 提前批
+      if (/(高职.*专科.*提前批|专科.*提前批|提前批.*专科)/.test(title)) {
+        if (/征集志愿/.test(title)) {
+          const round = this.extractRound(title);
+          return { key: 'vocational_early', status: `collecting_${round}` };
+        }
+        if (/(投档|开始录取|正在录取)/.test(title)) {
+          return { key: 'vocational_early', status: 'in_progress' };
+        }
       }
-      if (/(投档|开始录取|正在录取)/.test(title)) {
-        return { key: 'vocational_batch', status: 'in_progress' };
+      // 高职/专科 普通批
+      if (/(高职.*专科.*批|专科批次)/.test(title) && !/提前批/.test(title)) {
+        if (/征集志愿/.test(title)) {
+          const round = this.extractRound(title);
+          return { key: 'vocational_batch', status: `collecting_${round}` };
+        }
+        if (/(投档|开始录取|正在录取)/.test(title)) {
+          return { key: 'vocational_batch', status: 'in_progress' };
+        }
       }
     }
 
-    // --- 本科提前批 ---
-    if (/本科提前批/.test(title)) {
+    // --- 本科提前批 A 段 ---
+    if (/本科提前批.*A段/.test(title)) {
       if (/征集志愿/.test(title)) {
         const round = this.extractRound(title);
-        return { key: 'early_batch', status: `collecting_${round}` };
+        return { key: 'early_batch_a', status: `collecting_${round}` };
       }
       if (/(投档录取开始|开始录取|正在录取|投档$)/.test(title)) {
-        return { key: 'early_batch', status: 'in_progress' };
+        return { key: 'early_batch_a', status: 'in_progress' };
       }
     }
 
-    // --- 本科批（非提前批） ---
-    if (/本科批次/.test(title) && !/提前/.test(title)) {
+    // --- 本科提前批 B 段 ---
+    if (/本科提前批.*B段/.test(title)) {
       if (/征集志愿/.test(title)) {
         const round = this.extractRound(title);
-        return { key: 'regular_batch', status: `collecting_${round}` };
+        return { key: 'early_batch_b', status: `collecting_${round}` };
+      }
+      if (/(投档录取开始|开始录取|正在录取|投档$)/.test(title)) {
+        return { key: 'early_batch_b', status: 'in_progress' };
+      }
+    }
+
+    // --- 本科提前批（未指明 A/B 段，整段进度推 A 段，因为 A 段先行） ---
+    if (/本科提前批/.test(title) && !/[AB]段/.test(title)) {
+      if (/征集志愿/.test(title)) {
+        const round = this.extractRound(title);
+        return { key: 'early_batch_a', status: `collecting_${round}` };
+      }
+      if (/(投档录取开始|开始录取|正在录取|投档$)/.test(title)) {
+        return { key: 'early_batch_a', status: 'in_progress' };
+      }
+    }
+
+    // --- 本科批 A 段（专项类） ---
+    if (/本科批次.*A段/.test(title) && !/提前/.test(title)) {
+      if (/征集志愿/.test(title)) {
+        const round = this.extractRound(title);
+        return { key: 'regular_batch_a', status: `collecting_${round}` };
       }
       if (/(投档|开始录取|正在录取)/.test(title)) {
-        return { key: 'regular_batch', status: 'in_progress' };
+        return { key: 'regular_batch_a', status: 'in_progress' };
+      }
+    }
+
+    // --- 本科批 B 段（普通类） ---
+    if (/本科批次.*B段/.test(title) && !/提前/.test(title)) {
+      if (/征集志愿/.test(title)) {
+        const round = this.extractRound(title);
+        return { key: 'regular_batch_b', status: `collecting_${round}` };
+      }
+      if (/(投档|开始录取|正在录取)/.test(title)) {
+        return { key: 'regular_batch_b', status: 'in_progress' };
+      }
+    }
+
+    // --- 本科批（未指明 A/B 段） ---
+    if (/本科批次/.test(title) && !/提前/.test(title) && !/[AB]段/.test(title)) {
+      if (/征集志愿/.test(title)) {
+        const round = this.extractRound(title);
+        return { key: 'regular_batch_b', status: `collecting_${round}` };
+      }
+      if (/(投档|开始录取|正在录取)/.test(title)) {
+        return { key: 'regular_batch_b', status: 'in_progress' };
       }
     }
 

@@ -20,17 +20,38 @@ export default function HomePage() {
     <MainLayout noPadding>
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-primary">
-        {/* 背景图 */}
+        {/* 背景图（淡化） */}
         <div
-          className="absolute inset-0 opacity-20"
+          className="absolute inset-0 opacity-[0.10]"
           style={{
             backgroundImage: `url('/images/bg-hero-home.webp')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
         />
+        {/* 装饰光晕：右上暖色 + 左下冷色，打破矩形铺图的单调 */}
         <div
-          className="absolute inset-0"
+          className="absolute -top-1/3 -right-1/4 w-[60%] aspect-square pointer-events-none"
+          style={{
+            background: 'radial-gradient(circle at center, rgba(184,134,11,0.18) 0%, rgba(184,134,11,0.05) 35%, transparent 70%)',
+          }}
+        />
+        <div
+          className="absolute -bottom-1/3 -left-1/4 w-[55%] aspect-square pointer-events-none"
+          style={{
+            background: 'radial-gradient(circle at center, rgba(120,160,200,0.12) 0%, rgba(120,160,200,0.03) 40%, transparent 70%)',
+          }}
+        />
+        {/* 微噪点纹理（极淡，增加质感） */}
+        <div
+          className="absolute inset-0 opacity-[0.03] pointer-events-none mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          }}
+        />
+        {/* 顶部柔光过渡 */}
+        <div
+          className="absolute inset-0 pointer-events-none"
           style={{
             background: 'linear-gradient(to bottom, rgba(30,58,95,0.3) 0%, transparent 40%, transparent 100%)',
           }}

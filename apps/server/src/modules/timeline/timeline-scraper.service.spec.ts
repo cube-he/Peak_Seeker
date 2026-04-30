@@ -33,52 +33,62 @@ describe('TimelineScraperService', () => {
         .toEqual({ key: 'score_query', status: 'available' });
     });
 
+    it('should match 志愿填报时间通知', () => {
+      expect(service.matchTitle('四川省2025年普通高考志愿填报时间温馨提示'))
+        .toEqual({ key: 'volunteer_filling', status: 'filling' });
+    });
+
     it('should match 本科提前批A段投档录取开始', () => {
       expect(service.matchTitle('我省2025年普通类本科提前批A段投档录取开始 计划总体满足率高'))
-        .toEqual({ key: 'early_batch', status: 'in_progress' });
+        .toEqual({ key: 'early_batch_a', status: 'in_progress' });
     });
 
     it('should match 本科提前批A段征集志愿（第1次）', () => {
       expect(service.matchTitle('关于本科提前批次A段未完成计划高校征集志愿的通知'))
-        .toEqual({ key: 'early_batch', status: 'collecting_1' });
+        .toEqual({ key: 'early_batch_a', status: 'collecting_1' });
     });
 
     it('should match 本科提前批B段投档录取开始', () => {
       expect(service.matchTitle('我省2025年普通类本科提前批次B段投档录取开始'))
-        .toEqual({ key: 'early_batch', status: 'in_progress' });
+        .toEqual({ key: 'early_batch_b', status: 'in_progress' });
     });
 
     it('should match 本科提前批B段第二次征集志愿', () => {
       expect(service.matchTitle('关于本科提前批次B段未完成计划高校第二次征集志愿的通知'))
-        .toEqual({ key: 'early_batch', status: 'collecting_2' });
+        .toEqual({ key: 'early_batch_b', status: 'collecting_2' });
     });
 
     it('should match 本科批次A段国家专项征集志愿', () => {
       expect(service.matchTitle('关于本科批次A段国家专项计划未完成计划高校征集志愿的通知'))
-        .toEqual({ key: 'regular_batch', status: 'collecting_1' });
+        .toEqual({ key: 'regular_batch_a', status: 'collecting_1' });
     });
 
     it('should match 本科批次A段第二次征集', () => {
       expect(service.matchTitle('关于本科批次A段国家专项计划第二次、地方专项计划第一次征集志愿的通知'))
-        .toEqual({ key: 'regular_batch', status: 'collecting_2' });
+        .toEqual({ key: 'regular_batch_a', status: 'collecting_2' });
     });
 
     it('should match 本科批次B段投档', () => {
       expect(service.matchTitle('我省2025年普通类本科批次B段今日投档'))
-        .toEqual({ key: 'regular_batch', status: 'in_progress' });
+        .toEqual({ key: 'regular_batch_b', status: 'in_progress' });
     });
 
     it('should match 本科批次B段第三次征集', () => {
       expect(service.matchTitle('关于本科批次B段第三次征集志愿的通知'))
-        .toEqual({ key: 'regular_batch', status: 'collecting_3' });
+        .toEqual({ key: 'regular_batch_b', status: 'collecting_3' });
     });
 
-    it('should match 专科提前批正在录取', () => {
+    it('should match 高职专科提前批正在录取', () => {
       expect(service.matchTitle('我省2025年普通类高职（专科）提前批次正在录取'))
-        .toEqual({ key: 'vocational_batch', status: 'in_progress' });
+        .toEqual({ key: 'vocational_early', status: 'in_progress' });
     });
 
-    it('should match 专科批次开始录取', () => {
+    it('should match 专科提前批征集志愿', () => {
+      expect(service.matchTitle('关于专科提前批次征集志愿的通知'))
+        .toEqual({ key: 'vocational_early', status: 'collecting_1' });
+    });
+
+    it('should match 高职专科批开始录取', () => {
       expect(service.matchTitle('我省2025年普通类高职（专科）批次开始录取'))
         .toEqual({ key: 'vocational_batch', status: 'in_progress' });
     });
@@ -125,7 +135,7 @@ describe('TimelineScraperService', () => {
       // 2024年的公告应被过滤掉
       expect(result).toHaveLength(2);
       expect(result.map(r => r.key)).toContain('gaokao');
-      expect(result.map(r => r.key)).toContain('early_batch');
+      expect(result.map(r => r.key)).toContain('early_batch_a');
     });
 
     it('should include admission-period announcements without year in title', () => {
