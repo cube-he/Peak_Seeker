@@ -6,6 +6,7 @@ import { BankOutlined, HistoryOutlined, RocketOutlined } from '@ant-design/icons
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
+import { RankInput } from '@/components/score/RankInput';
 import { majorService } from '@/services/major';
 import CareerTab from '@/components/major/CareerTab';
 
@@ -169,7 +170,8 @@ export default function MajorDetailPage() {
       </nav>
 
       {/* Hero Header Card */}
-      <div className="rounded-xl bg-surface shadow-card p-6 md:p-8 mb-4">
+      <div className="rounded-xl bg-surface shadow-card p-6 md:p-8 mb-4 flex flex-col md:flex-row md:gap-6 md:items-start">
+        <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3 mb-3">
           <h1 className="font-serif text-[36px] font-semibold text-text m-0">{m.name}</h1>
           {m.code && (
@@ -240,6 +242,10 @@ export default function MajorDetailPage() {
             </Descriptions.Item>
           )}
         </Descriptions>
+        </div>
+        <div className="md:w-[300px] md:flex-shrink-0 mt-4 md:mt-0">
+          <RankInput variant="compact" className="!bg-surface-dim !border-border" />
+        </div>
       </div>
 
       {/* Tabs Card */}

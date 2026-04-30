@@ -12,6 +12,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
+import { RankInput } from '@/components/score/RankInput';
 import { universityService } from '@/services/university';
 import RankingCard from '@/components/university/RankingCard';
 import SatisfactionCard from '@/components/university/SatisfactionCard';
@@ -271,12 +272,17 @@ export default function UniversityDetailPage() {
               {[u.province, u.city, u.type, u.level, u.runningNature].filter(Boolean).join(' · ')}
             </div>
           </div>
-          {u.ranking && (
-            <div className="bg-surface rounded-lg shadow-card p-5 border-l-[3px] border-l-accent text-center">
-              <div className="text-2xl font-bold text-primary font-serif">{u.ranking}</div>
-              <div className="text-xs text-text-muted">全国排名</div>
+          <div className="flex items-start gap-3">
+            {u.ranking && (
+              <div className="bg-surface rounded-lg shadow-card p-5 border-l-[3px] border-l-accent text-center">
+                <div className="text-2xl font-bold text-primary font-serif">{u.ranking}</div>
+                <div className="text-xs text-text-muted">全国排名</div>
+              </div>
+            )}
+            <div className="w-[280px]">
+              <RankInput variant="compact" className="!bg-surface !border-border" />
             </div>
-          )}
+          </div>
         </div>
       </div>
 
