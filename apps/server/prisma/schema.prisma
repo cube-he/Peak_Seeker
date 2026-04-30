@@ -1425,3 +1425,25 @@ model AlgorithmConfig {
   @@unique([name, version])
   @@map("algorithm_configs")
 }
+
+// ==================== 高考时间轴 ====================
+
+model TimelineEvent {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  key       String   @db.VarChar(30)   // 'gaokao' | 'score_query' | 'early_batch' | 'regular_batch' | 'vocational_batch'
+  name      String   @db.VarChar(30)   // "高考"、"本科提前批"等
+  status    String   @db.VarChar(30)   // 'countdown' | 'estimated' | 'filling' | 'in_progress' | 'collecting_1' | 'collecting_2' | 'collecting_3' | 'available' | 'completed'
+  sortOrder Int      @map("sort_order")
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  detail    Json?     // 征集截止时间、子批次信息等
+  sourceUrl String?  @map("source_url") @db.VarChar(500)
+  year      Int
+
+  @@unique([key, year])
+  @@index([year])
+  @@map("timeline_events")
+}
