@@ -41,74 +41,6 @@ function getActiveIndex(events: TimelineEvent[]): number {
   return 0;
 }
 
-// ---- 紧凑横幅节点 ----
-
-function BannerNode({ event, isActive, index }: { event: TimelineEvent; isActive: boolean; index: number }) {
-  const config = getStatusConfig(event.status);
-  const days = event.status === 'countdown' ? getDaysUntil(event.startDate) : null;
-
-  // 节点圆圈：活跃节点 28px，其余 20px
-  const renderDot = () => {
-    if (config.type === 'completed') {
-      return (
-        <div className={`${isActive ? 'w-7 h-7' : 'w-5 h-5'} rounded-full bg-safe flex items-center justify-center text-white flex-shrink-0`}>
-          <span className={isActive ? 'text-xs' : 'text-[9px]'}>✓</span>
-        </div>
-      );
-    }
-    if (event.status === 'countdown' && days !== null) {
-      return (
-        <div className={`${isActive ? 'w-7 h-7' : 'w-5 h-5'} rounded-full bg-gradient-to-br from-accent to-accent-light flex items-center justify-center text-white animate-pulse-ring flex-shrink-0`}>
-          <span className={`font-serif font-bold leading-none ${isActive ? 'text-xs' : 'text-[9px]'}`}>{days}</span>
-        </div>
-      );
-    }
-    if (config.type === 'active') {
-      return (
-        <div className={`${isActive ? 'w-7 h-7' : 'w-5 h-5'} rounded-full bg-accent flex items-center justify-center animate-pulse-ring flex-shrink-0`}>
-          <span className={`bg-white rounded-full block ${isActive ? 'w-2 h-2' : 'w-1.5 h-1.5'}`} />
-        </div>
-      );
-    }
-    return (
-      <div className={`${isActive ? 'w-7 h-7' : 'w-5 h-5'} rounded-full bg-white/20 flex items-center justify-center text-white/50 flex-shrink-0`}>
-        <span className={`font-serif font-medium ${isActive ? 'text-[10px]' : 'text-[8px]'}`}>{index + 1}</span>
-      </div>
-    );
-  };
-
-  const textColor = config.type === 'completed'
-    ? 'text-white/80'
-    : config.type === 'active'
-      ? 'text-white'
-      : 'text-white/40';
-
-  return (
-    <div className="flex items-center gap-1.5 sm:gap-2">
-      {renderDot()}
-      <div className="hidden sm:flex flex-col leading-none">
-        <span className={`text-[11px] sm:text-xs font-medium ${textColor}`}>{event.name}</span>
-        {isActive && (
-          <span className="text-[9px] sm:text-[10px] text-accent-light font-medium mt-0.5">
-            {event.status === 'countdown' && days !== null ? `${days}天` : config.label}
-          </span>
-        )}
-      </div>
-      {/* 移动端只在活跃节点显示名称 */}
-      {isActive && (
-        <span className={`sm:hidden text-[11px] font-medium ${textColor}`}>
-          {event.name}
-          <span className="text-accent-light ml-1">
-            {event.status === 'countdown' && days !== null ? `${days}天` : config.label}
-          </span>
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ---- 主组件：紧凑横幅 ----
-
 export default function TimelineTracker() {
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const { data, isLoading } = useQuery({
@@ -120,46 +52,97 @@ export default function TimelineTracker() {
   const events = data?.events ?? [];
   const activeIndex = useMemo(() => getActiveIndex(events), [events]);
 
-  // 连接线渐变
-  const lineGradient = useMemo(() => {
-    if (events.length === 0) return 'transparent';
-    const segments: string[] = [];
-    const step = 100 / (events.length - 1);
-    for (let i = 0; i < events.length - 1; i++) {
-      const start = step * i;
-      const end = step * (i + 1);
-      const cfg = getStatusConfig(events[i].status);
-      const color = cfg.type === 'completed'
-        ? 'rgba(39,103,73,0.6)'
-        : cfg.type === 'active'
-          ? 'rgba(184,134,11,0.6)'
-          : 'rgba(255,255,255,0.15)';
-      segments.push(`${color} ${start}%, ${color} ${end}%`);
-    }
-    return `linear-gradient(to right, ${segments.join(', ')})`;
-  }, [events]);
-
   if (isLoading || events.length === 0) return null;
 
-  return (
-    <div className="bg-primary/95 backdrop-blur-sm border-b border-white/10">
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-2.5 sm:py-3">
-        <div className="flex items-center justify-between gap-2 relative">
-          {/* 连接线 */}
-          <div
-            className="absolute top-1/2 left-3 right-3 h-[2px] rounded-full -translate-y-1/2 z-0 hidden sm:block"
-            style={{ background: lineGradient }}
-          />
+  // 当前活跃事件的描述文字
+  const activeEvent = events[activeIndex];
+  const activeConfig = getStatusConfig(activeEvent.status);
+  const days = activeEvent.status === 'countdown' ? getDaysUntil(activeEvent.startDate) : null;
 
-          {events.map((event, i) => (
-            <div key={event.key} className="relative z-[1] flex-shrink-0">
-              <BannerNode
-                event={event}
-                isActive={i === activeIndex}
-                index={i}
-              />
-            </div>
-          ))}
+  // 活跃节点的摘要文字
+  const activeSummary = days !== null
+    ? `距${activeEvent.name}还有 ${days} 天`
+    : `${activeEvent.name} · ${activeConfig.label}`;
+
+  return (
+    <div className="bg-[#162d4a] border-b border-white/[0.06]">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12">
+        <div className="flex items-center h-10 sm:h-11 gap-3 sm:gap-0 sm:justify-between overflow-x-auto scrollbar-none">
+
+          {/* 左侧：活跃状态摘要（移动端主显示） */}
+          <div className="flex items-center gap-2 flex-shrink-0 sm:hidden">
+            <div className="w-2 h-2 rounded-full bg-accent animate-pulse-ring flex-shrink-0" />
+            <span className="text-[13px] text-white font-medium whitespace-nowrap">{activeSummary}</span>
+          </div>
+
+          {/* 桌面端：完整节点列表 */}
+          <div className="hidden sm:flex items-center gap-1 flex-1 justify-between">
+            {events.map((event, i) => {
+              const config = getStatusConfig(event.status);
+              const isActive = i === activeIndex;
+              const eventDays = event.status === 'countdown' ? getDaysUntil(event.startDate) : null;
+
+              return (
+                <div key={event.key} className="flex items-center gap-1">
+                  {/* 节点间连线 */}
+                  {i > 0 && (
+                    <div className={`w-4 lg:w-8 xl:w-12 h-[1.5px] rounded-full mx-0.5 ${
+                      getStatusConfig(events[i - 1].status).type === 'completed'
+                        ? 'bg-safe/50'
+                        : getStatusConfig(events[i - 1].status).type === 'active'
+                          ? 'bg-accent/40'
+                          : 'bg-white/10'
+                    }`} />
+                  )}
+
+                  {/* 节点 */}
+                  <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-colors ${
+                    isActive ? 'bg-white/[0.08]' : ''
+                  }`}>
+                    {/* 圆点 */}
+                    {config.type === 'completed' ? (
+                      <div className="w-4 h-4 rounded-full bg-safe/80 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[8px] text-white">✓</span>
+                      </div>
+                    ) : isActive && eventDays !== null ? (
+                      <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center flex-shrink-0 animate-pulse-ring">
+                        <span className="text-[10px] text-white font-bold font-serif">{eventDays}</span>
+                      </div>
+                    ) : isActive ? (
+                      <div className="w-4 h-4 rounded-full bg-accent flex items-center justify-center flex-shrink-0 animate-pulse-ring">
+                        <span className="w-1.5 h-1.5 bg-white rounded-full" />
+                      </div>
+                    ) : (
+                      <div className="w-3.5 h-3.5 rounded-full bg-white/15 flex-shrink-0" />
+                    )}
+
+                    {/* 文字 */}
+                    <span className={`text-[12px] lg:text-[13px] whitespace-nowrap ${
+                      config.type === 'completed'
+                        ? 'text-white/60'
+                        : isActive
+                          ? 'text-white font-medium'
+                          : 'text-white/35'
+                    }`}>
+                      {event.name}
+                    </span>
+
+                    {/* 活跃节点额外信息 */}
+                    {isActive && (
+                      <span className="text-[10px] lg:text-[11px] text-accent-light font-medium whitespace-nowrap">
+                        {eventDays !== null ? `${eventDays}天` : activeConfig.label}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 右侧数据来源 */}
+          <span className="hidden lg:inline text-[10px] text-white/25 flex-shrink-0 ml-3">
+            四川省教育考试院
+          </span>
         </div>
       </div>
     </div>
