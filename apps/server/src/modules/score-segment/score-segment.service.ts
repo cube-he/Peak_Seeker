@@ -2,7 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ExamType, mapExamType } from './exam-type.helper';
 
-interface LookupResult {
+export interface LookupResult {
   year: number;
   examType: ExamType;
   score: number;
@@ -14,7 +14,7 @@ interface LookupResult {
   percentile: number;
 }
 
-interface EquivalentResult {
+export interface EquivalentResult {
   base: LookupResult;
   equivalents: LookupResult[];
 }
