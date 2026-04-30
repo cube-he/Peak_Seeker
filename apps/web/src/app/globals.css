@@ -67,6 +67,15 @@ body {
   animation: fadeIn 400ms ease;
 }
 
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 4px var(--color-accent-fixed); }
+  50% { box-shadow: 0 0 0 10px rgba(184, 134, 11, 0.08); }
+  100% { box-shadow: 0 0 0 4px var(--color-accent-fixed); }
+}
+.animate-pulse-ring {
+  animation: pulse-ring 2s infinite;
+}
+
 /* ========================================
    Ant Design Global Overrides
    智愿家 Zhiyuanjia Design System
