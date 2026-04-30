@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ExamType } from './exam-type.helper';
+import { ExamType, mapExamType } from './exam-type.helper';
 
 interface LookupResult {
   year: number;
@@ -99,12 +99,37 @@ export class ScoreSegmentService {
     return row?.cumulativeCount ?? 0;
   }
 
-  /** 跨年等位换算 — Task 5 实现 */
+  /**
+   * 跨年等位换算（线性比例法）
+   * p = R / N_baseYear
+   * 对每个目标年 y: examType_y = mapExamType(K, y); R_y = round(p × N_y); 查 rankToScore
+   */
   async equivalent(
-    _baseYear: number,
-    _examType: ExamType,
-    _rank: number,
+    baseYear: number,
+    examType: ExamType,
+    rank: number,
   ): Promise<EquivalentResult> {
-    throw new Error('not implemented');
+    const baseTotal = await this.getTotalCount(baseYear, examType);
+    if (baseTotal === 0) {
+      throw new BadRequestException(`${baseYear} 年 ${examType} 无数据`);
+    }
+    const baseScore = await this.rankToScore(baseYear, examType, rank);
+    const p = rank / baseTotal;
+
+    const targetYears = this.SUPPORTED_YEARS.filter((y) => y !== baseYear);
+    const equivalents: LookupResult[] = [];
+    for (const y of targetYears) {
+      const yExamType = mapExamType(examType, y);
+      const yTotal = await this.getTotalCount(y, yExamType);
+      if (yTotal === 0) continue; // 目标年缺数据，跳过
+      const Ry = Math.max(1, Math.round(p * yTotal));
+      const yScore = await this.rankToScore(y, yExamType, Ry);
+      equivalents.push(yScore);
+    }
+
+    return {
+      base: { ...baseScore, rank, percentile: p },
+      equivalents,
+    };
   }
 }
