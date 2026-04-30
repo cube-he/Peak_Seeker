@@ -26,6 +26,8 @@ import { HealthModule } from './modules/health/health.module';
 import { HealthRestrictionModule } from './modules/health-restriction/health-restriction.module';
 import { EligibleRegionModule } from './modules/eligible-region/eligible-region.module';
 import { TimelineModule } from './modules/timeline/timeline.module';
+import { ScoreSegmentModule } from './modules/score-segment/score-segment.module';
+import { AlgorithmConfigModule } from './modules/algorithm-config/algorithm-config.module';
 
 @Module({
   imports: [
@@ -70,6 +72,8 @@ import { TimelineModule } from './modules/timeline/timeline.module';
     HealthRestrictionModule,
     EligibleRegionModule,
     TimelineModule,
+    ScoreSegmentModule,
+    AlgorithmConfigModule,
   ],
   providers: [
     // 全局应用限流守卫
