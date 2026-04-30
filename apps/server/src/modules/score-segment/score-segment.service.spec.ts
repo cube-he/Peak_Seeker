@@ -125,5 +125,71 @@ describe('ScoreSegmentService', () => {
       expect(e2024.rank).toBe(18000);
       expect(e2024.score).toBe(595);
     });
+
+    it('基准年无数据 → 抛 BadRequestException', async () => {
+      // getTotalCount 返回 null（即 baseTotal=0）
+      prisma.scoreSegment.findFirst.mockResolvedValue(null);
+      await expect(service.equivalent(2025, '物理', 20000)).rejects.toThrow(
+        '2025 年 物理 无数据',
+      );
+    });
+
+    it('某目标年缺数据 → 该年被跳过，equivalents 长度减少', async () => {
+      // 2025/物理 有数据；2024/理科 缺；2023/理科、2022/理科 有数据
+      prisma.scoreSegment.findFirst.mockImplementation((args: any) => {
+        const { where, orderBy } = args;
+        if (where.year === 2025 && where.examType === '物理') {
+          if (orderBy?.cumulativeCount === 'desc') {
+            return Promise.resolve({ score: 0, cumulativeCount: 200000 });
+          }
+          if (where.cumulativeCount?.gte != null) {
+            return Promise.resolve({ score: 600, cumulativeCount: where.cumulativeCount.gte });
+          }
+        }
+        if (where.year === 2024 && where.examType === '理科') {
+          return Promise.resolve(null); // 全部查询都返 null → yTotal=0 → 跳过
+        }
+        if (where.year === 2023 && where.examType === '理科') {
+          if (orderBy?.cumulativeCount === 'desc') {
+            return Promise.resolve({ score: 0, cumulativeCount: 190000 });
+          }
+          if (where.cumulativeCount?.gte != null) {
+            return Promise.resolve({ score: 590, cumulativeCount: where.cumulativeCount.gte });
+          }
+        }
+        if (where.year === 2022 && where.examType === '理科') {
+          if (orderBy?.cumulativeCount === 'desc') {
+            return Promise.resolve({ score: 0, cumulativeCount: 195000 });
+          }
+          if (where.cumulativeCount?.gte != null) {
+            return Promise.resolve({ score: 585, cumulativeCount: where.cumulativeCount.gte });
+          }
+        }
+        return Promise.resolve(null);
+      });
+
+      const result = await service.equivalent(2025, '物理', 20000);
+      expect(result.equivalents).toHaveLength(2); // 2023/2022，2024 被跳过
+      expect(result.equivalents.find((e) => e.year === 2024)).toBeUndefined();
+    });
+
+    it('基准年=2022 理科 → 所有目标年保持理科（覆盖 mapExamType 直通分支）', async () => {
+      // 输入 examType='理科'，mapExamType 应对 2023/2024/2025 都返 '理科'
+      prisma.scoreSegment.findFirst.mockImplementation((args: any) => {
+        const { where, orderBy } = args;
+        if (where.examType !== '理科') return Promise.resolve(null);
+        if (orderBy?.cumulativeCount === 'desc') {
+          return Promise.resolve({ score: 0, cumulativeCount: 200000 });
+        }
+        if (where.cumulativeCount?.gte != null) {
+          return Promise.resolve({ score: 580, cumulativeCount: where.cumulativeCount.gte });
+        }
+        return Promise.resolve(null);
+      });
+
+      const result = await service.equivalent(2022, '理科', 30000);
+      expect(result.equivalents).toHaveLength(3); // 2023/2024/2025
+      expect(result.equivalents.every((e) => e.examType === '理科')).toBe(true);
+    });
   });
 });
