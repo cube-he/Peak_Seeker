@@ -112,15 +112,15 @@ def run_local(cmd, cwd=None):
 
 def run_remote(ssh, cmd):
     """执行远程命令"""
-    print(f'  > {cmd}')
+    safe_print(f'  > {cmd}')
     stdin, stdout, stderr = ssh.exec_command(cmd, timeout=180)
     out = stdout.read().decode('utf-8', errors='replace')
     err = stderr.read().decode('utf-8', errors='replace')
     exit_code = stdout.channel.recv_exit_status()
     if out:
-        print(out[:500])
+        safe_print(out[:500])
     if err and 'warning' not in err.lower() and exit_code != 0:
-        print(f'  STDERR: {err[:300]}')
+        safe_print(f'  STDERR: {err[:300]}')
     return exit_code == 0
 
 
