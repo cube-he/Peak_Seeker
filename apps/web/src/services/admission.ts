@@ -1,4 +1,8 @@
 import api from './api';
+import type {
+  AggregatedAdmissionQuery,
+  AggregatedAdmissionResponse,
+} from '@volunteer-helper/shared';
 
 export interface AdmissionByScoreParams {
   score: number;
@@ -25,5 +29,9 @@ export const admissionService = {
 
   getStatistics(province: string, year?: number): Promise<any> {
     return api.get('/admissions/statistics', { params: { province, year } }) as any;
+  },
+
+  getAggregated(params: AggregatedAdmissionQuery): Promise<AggregatedAdmissionResponse> {
+    return api.get('/admissions/aggregated', { params }) as any;
   },
 };
