@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Card, Steps, Spin } from 'antd';
 import {
   FileTextOutlined,
@@ -10,6 +11,7 @@ import {
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
+import { timelineApi } from '@/services/timeline-api';
 import { useAuthStore } from '@/stores/authStore';
 
 const PROGRESS_STEPS = [
@@ -39,24 +41,51 @@ export default function StudentDashboardPage() {
   const profile = profileData?.data;
   const currentStep = STATUS_TO_STEP[profile?.status || 'COLLECTING'] ?? 0;
 
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const { data: timelineData } = useQuery({
+    queryKey: ['timeline', currentYear],
+    queryFn: () => timelineApi.getTimeline(currentYear),
+    staleTime: 60 * 60 * 1000,
+  });
+
+  const countdownDays = useMemo(() => {
+    const events = timelineData?.events ?? [];
+    const countdown = events.find((e) => e.status === 'countdown');
+    if (!countdown?.startDate) return null;
+    const target = new Date(countdown.startDate);
+    const now = new Date();
+    return Math.max(0, Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  }, [timelineData]);
+
   return (
     <div className="space-y-4">
       {/* Greeting */}
-      <div
-        className="mb-2 rounded-xl p-5 -mx-1"
-        style={{
-          backgroundImage: `url('/images/bg-student-welcome.webp')`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-        }}
-      >
-        <h1 className="font-serif text-xl font-semibold text-text">
-          你好，{user?.realName || user?.username || '同学'} 👋
-        </h1>
-        <p className="text-sm text-text-muted mt-1">
-          距离高考还有 <span className="font-medium text-primary">52</span> 天
-        </p>
+      <div className="mb-4 rounded-xl shadow-card relative overflow-hidden bg-primary">
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{
+            backgroundImage: `url('/images/bg-student-welcome.webp')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'right -40px center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: 'linear-gradient(to right, rgba(30,58,95,0.85) 0%, rgba(30,58,95,0.3) 100%)' }}
+        />
+        <div className="relative p-5">
+          <h1 className="font-serif text-xl font-semibold text-white">
+            你好，{user?.realName || user?.username || '同学'} 👋
+          </h1>
+          <p className="text-sm text-white/65 mt-1">
+            {countdownDays !== null ? (
+              <>距离高考还有 <span className="font-semibold text-accent-light">{countdownDays}</span> 天</>
+            ) : (
+              '欢迎使用智愿家'
+            )}
+          </p>
+        </div>
       </div>
 
       {/* Progress Card */}

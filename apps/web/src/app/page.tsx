@@ -32,12 +32,12 @@ export default function HomePage() {
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(to bottom, rgba(30,58,95,0.3) 0%, transparent 40%, transparent 70%, var(--color-bg) 100%)',
+            background: 'linear-gradient(to bottom, rgba(30,58,95,0.3) 0%, transparent 40%, transparent 100%)',
           }}
         />
 
-        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-16 sm:py-20 lg:py-24">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-10 lg:gap-12 items-stretch">
+        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-20">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_240px] lg:grid-cols-[1fr_280px] gap-10 lg:gap-12 items-start">
             {/* Left Column */}
             <div>
               <CountdownBadge events={events} />
@@ -66,7 +66,7 @@ export default function HomePage() {
               </div>
 
               {/* Stats */}
-              <div className="flex gap-8 mt-10 pt-8 border-t border-white/10">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 lg:gap-8 mt-10 pt-8 border-t border-white/10">
                 {[
                   { value: '2,237', label: '在川招生院校' },
                   { value: '14.4万', label: '录取记录' },
@@ -83,22 +83,20 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Right Column — Timeline */}
-            <div className="hidden lg:flex">
+            {/* Right Column — Timeline (md+) */}
+            <div className="hidden md:flex">
               <TimelinePanel />
             </div>
           </div>
+
+          {/* Mobile Timeline (sm only) — kept inside hero so bg-primary is continuous */}
+          {events.length > 0 && (
+            <div className="md:hidden mt-8 max-w-md">
+              <TimelinePanel />
+            </div>
+          )}
         </div>
       </section>
-
-      {/* Mobile Timeline */}
-      {events.length > 0 && (
-        <section className="lg:hidden bg-primary px-4 pb-6 -mt-1">
-          <div className="max-w-md mx-auto">
-            <TimelinePanel />
-          </div>
-        </section>
-      )}
 
       {/* Features Section */}
       <section className="bg-surface-dim py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-12">

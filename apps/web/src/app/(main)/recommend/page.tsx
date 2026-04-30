@@ -137,23 +137,30 @@ export default function RecommendPage() {
   const totalCount = rushCount + stableCount + safeCount;
 
   return (
-    <MainLayout>
-      {/* Page Title */}
-      <div
-        className="mb-8 -mx-4 sm:-mx-6 lg:-mx-12 -mt-6 px-4 sm:px-6 lg:px-12 pt-8 pb-6"
-        style={{
-          backgroundImage: `linear-gradient(to bottom, transparent 40%, var(--color-bg) 100%), url('/images/bg-recommend-header.webp')`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center top',
-          backgroundRepeat: 'no-repeat',
-        }}
-      >
-        <h2 className="font-serif text-xl font-semibold text-text mb-1">智能推荐</h2>
-        <p className="text-sm text-text-secondary">输入分数和位次，AI 智能生成冲稳保方案</p>
+    <MainLayout noPadding>
+      {/* Page Title — full bleed banner */}
+      <div className="relative overflow-hidden bg-primary">
+        <div
+          className="absolute inset-0 opacity-40"
+          style={{
+            backgroundImage: `url('/images/bg-recommend-header.webp')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center top',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: 'linear-gradient(to bottom, transparent 70%, var(--color-bg) 100%)' }}
+        />
+        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 pt-8 pb-10">
+          <h2 className="font-serif text-2xl sm:text-3xl lg:text-[32px] font-semibold text-white mb-1">智能推荐</h2>
+          <p className="text-sm sm:text-[15px] text-white/65">输入分数和位次，AI 智能生成冲稳保方案</p>
+        </div>
       </div>
 
       {/* Main Layout: Sidebar + Content */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-8 flex flex-col lg:flex-row gap-6 items-start">
         {/* Left Sidebar */}
         <div className="w-full lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-24">
           <div className="bg-surface rounded-xl p-6">
