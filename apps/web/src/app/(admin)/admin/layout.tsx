@@ -24,6 +24,7 @@ const mainNavItems = [
   { href: '/admin/users', icon: <TeamOutlined />, label: '用户管理' },
   { href: '/admin/data/import', icon: <DatabaseOutlined />, label: '数据导入' },
   { href: '/admin/config', icon: <SettingOutlined />, label: '系统配置' },
+  { href: '/admin/algorithm-config', icon: <SettingOutlined />, label: '算法配置' },
   { href: '/admin/ai-config', icon: <RobotOutlined />, label: 'AI 配置' },
 ];
 
