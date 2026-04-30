@@ -90,7 +90,7 @@ function TrendCell({
   return (
     <div className="flex items-center justify-end">
       <span className="[font-variant-numeric:tabular-nums] text-text-secondary text-xs">
-        {recent
+        {[...recent].reverse()
           .map((yd) => {
             const v = getValue(yd);
             return v != null ? (v > 999 ? v.toLocaleString() : String(v)) : '-';
@@ -596,7 +596,7 @@ export default function ScoresPage() {
               columns={columns}
               dataSource={result?.data ?? []}
               rowKey={(record: AggregatedAdmissionItem) =>
-                `${record.university.id}:${record.majorCode}:${record.groupCode}:${record.batch}`
+                `${record.university.id}:${record.majorCode}:${record.groupCode}:${record.batch}:${record.recruitType}`
               }
               loading={isLoading}
               expandable={{

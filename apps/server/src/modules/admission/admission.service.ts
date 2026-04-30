@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { FindAggregatedDto } from './dto/find-aggregated.dto';
 
@@ -104,6 +104,10 @@ export class AdmissionService {
       pageSize = 20,
     } = dto;
 
+    if (score == null && rank == null) {
+      throw new BadRequestException('score or rank is required');
+    }
+
     const scoreRange = range ?? 20;
     const rankRange = range ?? 5000;
 
@@ -134,10 +138,27 @@ export class AdmissionService {
       if (isDoubleFirstClass) where.university.isDoubleFirstClass = true;
     }
 
-    // 查询所有年份的匹配记录
+    // 查询所有年份的匹配记录（take: 10000 防 OOM）
     const records = await this.prisma.admissionRecord.findMany({
       where,
-      include: {
+      select: {
+        universityId: true,
+        majorId: true,
+        year: true,
+        majorCode: true,
+        majorName: true,
+        groupCode: true,
+        batch: true,
+        subjects: true,
+        recruitType: true,
+        majorMinScore: true,
+        majorMinRank: true,
+        majorAvgScore: true,
+        majorAvgRank: true,
+        majorAdmissionCount: true,
+        groupMinScore: true,
+        groupMinRank: true,
+        groupAdmissionCount: true,
         university: {
           select: {
             id: true,
@@ -163,6 +184,7 @@ export class AdmissionService {
         },
       },
       orderBy: [{ universityId: 'asc' }, { majorCode: 'asc' }, { year: 'desc' }],
+      take: 10000,
     });
 
     // 按 (universityId, majorCode, groupCode, batch, recruitType) 分组
@@ -218,13 +240,17 @@ export class AdmissionService {
       });
     }
 
-    // 按"最近年份最佳可用分数"排序
+    // 按"最近年份最佳可用分数/位次"排序
     const allGroups = Array.from(groups.values());
     allGroups.sort((a, b) => {
-      const aScore = this.getBestScore(a.yearlyData);
-      const bScore = this.getBestScore(b.yearlyData);
-      if (score) return (bScore ?? 0) - (aScore ?? 0); // 按分数降序
-      return (aScore ?? Infinity) - (bScore ?? Infinity); // 按位次升序
+      if (score != null) {
+        const aScore = this.getBestScore(a.yearlyData);
+        const bScore = this.getBestScore(b.yearlyData);
+        return (bScore ?? 0) - (aScore ?? 0); // 按分数降序
+      }
+      const aRank = this.getBestRank(a.yearlyData);
+      const bRank = this.getBestRank(b.yearlyData);
+      return (aRank ?? Infinity) - (bRank ?? Infinity); // 按位次升序
     });
 
     const total = allGroups.length;
@@ -303,6 +329,16 @@ export class AdmissionService {
     for (const yd of yearlyData) {
       if (yd.majorMinScore != null) return yd.majorMinScore;
       if (yd.groupMinScore != null) return yd.groupMinScore;
+    }
+    return null;
+  }
+
+  // 取最新年份的最佳可用位次（majorMinRank 优先，groupMinRank 兜底）
+  private getBestRank(yearlyData: any[]): number | null {
+    if (yearlyData.length === 0) return null;
+    for (const yd of yearlyData) {
+      if (yd.majorMinRank != null) return yd.majorMinRank;
+      if (yd.groupMinRank != null) return yd.groupMinRank;
     }
     return null;
   }
