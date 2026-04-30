@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import { CountdownBadge, TimelinePanel } from '@/components/home/TimelineTracker';
+import { RankInput } from '@/components/score/RankInput';
 import { useQuery } from '@tanstack/react-query';
 import { timelineApi } from '@/services/timeline-api';
 import { useMemo } from 'react';
@@ -104,8 +105,9 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Right Column — Timeline (md+) */}
-            <div className="hidden md:flex">
+            {/* Right Column — RankInput + Timeline (md+) */}
+            <div className="hidden md:flex md:flex-col md:gap-4 w-full">
+              <RankInput variant="compact" />
               <TimelinePanel />
             </div>
           </div>
