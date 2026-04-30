@@ -20,54 +20,53 @@ export default function HomePage() {
     <MainLayout noPadding>
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-primary">
+        {/* 背景图 */}
         <div
-          className="absolute inset-0 opacity-25"
+          className="absolute inset-0 opacity-20"
           style={{
             backgroundImage: `url('/images/bg-hero-home.webp')`,
             backgroundSize: 'cover',
-            backgroundPosition: 'center 30%',
-            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'center',
           }}
         />
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(to bottom, transparent 60%, var(--color-bg) 100%)',
+            background: 'linear-gradient(to bottom, rgba(30,58,95,0.3) 0%, transparent 40%, transparent 70%, var(--color-bg) 100%)',
           }}
         />
 
-        <div className="relative max-w-[1400px] mx-auto px-6 sm:px-10 lg:px-16 py-14 sm:py-20 lg:py-24">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-8 lg:gap-12 items-start">
+        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-16 sm:py-20 lg:py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-10 lg:gap-16 items-start">
             {/* Left Column */}
             <div>
-              {/* Countdown Badge */}
               <CountdownBadge events={events} />
 
-              <h1 className="font-serif text-[28px] sm:text-[36px] lg:text-[42px] font-bold leading-[1.15] tracking-tight text-white">
+              <h1 className="font-serif text-[28px] sm:text-[36px] lg:text-[44px] font-bold leading-[1.12] tracking-tight text-white">
                 每一个志愿，
                 <br />
                 都值得被<span className="text-accent-light">认真对待</span>。
               </h1>
-              <p className="text-[15px] sm:text-[16px] text-white/65 leading-relaxed mt-4 max-w-[440px]">
+              <p className="text-[15px] sm:text-[17px] text-white/65 leading-relaxed mt-5 max-w-[460px]">
                 汇集 2022-2025 年四川在川招生录取数据，帮助四川考生做出更有把握的志愿决策。
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 mt-7">
+              <div className="flex flex-col sm:flex-row gap-3 mt-8">
                 <Link
                   href="/recommend"
-                  className="w-full sm:w-auto text-center bg-accent hover:bg-accent-light text-white px-7 py-3 rounded-[10px] text-[15px] font-semibold shadow-glow-accent hover:-translate-y-px transition-all duration-200 no-underline"
+                  className="w-full sm:w-auto text-center bg-accent hover:bg-accent-light text-white px-7 py-3.5 rounded-[10px] text-[15px] font-semibold shadow-glow-accent hover:-translate-y-px transition-all duration-200 no-underline"
                 >
                   开始智能推荐
                 </Link>
                 <Link
                   href="/universities"
-                  className="w-full sm:w-auto text-center bg-white/10 text-white border border-white/20 px-7 py-3 rounded-[10px] text-[15px] font-medium hover:bg-white/20 transition-all duration-200 no-underline"
+                  className="w-full sm:w-auto text-center bg-white/10 text-white border border-white/20 px-7 py-3.5 rounded-[10px] text-[15px] font-medium hover:bg-white/20 transition-all duration-200 no-underline"
                 >
                   浏览在川招生院校
                 </Link>
               </div>
 
-              {/* Stats row */}
-              <div className="flex gap-6 sm:gap-8 mt-8 pt-7 border-t border-white/10">
+              {/* Stats */}
+              <div className="flex gap-8 mt-10 pt-8 border-t border-white/10">
                 {[
                   { value: '2,237', label: '在川招生院校' },
                   { value: '14.4万', label: '录取记录' },
@@ -75,28 +74,26 @@ export default function HomePage() {
                   { value: '4年', label: '数据纵深' },
                 ].map((item, i) => (
                   <div key={i}>
-                    <div className="font-serif text-lg sm:text-xl font-semibold text-white tabular-nums">
+                    <div className="font-serif text-[20px] sm:text-[22px] font-semibold text-white tabular-nums">
                       {item.value}
                     </div>
-                    <div className="text-[11px] text-white/40 mt-0.5">
-                      {item.label}
-                    </div>
+                    <div className="text-[11px] text-white/40 mt-1">{item.label}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Right Column — Timeline Panel (desktop only) */}
-            <div className="hidden lg:block pt-2">
+            {/* Right Column — Timeline */}
+            <div className="hidden lg:block">
               <TimelinePanel />
             </div>
           </div>
         </div>
       </section>
 
-      {/* Mobile Timeline (below hero) */}
+      {/* Mobile Timeline */}
       {events.length > 0 && (
-        <section className="lg:hidden bg-primary/95 px-4 pb-4">
+        <section className="lg:hidden bg-primary px-4 pb-6 -mt-1">
           <div className="max-w-md mx-auto">
             <TimelinePanel />
           </div>
@@ -104,7 +101,7 @@ export default function HomePage() {
       )}
 
       {/* Features Section */}
-      <section className="bg-surface-dim py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12">
+      <section className="bg-surface-dim py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-12">
         <div className="max-w-[1200px] mx-auto">
           <div className="text-[11px] uppercase tracking-[2px] text-accent font-medium">
             核心能力
@@ -140,7 +137,7 @@ export default function HomePage() {
       </section>
 
       {/* How It Works */}
-      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-20">
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-16 sm:py-20 lg:py-24">
         <div className="text-[11px] uppercase tracking-[2px] text-accent font-medium">使用流程</div>
         <h2 className="font-serif text-[24px] sm:text-[30px] lg:text-[36px] font-semibold text-text mt-2.5">
           三步，从迷茫到从容
@@ -168,10 +165,9 @@ export default function HomePage() {
             backgroundImage: `url('/images/bg-cta-home.webp')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
           }}
         />
-        <div className="relative py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-12 text-center">
+        <div className="relative py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-12 text-center">
           <h2 className="font-serif text-[24px] sm:text-[30px] lg:text-[36px] font-semibold text-white">
             你的未来，值得一份好方案
           </h2>
