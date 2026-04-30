@@ -27,8 +27,18 @@ export class TimelineScraperService {
   analyzeAnnouncements(announcements: ScrapedAnnouncement[], year: number): StatusMatch[] {
     const matches: StatusMatch[] = [];
     const matched = new Set<string>(); // 每个 key 只取最新的一条
+    const yearStr = String(year);
 
     for (const ann of announcements) {
+      // 只处理当年公告：日期以当年开头，或标题含当年年份
+      const isCurrentYear = ann.date.startsWith(yearStr) || ann.title.includes(yearStr);
+      // 部分通知标题不含年份（如"关于本科提前批次A段...征集志愿的通知"），
+      // 但如果日期属于当年6-9月（高考录取期），也视为当年公告
+      const dateMonth = this.extractMonth(ann.date);
+      const isAdmissionPeriod = ann.date.startsWith(yearStr) && dateMonth >= 6 && dateMonth <= 9;
+
+      if (!isCurrentYear && !isAdmissionPeriod) continue;
+
       const result = this.matchTitle(ann.title);
       if (result && !matched.has(result.key)) {
         matched.add(result.key);
@@ -104,6 +114,14 @@ export class TimelineScraperService {
    * 从标题中提取征集志愿轮次
    * 无"第N次"标注 → 1，"第二次" → 2，"第三次" → 3
    */
+  /**
+   * 从日期字符串提取月份 (e.g. "2025/7/10 21:41:30" → 7)
+   */
+  private extractMonth(dateStr: string): number {
+    const parts = dateStr.split('/');
+    return parts.length >= 2 ? parseInt(parts[1], 10) : 0;
+  }
+
   extractRound(title: string): number {
     const m = title.match(/第([二三四五六七八九十]+)次/);
     if (!m) return 1;

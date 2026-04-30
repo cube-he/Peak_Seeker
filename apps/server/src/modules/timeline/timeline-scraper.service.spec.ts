@@ -114,6 +114,30 @@ describe('TimelineScraperService', () => {
     });
   });
 
+  describe('analyzeAnnouncements - year filtering', () => {
+    it('should only match announcements from the specified year', () => {
+      const announcements = [
+        { title: '我省2025年普通高考顺利结束', date: '2025/6/9 18:28:00', url: 'https://example.com/2025' },
+        { title: '关于本科提前批次A段未完成计划高校征集志愿的通知', date: '2025/7/10 21:41:30', url: 'https://example.com/collecting' },
+        { title: '我省2024年普通高考顺利结束', date: '2024/6/9 18:00:00', url: 'https://example.com/2024' },
+      ];
+      const result = service.analyzeAnnouncements(announcements, 2025);
+      // 2024年的公告应被过滤掉
+      expect(result).toHaveLength(2);
+      expect(result.map(r => r.key)).toContain('gaokao');
+      expect(result.map(r => r.key)).toContain('early_batch');
+    });
+
+    it('should include admission-period announcements without year in title', () => {
+      const announcements = [
+        { title: '关于专科批次征集志愿的通知（含物理类计划）', date: '2025/8/11 17:02:48', url: 'https://example.com/vocational' },
+      ];
+      const result = service.analyzeAnnouncements(announcements, 2025);
+      expect(result).toHaveLength(1);
+      expect(result[0].key).toBe('vocational_batch');
+    });
+  });
+
   describe('parseListPage', () => {
     it('should parse announcements from HTML', () => {
       const html = `
