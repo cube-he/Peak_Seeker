@@ -19,6 +19,12 @@ interface EquivalentResult {
   equivalents: LookupResult[];
 }
 
+export interface RushSafeStableConfig {
+  rush: { min: number; max: number };
+  safe: { min: number; max: number };
+  stable: { min: number; max: number };
+}
+
 @Injectable()
 export class ScoreSegmentService {
   private readonly PROVINCE = '四川';
@@ -131,5 +137,25 @@ export class ScoreSegmentService {
       base: { ...baseScore, rank, percentile: p },
       equivalents,
     };
+  }
+
+  /**
+   * 冲稳保判定。ratio = 院校历史最低位次 / 学生位次。
+   * - rush.min ≤ ratio < rush.max → 'rush'
+   * - safe.min ≤ ratio ≤ safe.max → 'safe'
+   * - stable.min < ratio ≤ stable.max → 'stable'
+   * - 其他 → null
+   */
+  classify(
+    studentRank: number,
+    universityRank: number,
+    config: RushSafeStableConfig,
+  ): 'rush' | 'safe' | 'stable' | null {
+    if (!studentRank || !universityRank) return null;
+    const r = universityRank / studentRank;
+    if (r >= config.rush.min && r < config.rush.max) return 'rush';
+    if (r >= config.safe.min && r <= config.safe.max) return 'safe';
+    if (r > config.stable.min && r <= config.stable.max) return 'stable';
+    return null;
   }
 }

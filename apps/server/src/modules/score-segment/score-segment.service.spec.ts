@@ -192,4 +192,38 @@ describe('ScoreSegmentService', () => {
       expect(result.equivalents.every((e) => e.examType === '理科')).toBe(true);
     });
   });
+
+  describe('classify', () => {
+    const cfg = {
+      rush:   { min: 0.85, max: 0.95 },
+      safe:   { min: 0.95, max: 1.05 },
+      stable: { min: 1.05, max: 1.20 },
+    };
+
+    it('ratio 在 [0.85, 0.95) → rush', () => {
+      // 院校位次 25500 / 学生位次 30000 ≈ 0.85
+      expect(service.classify(30000, 25500, cfg)).toBe('rush');
+      expect(service.classify(30000, 28499, cfg)).toBe('rush'); // 0.9499...
+    });
+
+    it('ratio 在 [0.95, 1.05] → safe', () => {
+      expect(service.classify(30000, 28500, cfg)).toBe('safe'); // 0.95
+      expect(service.classify(30000, 31500, cfg)).toBe('safe'); // 1.05
+    });
+
+    it('ratio 在 (1.05, 1.20] → stable', () => {
+      expect(service.classify(30000, 31501, cfg)).toBe('stable');
+      expect(service.classify(30000, 36000, cfg)).toBe('stable'); // 1.20
+    });
+
+    it('ratio 超出范围 → null', () => {
+      expect(service.classify(30000, 25499, cfg)).toBeNull(); // < 0.85
+      expect(service.classify(30000, 36001, cfg)).toBeNull(); // > 1.20
+    });
+
+    it('院校位次或学生位次缺失 → null', () => {
+      expect(service.classify(null as any, 28500, cfg)).toBeNull();
+      expect(service.classify(30000, null as any, cfg)).toBeNull();
+    });
+  });
 });
