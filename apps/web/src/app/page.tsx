@@ -18,8 +18,8 @@ export default function HomePage() {
 
   return (
     <MainLayout noPadding>
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-primary">
+      {/* Hero Section — 占满首屏视窗（减去导航栏高度） */}
+      <section className="relative overflow-hidden bg-primary min-h-[calc(100vh-64px)] flex flex-col justify-center">
         <div
           className="absolute inset-0 opacity-35"
           style={{
@@ -32,7 +32,7 @@ export default function HomePage() {
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(to bottom, transparent 65%, var(--color-bg) 100%)',
+            background: 'linear-gradient(to bottom, transparent 75%, var(--color-bg) 100%)',
           }}
         />
 
