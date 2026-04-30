@@ -136,7 +136,7 @@ function TimelineNode({ event, isActive, isLast }: { event: TimelineEvent; isAct
     <div className="flex gap-2.5 items-start">
       <div className="flex flex-col items-center flex-shrink-0">
         {renderDot()}
-        {!isLast && <div className={`w-[1.5px] h-[18px] ${lineColor}`} />}
+        {!isLast && <div className={`w-[1.5px] flex-1 min-h-[12px] ${lineColor}`} />}
       </div>
       <div className="pt-0.5 pb-1 min-w-0">
         <div className="flex items-center gap-1.5">
@@ -183,18 +183,20 @@ export function TimelinePanel() {
   if (isLoading || events.length === 0) return null;
 
   return (
-    <div className="bg-white/[0.05] border border-white/[0.08] rounded-xl p-5">
-      <div className="text-[10px] text-white/40 uppercase tracking-[1.5px] mb-3.5">
+    <div className="bg-white/[0.05] border border-white/[0.08] rounded-xl p-5 flex flex-col w-full">
+      <div className="text-[10px] text-white/40 uppercase tracking-[1.5px] mb-auto">
         录取进度
       </div>
-      {events.map((event, i) => (
-        <TimelineNode
-          key={event.key}
-          event={event}
-          isActive={i === activeIndex}
-          isLast={i === events.length - 1}
-        />
-      ))}
+      <div className="flex flex-col justify-between flex-1 mt-3">
+        {events.map((event, i) => (
+          <TimelineNode
+            key={event.key}
+            event={event}
+            isActive={i === activeIndex}
+            isLast={i === events.length - 1}
+          />
+        ))}
+      </div>
     </div>
   );
 }

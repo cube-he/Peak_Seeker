@@ -37,7 +37,7 @@ export default function HomePage() {
         />
 
         <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-16 sm:py-20 lg:py-24">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-10 lg:gap-16 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-10 lg:gap-12 items-stretch">
             {/* Left Column */}
             <div>
               <CountdownBadge events={events} />
@@ -84,7 +84,7 @@ export default function HomePage() {
             </div>
 
             {/* Right Column — Timeline */}
-            <div className="hidden lg:block">
+            <div className="hidden lg:flex">
               <TimelinePanel />
             </div>
           </div>
