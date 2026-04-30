@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import { TimelineService } from './timeline.service';
 
 export interface ScrapedAnnouncement {
   title: string;
@@ -15,6 +17,8 @@ export interface StatusMatch {
 @Injectable()
 export class TimelineScraperService {
   private readonly logger = new Logger(TimelineScraperService.name);
+
+  constructor(private readonly timelineService: TimelineService) {}
 
   /**
    * 从公告标题列表中分析出各节点的最新状态
@@ -142,5 +146,59 @@ export class TimelineScraperService {
       throw new Error(`Failed to fetch sceea.cn: ${response.status}`);
     }
     return response.text();
+  }
+
+  /**
+   * 每天凌晨4:00执行一次
+   */
+  @Cron('0 4 * * *')
+  async handleDailyScrape(): Promise<void> {
+    this.logger.log('Starting daily timeline scrape...');
+    await this.scrapeAndUpdate();
+  }
+
+  /**
+   * 录取期间（6-8月）每天20:00额外执行一次
+   */
+  @Cron('0 20 * 6-8 *')
+  async handleEveningScrape(): Promise<void> {
+    this.logger.log('Starting evening timeline scrape (admission period)...');
+    await this.scrapeAndUpdate();
+  }
+
+  /**
+   * 核心流程：抓取 → 解析 → 匹配 → 更新
+   */
+  async scrapeAndUpdate(): Promise<void> {
+    const year = new Date().getFullYear();
+
+    // 确保种子数据存在
+    await this.timelineService.seedYear(year);
+
+    try {
+      const html = await this.fetchNewsPage();
+      const announcements = this.parseListPage(html);
+      this.logger.log(`Parsed ${announcements.length} announcements from sceea.cn`);
+
+      const matches = this.analyzeAnnouncements(announcements, year);
+      this.logger.log(`Found ${matches.length} status matches`);
+
+      for (const match of matches) {
+        if (match.key === '__all__') {
+          await this.timelineService.completeAll(year, match.sourceUrl);
+        } else {
+          await this.timelineService.updateStatus(
+            match.key,
+            year,
+            match.status,
+            match.sourceUrl,
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Timeline scrape failed: ${error instanceof Error ? error.message : error}`,
+      );
+    }
   }
 }

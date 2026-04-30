@@ -1,10 +1,15 @@
 import { TimelineScraperService } from './timeline-scraper.service';
+import { TimelineService } from './timeline.service';
 
 describe('TimelineScraperService', () => {
   let service: TimelineScraperService;
+  let mockTimelineService: Partial<TimelineService>;
 
   beforeEach(() => {
-    service = new TimelineScraperService();
+    mockTimelineService = {
+      seedYear: jest.fn(),
+    };
+    service = new TimelineScraperService(mockTimelineService as TimelineService);
   });
 
   describe('matchTitle - 2025年真实公告标题', () => {
