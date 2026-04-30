@@ -200,6 +200,7 @@ export class AdmissionService {
       recruitType: string;
       yearlyData: any[];
       currentPlan: any;
+      supplementary: any;
     }>();
 
     for (const record of records) {
@@ -224,6 +225,7 @@ export class AdmissionService {
           recruitType: record.recruitType,
           yearlyData: [],
           currentPlan: null,
+          supplementary: null,
         });
       }
 
@@ -313,6 +315,45 @@ export class AdmissionService {
           group.recruitType,
         ].join(':');
         group.currentPlan = planMap.get(key) ?? null;
+      }
+
+      // 查询征集志愿摘要（按 universityId + batch 维度）
+      const suppSummaries = await this.prisma.supplementarySummary.findMany({
+        where: {
+          province,
+          universityId: { in: uniIds },
+          ...(batch && { batch }),
+        },
+        select: {
+          universityId: true,
+          batch: true,
+          year: true,
+          totalRounds: true,
+          totalPlanCount: true,
+          supplementaryRate: true,
+        },
+      });
+
+      // 按 (universityId, batch) 取最近年份的征集摘要
+      const suppMap = new Map<string, any>();
+      for (const s of suppSummaries) {
+        const sKey = `${s.universityId}:${s.batch}`;
+        const existing = suppMap.get(sKey);
+        if (!existing || s.year > existing.year) {
+          suppMap.set(sKey, s);
+        }
+      }
+
+      for (const group of paginatedGroups) {
+        const sKey = `${group.university.id}:${group.batch}`;
+        const supp = suppMap.get(sKey);
+        if (supp) {
+          group.supplementary = {
+            totalRounds: supp.totalRounds,
+            totalPlanCount: supp.totalPlanCount,
+            supplementaryRate: supp.supplementaryRate ? Number(supp.supplementaryRate) : null,
+          };
+        }
       }
     }
 

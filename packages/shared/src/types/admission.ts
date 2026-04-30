@@ -103,6 +103,13 @@ export interface MajorSummary {
   softRating: string | null;
 }
 
+// 征集志愿摘要（院校+批次维度）
+export interface SupplementaryInfo {
+  totalRounds: number;
+  totalPlanCount: number;
+  supplementaryRate: number | null; // 征集率 = 征集计划数 / 招生计划数 * 100
+}
+
 // 聚合录取结果 — 一条 = 一个"院校+专业"组合的完整画像
 export interface AggregatedAdmissionItem {
   university: UniversitySummary;
@@ -115,6 +122,7 @@ export interface AggregatedAdmissionItem {
   recruitType: string;
   yearlyData: YearlyAdmissionData[];
   currentPlan: CurrentEnrollmentPlan | null;
+  supplementary: SupplementaryInfo | null;
 }
 
 // 聚合查询参数

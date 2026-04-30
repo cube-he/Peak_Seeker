@@ -4,11 +4,13 @@ import { Tag } from 'antd';
 import type {
   YearlyAdmissionData,
   CurrentEnrollmentPlan,
+  SupplementaryInfo,
 } from '@volunteer-helper/shared';
 
 interface ExpandedAdmissionRowProps {
   yearlyData: YearlyAdmissionData[];
   currentPlan: CurrentEnrollmentPlan | null;
+  supplementary: SupplementaryInfo | null;
 }
 
 function ScoreCell({ value }: { value: number | null }) {
@@ -32,6 +34,7 @@ function RankCell({ value }: { value: number | null }) {
 export default function ExpandedAdmissionRow({
   yearlyData,
   currentPlan,
+  supplementary,
 }: ExpandedAdmissionRowProps) {
   const sortedYears = [...yearlyData].sort((a, b) => b.year - a.year);
 
@@ -132,6 +135,31 @@ export default function ExpandedAdmissionRow({
             )}
             {currentPlan.isSinoForeign && (
               <Tag className="rounded-full border-0 bg-primary-fixed text-primary m-0">中外合作</Tag>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 征集志愿信息 */}
+      {supplementary && (
+        <div>
+          <h4 className="text-xs font-semibold text-text-secondary mb-2 uppercase tracking-wider">
+            征集志愿情况
+          </h4>
+          <div className="flex items-center gap-4 text-sm">
+            <div>
+              <span className="text-text-muted">征集轮次：</span>
+              <span className="text-rush font-medium">{supplementary.totalRounds}轮</span>
+            </div>
+            <div>
+              <span className="text-text-muted">征集计划数：</span>
+              <span className="text-text">{supplementary.totalPlanCount}人</span>
+            </div>
+            {supplementary.supplementaryRate != null && (
+              <div>
+                <span className="text-text-muted">征集率：</span>
+                <span className="text-rush font-medium">{supplementary.supplementaryRate}%</span>
+              </div>
             )}
           </div>
         </div>

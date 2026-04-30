@@ -378,6 +378,19 @@ export default function ScoresPage() {
         </span>
       ),
     },
+    {
+      title: '征集',
+      key: 'supplementary',
+      width: 70,
+      render: (_: any, record: AggregatedAdmissionItem) => {
+        if (!record.supplementary) return null;
+        return (
+          <Tag className="rounded-full border-0 bg-rush-fixed text-rush m-0 text-[10px] leading-4 px-1.5">
+            征集×{record.supplementary.totalRounds}
+          </Tag>
+        );
+      },
+    },
   ];
 
   return (
@@ -604,6 +617,7 @@ export default function ScoresPage() {
                   <ExpandedAdmissionRow
                     yearlyData={record.yearlyData}
                     currentPlan={record.currentPlan}
+                    supplementary={record.supplementary}
                   />
                 ),
               }}
