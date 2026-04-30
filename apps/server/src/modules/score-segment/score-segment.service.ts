@@ -7,7 +7,11 @@ interface LookupResult {
   examType: ExamType;
   score: number;
   rank: number;
-  percentile: number; // 0..1
+  /**
+   * 位次百分比 = rank / totalCount（0..1，越小越靠前）。
+   * 不是分数百分位（score percentile），而是该位次在全省考生总数中的相对排名。
+   */
+  percentile: number;
 }
 
 interface EquivalentResult {

@@ -43,6 +43,14 @@ describe('ScoreSegmentService', () => {
       const result = await service.scoreToRank(2025, '物理', 750);
       expect(result.rank).toBe(1);
     });
+
+    it('分数 < 0 → 抛 BadRequestException', async () => {
+      await expect(service.scoreToRank(2025, '物理', -1)).rejects.toThrow('分数需在 0..750');
+    });
+
+    it('分数 > 750 → 抛 BadRequestException', async () => {
+      await expect(service.scoreToRank(2025, '物理', 800)).rejects.toThrow('分数需在 0..750');
+    });
   });
 
   describe('rankToScore', () => {
@@ -60,6 +68,10 @@ describe('ScoreSegmentService', () => {
       prisma.scoreSegment.findFirst.mockResolvedValueOnce({ score: 100, cumulativeCount: 300000 });
       const result = await service.rankToScore(2025, '物理', 999999);
       expect(result.score).toBe(100);
+    });
+
+    it('位次 < 1 → 抛 BadRequestException', async () => {
+      await expect(service.rankToScore(2025, '物理', 0)).rejects.toThrow('位次需 ≥ 1');
     });
   });
 });
