@@ -18,6 +18,7 @@ interface EquivalentResult {
 @Injectable()
 export class ScoreSegmentService {
   private readonly PROVINCE = '四川';
+  private readonly SUPPORTED_YEARS = [2022, 2023, 2024, 2025];
 
   constructor(private readonly prisma: PrismaService) {}
 
