@@ -7,6 +7,9 @@ import TimelineTracker from '@/components/home/TimelineTracker';
 export default function HomePage() {
   return (
     <MainLayout noPadding>
+      {/* Timeline Banner */}
+      <TimelineTracker />
+
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-primary">
         {/* 背景图：低 opacity 作为底纹，不用有色遮罩 */}
@@ -27,7 +30,7 @@ export default function HomePage() {
           }}
         />
 
-        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-16 sm:py-20 lg:py-[110px]">
+        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-14 lg:py-[72px]">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
             {/* Left Column */}
             <div>
@@ -96,9 +99,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      {/* Timeline Tracker */}
-      <TimelineTracker />
 
       {/* Trust Bar */}
       <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-20 flex flex-wrap justify-center gap-6 sm:gap-8 lg:gap-12">
