@@ -18,26 +18,26 @@ export default function HomePage() {
 
   return (
     <MainLayout noPadding>
-      {/* Hero Section — 占满首屏视窗（减去导航栏高度） */}
-      <section className="relative overflow-hidden bg-primary min-h-[calc(100vh-64px)] flex flex-col justify-center">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-primary">
         <div
-          className="absolute inset-0 opacity-35"
+          className="absolute inset-0 opacity-25"
           style={{
             backgroundImage: `url('/images/bg-hero-home.webp')`,
             backgroundSize: 'cover',
-            backgroundPosition: 'center top',
+            backgroundPosition: 'center 30%',
             backgroundRepeat: 'no-repeat',
           }}
         />
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(to bottom, transparent 75%, var(--color-bg) 100%)',
+            background: 'linear-gradient(to bottom, transparent 60%, var(--color-bg) 100%)',
           }}
         />
 
-        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16 lg:py-[72px]">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8 lg:gap-10 items-start">
+        <div className="relative max-w-[1400px] mx-auto px-6 sm:px-10 lg:px-16 py-14 sm:py-20 lg:py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-8 lg:gap-12 items-start">
             {/* Left Column */}
             <div>
               {/* Countdown Badge */}
