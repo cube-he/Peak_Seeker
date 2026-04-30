@@ -67,6 +67,12 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         setTokenCookie(null);
+        // 清空跟当前用户绑定的学生位次缓存（避免共享设备污染）
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('vh:student-rank');
+          }
+        } catch {}
         set({
           user: null,
           accessToken: null,
