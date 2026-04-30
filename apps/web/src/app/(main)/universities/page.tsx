@@ -12,6 +12,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
+import { RankInput } from '@/components/score/RankInput';
 import { universityService, UniversityQueryParams } from '@/services/university';
 
 // 省份列表
@@ -458,7 +459,8 @@ export default function UniversitiesPage() {
 
         {/* 右侧热门排名 */}
         <div className="w-64 shrink-0 hidden lg:block">
-          <div className="sticky top-20">
+          <div className="sticky top-20 space-y-4">
+            <RankInput variant="compact" className="!bg-surface !border-border" />
             <HotUniversitiesSidebar />
           </div>
         </div>

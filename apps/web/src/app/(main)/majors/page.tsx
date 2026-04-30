@@ -12,6 +12,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
+import { RankInput } from '@/components/score/RankInput';
 import { majorService, MajorQueryParams } from '@/services/major';
 
 // 学科门类（参考学信网分类）
@@ -309,7 +310,8 @@ export default function MajorsPage() {
       <div className="flex gap-5">
         {/* 左侧门类导航 */}
         <div className="w-52 shrink-0 hidden md:block">
-          <div className="sticky top-20">
+          <div className="sticky top-20 space-y-4">
+            <RankInput variant="compact" className="!bg-surface !border-border" />
             <CategoryNav
               categories={CATEGORIES}
               selected={filters.category}
