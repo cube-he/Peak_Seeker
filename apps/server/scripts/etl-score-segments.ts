@@ -7,6 +7,7 @@
 import * as path from 'path';
 import * as ExcelJS from 'exceljs';
 import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
 const DEFAULT_XLSX = path.resolve(
   __dirname,
@@ -62,7 +63,8 @@ async function main() {
   console.log(`[ETL] 解析到 ${rows.length} 行`);
   console.log(`[ETL] 样本前 3 行:`, rows.slice(0, 3));
 
-  const prisma = new PrismaClient();
+  const adapter = new PrismaMariaDb(process.env.DATABASE_URL!);
+  const prisma = new PrismaClient({ adapter });
   let upserted = 0;
   for (const r of rows) {
     await prisma.scoreSegment.upsert({

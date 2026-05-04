@@ -71,10 +71,16 @@ data/
 # 数据处理中间产物（保留最终output）
 scripts/data-processing/output/*.sql
 scripts/data-processing/output/admission_records.json
+scripts/data-processing/output/admission_records_filled.json
 scripts/data-processing/output/enrollment_plans.json
+scripts/data-processing/output/enrollment_plans_enriched.json
 scripts/data-processing/output/universities.json
 scripts/data-processing/output/majors.json
+scripts/data-processing/output/majors_enriched.json
 scripts/data-processing/output/*_report.json
+
+# TypeScript 增量构建缓存
+**/tsconfig.tsbuildinfo
 
 # SSH密钥
 *.pem
