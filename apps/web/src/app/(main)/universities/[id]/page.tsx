@@ -18,14 +18,20 @@ import RankingCard from '@/components/university/RankingCard';
 import SatisfactionCard from '@/components/university/SatisfactionCard';
 import EmploymentCard from '@/components/university/EmploymentCard';
 import QiangjiTable from '@/components/university/QiangjiTable';
+import UniversityLogo from '@/components/university/UniversityLogo';
+import HeroBanner from '@/components/admission/HeroBanner';
+import { useUserStore } from '@/stores/userStore';
 
 export default function UniversityDetailPage() {
   const params = useParams();
   const id = Number(params.id);
 
+  const { examInfo } = useUserStore();
+  const userSubject = examInfo.subjects?.[0];
+
   const { data: university, isLoading } = useQuery({
-    queryKey: ['university', id],
-    queryFn: () => universityService.getById(id),
+    queryKey: ['university', id, userSubject],
+    queryFn: () => universityService.getById(id, userSubject),
     enabled: !!id,
   });
 
@@ -251,10 +257,11 @@ export default function UniversityDetailPage() {
 
       {/* Hero Header Card */}
       <div className="rounded-xl bg-surface shadow-card p-6 md:p-8 mb-4">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="font-serif text-[36px] font-semibold text-text m-0">{u.name}</h1>
+        <div className="flex items-start gap-5 flex-wrap">
+          <UniversityLogo name={u.name} logoUrl={u.logoUrl} size={80} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <h1 className="font-serif text-[32px] font-semibold text-text m-0">{u.name}</h1>
               <Space size={4}>
                 {u.is985 && (
                   <span className="inline-block rounded-full bg-surface-dim text-text-secondary text-xs font-medium px-3 py-0.5">985</span>
@@ -270,20 +277,19 @@ export default function UniversityDetailPage() {
             <div className="flex items-center gap-1 text-sm text-text-tertiary">
               <EnvironmentOutlined />
               {[u.province, u.city, u.type, u.level, u.runningNature].filter(Boolean).join(' · ')}
+              {u.ranking && <span className="ml-2">· 全国排名 #{u.ranking}</span>}
             </div>
           </div>
-          <div className="flex items-start gap-3">
-            {u.ranking && (
-              <div className="bg-surface rounded-lg shadow-card p-5 border-l-[3px] border-l-accent text-center">
-                <div className="text-2xl font-bold text-primary font-serif">{u.ranking}</div>
-                <div className="text-xs text-text-muted">全国排名</div>
-              </div>
-            )}
-            <div className="w-[280px]">
-              <RankInput variant="compact" className="!bg-surface !border-border" />
-            </div>
+          <div className="w-[280px]">
+            <RankInput variant="compact" className="!bg-surface !border-border" />
           </div>
         </div>
+
+        <HeroBanner
+          university={{ is985: u.is985, is211: u.is211 }}
+          prediction={u.bestPrediction ?? null}
+          userRank={examInfo.rank}
+        />
       </div>
 
       {/* Tabs Card */}
