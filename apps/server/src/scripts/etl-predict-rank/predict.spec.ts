@@ -52,7 +52,7 @@ describe('predictMinRank', () => {
     expect(predictMinRank(makeInput({ history: [{ year: 2024, minRank: 5000 }] }))).toBeNull();
   });
 
-  it('returns null when both target pool and proxy missing', () => {
+  it('returns null when target pool is missing', () => {
     expect(predictMinRank(makeInput({ poolTarget: null }))).toBeNull();
   });
 
@@ -95,5 +95,13 @@ describe('predictMinRank', () => {
   it('plan target null → confidence low', () => {
     const out = predictMinRank(makeInput({ planTarget: null }));
     expect(out!.confidence).toBe('low');
+  });
+
+  it('2 history + proxy pool → confidence medium (contract test)', () => {
+    const out = predictMinRank(makeInput({
+      history: [{ year: 2024, minRank: 5000 }, { year: 2023, minRank: 5500 }],
+      poolTargetIsProxy: true,
+    }));
+    expect(out!.confidence).toBe('medium');
   });
 });

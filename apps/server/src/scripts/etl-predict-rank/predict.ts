@@ -45,12 +45,20 @@ export interface PredictOutput {
   confidence: 'high' | 'medium' | 'low';
 }
 
+/**
+ * Year weights from most recent (index 0) to oldest (index 2).
+ * When history has fewer than 3 entries, weights are sliced + renormalized
+ * (divided by their sum) so `point` is always a true weighted average regardless
+ * of history length. Evidence sufficiency is reflected via `confidence`,
+ * not by deflating the point estimate.
+ */
 const YEAR_WEIGHTS = [0.5, 0.3, 0.2];
 
 export function predictMinRank(input: PredictInput): PredictOutput | null {
   const { history, planTarget, planHistorical, poolTarget, poolHistorical, poolTargetIsProxy } = input;
 
   if (history.length < 2) return null;
+  // target pool unknown (proxy fallback already attempted upstream by ETL caller)
   if (poolTarget == null) return null;
 
   const equivRanks: number[] = [];
