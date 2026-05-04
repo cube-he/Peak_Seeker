@@ -161,3 +161,20 @@ export interface AggregatedAdmissionResponse {
     total: number;
   };
 }
+
+// 批量查 prediction 的请求
+export interface LookupPredictionsRequest {
+  keys: Array<{
+    universityId: number;
+    groupCode: string;
+    batch: string;
+    recruitType: string;
+    subjects: string;
+  }>;
+  targetYear?: number;
+}
+
+// 批量查 prediction 的响应（顺序与 request.keys 一致；找不到的返回 null）
+export interface LookupPredictionsResponse {
+  predictions: Array<PredictedMinRank | null>;
+}
