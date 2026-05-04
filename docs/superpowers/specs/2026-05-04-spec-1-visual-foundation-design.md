@@ -26,8 +26,11 @@
 |---|---|---|---|
 | **scores 查询** | `apps/web/src/app/(main)/scores/page.tsx` | 表格每行染色 + 距离 + 徽章 | `aggregatedAdmission.predictedMinRank` |
 | **专业详情"开设院校"tab** | `apps/web/src/app/(main)/majors/[id]/page.tsx` | 院校列表表格染色 + 徽章 | 同上（API 同样的聚合） |
-| **学生志愿单** | `apps/web/src/app/(student)/student/plans/[id]/page.tsx` | 已选条目染色 + 徽章 | 同上 |
 | **院校详情 hero** | `apps/web/src/app/(main)/universities/[id]/page.tsx` | logo 80px + 染色横幅副标 | 该院校最佳预测（按用户选科匹配） |
+| ~~**学生志愿单**~~ | ~~`apps/web/src/app/(student)/student/plans/[id]/page.tsx`~~ | **范围调整：移出 spec-1**。理由见下方说明。 | — |
+
+**学生志愿单页面调整说明（spec 修订 2026-05-04）**：
+该页面已有自有的 6 档梯度系统（`rush-high/rush-low/stable-high/stable-low/safe-high/safe-low`），由后端 `plan_items.gradient` 字段驱动；渲染走 `PlanItemCard` 而非通用表格；含 expand/collapse、批注、`admissionProbability`、确认方案等完整业务逻辑。spec-1 的 4 档实时染色与之逻辑不同源、不同粒度。直接替换会丢失现有业务能力且违反 surgical-changes 原则。本页面延后到独立 spec（plan-page-redesign）专门处理，spec-1 不动。
 
 不在 spec-1 内：
 - 趋势 sparkline（spec-2）
