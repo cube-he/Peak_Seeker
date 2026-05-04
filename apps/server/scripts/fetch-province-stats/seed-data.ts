@@ -38,6 +38,19 @@ export const PROVINCE_YEAR_STATS: ProvinceYearStatRow[] = [
       'registrants=报名选科人数(B级); examineesActual=一分一段150分位次(B级). 新高考首届.',
   },
   {
+    // 物理类 + 选化学 子池 (用于 subjectRequirements 含化学的专业组)
+    // 224,560 (化生) + 52,826 (化地) + 30,624 (化政) + 极少长尾 ≈ 307,910 (94.16% of 物理类)
+    province: '四川',
+    year: 2025,
+    examType: '物理化学',
+    registrants: 307910,
+    examineesActual: null, // 不另算实参，按 物理 类 examineesActual × 94.16% 隐含
+    source:
+      'https://www.163.com/dy/article/K1C7VSSN0536NZ17.html; https://www.sxwd.cn/jyzx/gkzx/1627.html',
+    notes:
+      '化生224560 + 化地52826 + 化政30624 (A级官方公开数据汇总). 用于物理类专业组要求"化学"时缩小池子.',
+  },
+  {
     province: '四川',
     year: 2025,
     examType: '历史',

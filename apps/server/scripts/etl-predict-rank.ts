@@ -9,7 +9,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
-import { normalizeSubject } from '../src/scripts/etl-predict-rank/subject-normalize';
+import { normalizeSubject, decidePoolKey, type CanonicalSubject } from '../src/scripts/etl-predict-rank/subject-normalize';
 import { predictMinRank, type PredictInput } from '../src/scripts/etl-predict-rank/predict';
 
 const PROVINCE = '四川';
@@ -36,20 +36,37 @@ function getTargetYear(): number {
 }
 
 interface PoolMap { [year: number]: number | null }
+type Pools = { 物理: PoolMap; 历史: PoolMap; 物理化学: PoolMap };
 
-async function loadPools(prisma: PrismaClient): Promise<{ 物理: PoolMap; 历史: PoolMap }> {
+async function loadPools(prisma: PrismaClient): Promise<Pools> {
   const stats = await prisma.provinceYearStat.findMany({
-    where: { province: PROVINCE, examType: { in: ['物理', '历史'] } },
+    where: { province: PROVINCE, examType: { in: ['物理', '历史', '物理化学'] } },
   });
-  const out: { 物理: PoolMap; 历史: PoolMap } = { 物理: {}, 历史: {} };
+  const out: Pools = { 物理: {}, 历史: {}, 物理化学: {} };
   for (const s of stats) {
-    const subj = s.examType as '物理' | '历史';
+    if (s.examType !== '物理' && s.examType !== '历史' && s.examType !== '物理化学') continue;
     // Priority chain: registrants > examineesActual > rankedCount.
     // examineesActual is fully populated for 2024/2025 even when registrants is null
     // (old gaokao didn't publish 文/理 split of registrants), so it's the most-populated A/B-tier source.
-    out[subj][s.year] = s.registrants ?? s.examineesActual ?? s.rankedCount ?? null;
+    out[s.examType][s.year] = s.registrants ?? s.examineesActual ?? s.rankedCount ?? null;
   }
   return out;
+}
+
+/**
+ * Look up pool size for (poolKey, year) with fallback chain:
+ * - 物理化学 / year missing → fall back to 物理 / year (subset → parent pool)
+ * - 历史 / year missing → no fallback (历史 has no subset)
+ * Returns null if even the parent pool is missing.
+ */
+function lookupPool(pools: Pools, poolKey: CanonicalSubject, year: number): number | null {
+  if (poolKey === '物理化学') {
+    return pools.物理化学[year] ?? pools.物理[year] ?? null;
+  }
+  if (poolKey === '物理' || poolKey === '历史') {
+    return pools[poolKey][year] ?? null;
+  }
+  return null;
 }
 
 interface HistoryKey {
@@ -122,6 +139,12 @@ async function loadHistory(prisma: PrismaClient, targetYear: number): Promise<{
 
 async function loadPlans(prisma: PrismaClient, years: number[]): Promise<{
   plans: Map<string, Map<number, number>>;
+  /** key → poolKey decided by checking subjectRequirements across all loaded years.
+   * If any year of this key requires 化学 (and subject=物理), the key uses 物理化学 pool;
+   * otherwise it uses the parent 物理 / 历史 pool. Subject requirements rarely change
+   * across years for the same group, so a single per-key decision is correct in practice.
+   */
+  poolKeyByKey: Map<string, CanonicalSubject>;
   unsupportedSubjectCount: number;
 }> {
   const plans = await prisma.enrollmentPlan.findMany({
@@ -136,12 +159,14 @@ async function loadPlans(prisma: PrismaClient, years: number[]): Promise<{
       batch: true,
       recruitType: true,
       subjects: true,
+      subjectRequirements: true,
       year: true,
       groupPlanCount: true,
     },
     orderBy: [{ id: 'asc' }],
   });
   const out = new Map<string, Map<number, number>>();
+  const poolKeyByKey = new Map<string, CanonicalSubject>();
   let unsupportedSubjectCount = 0;
   for (const p of plans) {
     const subj = normalizeSubject(p.subjects);
@@ -161,8 +186,16 @@ async function loadPlans(prisma: PrismaClient, years: number[]): Promise<{
     // orderBy id asc above makes "take first" deterministic across re-runs.
     const yearMap = out.get(key)!;
     if (!yearMap.has(p.year)) yearMap.set(p.year, p.groupPlanCount!);
+
+    // Decide pool key: if any year/major in this group requires 化学, the whole key uses 物理化学
+    const decided = decidePoolKey(p.subjects, p.subjectRequirements);
+    if (decided === '物理化学') {
+      poolKeyByKey.set(key, '物理化学');
+    } else if (!poolKeyByKey.has(key)) {
+      poolKeyByKey.set(key, subj);
+    }
   }
-  return { plans: out, unsupportedSubjectCount };
+  return { plans: out, poolKeyByKey, unsupportedSubjectCount };
 }
 
 async function main() {
@@ -181,8 +214,11 @@ async function main() {
 
   console.log('Loading enrollment plans...');
   const yearsNeeded = [targetYear, ...Array.from({ length: HISTORY_YEARS }, (_, i) => targetYear - 1 - i)];
-  const { plans: plansByKey, unsupportedSubjectCount: planUnsupported } = await loadPlans(prisma, yearsNeeded);
+  const { plans: plansByKey, poolKeyByKey, unsupportedSubjectCount: planUnsupported } = await loadPlans(prisma, yearsNeeded);
   console.log(`  ${planUnsupported} plan rows skipped (subject not 物理/历史)`);
+  let chemKeysCount = 0;
+  for (const v of poolKeyByKey.values()) if (v === '物理化学') chemKeysCount++;
+  console.log(`  ${chemKeysCount} keys use 物理化学 subset pool (subjectRequirements contains 化学)`);
 
   let written = 0;
   let skippedInsufficient = 0;
@@ -193,10 +229,14 @@ async function main() {
 
     const sample = history[0];
     const subj = sample.subjects;
-    let poolTarget = pools[subj][targetYear] ?? null;
+    // Decide pool key: 物理化学 (if any plan year required 化学) OR fall back to subj.
+    // If poolKeyByKey doesn't have this key (no plan data for any year), fall back to subj.
+    const poolKey: CanonicalSubject = poolKeyByKey.get(key) ?? subj;
+
+    let poolTarget = lookupPool(pools, poolKey, targetYear);
     let poolTargetIsProxy = false;
     if (poolTarget == null) {
-      poolTarget = pools[subj][targetYear - 1] ?? null;
+      poolTarget = lookupPool(pools, poolKey, targetYear - 1);
       poolTargetIsProxy = poolTarget != null;
     }
     if (poolTarget == null) { skippedNoPool++; continue; }
@@ -207,7 +247,7 @@ async function main() {
     const poolHistorical: Record<number, number | null> = {};
     for (const h of history) {
       planHistorical[h.year] = planMap.get(h.year) ?? null;
-      poolHistorical[h.year] = pools[subj][h.year] ?? null;
+      poolHistorical[h.year] = lookupPool(pools, poolKey, h.year);
     }
 
     const input: PredictInput = {
