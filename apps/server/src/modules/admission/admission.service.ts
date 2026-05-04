@@ -1,6 +1,36 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { FindAggregatedDto } from './dto/find-aggregated.dto';
+import * as fs from 'fs';
+import * as path from 'path';
+
+let _cachedTargetYear: number | null = null;
+
+/**
+ * Returns the configured target year for rank predictions.
+ * Reads `config/rank-prediction.json` once and caches.
+ * Falls back to current calendar year if config missing.
+ */
+function getTargetYear(): number {
+  if (_cachedTargetYear !== null) return _cachedTargetYear;
+  // Resolve from project root (process.cwd() when server starts there)
+  const candidates = [
+    path.resolve(process.cwd(), 'config/rank-prediction.json'),
+    path.resolve(process.cwd(), '../../config/rank-prediction.json'),
+    path.resolve(__dirname, '../../../../config/rank-prediction.json'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      const cfg = JSON.parse(fs.readFileSync(p, 'utf-8'));
+      if (Number.isInteger(cfg.targetYear)) {
+        _cachedTargetYear = cfg.targetYear as number;
+        return _cachedTargetYear as number;
+      }
+    }
+  }
+  _cachedTargetYear = new Date().getFullYear();
+  return _cachedTargetYear;
+}
 
 @Injectable()
 export class AdmissionService {
@@ -354,6 +384,45 @@ export class AdmissionService {
             supplementaryRate: supp.supplementaryRate ? Number(supp.supplementaryRate) : null,
           };
         }
+      }
+
+      // Inject predictedMinRank — multi-to-one join (same prediction shared across
+      // all majors in the same group). spec-0 ETL writes one row per
+      // (uniId, groupCode, batch, recruitType, subjects, targetYear).
+      const targetYear = getTargetYear();
+
+      const preds = await this.prisma.rankPrediction.findMany({
+        where: {
+          targetYear,
+          OR: paginatedGroups.map((g) => ({
+            universityId: g.university.id,
+            groupCode: g.groupCode,
+            batch: g.batch,
+            recruitType: g.recruitType,
+            subjects: g.subjects,
+          })),
+        },
+      });
+
+      const predMap = new Map<string, (typeof preds)[number]>();
+      for (const p of preds) {
+        const k = [p.universityId, p.groupCode, p.batch, p.recruitType, p.subjects].join('|');
+        predMap.set(k, p);
+      }
+
+      for (const g of paginatedGroups) {
+        const k = [g.university.id, g.groupCode, g.batch, g.recruitType, g.subjects].join('|');
+        const pred = predMap.get(k);
+        (g as any).predictedMinRank = pred
+          ? {
+              point: pred.pointRank,
+              conservative: pred.conservativeRank,
+              optimistic: pred.optimisticRank,
+              basisYears: pred.basisYears as number[],
+              confidence: pred.confidence,
+              targetYear: pred.targetYear,
+            }
+          : null;
       }
     }
 
