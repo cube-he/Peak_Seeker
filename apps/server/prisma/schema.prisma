@@ -1497,6 +1497,5 @@ model RankPrediction {
 
   @@unique([universityId, groupCode, batch, recruitType, subjects, targetYear], name: "rank_pred_natural_key")
   @@index([targetYear, subjects])
-  @@index([universityId])
   @@map("rank_predictions")
 }

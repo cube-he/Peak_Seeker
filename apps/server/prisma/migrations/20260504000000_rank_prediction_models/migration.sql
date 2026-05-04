@@ -37,7 +37,6 @@ CREATE TABLE `rank_predictions` (
     `computed_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     INDEX `rank_predictions_target_year_subjects_idx`(`target_year`, `subjects`),
-    INDEX `rank_predictions_university_id_idx`(`university_id`),
     UNIQUE INDEX `rank_pred_natural_key`(`university_id`, `group_code`, `batch`, `recruit_type`, `subjects`, `target_year`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
