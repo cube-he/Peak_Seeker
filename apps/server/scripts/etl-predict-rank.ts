@@ -16,11 +16,21 @@ const PROVINCE = '四川';
 const HISTORY_YEARS = 3;
 
 function getTargetYear(): number {
-  const cliYear = process.argv[2] ? Number(process.argv[2]) : null;
-  if (cliYear) return cliYear;
+  if (process.argv[2]) {
+    const cliYear = Number(process.argv[2]);
+    if (!Number.isInteger(cliYear) || cliYear < 2017 || cliYear > 2099) {
+      throw new Error(`Invalid CLI targetYear: ${process.argv[2]}. Must be integer in [2017, 2099].`);
+    }
+    return cliYear;
+  }
   const configPath = path.resolve(__dirname, '../../../config/rank-prediction.json');
   if (fs.existsSync(configPath)) {
-    return JSON.parse(fs.readFileSync(configPath, 'utf-8')).targetYear;
+    const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const y = cfg.targetYear;
+    if (!Number.isInteger(y) || y < 2017 || y > 2099) {
+      throw new Error(`Invalid config targetYear: ${y}. Must be integer in [2017, 2099].`);
+    }
+    return y;
   }
   return new Date().getFullYear();
 }
@@ -58,7 +68,10 @@ function keyOf(k: HistoryKey): string {
   return [k.universityId, k.groupCode, k.batch, k.recruitType, k.subjects].join('|');
 }
 
-async function loadHistory(prisma: PrismaClient, targetYear: number): Promise<Map<string, HistoryRow[]>> {
+async function loadHistory(prisma: PrismaClient, targetYear: number): Promise<{
+  history: Map<string, HistoryRow[]>;
+  unsupportedSubjectCount: number;
+}> {
   const records = await prisma.admissionRecord.findMany({
     where: {
       province: PROVINCE,
@@ -77,9 +90,13 @@ async function loadHistory(prisma: PrismaClient, targetYear: number): Promise<Ma
   });
   // group by (uni, group, batch, recruitType, subjects); for each year keep one row
   const grouped = new Map<string, Map<number, HistoryRow>>();
+  let unsupportedSubjectCount = 0;
   for (const r of records) {
     const subj = normalizeSubject(r.subjects);
-    if (subj !== '物理' && subj !== '历史') continue;
+    if (subj !== '物理' && subj !== '历史') {
+      unsupportedSubjectCount++;
+      continue;
+    }
     const k: HistoryKey = {
       universityId: r.universityId,
       groupCode: r.groupCode,
@@ -100,10 +117,13 @@ async function loadHistory(prisma: PrismaClient, targetYear: number): Promise<Ma
     const arr = [...yearMap.values()].sort((a, b) => b.year - a.year).slice(0, HISTORY_YEARS);
     out.set(key, arr);
   }
-  return out;
+  return { history: out, unsupportedSubjectCount };
 }
 
-async function loadPlans(prisma: PrismaClient, years: number[]): Promise<Map<string, Map<number, number>>> {
+async function loadPlans(prisma: PrismaClient, years: number[]): Promise<{
+  plans: Map<string, Map<number, number>>;
+  unsupportedSubjectCount: number;
+}> {
   const plans = await prisma.enrollmentPlan.findMany({
     where: {
       province: PROVINCE,
@@ -119,11 +139,16 @@ async function loadPlans(prisma: PrismaClient, years: number[]): Promise<Map<str
       year: true,
       groupPlanCount: true,
     },
+    orderBy: [{ id: 'asc' }],
   });
   const out = new Map<string, Map<number, number>>();
+  let unsupportedSubjectCount = 0;
   for (const p of plans) {
     const subj = normalizeSubject(p.subjects);
-    if (subj !== '物理' && subj !== '历史') continue;
+    if (subj !== '物理' && subj !== '历史') {
+      unsupportedSubjectCount++;
+      continue;
+    }
     const key = keyOf({
       universityId: p.universityId,
       groupCode: p.groupCode,
@@ -132,11 +157,12 @@ async function loadPlans(prisma: PrismaClient, years: number[]): Promise<Map<str
       subjects: subj,
     });
     if (!out.has(key)) out.set(key, new Map());
-    // groupPlanCount may differ between rows of same group (shouldn't, but defensive — take first)
+    // groupPlanCount may differ between rows of same group (data integrity quirk).
+    // orderBy id asc above makes "take first" deterministic across re-runs.
     const yearMap = out.get(key)!;
     if (!yearMap.has(p.year)) yearMap.set(p.year, p.groupPlanCount!);
   }
-  return out;
+  return { plans: out, unsupportedSubjectCount };
 }
 
 async function main() {
@@ -150,12 +176,13 @@ async function main() {
   const pools = await loadPools(prisma);
 
   console.log('Loading admission history...');
-  const historyByKey = await loadHistory(prisma, targetYear);
-  console.log(`  ${historyByKey.size} unique (uni,group,batch,recruitType,subjects) keys`);
+  const { history: historyByKey, unsupportedSubjectCount: histUnsupported } = await loadHistory(prisma, targetYear);
+  console.log(`  ${historyByKey.size} unique keys; ${histUnsupported} rows skipped (subject not 物理/历史)`);
 
   console.log('Loading enrollment plans...');
   const yearsNeeded = [targetYear, ...Array.from({ length: HISTORY_YEARS }, (_, i) => targetYear - 1 - i)];
-  const plansByKey = await loadPlans(prisma, yearsNeeded);
+  const { plans: plansByKey, unsupportedSubjectCount: planUnsupported } = await loadPlans(prisma, yearsNeeded);
+  console.log(`  ${planUnsupported} plan rows skipped (subject not 物理/历史)`);
 
   let written = 0;
   let skippedInsufficient = 0;
