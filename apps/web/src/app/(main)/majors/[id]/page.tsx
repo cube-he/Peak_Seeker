@@ -9,6 +9,9 @@ import MainLayout from '@/components/layout/MainLayout';
 import { RankInput } from '@/components/score/RankInput';
 import { majorService } from '@/services/major';
 import CareerTab from '@/components/major/CareerTab';
+import AdmissionRow from '@/components/admission/AdmissionRow';
+import LowConfidenceBanner from '@/components/admission/LowConfidenceBanner';
+import { useUserStore } from '@/stores/userStore';
 
 export default function MajorDetailPage() {
   const params = useParams();
@@ -19,6 +22,8 @@ export default function MajorDetailPage() {
     queryFn: () => majorService.getById(id),
     enabled: !!id,
   });
+
+  const { examInfo } = useUserStore();
 
   if (isLoading) {
     return (
@@ -40,50 +45,6 @@ export default function MajorDetailPage() {
 
   const m = major;
 
-  const universityColumns = [
-    {
-      title: '院校名称',
-      dataIndex: ['university', 'name'],
-      key: 'uniName',
-      render: (text: string, r: any) => (
-        <Link href={`/universities/${r.universityId}`} className="text-primary font-medium hover:text-primary-light">
-          {text}
-        </Link>
-      ),
-    },
-    {
-      title: '专业组',
-      key: 'group',
-      width: 100,
-      render: (_: any, r: any) => (
-        <span className="text-text-tertiary text-[13px]">{r.groupCode || '-'}</span>
-      ),
-    },
-    { title: '计划数', dataIndex: 'planCount', key: 'planCount', width: 80, render: (v: number) => v ?? '-' },
-    {
-      title: '学费',
-      dataIndex: 'tuition',
-      key: 'tuition',
-      width: 90,
-      render: (v: number) => v ? <span className="text-text">{v}</span> : '-',
-    },
-    {
-      title: '学科评估',
-      dataIndex: 'disciplineEval',
-      key: 'disciplineEval',
-      width: 90,
-      render: (v: string) => v ? (
-        <span className="inline-block rounded-full bg-primary-fixed text-primary text-xs font-medium px-3 py-0.5">{v}</span>
-      ) : '-',
-    },
-    {
-      title: '专业排名',
-      dataIndex: 'majorRanking',
-      key: 'majorRanking',
-      width: 90,
-      render: (v: string) => v ? <span className="font-medium text-text">{v}</span> : '-',
-    },
-  ];
 
   const admissionColumns = [
     {
@@ -123,14 +84,37 @@ export default function MajorDetailPage() {
       key: 'universities',
       label: <span><BankOutlined className="mr-1" />开设院校 ({m.enrollmentPlans?.length || 0})</span>,
       children: (
-        <Table
-          columns={universityColumns}
-          dataSource={m.enrollmentPlans || []}
-          rowKey="id"
-          scroll={{ x: 700 }}
-          size="small"
-          pagination={{ pageSize: 20, showTotal: (t: number) => `共 ${t} 条` }}
-        />
+        <div className="px-4 py-2">
+          <LowConfidenceBanner
+            show={(m.enrollmentPlans ?? []).some((ep: any) => ep.predictedMinRank?.confidence === 'low')}
+          />
+          {(m.enrollmentPlans ?? []).length === 0 ? (
+            <div className="text-center text-text-muted py-12">暂无开设院校数据</div>
+          ) : (
+            m.enrollmentPlans.map((ep: any) => (
+              <AdmissionRow
+                key={ep.id}
+                data={{
+                  university: {
+                    id: ep.universityId,
+                    name: ep.university?.name ?? '',
+                    logoUrl: ep.university?.logoUrl,
+                    is985: ep.university?.is985 ?? false,
+                    is211: ep.university?.is211 ?? false,
+                    isDoubleFirstClass: ep.university?.isDoubleFirstClass ?? false,
+                  },
+                  majorName: m.name,
+                  groupCode: ep.groupCode ?? '',
+                  batch: ep.batch ?? '',
+                  recruitType: ep.recruitType ?? '',
+                  subjects: ep.subjects ?? '',
+                  predictedMinRank: ep.predictedMinRank,
+                }}
+                userRank={examInfo.rank}
+              />
+            ))
+          )}
+        </div>
       ),
     },
     {
