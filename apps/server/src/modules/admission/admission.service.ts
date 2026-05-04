@@ -14,10 +14,12 @@ let _cachedTargetYear: number | null = null;
 function getTargetYear(): number {
   if (_cachedTargetYear !== null) return _cachedTargetYear;
   // Resolve from project root (process.cwd() when server starts there)
+  // Two candidates cover all documented launch modes:
+  //   - Project root cwd (rare): candidate 1
+  //   - apps/server/ cwd (common: nest start, node dist/main): candidate 2
   const candidates = [
     path.resolve(process.cwd(), 'config/rank-prediction.json'),
     path.resolve(process.cwd(), '../../config/rank-prediction.json'),
-    path.resolve(__dirname, '../../../../config/rank-prediction.json'),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) {
