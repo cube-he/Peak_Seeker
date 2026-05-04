@@ -434,6 +434,77 @@ export class AdmissionService {
     };
   }
 
+  /**
+   * Read targetYear from config — exposed as a method so other services can call.
+   * Wraps the existing module-level getTargetYear() helper.
+   */
+  async getTargetYear(): Promise<number> {
+    return getTargetYear();
+  }
+
+  /**
+   * Batch lookup of RankPrediction by natural-key tuples.
+   * Used by other services (university, major, plan endpoints) that need to
+   * inject predictedMinRank without rebuilding the query each time.
+   *
+   * Returns a Map from "uniId|groupCode|batch|recruitType|subjects" → prediction object.
+   */
+  async lookupPredictionsByKeys(
+    keys: Array<{
+      universityId: number;
+      groupCode: string;
+      batch: string;
+      recruitType: string;
+      subjects: string;
+    }>,
+    targetYearOverride?: number,
+  ): Promise<Map<string, {
+    point: number;
+    conservative: number;
+    optimistic: number;
+    basisYears: number[];
+    confidence: string;
+    targetYear: number;
+  }>> {
+    if (keys.length === 0) return new Map();
+
+    const targetYear = targetYearOverride ?? (await this.getTargetYear());
+
+    const preds = await this.prisma.rankPrediction.findMany({
+      where: {
+        targetYear,
+        OR: keys.map((k) => ({
+          universityId: k.universityId,
+          groupCode: k.groupCode,
+          batch: k.batch,
+          recruitType: k.recruitType,
+          subjects: k.subjects,
+        })),
+      },
+    });
+
+    const result = new Map<string, {
+      point: number;
+      conservative: number;
+      optimistic: number;
+      basisYears: number[];
+      confidence: string;
+      targetYear: number;
+    }>();
+    for (const p of preds) {
+      const k = [p.universityId, p.groupCode, p.batch, p.recruitType, p.subjects].join('|');
+      result.set(k, {
+        point: p.pointRank!,
+        conservative: p.conservativeRank!,
+        optimistic: p.optimisticRank!,
+        basisYears: p.basisYears as number[],
+        confidence: p.confidence,
+        targetYear: p.targetYear,
+      });
+    }
+    return result;
+  }
+
   // 取最新年份的最佳可用分数（majorMinScore 优先，groupMinScore 兜底）
   private getBestScore(yearlyData: any[]): number | null {
     if (yearlyData.length === 0) return null;
