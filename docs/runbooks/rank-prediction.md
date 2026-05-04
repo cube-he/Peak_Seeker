@@ -20,6 +20,35 @@ Spec: `docs/superpowers/specs/2026-05-04-rank-prediction-model-design.md`
 | Calibration (holdout MAE/MAPE report) | `apps/server/scripts/validate-rank-predictions.ts` |
 | Latest validation report | `docs/data-reports/2026-05-04-rank-prediction-validation.md` |
 
+## Deploy-day quickstart (first-time go-live)
+
+Run these in order on the production server. **Order matters** — `etl-predict-rank` requires `province_year_stats` populated upstream.
+
+```bash
+# 1. Deploy code + apply migration (does prisma migrate deploy automatically)
+python deploy_auto.py
+
+# On the server, then:
+cd /home/ubuntu/apps/volunteer-helper/apps/server
+
+# 2. Seed ProvinceYearStat (requires score_segments already loaded for rankedCount fallback)
+pnpm ts-node scripts/seed-province-stats.ts
+
+# 3. Run ETL — writes ~20-40k rows of rank_predictions
+pnpm ts-node scripts/etl-predict-rank.ts
+
+# 4. Generate calibration report (writes back to repo path)
+pnpm ts-node scripts/validate-rank-predictions.ts > /tmp/rank-prediction-validation-$(date +%F).md
+
+# 5. Inspect the report — confirm thresholds pass before allowing染色 in spec-1:
+#    - Overall MAE < 3000
+#    - High-confidence MAE < 1500
+#    - 0–10000 段 MAE < 800
+cat /tmp/rank-prediction-validation-$(date +%F).md
+```
+
+If validation thresholds fail, do NOT enable spec-1 染色. Iterate on the model first.
+
 ## When to switch `targetYear`
 
 **Trigger**: previous year's filing + admission cycle has fully closed AND that year's `admission_records`, `enrollment_plans`, and `province_year_stats` are loaded into the DB.
@@ -107,13 +136,13 @@ The script is idempotent (upsert by `rank_pred_natural_key`).
 
 ## Disabling predictions for a problematic group
 
-If the model produces obviously wrong predictions for a specific (university, group, batch, recruitType), the safest mitigation is data-side:
+If the model produces obviously wrong predictions for a specific (university, group, batch, recruitType), the API has no built-in confidence filter — it surfaces every `rank_predictions` row as-is. To suppress a problematic row:
 
-1. Identify the row in `rank_predictions`.
-2. Set `confidence` to `"insufficient"` directly via SQL — the API filter `confidence != 'insufficient'` (TBD in T10) will hide it from frontend response.
-3. Or delete the row entirely; the API treats missing rows as `predictedMinRank: null`.
+- **Delete the row directly via SQL.** The API treats missing rows as `predictedMinRank: null`, which the frontend already handles (no染色, falls back to historical-only display).
 
-The systemic fix is to investigate why the model failed and either improve `predict.ts` or correct upstream data.
+The systemic fix is to investigate why the model failed and either improve `predict.ts` or correct upstream data, then re-run the ETL (which is upsert-based, so deleted rows will be re-created if the inputs still drive the same buggy output).
+
+If row-level disabling becomes frequent, consider implementing an API-side filter such as `confidence != 'low'` or a dedicated `disabled` boolean column in a follow-up.
 
 ## Frontend integration
 
