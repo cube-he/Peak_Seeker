@@ -110,6 +110,16 @@ export interface SupplementaryInfo {
   supplementaryRate: number | null; // 征集率 = 征集计划数 / 招生计划数 * 100
 }
 
+// 预估当年最低录取位次（来自 spec-0 模型）
+export interface PredictedMinRank {
+  point: number;
+  conservative: number;
+  optimistic: number;
+  basisYears: number[];
+  confidence: 'high' | 'medium' | 'low';
+  targetYear: number;
+}
+
 // 聚合录取结果 — 一条 = 一个"院校+专业"组合的完整画像
 export interface AggregatedAdmissionItem {
   university: UniversitySummary;
@@ -123,6 +133,7 @@ export interface AggregatedAdmissionItem {
   yearlyData: YearlyAdmissionData[];
   currentPlan: CurrentEnrollmentPlan | null;
   supplementary: SupplementaryInfo | null;
+  predictedMinRank: PredictedMinRank | null;
 }
 
 // 聚合查询参数
