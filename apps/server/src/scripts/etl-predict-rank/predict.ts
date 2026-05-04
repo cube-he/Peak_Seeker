@@ -11,12 +11,77 @@ export function subjectWeight(N_target: number | null, N_historical: number | nu
 
 /**
  * planWeight: how the target year's plan count compares to a historical year.
- * More plans this year → admission threshold loosens → predicted rank moves toward larger numbers.
- * Use historical/target ratio so historical_rank × planWeight scales correctly.
+ * Larger P_target relative to P_historical means looser threshold this year, so
+ * historical_rank gets multiplied by P_target/P_historical to scale up.
+ * e.g. if target has 2× the plans, the min-admitted rank is roughly 2× larger (worse-ranked accepted).
  * Returns 1 (no adjustment) when either side is unknown.
  */
 export function planWeight(P_historical: number | null, P_target: number | null): number {
   if (P_historical == null || P_target == null) return 1;
   if (P_historical === 0 || P_target === 0) return 1;
-  return P_historical / P_target;
+  return P_target / P_historical;
+}
+
+export interface PredictInput {
+  /** sorted desc by year, max 3 */
+  history: Array<{ year: number; minRank: number }>;
+  /** plan count for target year, null if unknown */
+  planTarget: number | null;
+  /** plan count for each historical year keyed by year */
+  planHistorical: Record<number, number | null>;
+  /** target year subject pool (canonical) */
+  poolTarget: number | null;
+  /** historical subject pool keyed by year */
+  poolHistorical: Record<number, number | null>;
+  /** true if poolTarget came from target-1 fallback */
+  poolTargetIsProxy: boolean;
+}
+
+export interface PredictOutput {
+  point: number;
+  conservative: number;
+  optimistic: number;
+  basisYears: number[];
+  confidence: 'high' | 'medium' | 'low';
+}
+
+const YEAR_WEIGHTS = [0.5, 0.3, 0.2];
+
+export function predictMinRank(input: PredictInput): PredictOutput | null {
+  const { history, planTarget, planHistorical, poolTarget, poolHistorical, poolTargetIsProxy } = input;
+
+  if (history.length < 2) return null;
+  if (poolTarget == null) return null;
+
+  const equivRanks: number[] = [];
+  for (const h of history) {
+    const N_y = poolHistorical[h.year] ?? null;
+    const P_y = planHistorical[h.year] ?? null;
+    const sw = subjectWeight(poolTarget, N_y);
+    const pw = planWeight(P_y, planTarget);
+    equivRanks.push(h.minRank * sw * pw);
+  }
+
+  const usedWeights = YEAR_WEIGHTS.slice(0, equivRanks.length);
+  const totalWeight = usedWeights.reduce((a, b) => a + b, 0);
+  const point = equivRanks.reduce((acc, v, i) => acc + v * usedWeights[i], 0) / totalWeight;
+
+  // Confidence ladder:
+  // - 3 years + non-proxy pool + non-null planTarget → high
+  // - 2-3 years + non-proxy pool + non-null planTarget → medium
+  // - proxy pool but planTarget known → medium
+  // - planTarget null (threshold unknown) → low
+  const confidence: PredictOutput['confidence'] =
+    history.length === 3 && !poolTargetIsProxy && planTarget != null ? 'high'
+    : history.length >= 2 && !poolTargetIsProxy && planTarget != null ? 'medium'
+    : poolTargetIsProxy && planTarget != null ? 'medium'
+    : 'low';
+
+  return {
+    point: Math.round(point),
+    conservative: Math.round(Math.max(...equivRanks)),
+    optimistic: Math.round(Math.min(...equivRanks)),
+    basisYears: history.map(h => h.year),
+    confidence,
+  };
 }

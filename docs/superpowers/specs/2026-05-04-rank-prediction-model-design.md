@@ -190,8 +190,8 @@ function predictMinRank(uniId, groupCode, batch, recruitType, subjects, targetYe
       ?.groupPlanCount
 
     const subjWeight = (N_y && N_t) ? (N_t / N_y) : 1
-    const planWeight = (P_y && P_t) ? (P_y / P_t) : 1
-      // 计划增 → 录取门槛松 → 位次变大；用 P_y / P_t 让历史位次缩放到当年规模
+    const planWeight = (P_y && P_t) ? (P_t / P_y) : 1
+      // 计划增 → 录取门槛松 → 位次变大；P_t/P_y 让历史位次乘以"当年相对历史的计划倍数"，位次向大数方向偏移
     equivRanks.push(h.minRank * subjWeight * planWeight)
   }
 
