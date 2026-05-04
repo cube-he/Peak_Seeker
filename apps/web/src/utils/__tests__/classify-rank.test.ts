@@ -70,8 +70,11 @@ describe('classifyRank', () => {
     expect(classifyRank(50000, 64000, '普通本科', true)).toBe('stable');
   });
 
-  it('userRank zero degenerates to ratio safely', () => {
-    // user=0 → ratio uses Math.max(1, userRank) = 1 → ratio = predicted = 10000 → elite via ratio
-    expect(classifyRank(0, 10000, TIER, false)).toBe('elite');
+  it('userRank zero degenerates to ratio safely (no division crash)', () => {
+    // user=0 → ratio uses Math.max(1, userRank) = 1 → ratio = predicted = 10000.
+    // abs: diff=10000 → in [stable=10000, safe=30000) → 'safe'
+    // ratio: 10000 > safeMax(0.5) → 'elite'
+    // risker (lower RISK_ORDER index): min(safe=2, elite=3) = 'safe'
+    expect(classifyRank(0, 10000, TIER, false)).toBe('safe');
   });
 });
