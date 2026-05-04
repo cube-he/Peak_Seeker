@@ -203,6 +203,7 @@ export class AdmissionService {
             is985: true,
             is211: true,
             isDoubleFirstClass: true,
+            logoUrl: true,
           },
         },
         major: {

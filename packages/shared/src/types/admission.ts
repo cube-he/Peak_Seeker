@@ -92,6 +92,7 @@ export interface UniversitySummary {
   is985: boolean;
   is211: boolean;
   isDoubleFirstClass: boolean;
+  logoUrl?: string | null;
 }
 
 // 专业摘要
