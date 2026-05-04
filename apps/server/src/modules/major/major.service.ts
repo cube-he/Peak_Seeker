@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
+import { AdmissionService } from '../admission/admission.service';
 
 @Injectable()
 export class MajorService {
   constructor(
     private prisma: PrismaService,
     private redis: RedisService,
+    private admissionService: AdmissionService,
   ) {}
 
   async findAll(query: {
@@ -52,19 +54,50 @@ export class MajorService {
   }
 
   async findById(id: number) {
-    return this.prisma.major.findUnique({
+    const universitySelect = {
+      select: {
+        id: true,
+        name: true,
+        logoUrl: true,
+        is985: true,
+        is211: true,
+        isDoubleFirstClass: true,
+      },
+    };
+
+    const major = await this.prisma.major.findUnique({
       where: { id },
       include: {
         enrollmentPlans: {
-          include: { university: true },
+          include: { university: universitySelect },
           orderBy: { year: 'desc' },
         },
         admissionRecords: {
-          include: { university: true },
+          include: { university: universitySelect },
           orderBy: { year: 'desc' },
         },
       },
     });
+
+    // Inject predictedMinRank into each enrollmentPlan row for the rank badge UI
+    if (major && major.enrollmentPlans && major.enrollmentPlans.length > 0) {
+      const keys = major.enrollmentPlans
+        .filter((ep: any) => ep.universityId && ep.subjects)
+        .map((ep: any) => ({
+          universityId: ep.universityId,
+          groupCode: ep.groupCode,
+          batch: ep.batch,
+          recruitType: ep.recruitType,
+          subjects: ep.subjects,
+        }));
+      const predMap = await this.admissionService.lookupPredictionsByKeys(keys);
+      for (const ep of major.enrollmentPlans as any[]) {
+        const k = [ep.universityId, ep.groupCode, ep.batch, ep.recruitType, ep.subjects].join('|');
+        ep.predictedMinRank = predMap.get(k) ?? null;
+      }
+    }
+
+    return major;
   }
 
   async findUniversities(id: number, year?: number) {
