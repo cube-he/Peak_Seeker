@@ -19,7 +19,7 @@ export interface UniversityQueryParams {
 
 export const universityService = {
   getList: (params: UniversityQueryParams): Promise<any> => api.get('/universities', { params }) as any,
-  getById: (id: number): Promise<any> => api.get(`/universities/${id}`) as any,
+  getById: (id: number, subject?: string): Promise<any> => api.get(`/universities/${id}`, { params: subject ? { subject } : undefined }) as any,
   getMajors: (id: number, year?: number): Promise<any> =>
     api.get(`/universities/${id}/majors`, { params: { year } }) as any,
   getAdmissions: (id: number): Promise<any> => api.get(`/universities/${id}/admissions`) as any,

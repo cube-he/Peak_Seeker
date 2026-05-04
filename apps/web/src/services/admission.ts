@@ -2,6 +2,8 @@ import api from './api';
 import type {
   AggregatedAdmissionQuery,
   AggregatedAdmissionResponse,
+  LookupPredictionsRequest,
+  LookupPredictionsResponse,
 } from '@volunteer-helper/shared';
 
 export interface AdmissionByScoreParams {
@@ -33,5 +35,9 @@ export const admissionService = {
 
   getAggregated(params: AggregatedAdmissionQuery): Promise<AggregatedAdmissionResponse> {
     return api.get('/admissions/aggregated', { params }) as any;
+  },
+
+  lookupPredictions(req: LookupPredictionsRequest): Promise<LookupPredictionsResponse> {
+    return api.post('/admissions/lookup-predictions', req) as any;
   },
 };
