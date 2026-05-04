@@ -44,6 +44,9 @@ prisma/migrations/*_migration_lock.toml
 # Claude flow (开发工具)
 .claude-flow/
 
+# Superpowers brainstorm artifacts (transient mockups + state)
+.superpowers/brainstorm/
+
 # Python 缓存
 __pycache__/
 *.pyc
