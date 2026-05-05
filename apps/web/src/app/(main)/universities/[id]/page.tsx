@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Card, Tabs, Space, Descriptions, Spin } from 'antd';
+import { Card, Tabs, Space, Spin } from 'antd';
 import {
   BankOutlined,
   BookOutlined,
@@ -17,6 +17,10 @@ import { universityService } from '@/services/university';
 import RankingCard from '@/components/university/RankingCard';
 import SatisfactionCard from '@/components/university/SatisfactionCard';
 import EmploymentCard from '@/components/university/EmploymentCard';
+import OverviewCard from '@/components/university/OverviewCard';
+import DisciplineCard from '@/components/university/DisciplineCard';
+import CampusCard from '@/components/university/CampusCard';
+import CharterCard from '@/components/university/CharterCard';
 import QiangjiTable from '@/components/university/QiangjiTable';
 import UniversityLogo from '@/components/university/UniversityLogo';
 import PlanPivotTable from '@/components/university/PlanPivotTable';
@@ -74,49 +78,64 @@ export default function UniversityDetailPage() {
       key: 'info',
       label: <span><BankOutlined className="mr-1" />基本信息</span>,
       children: (
-        <>
-          <Descriptions bordered column={{ xs: 1, sm: 2 }} size="small">
-            <Descriptions.Item label="院校代码">{u.code || '-'}</Descriptions.Item>
-            <Descriptions.Item label="省份/城市">{[u.province, u.city].filter(Boolean).join(' · ') || '-'}</Descriptions.Item>
-            <Descriptions.Item label="类型">{u.type || '-'}</Descriptions.Item>
-            <Descriptions.Item label="层次">{u.level || '-'}</Descriptions.Item>
-            <Descriptions.Item label="办学性质">{u.runningNature || '-'}</Descriptions.Item>
-            <Descriptions.Item label="主管部门">{u.department || '-'}</Descriptions.Item>
-            <Descriptions.Item label="院校排名">{u.ranking ? <span className="font-semibold text-primary">第 {u.ranking} 名</span> : '-'}</Descriptions.Item>
-            <Descriptions.Item label="考研率">{u.postgradRate || '-'}</Descriptions.Item>
-            <Descriptions.Item label="转专业难度">{u.transferDifficulty || '-'}</Descriptions.Item>
-            <Descriptions.Item label="学科评估">{u.disciplineEvaluationLevel || '-'}</Descriptions.Item>
-            <Descriptions.Item label="硕士点">{u.hasMasterProgram ? `${u.masterProgramCount || ''}个` : '无'}</Descriptions.Item>
-            <Descriptions.Item label="博士点">{u.hasDoctoralProgram ? `${u.doctoralProgramCount || ''}个` : '无'}</Descriptions.Item>
-            {u.renameHistory && (
-              <Descriptions.Item label="更名信息" span={2}>{u.renameHistory}</Descriptions.Item>
-            )}
-            {u.admissionGuide && (
-              <Descriptions.Item label="招生章程" span={2}>
-                <div className="max-h-[200px] overflow-auto whitespace-pre-wrap text-[13px]">{u.admissionGuide}</div>
-              </Descriptions.Item>
-            )}
-          </Descriptions>
-          <RankingCard
-            rankingSoft={u.rankingSoft ?? null}
-            rankingAlumni={u.rankingAlumni ?? null}
-            rankingQS={u.rankingQS ?? null}
-            rankingUSNews={u.rankingUSNews ?? null}
-            aClassDisciplineCount={u.aClassDisciplineCount ?? null}
+        <div className="px-6 py-4 space-y-4">
+          <CharterCard
+            renameHistory={u.renameHistory ?? null}
+            admissionGuide={u.admissionGuide ?? null}
+            charterInfo={u.charterInfo ?? null}
           />
-          <SatisfactionCard
-            overall={u.satisfactionOverall ?? null}
-            life={u.satisfactionLife ?? null}
-            environ={u.satisfactionEnviron ?? null}
-            count={u.satisfactionCount ?? null}
-          />
-          <EmploymentCard
-            employmentRate={u.employmentRate ?? null}
-            furtherStudyRate={u.furtherStudyRate ?? null}
-            avgSalary={u.avgSalary ?? null}
-            topEmployers={u.topEmployers ?? null}
-          />
-        </>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <OverviewCard
+              code={u.code ?? null}
+              province={u.province ?? null}
+              city={u.city ?? null}
+              type={u.type ?? null}
+              level={u.level ?? null}
+              runningLevel={u.runningLevel ?? null}
+              runningNature={u.runningNature ?? null}
+              department={u.department ?? null}
+              createdYear={u.createdYear ?? null}
+              campusArea={u.campusArea ?? null}
+              maleRatio={u.maleRatio ?? null}
+              femaleRatio={u.femaleRatio ?? null}
+              tags={u.tags ?? null}
+            />
+            <DisciplineCard
+              disciplineEvaluationLevel={u.disciplineEvaluationLevel ?? null}
+              aClassDisciplineCount={u.aClassDisciplineCount ?? null}
+              hasMasterProgram={!!u.hasMasterProgram}
+              masterProgramCount={u.masterProgramCount ?? null}
+              masterPrograms={u.masterPrograms ?? null}
+              hasDoctoralProgram={!!u.hasDoctoralProgram}
+              doctoralProgramCount={u.doctoralProgramCount ?? null}
+              doctoralPrograms={u.doctoralPrograms ?? null}
+              postgradRate={u.postgradRate ?? null}
+              transferDifficulty={u.transferDifficulty ?? null}
+            />
+            <CampusCard
+              militaryTrainingDuration={u.militaryTrainingDuration ?? null}
+            />
+            <RankingCard
+              rankingSoft={u.rankingSoft ?? null}
+              rankingAlumni={u.rankingAlumni ?? null}
+              rankingQS={u.rankingQS ?? null}
+              rankingUSNews={u.rankingUSNews ?? null}
+              aClassDisciplineCount={u.aClassDisciplineCount ?? null}
+            />
+            <SatisfactionCard
+              overall={u.satisfactionOverall ?? null}
+              life={u.satisfactionLife ?? null}
+              environ={u.satisfactionEnviron ?? null}
+              count={u.satisfactionCount ?? null}
+            />
+            <EmploymentCard
+              employmentRate={u.employmentRate ?? null}
+              furtherStudyRate={u.furtherStudyRate ?? null}
+              avgSalary={u.avgSalary ?? null}
+              topEmployers={u.topEmployers ?? null}
+            />
+          </div>
+        </div>
       ),
     },
     {
