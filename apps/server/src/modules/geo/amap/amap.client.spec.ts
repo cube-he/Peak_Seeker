@@ -176,3 +176,89 @@ describe('AmapClient.district', () => {
     expect(await client.district('不存在')).toBeNull();
   });
 });
+
+describe('AmapClient retry behaviour', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('retries on 5xx and succeeds on later attempt', async () => {
+    let attempts = 0;
+    const fn = jest.fn().mockImplementation(async () => {
+      attempts += 1;
+      if (attempts < 2) {
+        return { ok: false, status: 502, json: async () => ({}) } as Response;
+      }
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          status: '1', info: 'OK', count: '1',
+          geocodes: [{ formatted_address: 'X', province: '', city: '', district: '', location: '0,0' }],
+        }),
+      } as Response;
+    });
+    (global as unknown as { fetch: jest.Mock }).fetch = fn;
+
+    const client = makeClient({ AMAP_RATE_LIMIT_QPS: '100' });
+    const result = await client.geocode('test');
+    expect(attempts).toBe(2);
+    expect(result?.formatted_address).toBe('X');
+  }, 30000);
+
+  it('throws AmapUnavailableError after max retries on persistent 5xx', async () => {
+    (global as unknown as { fetch: jest.Mock }).fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: false, status: 503, json: async () => ({}) } as Response);
+    const client = makeClient();
+    const { AmapUnavailableError } = await import('./amap.types');
+    await expect(client.geocode('test')).rejects.toThrow(AmapUnavailableError);
+  }, 30000);
+});
+
+describe('AmapClient cache', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('returns cached response without calling fetch', async () => {
+    const cachedJson = {
+      status: '1', info: 'OK',
+      geocodes: [{ formatted_address: 'cached', province: '', city: '', district: '', location: '1,1' }],
+    };
+    const redis = {
+      getCache: jest.fn().mockResolvedValue(cachedJson),
+      setCache: jest.fn().mockResolvedValue(undefined),
+    };
+    const fetchMock = jest.fn();
+    (global as unknown as { fetch: jest.Mock }).fetch = fetchMock;
+
+    const config = {
+      get: (k: string) =>
+        ({ AMAP_SERVICE_KEY: 'test-key', AMAP_RATE_LIMIT_QPS: '100' } as Record<string, string>)[k],
+    } as unknown as ConfigService;
+    const client = new AmapClient(config, redis as unknown as never);
+    const result = await client.geocode('清华大学');
+    expect(redis.getCache).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result?.formatted_address).toBe('cached');
+  });
+
+  it('writes successful responses to cache', async () => {
+    const redis = {
+      getCache: jest.fn().mockResolvedValue(null),
+      setCache: jest.fn().mockResolvedValue(undefined),
+    };
+    mockFetch({
+      status: '1', info: 'OK',
+      geocodes: [{ formatted_address: 'X', province: '', city: '', district: '', location: '0,0' }],
+    });
+
+    const config = {
+      get: (k: string) =>
+        ({ AMAP_SERVICE_KEY: 'test-key', AMAP_RATE_LIMIT_QPS: '100' } as Record<string, string>)[k],
+    } as unknown as ConfigService;
+    const client = new AmapClient(config, redis as unknown as never);
+    await client.geocode('清华大学');
+    expect(redis.setCache).toHaveBeenCalledTimes(1);
+    const [key, value, ttl] = redis.setCache.mock.calls[0];
+    expect(key).toContain('amap:');
+    expect(typeof value).toBe('object');
+    expect(ttl).toBe(24 * 60 * 60);
+  });
+});

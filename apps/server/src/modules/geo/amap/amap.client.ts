@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { RedisService } from '@/redis/redis.service';
 import {
   AmapApiError,
   AmapDistrictResponse,
@@ -8,8 +9,10 @@ import {
   AmapPlaceSearchResponse,
   AmapPoi,
   AmapRegeocodeResponse,
+  AmapUnavailableError,
 } from './amap.types';
 import { GEO_CONFIG } from '../geo.config';
+import { TokenBucketLimiter } from './rate-limiter';
 
 const AMAP_BASE = 'https://restapi.amap.com/v3';
 
@@ -17,11 +20,17 @@ const AMAP_BASE = 'https://restapi.amap.com/v3';
 export class AmapClient {
   private readonly logger = new Logger(AmapClient.name);
   private readonly key: string;
+  private readonly limiter: TokenBucketLimiter;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    @Optional() @Inject(RedisService) private readonly redis?: RedisService,
+  ) {
     const k = this.config.get<string>('AMAP_SERVICE_KEY');
     if (!k) throw new Error('AMAP_SERVICE_KEY is not set');
     this.key = k;
+    const qps = Number(this.config.get('AMAP_RATE_LIMIT_QPS') ?? GEO_CONFIG.AMAP_QPS);
+    this.limiter = new TokenBucketLimiter(qps, 1000);
   }
 
   async geocode(
@@ -114,15 +123,64 @@ export class AmapClient {
     return json.districts && json.districts.length > 0 ? json.districts[0] : null;
   }
 
-  private async request<T>(path: string, params: Record<string, string>): Promise<T> {
+  private cacheKey(path: string, params: Record<string, string>): string {
+    const safe = { ...params };
+    delete safe.key; // never use the API key as cache differentiator
+    const qs = new URLSearchParams(safe).toString();
+    return `amap:${path}?${qs}`;
+  }
+
+  private async request<T>(
+    path: string,
+    params: Record<string, string>,
+  ): Promise<T> {
+    await this.limiter.acquire();
+
+    const cKey = this.cacheKey(path, params);
+    if (this.redis) {
+      try {
+        const hit = await this.redis.getCache<T>(cKey);
+        if (hit) return hit;
+      } catch (e) {
+        this.logger.warn(`Cache read failed: ${(e as Error).message}`);
+      }
+    }
+
     const qs = new URLSearchParams(params).toString();
     const url = `${AMAP_BASE}${path}?${qs}`;
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(GEO_CONFIG.AMAP_DEFAULT_TIMEOUT_MS),
-    });
-    if (!res.ok) {
-      throw new Error(`AMap HTTP ${res.status}`);
+
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= GEO_CONFIG.AMAP_MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(GEO_CONFIG.AMAP_DEFAULT_TIMEOUT_MS),
+        });
+        if (res.status === 429 || res.status >= 500) {
+          lastErr = new Error(`HTTP ${res.status}`);
+        } else if (!res.ok) {
+          throw new Error(`AMap HTTP ${res.status}`);
+        } else {
+          const json = (await res.json()) as T;
+          if (this.redis) {
+            try {
+              await this.redis.setCache(cKey, json, GEO_CONFIG.AMAP_CACHE_TTL_SECONDS);
+            } catch (e) {
+              this.logger.warn(`Cache write failed: ${(e as Error).message}`);
+            }
+          }
+          return json;
+        }
+      } catch (err) {
+        lastErr = err;
+      }
+      if (attempt < GEO_CONFIG.AMAP_MAX_RETRIES) {
+        const delay = GEO_CONFIG.AMAP_RETRY_BASE_DELAY_MS * 2 ** attempt;
+        await new Promise((r) => setTimeout(r, delay));
+      }
     }
-    return (await res.json()) as T;
+    throw new AmapUnavailableError(
+      `AMap unreachable after ${GEO_CONFIG.AMAP_MAX_RETRIES + 1} attempts`,
+      lastErr,
+    );
   }
 }
