@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
   ParseIntPipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { StudentService } from './student.service';
@@ -48,6 +49,42 @@ export class StudentController {
       user.role === 'ADMIN' ? undefined : user.teacherProfileId;
     return this.studentService.findByTeacher(teacherProfileId, query);
   }
+
+  // ── 学生自助端点 (/me) ────────────────────────────────
+  // 注：/me 必须声明在 /:id 之前，NestJS 才能正确匹配静态路径
+
+  @Get('me')
+  @ApiOperation({ summary: '获取当前学生自己的档案（① 字段已过滤）' })
+  async getMyProfile(@CurrentUser() user: JwtPayloadUser) {
+    if (user.role !== 'STUDENT') {
+      throw new ForbiddenException('仅学生角色可调用此端点');
+    }
+    return this.studentService.getMyProfile(user.id);
+  }
+
+  @Put('me')
+  @ApiOperation({ summary: '学生更新自己的档案（拒绝 ① 字段）' })
+  async updateMyProfile(
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() dto: UpdateStudentProfileDto,
+  ) {
+    if (user.role !== 'STUDENT') {
+      throw new ForbiddenException('仅学生角色可调用此端点');
+    }
+    return this.studentService.updateMyProfile(user.id, dto);
+  }
+
+  @Get('me/progress')
+  @ApiOperation({ summary: '取学生自己的进度信息（双轨完整度）' })
+  async getMyProgress(@CurrentUser() user: JwtPayloadUser) {
+    if (user.role !== 'STUDENT') {
+      throw new ForbiddenException('仅学生角色可调用此端点');
+    }
+    const profile = await this.studentService.getMyProfile(user.id);
+    return (profile as { progress: unknown }).progress;
+  }
+
+  // ── 老师/管理员端点 ───────────────────────────────────
 
   @Get(':id')
   @ApiOperation({ summary: '获取学生详情' })
