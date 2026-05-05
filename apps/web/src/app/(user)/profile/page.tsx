@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Form,
   Input,
@@ -24,8 +26,28 @@ import Link from 'next/link';
 const { Option } = Select;
 
 export default function ProfilePage() {
-  const { isLoggedIn } = useAuthStore();
+  const { isLoggedIn, user: authUser } = useAuthStore();
+  const router = useRouter();
   const queryClient = useQueryClient();
+
+  // 学生角色：跳转到 W3 三阶段渐进采集 dashboard
+  // 老师/管理员仍保留此通用 profile（无新版替代）
+  useEffect(() => {
+    if (authUser?.role === 'STUDENT') {
+      router.replace('/student/profile');
+    }
+  }, [authUser?.role, router]);
+
+  // STUDENT 角色在 effect 跳转前先显示 loading，避免闪烁旧 form
+  if (authUser?.role === 'STUDENT') {
+    return (
+      <MainLayout>
+        <div className="flex justify-center py-32">
+          <Spin size="large" tip="正在跳转..." />
+        </div>
+      </MainLayout>
+    );
+  }
   const [profileForm] = Form.useForm();
   const [examForm] = Form.useForm();
   const [prefForm] = Form.useForm();
