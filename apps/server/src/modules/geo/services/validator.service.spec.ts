@@ -70,3 +70,73 @@ describe('GeoValidator.checkProvinceMatch', () => {
     expect(types).not.toContain('province_mismatch');
   });
 });
+
+describe('GeoValidator.checkDuplicateCoord', () => {
+  it('flags duplicate when another university shares coordinates within 50m', async () => {
+    const prisma: any = {
+      university: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 99, name: 'Other', latitude: 30.5, longitude: 104.0 },
+        ]),
+      },
+      universityCampus: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const amap = { regeocode: jest.fn().mockResolvedValue(null) };
+    const v = new GeoValidator(prisma, amap as any);
+    const r = await v.validate({
+      id: 1, name: 'Self', province: undefined, city: undefined,
+      address: 'A', latitude: 30.5, longitude: 104.0, campuses: [],
+    });
+    expect(r.issues.map((i) => i.issueType)).toContain('duplicate_coord');
+  });
+
+  it('ignores the university itself when checking duplicates', async () => {
+    const prisma: any = {
+      university: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 1, name: 'Self', latitude: 30.5, longitude: 104.0 },
+        ]),
+      },
+      universityCampus: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const amap = { regeocode: jest.fn().mockResolvedValue(null) };
+    const v = new GeoValidator(prisma, amap as any);
+    const r = await v.validate({
+      id: 1, name: 'Self', address: 'A',
+      latitude: 30.5, longitude: 104.0, campuses: [],
+    });
+    expect(r.issues.map((i) => i.issueType)).not.toContain('duplicate_coord');
+  });
+});
+
+describe('GeoValidator.checkCampusDistance', () => {
+  it('flags anomaly when same-city main and branch are > 800km apart', () => {
+    const v = new GeoValidator(fakePrisma() as any, { regeocode: jest.fn().mockResolvedValue(null) } as any);
+    return v.validate({
+      id: 1, name: 'X',
+      address: 'A', latitude: 39.9, longitude: 116.4,   // Beijing
+      city: '北京市',
+      campuses: [
+        { id: 10, name: '本部', isMain: true, city: '北京市', latitude: 39.9, longitude: 116.4 },
+        { id: 11, name: '分校', isMain: false, city: '北京市', latitude: 22.59, longitude: 113.97 }, // Shenzhen
+      ],
+    }).then((r) => {
+      expect(r.issues.map((i) => i.issueType)).toContain('campus_distance_anomaly');
+    });
+  });
+
+  it('does not flag when same-city campuses are within tolerance', () => {
+    const v = new GeoValidator(fakePrisma() as any, { regeocode: jest.fn().mockResolvedValue(null) } as any);
+    return v.validate({
+      id: 1, name: 'X',
+      address: 'A', latitude: 39.9, longitude: 116.4,
+      city: '北京市',
+      campuses: [
+        { id: 10, name: '东', isMain: true, city: '北京市', latitude: 39.9, longitude: 116.4 },
+        { id: 11, name: '西', isMain: false, city: '北京市', latitude: 39.95, longitude: 116.30 },
+      ],
+    }).then((r) => {
+      expect(r.issues.map((i) => i.issueType)).not.toContain('campus_distance_anomaly');
+    });
+  });
+});

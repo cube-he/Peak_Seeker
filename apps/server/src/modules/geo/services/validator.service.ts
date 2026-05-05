@@ -3,6 +3,7 @@ import { PrismaService } from '@/prisma/prisma.service';
 import { AmapClient } from '../amap/amap.client';
 import { GEO_CONFIG } from '../geo.config';
 import { GeoIssueDetail, ValidationReport } from '../dto/validation-report.dto';
+import { haversineKm, haversineMeters } from '../utils/haversine';
 
 interface CampusLike {
   id?: number;
@@ -97,10 +98,60 @@ export class GeoValidator {
       s.replace(/省|市|自治区|特别行政区|壮族|回族|维吾尔|藏族|蒙古/g, '').trim();
     return norm(a) === norm(b);
   }
-  private async checkDuplicateCoord(_uni: UniversityLike): Promise<GeoIssueDetail[]> {
-    return [];
+  private async checkDuplicateCoord(uni: UniversityLike): Promise<GeoIssueDetail[]> {
+    if (uni.latitude == null || uni.longitude == null) return [];
+    // Coarse range filter via SQL bbox (~150m at most), then exact haversine in JS.
+    const tolDeg = 0.0015; // ~167m at the equator; safe upper bound
+    const candidates = await this.prisma.university.findMany({
+      where: {
+        id: { not: uni.id },
+        latitude: { gte: uni.latitude - tolDeg, lte: uni.latitude + tolDeg },
+        longitude: { gte: uni.longitude - tolDeg, lte: uni.longitude + tolDeg },
+      },
+      select: { id: true, name: true, latitude: true, longitude: true },
+    });
+    const issues: GeoIssueDetail[] = [];
+    for (const c of candidates) {
+      // Double-check self-exclusion in JS — guards against mock/edge cases where DB filter is bypassed.
+      if (c.id === uni.id) continue;
+      if (c.latitude == null || c.longitude == null) continue;
+      const m = haversineMeters(
+        uni.latitude!, uni.longitude!,
+        Number(c.latitude), Number(c.longitude),
+      );
+      if (m < GEO_CONFIG.DUPLICATE_COORD_METERS) {
+        issues.push({
+          issueType: 'duplicate_coord',
+          detail: { otherUniversityId: c.id, otherName: c.name, distanceMeters: Math.round(m) },
+        });
+      }
+    }
+    return issues;
   }
-  private checkCampusDistance(_uni: UniversityLike): GeoIssueDetail[] {
-    return [];
+
+  private checkCampusDistance(uni: UniversityLike): GeoIssueDetail[] {
+    const campuses = uni.campuses ?? [];
+    const main = campuses.find((c) => c.isMain) ?? campuses[0];
+    if (!main || main.latitude == null || main.longitude == null) return [];
+    const issues: GeoIssueDetail[] = [];
+    for (const c of campuses) {
+      if (c === main || c.latitude == null || c.longitude == null) continue;
+      if (!c.city || !main.city) continue;
+      if (c.city !== main.city) continue;             // 跨市距离远是正常的
+      const km = haversineKm(
+        Number(main.latitude), Number(main.longitude),
+        Number(c.latitude), Number(c.longitude),
+      );
+      if (km > GEO_CONFIG.CAMPUS_DISTANCE_ANOMALY_KM) {
+        issues.push({
+          issueType: 'campus_distance_anomaly',
+          campusId: c.id,
+          detail: {
+            mainCampusId: main.id, anomalyCampusId: c.id, distanceKm: Math.round(km),
+          },
+        });
+      }
+    }
+    return issues;
   }
 }
