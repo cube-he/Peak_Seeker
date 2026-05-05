@@ -40,3 +40,33 @@ describe('GeoValidator basic checks', () => {
     expect(r.pass).toBe(true);
   });
 });
+
+describe('GeoValidator.checkProvinceMatch', () => {
+  it('flags province_mismatch when regeocoded province ≠ University.province', async () => {
+    const amap = { regeocode: jest.fn().mockResolvedValue({
+      formatted_address: '',
+      addressComponent: { province: '江苏省', city: '南京市', district: '玄武区' },
+    }) };
+    const v = new GeoValidator(fakePrisma() as any, amap as any);
+    const r = await v.validate({
+      id: 1, name: 'X', province: '四川省', city: '成都市',
+      address: 'A', latitude: 32, longitude: 118, campuses: [],
+    });
+    const types = r.issues.map((i) => i.issueType);
+    expect(types).toContain('province_mismatch');
+  });
+
+  it('does not flag when provinces match', async () => {
+    const amap = { regeocode: jest.fn().mockResolvedValue({
+      formatted_address: '',
+      addressComponent: { province: '四川省', city: '成都市', district: '武侯区' },
+    }) };
+    const v = new GeoValidator(fakePrisma() as any, amap as any);
+    const r = await v.validate({
+      id: 1, name: 'X', province: '四川省', city: '成都市',
+      address: 'A', latitude: 30.5, longitude: 104.0, campuses: [],
+    });
+    const types = r.issues.map((i) => i.issueType);
+    expect(types).not.toContain('province_mismatch');
+  });
+});

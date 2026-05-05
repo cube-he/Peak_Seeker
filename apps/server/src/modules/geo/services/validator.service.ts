@@ -75,8 +75,27 @@ export class GeoValidator {
   }
 
   // Placeholders — fully implemented in Tasks 9-10.
-  private async checkProvinceMatch(_uni: UniversityLike): Promise<GeoIssueDetail[]> {
-    return [];
+  private async checkProvinceMatch(uni: UniversityLike): Promise<GeoIssueDetail[]> {
+    const issues: GeoIssueDetail[] = [];
+    if (uni.latitude != null && uni.longitude != null && uni.province) {
+      const r = await this.amap.regeocode(uni.longitude, uni.latitude);
+      const prov = Array.isArray(r?.addressComponent.province)
+        ? r?.addressComponent.province.join('')
+        : r?.addressComponent.province ?? '';
+      if (prov && !this.provinceMatches(prov, uni.province)) {
+        issues.push({
+          issueType: 'province_mismatch',
+          detail: { expected: uni.province, got: prov },
+        });
+      }
+    }
+    return issues;
+  }
+
+  private provinceMatches(a: string, b: string): boolean {
+    const norm = (s: string) =>
+      s.replace(/省|市|自治区|特别行政区|壮族|回族|维吾尔|藏族|蒙古/g, '').trim();
+    return norm(a) === norm(b);
   }
   private async checkDuplicateCoord(_uni: UniversityLike): Promise<GeoIssueDetail[]> {
     return [];
