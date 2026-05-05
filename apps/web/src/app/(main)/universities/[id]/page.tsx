@@ -85,6 +85,9 @@ export default function UniversityDetailPage() {
             admissionGuide={u.admissionGuide ?? null}
             charterInfo={u.charterInfo ?? null}
           />
+          {u.campuses && u.campuses.length > 0 && (
+            <CampusLocationTab universityId={u.id} campuses={u.campuses} />
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <OverviewCard
               code={u.code ?? null}
@@ -149,21 +152,6 @@ export default function UniversityDetailPage() {
       label: <span><HistoryOutlined className="mr-1" />历年录取 ({admissions?.length || 0})</span>,
       children: <AdmissionPivotTable data={admissions} />,
     },
-    // Only show the tab when there is verified campus data
-    ...(u.campuses && u.campuses.length > 0
-      ? [
-          {
-            key: 'campus',
-            label: (
-              <span>
-                <EnvironmentOutlined className="mr-1" />
-                校区位置 ({u.campuses.length})
-              </span>
-            ),
-            children: <CampusLocationTab universityId={u.id} campuses={u.campuses} />,
-          },
-        ]
-      : []),
     // Only show the tab when there is qiangji data
     ...(u.qiangjiAdmissions?.length > 0
       ? [
