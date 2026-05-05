@@ -207,25 +207,33 @@ model UniversityGeoIssue {
 Run: `cd apps/server && pnpm prisma format`
 Expected: command exits 0, no output (or "formatted successfully").
 
-- [ ] **Step 4: Generate the migration**
+- [ ] **Step 4: Hand-write the migration SQL and regenerate the Prisma Client**
 
-Run: `cd apps/server && pnpm prisma migrate dev --name add_geo_fields_and_tables`
+> **Project deployment workflow note:** this project does NOT run `prisma migrate dev` locally. There is no local MySQL instance. Production DB lives on the deploy server (`132.232.245.53`), and `deploy_auto.py` runs `npx prisma migrate deploy` there at deploy time. Therefore the migration directory + SQL must be **created manually** (matching what `migrate dev` would have produced).
 
-Expected:
-- Prisma prints "Applying migration `…_add_geo_fields_and_tables`".
-- Three `CREATE TABLE` statements appear (`university_campuses`, `university_campus_pois`, `university_geo_issues`).
-- `ALTER TABLE universities` adds 6 columns.
-- Generated client is regenerated automatically.
+Steps:
+1. Create the directory `apps/server/prisma/migrations/<TS>_add_geo_fields_and_tables/` where `<TS>` is a 14-digit UTC timestamp like `20260505083740` (use `date -u +%Y%m%d%H%M%S` to generate one).
+2. Hand-write `migration.sql` inside that directory (see Step 5 for exact contents to verify).
+3. Regenerate the Prisma Client locally so the new types are available to subsequent tasks:
 
-If the dev DB has data, Prisma will warn about adding columns. Since all new columns on `universities` are nullable or have defaults, no data loss should occur.
+```bash
+cd apps/server && pnpm prisma generate
+```
 
-- [ ] **Step 5: Sanity-check the generated SQL**
+Expected: `✔ Generated Prisma Client (v7.x.x) to ...`. This requires NO database connection.
 
-Open the new file under `apps/server/prisma/migrations/<timestamp>_add_geo_fields_and_tables/migration.sql` and verify:
-- `ALTER TABLE \`universities\` ADD COLUMN \`address\` VARCHAR(500) NULL` (and 5 more columns)
-- 3 `CREATE TABLE` statements
-- All FK relations use `ON DELETE CASCADE`
-- All `@@index` and `@@unique` are emitted as `CREATE INDEX` / `CREATE UNIQUE INDEX`
+- [ ] **Step 5: Sanity-check the hand-written SQL**
+
+Open `apps/server/prisma/migrations/<TS>_add_geo_fields_and_tables/migration.sql` and verify it matches the format `prisma migrate dev` would emit:
+
+- `-- AlterTable` then `ALTER TABLE \`universities\` ADD COLUMN ... ;` for the 6 new columns (`address`, `latitude`, `longitude`, `geo_status`, `geo_source`, `geo_updated_at`)
+- `-- CreateTable` then `CREATE TABLE \`university_campuses\` (...)` with all fields, `UNIQUE INDEX`, `INDEX`, `PRIMARY KEY (\`id\`)`
+- `-- CreateTable` for `university_campus_pois` and `university_geo_issues`
+- `-- AddForeignKey` for each FK using `ON DELETE CASCADE ON UPDATE CASCADE`
+- All tables use `DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+- snake_case column names (`is_main`, `created_at`, etc.); `@map` directives in the schema must be respected
+
+The actual application of this SQL to production happens later via `deploy_auto.py` running `prisma migrate deploy` on the server. **Do not** attempt to apply it locally.
 
 - [ ] **Step 6: Commit**
 
