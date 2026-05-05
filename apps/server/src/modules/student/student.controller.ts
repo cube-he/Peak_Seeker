@@ -6,11 +6,15 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
   ParseIntPipe,
+  ForbiddenException,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { StudentService } from './student.service';
+import { IntakeExportService } from './intake-export.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
@@ -24,7 +28,10 @@ import { JwtPayloadUser } from '../casl/types';
 @UseGuards(JwtAuthGuard, PoliciesGuard)
 @ApiBearerAuth()
 export class StudentController {
-  constructor(private studentService: StudentService) {}
+  constructor(
+    private studentService: StudentService,
+    private intakeExportService: IntakeExportService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: '创建学生' })
@@ -48,6 +55,42 @@ export class StudentController {
       user.role === 'ADMIN' ? undefined : user.teacherProfileId;
     return this.studentService.findByTeacher(teacherProfileId, query);
   }
+
+  // ── 学生自助端点 (/me) ────────────────────────────────
+  // 注：/me 必须声明在 /:id 之前，NestJS 才能正确匹配静态路径
+
+  @Get('me')
+  @ApiOperation({ summary: '获取当前学生自己的档案（① 字段已过滤）' })
+  async getMyProfile(@CurrentUser() user: JwtPayloadUser) {
+    if (user.role !== 'STUDENT') {
+      throw new ForbiddenException('仅学生角色可调用此端点');
+    }
+    return this.studentService.getMyProfile(user.id);
+  }
+
+  @Put('me')
+  @ApiOperation({ summary: '学生更新自己的档案（拒绝 ① 字段）' })
+  async updateMyProfile(
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() dto: UpdateStudentProfileDto,
+  ) {
+    if (user.role !== 'STUDENT') {
+      throw new ForbiddenException('仅学生角色可调用此端点');
+    }
+    return this.studentService.updateMyProfile(user.id, dto);
+  }
+
+  @Get('me/progress')
+  @ApiOperation({ summary: '取学生自己的进度信息（双轨完整度）' })
+  async getMyProgress(@CurrentUser() user: JwtPayloadUser) {
+    if (user.role !== 'STUDENT') {
+      throw new ForbiddenException('仅学生角色可调用此端点');
+    }
+    const profile = await this.studentService.getMyProfile(user.id);
+    return (profile as { progress: unknown }).progress;
+  }
+
+  // ── 老师/管理员端点 ───────────────────────────────────
 
   @Get(':id')
   @ApiOperation({ summary: '获取学生详情' })
@@ -74,5 +117,27 @@ export class StudentController {
     @Body('teacherProfileId', ParseIntPipe) teacherProfileId: number,
   ) {
     return this.studentService.assignTeacher(id, teacherProfileId);
+  }
+
+  @Get(':id/export-intake')
+  @ApiOperation({ summary: '导出学生接待单 xlsx（仅老师/管理员）' })
+  @CheckPolicies((ability) => ability.can('export', 'StudentProfile'))
+  async exportIntake(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.intakeExportService.export(id);
+    const profile = await this.studentService.findById(id);
+    const realName = (profile as any).user?.realName ?? `student${id}`;
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    // RFC 5987 编码非 ASCII 文件名
+    const filename = `intake_${realName}_${today}.xlsx`;
+    const filenameStar = encodeURIComponent(filename);
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="intake_${id}_${today}.xlsx"; filename*=UTF-8''${filenameStar}`,
+    });
+    res.end(Buffer.from(buffer));
   }
 }

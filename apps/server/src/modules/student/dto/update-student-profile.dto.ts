@@ -6,7 +6,10 @@ import {
   IsArray,
   IsEnum,
   IsNumber,
+  IsDate,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   NewExamType,
@@ -16,7 +19,14 @@ import {
   StayPreference,
   AcceptLevel,
   TuitionBudget,
+  PoliticalStatus,
+  BonusPolicyStatus,
+  RemoteAreaAcceptance,
+  ColdMajorAcceptance,
+  FormFiller,
+  Batch,
 } from '@prisma/client';
+import { BonusItemDto } from './bonus-item.dto';
 
 export class UpdateStudentProfileDto {
   @ApiProperty({ description: '数据版本号（乐观锁）' })
@@ -298,4 +308,102 @@ export class UpdateStudentProfileDto {
   @IsOptional()
   @IsString()
   selfDescription?: string;
+
+  // --- V1 新增：政治面貌（②）---
+
+  @ApiPropertyOptional({ enum: PoliticalStatus })
+  @IsOptional()
+  @IsEnum(PoliticalStatus)
+  politicalStatus?: PoliticalStatus;
+
+  // --- V1 新增：高考所在地（① 老师独占）---
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  examLocationProvince?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  examLocationCity?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  examLocationCounty?: string;
+
+  // --- V1 新增：视力详细（②）---
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  visionLeft?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  visionRight?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  visionLeftCorrected?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  visionRightCorrected?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  medicalHistory?: string;
+
+  // --- V1 新增：加分政策（① 老师独占）---
+
+  @ApiPropertyOptional({ enum: BonusPolicyStatus })
+  @IsOptional()
+  @IsEnum(BonusPolicyStatus)
+  bonusPolicyStatus?: BonusPolicyStatus;
+
+  @ApiPropertyOptional({ type: [BonusItemDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BonusItemDto)
+  bonusItems?: BonusItemDto[];
+
+  // --- V1 新增：意向批次（②）---
+
+  @ApiPropertyOptional({ enum: Batch, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(Batch, { each: true })
+  preferredBatches?: Batch[];
+
+  // --- V1 新增：偏远 / 冷门接受度（②）---
+
+  @ApiPropertyOptional({ enum: RemoteAreaAcceptance })
+  @IsOptional()
+  @IsEnum(RemoteAreaAcceptance)
+  remoteAreaAcceptance?: RemoteAreaAcceptance;
+
+  @ApiPropertyOptional({ enum: ColdMajorAcceptance })
+  @IsOptional()
+  @IsEnum(ColdMajorAcceptance)
+  coldMajorAcceptance?: ColdMajorAcceptance;
+
+  // --- V1 新增：填表元信息（③ 学生端独有）---
+
+  @ApiPropertyOptional({ enum: FormFiller })
+  @IsOptional()
+  @IsEnum(FormFiller)
+  formFiller?: FormFiller;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  parentSignedAt?: Date;
 }

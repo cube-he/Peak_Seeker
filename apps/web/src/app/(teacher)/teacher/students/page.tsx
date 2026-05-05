@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Table, Input, Select, Button, Tag, Space, Progress, Avatar } from 'antd';
 import {
   PlusOutlined,
@@ -13,7 +13,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { studentApi } from '@/services/student-api';
+import { studentApi, type ProfileProgress } from '@/services/student-api';
 import type { ColumnsType } from 'antd/es/table';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -30,42 +30,90 @@ interface Student {
   realName?: string;
   phone?: string;
   status: string;
-  score?: number;
-  rank?: number;
-  completeness?: number;
+  user?: { realName?: string; phone?: string };
+  totalScore?: number;
+  provincialRank?: number;
+  progress?: ProfileProgress;
   planCount?: number;
   createdAt: string;
 }
+
+type ProgressFilter = 'all' | 'self_low' | 'self_mid' | 'teacher_pending' | 'recommendable';
 
 export default function TeacherStudentsPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [progressFilter, setProgressFilter] = useState<ProgressFilter>('all');
 
   const { data, isLoading } = useQuery({
     queryKey: ['teacher-students', search, statusFilter],
     queryFn: () => studentApi.getList({ search, status: statusFilter }),
   });
 
-  const students: Student[] = data?.data || [];
+  const allStudents: Student[] = data?.data?.data ?? data?.data ?? [];
+
+  // 进度筛选在前端做（数据量小，B 范围足够；后续如需要可下沉到后端 query）
+  const students = useMemo(() => {
+    if (progressFilter === 'all') return allStudents;
+    return allStudents.filter((s) => {
+      const p = s.progress;
+      if (!p) return progressFilter === 'self_low';
+      switch (progressFilter) {
+        case 'self_low':
+          return p.studentSelfCompleteness < 50;
+        case 'self_mid':
+          return p.studentSelfCompleteness >= 50 && p.studentSelfCompleteness < 80;
+        case 'teacher_pending':
+          return p.teacherDataCompleteness < 100;
+        case 'recommendable':
+          return p.isRecommendable;
+        default:
+          return true;
+      }
+    });
+  }, [allStudents, progressFilter]);
+
+  const renderProgress = (pct: number | undefined) => {
+    const v = pct ?? 0;
+    const color = v >= 80 ? '#276749' : v >= 50 ? '#b8860b' : '#c53030';
+    return (
+      <div className="flex items-center gap-2">
+        <Progress
+          percent={v}
+          size="small"
+          showInfo={false}
+          strokeColor={color}
+          className="flex-1"
+        />
+        <span className="w-8 text-right text-xs text-text-muted">{v}%</span>
+      </div>
+    );
+  };
 
   const columns: ColumnsType<Student> = [
     {
       title: '学生',
       key: 'name',
-      render: (_, record) => (
-        <div className="flex items-center gap-2">
-          <Avatar size="small" icon={<UserOutlined />} className="bg-primary flex-shrink-0" />
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-text truncate">
-              {record.realName || record.username}
+      render: (_, record) => {
+        const name = record.user?.realName || record.realName || record.username;
+        const phone = record.user?.phone || record.phone;
+        return (
+          <div className="flex items-center gap-2">
+            <Avatar
+              size="small"
+              icon={<UserOutlined />}
+              className="flex-shrink-0 bg-primary"
+            />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-text">{name}</div>
+              {phone && (
+                <div className="text-xs text-text-muted">{phone}</div>
+              )}
             </div>
-            {record.phone && (
-              <div className="text-xs text-text-muted">{record.phone}</div>
-            )}
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: '状态',
@@ -83,45 +131,47 @@ export default function TeacherStudentsPage() {
       width: 120,
       render: (_, record) => (
         <div className="text-sm">
-          {record.score ? (
-            <span className="font-medium text-text">{record.score}</span>
+          {record.totalScore ? (
+            <span className="font-medium text-text">{record.totalScore}</span>
           ) : (
             <span className="text-text-faint">未填写</span>
           )}
-          {record.rank && (
-            <span className="text-text-muted text-xs ml-1">/ {record.rank}位</span>
+          {record.provincialRank && (
+            <span className="ml-1 text-xs text-text-muted">
+              / {record.provincialRank}位
+            </span>
           )}
         </div>
       ),
     },
     {
-      title: '信息完善度',
-      key: 'completeness',
-      width: 150,
-      render: (_, record) => {
-        const pct = record.completeness ?? 0;
-        return (
-          <div className="flex items-center gap-2">
-            <Progress
-              percent={pct}
-              size="small"
-              showInfo={false}
-              strokeColor={pct >= 80 ? '#276749' : pct >= 50 ? '#b8860b' : '#c53030'}
-              className="flex-1"
-            />
-            <span className="text-xs text-text-muted w-8 text-right">{pct}%</span>
-          </div>
-        );
-      },
+      title: '自填进度',
+      key: 'selfProgress',
+      width: 140,
+      sorter: (a, b) =>
+        (a.progress?.studentSelfCompleteness ?? 0) -
+        (b.progress?.studentSelfCompleteness ?? 0),
+      render: (_, r) => renderProgress(r.progress?.studentSelfCompleteness),
     },
     {
-      title: '方案数',
-      dataIndex: 'planCount',
-      key: 'planCount',
+      title: '录入进度',
+      key: 'teacherProgress',
+      width: 140,
+      sorter: (a, b) =>
+        (a.progress?.teacherDataCompleteness ?? 0) -
+        (b.progress?.teacherDataCompleteness ?? 0),
+      render: (_, r) => renderProgress(r.progress?.teacherDataCompleteness),
+    },
+    {
+      title: '可推荐',
+      key: 'recommendable',
       width: 80,
-      render: (count: number) => (
-        <span className="text-sm text-text-secondary">{count ?? 0}</span>
-      ),
+      render: (_, r) =>
+        r.progress?.isRecommendable ? (
+          <Tag color="success">就绪</Tag>
+        ) : (
+          <Tag color="default">未达</Tag>
+        ),
     },
     {
       title: '操作',
@@ -182,6 +232,18 @@ export default function TeacherStudentsPage() {
             value: k,
             label: v.label,
           }))}
+        />
+        <Select<ProgressFilter>
+          value={progressFilter}
+          onChange={setProgressFilter}
+          className="sm:w-[200px]"
+          options={[
+            { value: 'all', label: '全部学生' },
+            { value: 'self_low', label: '自填 < 50%（催学生）' },
+            { value: 'self_mid', label: '自填 50%~80%' },
+            { value: 'teacher_pending', label: '录入未完成（自己补）' },
+            { value: 'recommendable', label: '可推荐' },
+          ]}
         />
       </div>
 

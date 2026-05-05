@@ -61,6 +61,8 @@ scripts/_*.txt
 *.docx
 # Allow test fixtures
 !scripts/data_integration/tests/fixtures/*.xlsx
+# Allow server templates (e.g. 接待单 模板)
+!apps/server/templates/*.xlsx
 *_files/
 优志愿*.html
 掌上高考*.html

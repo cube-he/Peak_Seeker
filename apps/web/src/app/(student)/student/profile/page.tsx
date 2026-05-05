@@ -1,65 +1,30 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  Card,
-  Form,
-  Input,
-  InputNumber,
-  Select,
-  Radio,
-  Tabs,
-  Button,
-  Progress,
-  message,
-  Spin,
-} from 'antd';
-import {
-  SaveOutlined,
-  UserOutlined,
-  BookOutlined,
-  HeartOutlined,
-} from '@ant-design/icons';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Spin, Alert, Button } from 'antd';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
-import HealthCheckboxGroup from '@/components/student/HealthCheckboxGroup';
-import CountyCascader from '@/components/student/CountyCascader';
+import StageCard from '@/components/student/StageCard';
+import ProgressBar from '@/components/student/ProgressBar';
+import TeacherOnlyField from '@/components/student/TeacherOnlyField';
+import { STAGE_LABELS } from '@/components/student/stage-fields';
 
-const EXAM_TYPE_OPTIONS = [
-  { label: '理科', value: 'SCIENCE' },
-  { label: '文科', value: 'LIBERAL_ARTS' },
-];
-
+/**
+ * 学生端档案首页 (W3 三阶段渐进采集 dashboard)
+ *
+ * 替换原 220 行单页 Tab 表单。新结构：
+ * - 顶部：双进度条（自填 / 总进度）+ recommend gate 提示
+ * - 中部：3 张阶段卡片（点击进入对应表单页）
+ * - 底部：① 由老师录入的只读字段卡片
+ *
+ * 注：getMyProfile 已在后端过滤 ① 字段，TeacherOnlyField 看到 undefined
+ * 即正确显示「未录入」 — 这是预期，与 spec §4.3 一致。
+ */
 export default function StudentProfilePage() {
-  const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('core');
-  const [form] = Form.useForm();
-
-  const { data: profileData, isLoading } = useQuery({
-    queryKey: ['student-profile'],
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['student-my-profile'],
     queryFn: () => studentApi.getMyProfile(),
   });
-
-  const profile = profileData?.data;
-  const completeness = profile?.completeness ?? 0;
-
-  const saveMutation = useMutation({
-    mutationFn: (values: Record<string, unknown>) =>
-      studentApi.updateMyProfile(values),
-    onSuccess: () => {
-      message.success('保存成功');
-      queryClient.invalidateQueries({ queryKey: ['student-profile'] });
-    },
-    onError: () => {
-      message.error('保存失败');
-    },
-  });
-
-  const onSave = () => {
-    form.validateFields().then((values) => {
-      saveMutation.mutate(values);
-    });
-  };
 
   if (isLoading) {
     return (
@@ -69,152 +34,91 @@ export default function StudentProfilePage() {
     );
   }
 
-  const tabItems = [
-    {
-      key: 'core',
-      label: (
-        <span className="flex items-center gap-1.5">
-          <UserOutlined /> 基本信息
-        </span>
-      ),
-      children: (
-        <div className="space-y-4">
-          <Form.Item name="realName" label="姓名">
-            <Input placeholder="你的真实姓名" />
-          </Form.Item>
-          <Form.Item name="phone" label="手机号">
-            <Input placeholder="手机号" />
-          </Form.Item>
-          <Form.Item name="gender" label="性别">
-            <Radio.Group>
-              <Radio value="MALE">男</Radio>
-              <Radio value="FEMALE">女</Radio>
-            </Radio.Group>
-          </Form.Item>
-          <Form.Item name="examType" label="科类">
-            <Select options={EXAM_TYPE_OPTIONS} placeholder="选择科类" />
-          </Form.Item>
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="score" label="高考分数">
-              <InputNumber min={0} max={750} placeholder="总分" className="w-full" />
-            </Form.Item>
-            <Form.Item name="rank" label="全省位次">
-              <InputNumber min={1} placeholder="位次" className="w-full" />
-            </Form.Item>
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'preferences',
-      label: (
-        <span className="flex items-center gap-1.5">
-          <BookOutlined /> 我的偏好
-        </span>
-      ),
-      children: (
-        <div className="space-y-4">
-          <Form.Item name="preferredProvinces" label="意向省份">
-            <Select mode="multiple" placeholder="选择意向省份" allowClear>
-              <Select.Option value="四川">四川</Select.Option>
-              <Select.Option value="北京">北京</Select.Option>
-              <Select.Option value="上海">上海</Select.Option>
-              <Select.Option value="广东">广东</Select.Option>
-              <Select.Option value="浙江">浙江</Select.Option>
-              <Select.Option value="江苏">江苏</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="preferredMajorCategories" label="意向专业大类">
-            <Select mode="multiple" placeholder="选择意向专业" allowClear>
-              <Select.Option value="工学">工学</Select.Option>
-              <Select.Option value="理学">理学</Select.Option>
-              <Select.Option value="医学">医学</Select.Option>
-              <Select.Option value="经济学">经济学</Select.Option>
-              <Select.Option value="管理学">管理学</Select.Option>
-              <Select.Option value="法学">法学</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="careerDirection" label="职业方向">
-            <Input.TextArea rows={2} placeholder="未来想从事什么方向的工作？" />
-          </Form.Item>
-        </div>
-      ),
-    },
-    {
-      key: 'conditions',
-      label: (
-        <span className="flex items-center gap-1.5">
-          <HeartOutlined /> 其他条件
-        </span>
-      ),
-      children: (
-        <div className="space-y-4">
-          <Form.Item name="physicalLimits" label="体检受限项">
-            <HealthCheckboxGroup />
-          </Form.Item>
-          <Form.Item name="county" label="区县">
-            <CountyCascader />
-          </Form.Item>
-          <Form.Item name="economicLevel" label="经济承受能力">
-            <Radio.Group>
-              <Radio value="LOW">经济敏感</Radio>
-              <Radio value="MEDIUM">适中</Radio>
-              <Radio value="HIGH">不限</Radio>
-            </Radio.Group>
-          </Form.Item>
-          <Form.Item name="interests" label="兴趣爱好">
-            <Select mode="tags" placeholder="输入你的兴趣爱好" />
-          </Form.Item>
-        </div>
-      ),
-    },
-  ];
+  if (error || !data) {
+    return <Alert type="error" message="加载档案失败，请刷新重试" />;
+  }
+
+  const profile: Record<string, any> = (data as any).data ?? data;
+  const progress = profile.progress;
+
+  if (!progress) {
+    return <Alert type="error" message="档案进度信息缺失，请联系老师" />;
+  }
 
   return (
-    <div className="space-y-4">
-      <h1 className="font-serif text-xl font-semibold text-text">个人信息</h1>
+    <div className="space-y-4 pb-20">
+      <h1 className="font-serif text-xl font-semibold text-text">我的档案</h1>
 
-      {/* Completeness */}
+      {/* 双进度条 */}
       <Card size="small">
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-text-secondary">信息完善度</span>
-          <Progress
-            percent={completeness}
-            strokeColor={completeness >= 80 ? '#276749' : completeness >= 50 ? '#b8860b' : '#c53030'}
-            className="flex-1"
+        <div className="space-y-3">
+          <ProgressBar
+            label="自填进度"
+            percent={progress.studentSelfCompleteness}
+            hint="完善信息有助于老师为你生成更精准的方案"
           />
+          <ProgressBar
+            label="档案总进度（含老师录入）"
+            percent={progress.overallCompleteness}
+          />
+          {!progress.isRecommendable &&
+            progress.missingFieldsForRecommend?.length > 0 && (
+              <p className="text-xs text-text-faint">
+                当前未达到「可推荐」阈值，缺少：
+                <span className="ml-1 text-text-secondary">
+                  {progress.missingFieldsForRecommend.slice(0, 5).join('、')}
+                  {progress.missingFieldsForRecommend.length > 5 ? ' 等' : ''}
+                </span>
+              </p>
+            )}
         </div>
-        <p className="text-xs text-text-faint mt-1">
-          完善信息有助于老师为你生成更精准的方案
+      </Card>
+
+      {/* 3 张阶段卡片 */}
+      <div className="space-y-3">
+        {([1, 2, 3] as const).map((stage) => {
+          const stageKey = `stage${stage}` as 'stage1' | 'stage2' | 'stage3';
+          const s = progress.stageProgress[stageKey];
+          const labels = STAGE_LABELS[String(stage) as '1' | '2' | '3'];
+          return (
+            <StageCard
+              key={stage}
+              stage={stage}
+              title={labels.title}
+              subtitle={labels.subtitle}
+              badge={labels.badge}
+              filled={s.filled}
+              total={s.total}
+              completed={s.completed}
+            />
+          );
+        })}
+      </div>
+
+      {/* ① 老师录入字段（只读） */}
+      <Card size="small" title="由老师录入的信息">
+        <TeacherOnlyField label="高考总分" value={profile.totalScore} />
+        <TeacherOnlyField label="全省位次" value={profile.provincialRank} />
+        <TeacherOnlyField label="加分政策" value={profile.bonusPolicyStatus} />
+        <TeacherOnlyField
+          label="户籍"
+          value={
+            [profile.province, profile.city, profile.county]
+              .filter(Boolean)
+              .join('/') || null
+          }
+        />
+        <p className="mt-3 text-xs text-text-faint">
+          以上信息由老师录入，学生本人不可修改。如有错误请联系老师。
         </p>
       </Card>
 
-      <Card>
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={profile || {}}
-          requiredMark="optional"
-        >
-          <Tabs
-            activeKey={activeTab}
-            onChange={setActiveTab}
-            items={tabItems}
-          />
-
-          <div className="flex justify-end pt-4 border-t border-border-subtle mt-4">
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              onClick={onSave}
-              loading={saveMutation.isPending}
-              size="large"
-            >
-              保存
-            </Button>
-          </div>
-        </Form>
-      </Card>
+      {/* 推荐入口 */}
+      <Link href="/student/recommend">
+        <Button type="primary" size="large" block>
+          查看老师为我生成的方案
+        </Button>
+      </Link>
     </div>
   );
 }
