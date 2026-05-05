@@ -2,10 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   AmapApiError,
+  AmapDistrictResponse,
   AmapGeocode,
   AmapGeocodeResponse,
-  AmapPoi,
   AmapPlaceSearchResponse,
+  AmapPoi,
   AmapRegeocodeResponse,
 } from './amap.types';
 import { GEO_CONFIG } from '../geo.config';
@@ -75,6 +76,42 @@ export class AmapClient {
       throw new AmapApiError(`AMap place/text failed: ${json.info}`, json.info);
     }
     return json.pois ?? [];
+  }
+
+  async searchPlaceAround(
+    lng: number,
+    lat: number,
+    opts: { types: string; radius: number; offset?: number },
+  ): Promise<AmapPoi[]> {
+    const json = await this.request<AmapPlaceSearchResponse>('/place/around', {
+      key: this.key,
+      location: `${lng},${lat}`,
+      types: opts.types,
+      radius: String(opts.radius),
+      offset: String(opts.offset ?? 20),
+      page: '1',
+      extensions: 'base',
+      output: 'JSON',
+    });
+    if (json.status === '0') {
+      throw new AmapApiError(`AMap place/around failed: ${json.info}`, json.info);
+    }
+    return json.pois ?? [];
+  }
+
+  async district(
+    keywords: string,
+  ): Promise<NonNullable<AmapDistrictResponse['districts']>[0] | null> {
+    const json = await this.request<AmapDistrictResponse>('/config/district', {
+      key: this.key,
+      keywords,
+      subdistrict: '0',
+      output: 'JSON',
+    });
+    if (json.status === '0') {
+      throw new AmapApiError(`AMap district failed: ${json.info}`, json.info);
+    }
+    return json.districts && json.districts.length > 0 ? json.districts[0] : null;
   }
 
   private async request<T>(path: string, params: Record<string, string>): Promise<T> {

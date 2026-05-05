@@ -131,3 +131,48 @@ describe('AmapClient.searchPlaceText', () => {
     expect(await client.searchPlaceText('不存在')).toEqual([]);
   });
 });
+
+describe('AmapClient.searchPlaceAround', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('searches around given coordinates with type and radius', async () => {
+    const fetchMock = mockFetch({
+      status: '1', info: 'OK',
+      pois: [{
+        id: 'BV1', name: '西大直街地铁站', type: '交通设施服务;地铁站;地铁站',
+        typecode: '150500', location: '126.66,45.78',
+        address: '南岗区西大直街', distance: '380',
+      }],
+    });
+    const client = makeClient();
+    const result = await client.searchPlaceAround(126.66, 45.78, {
+      types: '150500', radius: 2000,
+    });
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('/place/around');
+    expect(url).toContain('location=126.66%2C45.78');
+    expect(url).toContain('types=150500');
+    expect(url).toContain('radius=2000');
+    expect(result[0].distance).toBe('380');
+  });
+});
+
+describe('AmapClient.district', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('returns the first matching district', async () => {
+    mockFetch({
+      status: '1', info: 'OK',
+      districts: [{ name: '海淀区', level: 'district', center: '116.298,39.96' }],
+    });
+    const client = makeClient();
+    const result = await client.district('海淀区');
+    expect(result?.name).toBe('海淀区');
+  });
+
+  it('returns null on empty result', async () => {
+    mockFetch({ status: '1', info: 'OK', districts: [] });
+    const client = makeClient();
+    expect(await client.district('不存在')).toBeNull();
+  });
+});
