@@ -2,10 +2,18 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { EnvironmentOutlined } from '@ant-design/icons';
-import { CampusMap } from './CampusMap';
 import { CampusPanel } from './CampusPanel';
 import type { Campus } from './types';
+
+// CampusMap touches the AMap browser SDK; never SSR it.
+const CampusMap = dynamic(() => import('./CampusMap').then((m) => m.CampusMap), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-surface-dim rounded-lg" style={{ height: 480 }} />
+  ),
+});
 
 interface CampusLocationTabProps {
   universityId: number;

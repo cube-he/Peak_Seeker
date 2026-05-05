@@ -1,10 +1,13 @@
 // Ambient global declared by the AMap SDK at runtime.
 declare const AMap: any;
 
-import AMapLoader from '@amap/amap-jsapi-loader';
-
 // Module-level singleton so multiple components / re-renders do not
 // reload the SDK. The promise is cached on first call.
+//
+// IMPORTANT: we use dynamic import() inside loadAMap() instead of a
+// top-level `import AMapLoader from '@amap/amap-jsapi-loader'` because
+// the AMap loader package touches `window` at module evaluation time.
+// A top-level import is evaluated during Next.js SSR, crashing the page.
 let loadPromise: Promise<typeof AMap> | null = null;
 
 /**
@@ -40,11 +43,14 @@ export function loadAMap(): Promise<typeof AMap> {
     securityJsCode: securityCode,
   };
 
-  loadPromise = AMapLoader.load({
-    key,
-    version: '2.0',
-    plugins: [],         // Stage 1 only needs Map + Marker (in core); no PlaceSearch
-  });
+  // Dynamic import keeps `@amap/amap-jsapi-loader` out of the SSR bundle.
+  loadPromise = import('@amap/amap-jsapi-loader').then((mod) =>
+    mod.default.load({
+      key,
+      version: '2.0',
+      plugins: [],         // Stage 1 only needs Map + Marker (in core); no PlaceSearch
+    }),
+  );
   return loadPromise;
 }
 
