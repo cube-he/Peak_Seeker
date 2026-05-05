@@ -6,12 +6,15 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
   ParseIntPipe,
   ForbiddenException,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { StudentService } from './student.service';
+import { IntakeExportService } from './intake-export.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
@@ -25,7 +28,10 @@ import { JwtPayloadUser } from '../casl/types';
 @UseGuards(JwtAuthGuard, PoliciesGuard)
 @ApiBearerAuth()
 export class StudentController {
-  constructor(private studentService: StudentService) {}
+  constructor(
+    private studentService: StudentService,
+    private intakeExportService: IntakeExportService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: '创建学生' })
@@ -111,5 +117,27 @@ export class StudentController {
     @Body('teacherProfileId', ParseIntPipe) teacherProfileId: number,
   ) {
     return this.studentService.assignTeacher(id, teacherProfileId);
+  }
+
+  @Get(':id/export-intake')
+  @ApiOperation({ summary: '导出学生接待单 xlsx（仅老师/管理员）' })
+  @CheckPolicies((ability) => ability.can('export', 'StudentProfile'))
+  async exportIntake(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.intakeExportService.export(id);
+    const profile = await this.studentService.findById(id);
+    const realName = (profile as any).user?.realName ?? `student${id}`;
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    // RFC 5987 编码非 ASCII 文件名
+    const filename = `intake_${realName}_${today}.xlsx`;
+    const filenameStar = encodeURIComponent(filename);
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="intake_${id}_${today}.xlsx"; filename*=UTF-8''${filenameStar}`,
+    });
+    res.end(Buffer.from(buffer));
   }
 }

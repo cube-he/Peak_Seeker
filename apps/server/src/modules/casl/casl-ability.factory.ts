@@ -47,7 +47,7 @@ export class CaslAbilityFactory {
 
     // Student management: create + manage own students (by assignedTeacherId)
     can('create', 'StudentProfile');
-    can(['read', 'update', 'delete'], 'StudentProfile', {
+    can(['read', 'update', 'delete', 'export'], 'StudentProfile', {
       assignedTeacherId: user.teacherProfileId,
     } as any);
 
