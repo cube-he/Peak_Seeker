@@ -6,20 +6,18 @@ import paramiko
 import os
 import sys
 
-HOST = '47.109.156.104'
-USER = 'hcz'
-SSH_KEY_PATH = os.path.expanduser('~/.ssh/volunteer_helper_deploy')
-CA_KEY_PATH = os.path.expanduser('~/.ssh/course_assistant_deploy')
+HOST = '132.232.245.53'
+USER = 'ubuntu'
+SSH_KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cube.pem')
 
 
 def connect():
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    key = SSH_KEY_PATH if os.path.exists(SSH_KEY_PATH) else CA_KEY_PATH
-    if not os.path.exists(key):
-        print('No SSH key found')
+    if not os.path.exists(SSH_KEY_PATH):
+        print(f'No SSH key found at {SSH_KEY_PATH}')
         sys.exit(1)
-    ssh.connect(HOST, username=USER, key_filename=key, timeout=30)
+    ssh.connect(HOST, username=USER, key_filename=SSH_KEY_PATH, timeout=30)
     return ssh
 
 

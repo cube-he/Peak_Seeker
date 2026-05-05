@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 服务器首次初始化脚本 - 在服务器上运行
-# 用法: ssh hcz@47.109.156.104 'bash -s' < setup_server.sh
+# 用法: ssh -i cube.pem ubuntu@132.232.245.53 'bash -s' < setup_server.sh
 
 set -e
 
@@ -80,7 +80,7 @@ fi
 # 配置 Nginx
 echo "[5/5] Nginx configuration..."
 echo "  Please copy nginx.conf to server:"
-echo "  scp nginx.conf hcz@47.109.156.104:/etc/nginx/sites-available/volunteer-helper"
+echo "  scp -i cube.pem nginx.conf ubuntu@132.232.245.53:/etc/nginx/sites-available/volunteer-helper"
 echo "  Then run on server:"
 echo "    sudo ln -sf /etc/nginx/sites-available/volunteer-helper /etc/nginx/sites-enabled/"
 echo "    sudo nginx -t && sudo systemctl reload nginx"
