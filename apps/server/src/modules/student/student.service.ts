@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -9,10 +10,15 @@ import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
 import { Role, StudentStatus, Prisma } from '@prisma/client';
+import { ProgressService } from './progress.service';
+import { TEACHER_ONLY_FIELDS } from './field-policy';
 
 @Injectable()
 export class StudentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private progressService: ProgressService,
+  ) {}
 
   /**
    * Create a student account (User + StudentProfile) assigned to a teacher.
@@ -242,8 +248,74 @@ export class StudentService {
    * 本方法保留旧签名以兼容现有调用方，内部委托给新双轨算法的 overallCompleteness。
    */
   calculateCompleteness(profile: Record<string, any>): number {
-    // Lazy require 避免循环依赖；deprecated 方法保持简单，不通过 DI 注入
-    const { ProgressService } = require('./progress.service');
-    return new ProgressService().compute(profile).overallCompleteness;
+    return this.progressService.compute(profile).overallCompleteness;
+  }
+
+  /**
+   * 学生本人查询自己的档案。
+   * 自动过滤掉 ① TEACHER_ONLY_FIELDS（学生看不到总分/位次/加分/户籍/高考所在地）。
+   * 返回 progress 字段（双轨完整度 + stageProgress + isRecommendable）。
+   */
+  async getMyProfile(userId: number) {
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            realName: true,
+            phone: true,
+            gender: true,
+            ethnicity: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!profile) {
+      throw new NotFoundException('学生档案不存在');
+    }
+
+    // 把 User 上的字段铺平进 progress 输入（progress 算法看 STAGE_1 包括 realName/phone/gender 等 User 级字段）
+    const progress = this.progressService.compute({
+      ...profile,
+      realName: profile.user.realName,
+      phone: profile.user.phone,
+      gender: profile.user.gender,
+      ethnicity: profile.user.ethnicity,
+    });
+
+    // 过滤 ① 字段（学生不可见）
+    const teacherOnlySet = new Set<string>(TEACHER_ONLY_FIELDS);
+    const filtered: Record<string, any> = {};
+    for (const [k, v] of Object.entries(profile)) {
+      if (!teacherOnlySet.has(k)) {
+        filtered[k] = v;
+      }
+    }
+    return { ...filtered, progress };
+  }
+
+  /**
+   * 学生本人更新自己的档案。拒绝任何 ① 字段（抛 ForbiddenException）。
+   * 校验通过后委托给 updateProfile（含乐观锁）。
+   */
+  async updateMyProfile(userId: number, dto: UpdateStudentProfileDto) {
+    // 拒绝 ① 字段：哪怕 dto 携带了一个 teacher-only 字段，也立刻拒绝（不静默忽略）
+    for (const f of TEACHER_ONLY_FIELDS) {
+      if ((dto as Record<string, any>)[f] !== undefined) {
+        throw new ForbiddenException(`字段 ${f} 仅老师可修改`);
+      }
+    }
+
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+    });
+    if (!profile) {
+      throw new NotFoundException('学生档案不存在');
+    }
+    return this.updateProfile(profile.id, dto);
   }
 }

@@ -1,6 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { StudentService } from './student.service';
+import { ProgressService } from './progress.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StudentStatus } from '@prisma/client';
 
@@ -42,6 +47,23 @@ describe('StudentService', () => {
       providers: [
         StudentService,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: ProgressService,
+          useValue: {
+            compute: jest.fn().mockReturnValue({
+              studentSelfCompleteness: 50,
+              teacherDataCompleteness: 50,
+              stageProgress: {
+                stage1: { filled: 1, total: 6, completed: false },
+                stage2: { filled: 0, total: 15, completed: false },
+                stage3: { filled: 0, total: 24, completed: false },
+              },
+              overallCompleteness: 50,
+              isRecommendable: false,
+              missingFieldsForRecommend: [],
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -220,4 +242,123 @@ describe('StudentService', () => {
   });
 
   // calculateCompleteness 旧测试已删除；新算法覆盖在 progress.service.spec.ts
+
+  // ── getMyProfile ────────────────────────────────────────
+
+  describe('getMyProfile', () => {
+    it('返回的档案不含 TEACHER_ONLY_FIELDS', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        // teacher-only fields existing in DB
+        totalScore: 600,
+        provincialRank: 1000,
+        scoreChinese: 120,
+        province: '四川',
+        city: '成都',
+        county: '武侯区',
+        isRural: false,
+        bonusItems: [],
+        bonusPolicyStatus: 'NONE',
+        examLocationProvince: '四川',
+        // student-visible fields
+        formFiller: 'STUDENT',
+        user: {
+          id: 100,
+          realName: '小王',
+          phone: '13800000000',
+          gender: 'MALE',
+        },
+      });
+
+      const result = await service.getMyProfile(100);
+      expect(result).not.toHaveProperty('totalScore');
+      expect(result).not.toHaveProperty('provincialRank');
+      expect(result).not.toHaveProperty('scoreChinese');
+      expect(result).not.toHaveProperty('province');
+      expect(result).not.toHaveProperty('city');
+      expect(result).not.toHaveProperty('county');
+      expect(result).not.toHaveProperty('isRural');
+      expect(result).not.toHaveProperty('bonusItems');
+      expect(result).not.toHaveProperty('bonusPolicyStatus');
+      expect(result).not.toHaveProperty('examLocationProvince');
+      // student-visible fields preserved
+      expect(result).toHaveProperty('formFiller', 'STUDENT');
+      expect(result).toHaveProperty('user');
+    });
+
+    it('返回 progress 字段', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        formFiller: 'STUDENT',
+        user: { id: 100, realName: '小王', phone: '13800000000', gender: 'MALE' },
+      });
+
+      const result = await service.getMyProfile(100);
+      expect(result).toHaveProperty('progress');
+      expect((result as any).progress).toHaveProperty('studentSelfCompleteness');
+      expect((result as any).progress).toHaveProperty('stageProgress');
+      expect((result as any).progress).toHaveProperty('isRecommendable');
+    });
+
+    it('找不到时抛 NotFoundException', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue(null);
+      await expect(service.getMyProfile(999)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ── updateMyProfile ─────────────────────────────────────
+
+  describe('updateMyProfile', () => {
+    it('包含 TEACHER_ONLY 字段时抛 ForbiddenException', async () => {
+      const dto = {
+        dataVersion: 0,
+        // ① teacher-only field
+        totalScore: 600,
+      };
+      await expect(service.updateMyProfile(100, dto as any)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('包含 province 字段时抛 ForbiddenException（户籍是 ① 老师独占）', async () => {
+      const dto = {
+        dataVersion: 0,
+        province: '四川',
+      };
+      await expect(service.updateMyProfile(100, dto as any)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('正常字段写入成功', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        dataVersion: 0,
+      });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        formFiller: 'STUDENT',
+        dataVersion: 1,
+        user: { id: 100, realName: '小王' },
+      });
+
+      const result = await service.updateMyProfile(100, {
+        dataVersion: 0,
+        formFiller: 'STUDENT',
+      } as any);
+      expect(prisma.studentProfile.update).toHaveBeenCalled();
+      expect(result).toHaveProperty('formFiller', 'STUDENT');
+    });
+
+    it('档案不存在时抛 NotFoundException', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateMyProfile(999, { dataVersion: 0 } as any),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
 });
