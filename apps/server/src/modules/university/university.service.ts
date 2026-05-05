@@ -108,6 +108,24 @@ export class UniversityService {
       throw new NotFoundException('院校不存在');
     }
 
+    // Coerce Prisma Decimal -> number for frontend consumption.
+    // Decimal instances have toNumber(); plain numbers / null pass through.
+    const decimalToNumber = (v: unknown): number | null => {
+      if (v == null) return null;
+      if (typeof v === 'number') return v;
+      if (typeof v === 'object' && v !== null && 'toNumber' in v) {
+        return (v as { toNumber: () => number }).toNumber();
+      }
+      return Number(v);
+    };
+
+    const campuses = (university as any).campuses?.map((c: any) => ({
+      ...c,
+      latitude: decimalToNumber(c.latitude),
+      longitude: decimalToNumber(c.longitude),
+      nearestAirportKm: decimalToNumber(c.nearestAirportKm),
+    })) ?? [];
+
     // 查询强基计划录取数据，按专业名+年份降序排列
     const qiangjiAdmissions = await this.prisma.qiangjiAdmission.findMany({
       where: { school: university.name },
@@ -156,7 +174,7 @@ export class UniversityService {
       }
     }
 
-    const result = { ...university, qiangjiAdmissions, bestPrediction };
+    const result = { ...university, campuses, qiangjiAdmissions, bestPrediction };
     await this.redis.setCache(cacheKey, result, 3600);
     return result;
   }

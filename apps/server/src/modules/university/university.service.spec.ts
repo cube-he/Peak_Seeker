@@ -65,4 +65,32 @@ describe('UniversityService.findById campuses', () => {
     const result: any = await svc.findById(2);
     expect(result.campuses).toEqual([]);
   });
+
+  it('coerces Decimal lat/lng to plain numbers in campuses', async () => {
+    // Simulate Prisma's Decimal type: an object with toNumber() method
+    const decimal = (n: number) => ({ toNumber: () => n, toString: () => String(n) });
+    const { svc } = setup({
+      id: 1, name: 'X',
+      campuses: [
+        {
+          id: 10, name: '本部', isMain: true,
+          province: '北京市', city: '北京市', district: null,
+          address: 'X',
+          latitude: decimal(40.0),
+          longitude: decimal(116.331),
+          distanceToCityCenter: 5200,
+          nearestSubwayMeters: 380,
+          nearestAirportKm: decimal(38.0),
+          geoStatus: 'verified',
+        },
+      ],
+      enrollmentPlans: [],
+      admissionRecords: [],
+    });
+    const result: any = await svc.findById(1);
+    expect(result.campuses[0].latitude).toBe(40.0);
+    expect(typeof result.campuses[0].latitude).toBe('number');
+    expect(result.campuses[0].longitude).toBe(116.331);
+    expect(result.campuses[0].nearestAirportKm).toBe(38.0);
+  });
 });
