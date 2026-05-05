@@ -97,12 +97,34 @@ export class UniversityService {
           orderBy: { year: 'desc' },
           take: 100,
         },
+        campuses: {
+          where: { geoStatus: 'verified' },
+          orderBy: [{ isMain: 'desc' }, { id: 'asc' }],
+        },
       },
     });
 
     if (!university) {
       throw new NotFoundException('院校不存在');
     }
+
+    // Coerce Prisma Decimal -> number for frontend consumption.
+    // Decimal instances have toNumber(); plain numbers / null pass through.
+    const decimalToNumber = (v: unknown): number | null => {
+      if (v == null) return null;
+      if (typeof v === 'number') return v;
+      if (typeof v === 'object' && v !== null && 'toNumber' in v) {
+        return (v as { toNumber: () => number }).toNumber();
+      }
+      return Number(v);
+    };
+
+    const campuses = (university as any).campuses?.map((c: any) => ({
+      ...c,
+      latitude: decimalToNumber(c.latitude),
+      longitude: decimalToNumber(c.longitude),
+      nearestAirportKm: decimalToNumber(c.nearestAirportKm),
+    })) ?? [];
 
     // 查询强基计划录取数据，按专业名+年份降序排列
     const qiangjiAdmissions = await this.prisma.qiangjiAdmission.findMany({
@@ -152,7 +174,7 @@ export class UniversityService {
       }
     }
 
-    const result = { ...university, qiangjiAdmissions, bestPrediction };
+    const result = { ...university, campuses, qiangjiAdmissions, bestPrediction };
     await this.redis.setCache(cacheKey, result, 3600);
     return result;
   }
@@ -204,6 +226,41 @@ export class UniversityService {
 
     await this.redis.setCache(cacheKey, universities, 3600);
     return universities;
+  }
+
+  async getCampusPois(
+    universityId: number,
+    campusId: number,
+    query: { category: 'subway' | 'mall' | 'airport'; limit?: number },
+  ): Promise<Array<{
+    id: number;
+    amapId: string;
+    name: string;
+    category: 'subway' | 'mall' | 'airport';
+    distance: number;
+    metadata: unknown | null;
+  }>> {
+    const campus = await this.prisma.universityCampus.findUnique({
+      where: { id: campusId },
+      select: { id: true, universityId: true },
+    });
+    if (!campus || campus.universityId !== universityId) {
+      throw new NotFoundException('campus not found');
+    }
+    const limit = query.limit ?? 5;
+    const rows = await this.prisma.universityCampusPoi.findMany({
+      where: { campusId, category: query.category, obsolete: false },
+      orderBy: { distance: 'asc' },
+      take: limit,
+      select: {
+        id: true, amapId: true, name: true,
+        category: true, distance: true, metadata: true,
+      },
+    });
+    return rows.map((r) => ({
+      ...r,
+      category: r.category as 'subway' | 'mall' | 'airport',
+    }));
   }
 
   async getFilters() {
