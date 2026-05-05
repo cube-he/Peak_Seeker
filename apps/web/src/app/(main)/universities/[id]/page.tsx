@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Card, Tabs, Table, Space, Descriptions, Spin } from 'antd';
+import { Card, Tabs, Space, Descriptions, Spin } from 'antd';
 import {
   BankOutlined,
   BookOutlined,
@@ -19,6 +19,8 @@ import SatisfactionCard from '@/components/university/SatisfactionCard';
 import EmploymentCard from '@/components/university/EmploymentCard';
 import QiangjiTable from '@/components/university/QiangjiTable';
 import UniversityLogo from '@/components/university/UniversityLogo';
+import PlanPivotTable from '@/components/university/PlanPivotTable';
+import AdmissionPivotTable from '@/components/university/AdmissionPivotTable';
 import HeroBanner from '@/components/admission/HeroBanner';
 import { useUserStore } from '@/stores/userStore';
 
@@ -66,95 +68,6 @@ export default function UniversityDetailPage() {
   }
 
   const u = university;
-
-  const planColumns = [
-    {
-      title: '专业组',
-      key: 'group',
-      width: 100,
-      render: (_: any, r: any) => (
-        <span className="text-text-tertiary text-[13px]">{r.groupCode || '-'}</span>
-      ),
-    },
-    {
-      title: '专业名称',
-      dataIndex: ['major', 'name'],
-      key: 'majorName',
-      render: (text: string, r: any) => (
-        <Link href={`/majors/${r.majorId}`} className="text-primary font-medium hover:text-primary-light">
-          {text}
-        </Link>
-      ),
-    },
-    { title: '计划数', dataIndex: 'planCount', key: 'planCount', width: 80, render: (v: number) => v ?? '-' },
-    { title: '批次', dataIndex: 'batch', key: 'batch', width: 90 },
-    { title: '选科', dataIndex: 'subjects', key: 'subjects', width: 110, ellipsis: true },
-    {
-      title: '学费',
-      dataIndex: 'tuition',
-      key: 'tuition',
-      width: 90,
-      render: (v: number) => v ? <span className="text-text">{v}</span> : '-',
-    },
-    {
-      title: '学科评估',
-      dataIndex: 'disciplineEval',
-      key: 'disciplineEval',
-      width: 90,
-      render: (v: string) => v ? (
-        <span className="inline-block rounded-full bg-primary-fixed text-primary text-xs font-medium px-3 py-0.5">{v}</span>
-      ) : '-',
-    },
-    {
-      title: '国家特色',
-      dataIndex: 'isNationalFeature',
-      key: 'isNationalFeature',
-      width: 80,
-      render: (v: boolean) => v ? (
-        <span className="inline-block rounded-full bg-accent-fixed text-accent text-xs font-medium px-3 py-0.5">是</span>
-      ) : '-',
-    },
-    {
-      title: '专业排名',
-      dataIndex: 'majorRanking',
-      key: 'majorRanking',
-      width: 90,
-      render: (v: string) => v ? <span className="font-medium text-text">{v}</span> : '-',
-    },
-  ];
-
-  const admissionColumns = [
-    {
-      title: '专业名称',
-      dataIndex: ['major', 'name'],
-      key: 'majorName',
-      render: (text: string, r: any) => (
-        <Link href={`/majors/${r.majorId}`} className="text-primary hover:text-primary-light">{text}</Link>
-      ),
-    },
-    { title: '年份', dataIndex: 'year', key: 'year', width: 70 },
-    {
-      title: '最低分',
-      dataIndex: 'majorMinScore',
-      key: 'majorMinScore',
-      width: 80,
-      render: (v: number) => v ? <span className="font-medium text-text">{v}</span> : '-',
-    },
-    {
-      title: '最低位次',
-      dataIndex: 'majorMinRank',
-      key: 'majorMinRank',
-      width: 100,
-      render: (v: number) => v ? <span className="text-text-secondary">{v.toLocaleString()}</span> : '-',
-    },
-    {
-      title: '录取人数',
-      dataIndex: 'majorAdmissionCount',
-      key: 'majorAdmissionCount',
-      width: 90,
-      render: (v: number) => v ?? '-',
-    },
-  ];
 
   const tabItems = [
     {
@@ -209,30 +122,12 @@ export default function UniversityDetailPage() {
     {
       key: 'plans',
       label: <span><BookOutlined className="mr-1" />招生计划 ({majors?.length || 0})</span>,
-      children: (
-        <Table
-          columns={planColumns}
-          dataSource={majors || []}
-          rowKey="id"
-          scroll={{ x: 900 }}
-          size="small"
-          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
-        />
-      ),
+      children: <PlanPivotTable data={majors} />,
     },
     {
       key: 'admissions',
       label: <span><HistoryOutlined className="mr-1" />历年录取 ({admissions?.length || 0})</span>,
-      children: (
-        <Table
-          columns={admissionColumns}
-          dataSource={admissions || []}
-          rowKey="id"
-          scroll={{ x: 600 }}
-          size="small"
-          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
-        />
-      ),
+      children: <AdmissionPivotTable data={admissions} />,
     },
     // Only show the tab when there is qiangji data
     ...(u.qiangjiAdmissions?.length > 0
