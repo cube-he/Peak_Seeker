@@ -207,8 +207,13 @@ export class UniversityService {
     });
   }
 
-  async getHotUniversities(limit = 10) {
-    const cacheKey = `hot-universities:${limit}`;
+  async getHotUniversities(limit?: number) {
+    // Prisma 7 rejects `take: undefined` (Prisma 6 accepted it). When the
+    // controller's `@Query('limit')` is missing, TS default `limit = 10`
+    // does not fire because ValidationPipe's enableImplicitConversion
+    // can pass `NaN` instead of `undefined`. Coerce defensively.
+    const safeLimit = Number.isFinite(limit) && limit! > 0 ? limit! : 10;
+    const cacheKey = `hot-universities:${safeLimit}`;
     const cached = await this.redis.getCache<any[]>(cacheKey);
     if (cached) return cached;
 
@@ -220,7 +225,7 @@ export class UniversityService {
           { isDoubleFirstClass: true },
         ],
       },
-      take: limit,
+      take: safeLimit,
       orderBy: { isFeatured: 'desc' },
     });
 

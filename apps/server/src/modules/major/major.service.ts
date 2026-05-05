@@ -133,13 +133,15 @@ export class MajorService {
     return result;
   }
 
-  async getHotMajors(limit = 10) {
+  async getHotMajors(limit?: number) {
+    // Prisma 7 rejects `take: undefined`. Coerce defensively (see UniversityService.getHotUniversities note).
+    const safeLimit = Number.isFinite(limit) && limit! > 0 ? limit! : 10;
     const cacheKey = 'hot-majors';
     const cached = await this.redis.getCache<any[]>(cacheKey);
     if (cached) return cached;
 
     const majors = await this.prisma.major.findMany({
-      take: limit,
+      take: safeLimit,
       orderBy: { employmentRate: 'desc' },
     });
 
