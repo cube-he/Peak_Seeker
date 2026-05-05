@@ -73,4 +73,31 @@ describe('GeocoderService.geocodeCampus', () => {
     expect(result?.source).toBe('amap_poi');
     expect(result?.city).toBe('威海市');
   });
+
+  // Regression test for the AMap quirk discovered by smoke test 2026-05-05:
+  // missing string fields come back as `[]` (empty array) instead of null/omitted.
+  // Without defensive coercion, our parser would store `[]` into a string field.
+  it('coerces empty-array AMap fields (pname/cityname/adname/address) to strings', async () => {
+    const amap = fakeAmap({
+      geocode: jest.fn().mockResolvedValue(null),
+      searchPlaceText: jest.fn().mockResolvedValue([{
+        id: 'X', name: '某 POI',
+        type: 'X', typecode: '141201',
+        location: '120.00,30.00',
+        address: [],   // AMap returns [] when no address
+        pname: [],
+        cityname: [],
+        adname: [],
+      }]),
+    });
+    const svc = new GeocoderService(amap);
+    const result = await svc.geocodeCampus('某大学', '某校区', { city: '杭州' });
+    expect(result).not.toBeNull();
+    expect(result?.address).toBe('某 POI');         // address coerced + falls back to name
+    expect(result?.province).toBe('');
+    expect(result?.city).toBe('');
+    expect(result?.district).toBeNull();
+    expect(typeof result?.province).toBe('string'); // explicit anti-array assertion
+    expect(typeof result?.city).toBe('string');
+  });
 });

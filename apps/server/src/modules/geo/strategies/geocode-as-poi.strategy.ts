@@ -7,6 +7,14 @@ import { GeoResult } from '../dto/geo-result.dto';
 
 const HIGHER_EDU_TYPECODE = '141201';
 
+// AMap returns `[]` (empty array) for any missing string field instead of
+// null/omitted. Coerce defensively before assigning to GeoResult string fields.
+function s(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string').join('');
+  return '';
+}
+
 @Injectable()
 export class GeocodeAsPoiStrategy implements RetryStrategy {
   readonly name = 'geocode-as-poi';
@@ -24,14 +32,16 @@ export class GeocodeAsPoiStrategy implements RetryStrategy {
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
       return { success: false, reason: 'invalid coords' };
     }
+    const addr = s(p.address) || p.name;
+    const district = s(p.adname);
     const fix: GeoResult = {
-      address: typeof p.address === 'string' ? p.address : (p.address ?? []).join('') || p.name,
-      province: p.pname ?? '',
-      city: p.cityname ?? '',
-      district: p.adname ?? null,
+      address: addr,
+      province: s(p.pname),
+      city: s(p.cityname),
+      district: district || null,
       latitude: lat, longitude: lng,
       source: 'amap_poi',
-      formattedAddress: typeof p.address === 'string' ? p.address : p.name,
+      formattedAddress: addr,
     };
     return { success: true, fix };
   }

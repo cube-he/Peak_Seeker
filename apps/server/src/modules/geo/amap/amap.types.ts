@@ -25,6 +25,7 @@ export interface AmapRegeocodeResponse {
       province: string | string[];
       city: string | string[];
       district: string | string[];
+      towncode?: string | string[];   // observed in real responses (2026-05-05)
     };
   };
 }
@@ -42,16 +43,20 @@ export interface AmapPoi {
   type: string;
   typecode: string;
   location: string;            // "lng,lat"
+  // NOTE: AMap returns `[]` (empty array) for any missing string field instead
+  // of `null` / omitted. So most string-typed fields below are `string | string[]`.
   address: string | string[];
-  distance?: string;           // present in around search
-  pname?: string;              // province name
-  cityname?: string;
-  adname?: string;             // district
-  // arbitrary metadata (e.g. line names for subways)
-  business_area?: string;
-  tag?: string;
-  // for around search results, AMap may include richer fields under `biz_ext`
-  biz_ext?: Record<string, unknown>;
+  distance?: string | unknown[];     // [] when no distance context (PlaceSearch text)
+  pname?: string | string[];         // province name
+  cityname?: string | string[];
+  adname?: string | string[];        // district
+  business_area?: string | string[]; // 商圈名,如"五道口"
+  tag?: string | string[];
+  // For around search results, AMap may include richer fields under `biz_ext`.
+  biz_ext?: Record<string, unknown> | unknown[];
+  // Observed in real responses (smoke 2026-05-05); not used directly but kept
+  // so consumers of the raw response have correct types.
+  keytag?: string | string[];        // e.g. "985大学" / "商场" / "机场"
 }
 
 export interface AmapDistrictResponse {

@@ -273,13 +273,20 @@ async function fetchPoiForCampus(amap: AmapClient, lat: number, lng: number) {
     const pois = await amap.searchPlaceAround(lng, lat, { types: typecode, radius });
     for (const p of pois.slice(0, GEO_CONFIG.POI_TOP_N)) {
       const [plng, plat] = p.location.split(',').map(Number);
-      const dist = Number(p.distance ?? 0);
+      // AMap returns `[]` for missing string fields; coerce defensively.
+      const distRaw = typeof p.distance === 'string' ? p.distance : '0';
+      const dist = Number(distRaw);
+      const address =
+        typeof p.address === 'string' ? p.address
+          : Array.isArray(p.address) ? p.address.filter((x): x is string => typeof x === 'string').join('') || undefined
+          : undefined;
+      const businessArea = typeof p.business_area === 'string' ? p.business_area : '';
       out.push({
         amapId: p.id, name: p.name, category: cat, typecode: p.typecode,
         latitude: plat, longitude: plng,
-        address: typeof p.address === 'string' ? p.address : (p.address ?? []).join('') || undefined,
+        address,
         distance: dist,
-        metadata: p.business_area ? { businessArea: p.business_area } : undefined,
+        metadata: businessArea ? { businessArea } : undefined,
       });
     }
   };

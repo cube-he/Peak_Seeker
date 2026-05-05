@@ -3,8 +3,20 @@ import { AmapClient } from '../amap/amap.client';
 import { GeoResult } from '../dto/geo-result.dto';
 import { AmapGeocode, AmapPoi } from '../amap/amap.types';
 
-function arrToStr(v: string | string[]): string {
-  return Array.isArray(v) ? v.join('') : (v ?? '');
+/**
+ * AMap returns `[]` (empty array) for any missing string field instead of
+ * `null` / omitted. So we accept anything and coerce defensively:
+ *   - string  →  string
+ *   - []      →  ''
+ *   - ['x']   →  'x'
+ *   - other   →  ''
+ */
+function arrToStr(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v)) {
+    return v.filter((x): x is string => typeof x === 'string').join('');
+  }
+  return '';
 }
 
 function parseLocation(loc: string): { lng: number; lat: number } | null {
@@ -55,15 +67,16 @@ export class GeocoderService {
   private fromPoi(p: AmapPoi): GeoResult | null {
     const loc = parseLocation(p.location);
     if (!loc) return null;
+    const addr = arrToStr(p.address) || p.name;
     return {
-      address: arrToStr(p.address) || p.name,
-      province: p.pname ?? '',
-      city: p.cityname ?? '',
-      district: p.adname ?? null,
+      address: addr,
+      province: arrToStr(p.pname),
+      city: arrToStr(p.cityname),
+      district: arrToStr(p.adname) || null,
       latitude: loc.lat,
       longitude: loc.lng,
       source: 'amap_poi',
-      formattedAddress: arrToStr(p.address) || p.name,
+      formattedAddress: addr,
     };
   }
 }
