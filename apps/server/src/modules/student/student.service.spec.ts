@@ -130,7 +130,7 @@ describe('StudentService', () => {
   // ── findByTeacher ───────────────────────────────────────
 
   describe('findByTeacher', () => {
-    it('should return paginated results for a teacher', async () => {
+    it('should return paginated results for a teacher (with progress per item)', async () => {
       const profiles = [{ id: 1 }, { id: 2 }];
       prisma.studentProfile.findMany.mockResolvedValue(profiles);
       prisma.studentProfile.count.mockResolvedValue(2);
@@ -140,12 +140,11 @@ describe('StudentService', () => {
         pageSize: 20,
       });
 
-      expect(result).toEqual({
-        data: profiles,
-        total: 2,
-        page: 1,
-        pageSize: 20,
-      });
+      expect(result).toMatchObject({ total: 2, page: 1, pageSize: 20 });
+      expect(result.data).toHaveLength(2);
+      // findByTeacher 注入 progress 字段（双轨完整度）— M6.4
+      expect(result.data[0]).toHaveProperty('progress');
+      expect(result.data[1]).toHaveProperty('progress');
 
       // Verify teacher filter was applied
       expect(prisma.studentProfile.findMany).toHaveBeenCalledWith(

@@ -112,7 +112,19 @@ export class StudentService {
       this.prisma.studentProfile.count({ where }),
     ]);
 
-    return { data, total, page, pageSize };
+    // 列表也需要 progress 显示双进度列 + 筛选
+    const dataWithProgress = data.map((p) => ({
+      ...p,
+      progress: this.progressService.compute({
+        ...p,
+        realName: (p as any).user?.realName,
+        phone: (p as any).user?.phone,
+        gender: (p as any).user?.gender,
+        ethnicity: (p as any).user?.ethnicity,
+      }),
+    }));
+
+    return { data: dataWithProgress, total, page, pageSize };
   }
 
   /**
@@ -151,7 +163,16 @@ export class StudentService {
       throw new NotFoundException('学生不存在');
     }
 
-    return profile;
+    // 注入双轨完整度信息（老师端用于显示双进度条 + recommend gate）
+    const progress = this.progressService.compute({
+      ...profile,
+      realName: profile.user?.realName,
+      phone: profile.user?.phone,
+      gender: profile.user?.gender,
+      ethnicity: profile.user?.ethnicity,
+    });
+
+    return { ...profile, progress };
   }
 
   /**
