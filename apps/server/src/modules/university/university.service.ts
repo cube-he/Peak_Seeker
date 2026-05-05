@@ -228,6 +228,41 @@ export class UniversityService {
     return universities;
   }
 
+  async getCampusPois(
+    universityId: number,
+    campusId: number,
+    query: { category: 'subway' | 'mall' | 'airport'; limit?: number },
+  ): Promise<Array<{
+    id: number;
+    amapId: string;
+    name: string;
+    category: 'subway' | 'mall' | 'airport';
+    distance: number;
+    metadata: unknown | null;
+  }>> {
+    const campus = await this.prisma.universityCampus.findUnique({
+      where: { id: campusId },
+      select: { id: true, universityId: true },
+    });
+    if (!campus || campus.universityId !== universityId) {
+      throw new NotFoundException('campus not found');
+    }
+    const limit = query.limit ?? 5;
+    const rows = await this.prisma.universityCampusPoi.findMany({
+      where: { campusId, category: query.category, obsolete: false },
+      orderBy: { distance: 'asc' },
+      take: limit,
+      select: {
+        id: true, amapId: true, name: true,
+        category: true, distance: true, metadata: true,
+      },
+    });
+    return rows.map((r) => ({
+      ...r,
+      category: r.category as 'subway' | 'mall' | 'airport',
+    }));
+  }
+
   async getFilters() {
     const cacheKey = 'university-filters';
     const cached = await this.redis.getCache(cacheKey);

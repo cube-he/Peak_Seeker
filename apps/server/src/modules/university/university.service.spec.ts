@@ -94,3 +94,63 @@ describe('UniversityService.findById campuses', () => {
     expect(result.campuses[0].nearestAirportKm).toBe(38.0);
   });
 });
+
+describe('UniversityService.getCampusPois', () => {
+  const buildService = (poiRows: any[]) => {
+    const prisma = {
+      universityCampus: {
+        findUnique: jest.fn().mockResolvedValue({ id: 10, universityId: 1 }),
+      },
+      universityCampusPoi: {
+        findMany: jest.fn().mockResolvedValue(poiRows),
+      },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    return new UniversityService(prisma as any, redis as any, admissionService as any);
+  };
+
+  it('returns POIs filtered by category, sorted by distance, with limit', async () => {
+    const svc = buildService([
+      { id: 1, amapId: 'A', name: '西大直街', category: 'subway', distance: 380, metadata: null },
+      { id: 2, amapId: 'B', name: '哈工大',   category: 'subway', distance: 520, metadata: null },
+    ]);
+    const result = await svc.getCampusPois(1, 10, { category: 'subway', limit: 5 });
+    expect(result).toHaveLength(2);
+    expect(result[0].name).toBe('西大直街');
+    expect(result[0].category).toBe('subway');
+    expect(result[0]).toEqual({
+      id: 1, amapId: 'A', name: '西大直街', category: 'subway', distance: 380, metadata: null,
+    });
+  });
+
+  it('rejects when campus does not belong to the requested university', async () => {
+    const prisma = {
+      universityCampus: {
+        findUnique: jest.fn().mockResolvedValue({ id: 99, universityId: 2 }),
+      },
+      universityCampusPoi: { findMany: jest.fn() },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const svc = new UniversityService(prisma as any, redis as any, admissionService as any);
+    await expect(
+      svc.getCampusPois(1, 99, { category: 'subway', limit: 5 }),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it('rejects when campus does not exist', async () => {
+    const prisma = {
+      universityCampus: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+      universityCampusPoi: { findMany: jest.fn() },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const svc = new UniversityService(prisma as any, redis as any, admissionService as any);
+    await expect(
+      svc.getCampusPois(1, 999, { category: 'subway', limit: 5 }),
+    ).rejects.toThrow(/not found/i);
+  });
+});
