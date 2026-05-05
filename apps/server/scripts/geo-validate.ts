@@ -6,7 +6,7 @@
  *   pnpm ts-node scripts/geo-validate.ts [--filter 985,211]
  */
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../src/app.module';
+import { GeoCliModule } from './geo-cli.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { GeoValidator } from '../src/modules/geo/services/validator.service';
 import { makeBar, writeJsonReport, parseArgs } from './lib/cli-utils';
@@ -15,7 +15,7 @@ async function main() {
   const flags = parseArgs(process.argv.slice(2));
   const filter = typeof flags.filter === 'string' ? flags.filter.split(',') : undefined;
 
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
+  const app = await NestFactory.createApplicationContext(GeoCliModule, { logger: false });
   const prisma = app.get(PrismaService);
   const validator = app.get(GeoValidator);
 
@@ -59,9 +59,9 @@ async function main() {
         })),
       });
 
-      const previousTypes = new Set(uni.geoIssues
+      const previousTypes: Set<string> = new Set(uni.geoIssues
         .filter((i) => i.status === 'pending').map((i) => i.issueType));
-      const newTypes = new Set(report.issues.map((i) => i.issueType));
+      const newTypes: Set<string> = new Set(report.issues.map((i) => i.issueType as string));
       for (const t of newTypes) if (!previousTypes.has(t)) issueDiff.newIssues += 1;
       for (const t of previousTypes) if (!newTypes.has(t)) issueDiff.resolvedIssues += 1;
 

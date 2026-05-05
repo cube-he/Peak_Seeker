@@ -25,7 +25,7 @@ export const GEO_CONFIG = {
 
   // AMap client tunables
   AMAP_DEFAULT_TIMEOUT_MS: 8000,
-  AMAP_MAX_RETRIES: 3,
+  AMAP_MAX_RETRIES: 5,                   // 1+2+4+8+16=31s worst-case (handles CUQPS bursts)
   AMAP_RETRY_BASE_DELAY_MS: 1000,
   AMAP_QPS: 10,
   AMAP_CACHE_TTL_SECONDS: 24 * 60 * 60,  // 24h

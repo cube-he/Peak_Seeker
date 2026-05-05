@@ -201,7 +201,7 @@ describe('AmapClient retry behaviour', () => {
     const result = await client.geocode('test');
     expect(attempts).toBe(2);
     expect(result?.formatted_address).toBe('X');
-  }, 30000);
+  }, 60000);
 
   it('throws AmapUnavailableError after max retries on persistent 5xx', async () => {
     (global as unknown as { fetch: jest.Mock }).fetch = jest
@@ -210,7 +210,7 @@ describe('AmapClient retry behaviour', () => {
     const client = makeClient();
     const { AmapUnavailableError } = await import('./amap.types');
     await expect(client.geocode('test')).rejects.toThrow(AmapUnavailableError);
-  }, 30000);
+  }, 60000);
 });
 
 describe('AmapClient cache', () => {

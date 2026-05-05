@@ -9,7 +9,7 @@
  * Exits non-zero on any failed assertion.
  */
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../src/app.module';
+import { GeoCliModule } from './geo-cli.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { writeJsonReport } from './lib/cli-utils';
 
@@ -19,7 +19,7 @@ const KNOWN_MULTI_CAMPUS = [
 ];
 
 async function main() {
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
+  const app = await NestFactory.createApplicationContext(GeoCliModule, { logger: false });
   const prisma = app.get(PrismaService);
 
   const findings: Array<{ check: string; pass: boolean; detail: unknown }> = [];

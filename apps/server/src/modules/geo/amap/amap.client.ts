@@ -161,14 +161,23 @@ export class AmapClient {
           throw new Error(`AMap HTTP ${res.status}`);
         } else {
           const json = (await res.json()) as T;
-          if (this.redis) {
-            try {
-              await this.redis.setCache(cKey, json, GEO_CONFIG.AMAP_CACHE_TTL_SECONDS);
-            } catch (e) {
-              this.logger.warn(`Cache write failed: ${(e as Error).message}`);
+          // Inspect AMap-level transient errors. Some errors (CUQPS rate limit,
+          // internal engine errors) are reported as HTTP 200 with status='0'
+          // and a specific info code. Treat them as retryable; let everything
+          // else (incl. permanent failures like INVALID_USER_KEY) pass through.
+          const j = json as unknown as { status?: string; info?: string };
+          if (j && j.status === '0' && j.info && TRANSIENT_AMAP_INFOS.has(j.info)) {
+            lastErr = new Error(`AMap transient: ${j.info}`);
+          } else {
+            if (this.redis) {
+              try {
+                await this.redis.setCache(cKey, json, GEO_CONFIG.AMAP_CACHE_TTL_SECONDS);
+              } catch (e) {
+                this.logger.warn(`Cache write failed: ${(e as Error).message}`);
+              }
             }
+            return json;
           }
-          return json;
         }
       } catch (err) {
         lastErr = err;
@@ -184,3 +193,10 @@ export class AmapClient {
     );
   }
 }
+
+// AMap returns these as `status='0'` with `info=<code>` over HTTP 200.
+// They mean "try again later" — retry instead of giving up.
+const TRANSIENT_AMAP_INFOS = new Set<string>([
+  'CUQPS_HAS_EXCEEDED_THE_LIMIT',     // concurrent QPS limit (per-endpoint)
+  'ENGINE_RESPONSE_DATA_ERROR',       // internal engine hiccup
+]);

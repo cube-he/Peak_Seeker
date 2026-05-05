@@ -1557,7 +1557,7 @@ model UniversityCampusPoi {
   amapId   String  @map("amap_id") @db.VarChar(50)
   name     String  @db.VarChar(200)
   category String  @db.VarChar(50)
-  typecode String? @db.VarChar(20)
+  typecode String? @db.VarChar(100)
 
   latitude  Decimal @db.Decimal(9, 6)
   longitude Decimal @db.Decimal(9, 6)

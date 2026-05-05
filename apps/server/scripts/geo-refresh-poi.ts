@@ -5,7 +5,7 @@
  * Usage: pnpm ts-node scripts/geo-refresh-poi.ts --max-age 30
  */
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../src/app.module';
+import { GeoCliModule } from './geo-cli.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AmapClient } from '../src/modules/geo/amap/amap.client';
 import { GEO_CONFIG } from '../src/modules/geo/geo.config';
@@ -16,7 +16,7 @@ async function main() {
   const maxAge = Number(flags['max-age'] ?? 30);
   const cutoff = new Date(Date.now() - maxAge * 24 * 60 * 60 * 1000);
 
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
+  const app = await NestFactory.createApplicationContext(GeoCliModule, { logger: false });
   const prisma = app.get(PrismaService);
   const amap = app.get(AmapClient);
 

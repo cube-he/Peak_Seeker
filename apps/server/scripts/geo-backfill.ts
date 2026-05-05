@@ -8,7 +8,7 @@
  *   pnpm ts-node scripts/geo-backfill.ts --skip-poi
  */
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../src/app.module';
+import { GeoCliModule } from './geo-cli.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { GeocoderService } from '../src/modules/geo/services/geocoder.service';
 import { CampusExtractor } from '../src/modules/geo/services/campus-extractor.service';
@@ -38,7 +38,7 @@ async function main() {
     concurrency: Number(flags.concurrency ?? 1),
   };
 
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
+  const app = await NestFactory.createApplicationContext(GeoCliModule, { logger: false });
   const prisma = app.get(PrismaService);
   const geocoder = app.get(GeocoderService);
   const extractor = app.get(CampusExtractor);
