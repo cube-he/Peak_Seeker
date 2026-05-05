@@ -603,6 +603,14 @@ model StudentProfile {
   parentPhone       String?       @map("parent_phone") @db.VarChar(20)
   isRural           Boolean       @default(false) @map("is_rural")
 
+  // --- 高考所在地（① 老师独占）---
+  examLocationProvince String? @map("exam_location_province") @db.VarChar(50)
+  examLocationCity     String? @map("exam_location_city") @db.VarChar(100)
+  examLocationCounty   String? @map("exam_location_county") @db.VarChar(100)
+
+  // --- 政治面貌（② 学生可编辑）---
+  politicalStatus PoliticalStatus? @map("political_status")
+
   // --- 考试成绩 ---
   examType         NewExamType? @map("exam_type")
   examYear         Int?         @map("exam_year") @db.SmallInt
@@ -624,10 +632,18 @@ model StudentProfile {
   // --- 身体条件 ---
   height         Decimal? @db.Decimal(5, 1)
   weight         Decimal? @db.Decimal(5, 1)
+  /// @deprecated 用 visionLeft/visionRight + visionLeftCorrected/visionRightCorrected 取代
   vision         String?  @db.VarChar(50)
   colorBlind     Boolean  @default(false) @map("color_blind")
   colorWeak      Boolean  @default(false) @map("color_weak")
   physicalLimits Json?    @map("physical_limits")
+
+  // --- 视力详细（V1 新增，旧 vision 字段标记 deprecated 但保留）---
+  visionLeft           Decimal? @map("vision_left") @db.Decimal(3, 1)
+  visionRight          Decimal? @map("vision_right") @db.Decimal(3, 1)
+  visionLeftCorrected  Decimal? @map("vision_left_corrected") @db.Decimal(3, 1)
+  visionRightCorrected Decimal? @map("vision_right_corrected") @db.Decimal(3, 1)
+  medicalHistory       String?  @map("medical_history") @db.Text
 
   // --- 升学规划 ---
   careerPlan       CareerPlan?     @map("career_plan")
@@ -654,6 +670,17 @@ model StudentProfile {
   excludedMajors       Json?        @map("excluded_majors")
   acceptLevel          AcceptLevel? @map("accept_level")
 
+  // --- 加分政策（① 老师独占）---
+  bonusPolicyStatus BonusPolicyStatus? @map("bonus_policy_status")
+  bonusItems        Json?              @map("bonus_items")
+
+  // --- 意向批次（② 学生可编辑，Batch 枚举值数组）---
+  preferredBatches Json? @map("preferred_batches")
+
+  // --- 偏远 / 冷门接受度（② 学生可编辑）---
+  remoteAreaAcceptance RemoteAreaAcceptance? @map("remote_area_acceptance")
+  coldMajorAcceptance  ColdMajorAcceptance?  @map("cold_major_acceptance")
+
   // --- 经济条件 ---
   tuitionBudget     TuitionBudget? @map("tuition_budget")
   acceptSinoForeign Boolean        @default(false) @map("accept_sino_foreign")
@@ -671,6 +698,11 @@ model StudentProfile {
   tags        Json?
   serviceYear Int   @default(2026) @map("service_year") @db.SmallInt
   dataVersion Int   @default(0) @map("data_version")
+
+  // --- 填表元信息（V1 新增）---
+  formFiller        FormFiller? @map("form_filler")
+  parentSignedAt    DateTime?   @map("parent_signed_at")
+  intakeFormVersion String?     @default("2025-v1") @map("intake_form_version") @db.VarChar(10)
 
   // 关联
   volunteerPlans VolunteerPlan[]
