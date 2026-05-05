@@ -83,8 +83,10 @@ export class CaslAbilityFactory {
     // Own plans: read-only (teachers create/manage plans for students)
     can('read', 'VolunteerPlan', { studentId: user.studentProfileId } as any);
 
-    // Own profile: can update their own info
-    can('update', 'StudentProfile', { userId: user.id } as any);
+    // Own profile: can read + update their own info
+    // Note: /students/me 端点目前自己用 role !== STUDENT 守门，未挂 PoliciesGuard。
+    // 这两条规则是为日后 controller 重构（如显式 ability.can 校验）保持一致。
+    can(['read', 'update'], 'StudentProfile', { userId: user.id } as any);
 
     // Light recommendation only
     can('use', 'LightRecommend');
