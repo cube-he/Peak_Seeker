@@ -14,6 +14,7 @@ import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import { RankInput } from '@/components/score/RankInput';
 import { universityService, UniversityQueryParams } from '@/services/university';
+import UniversityLogo from '@/components/university/UniversityLogo';
 
 // 省份列表
 const PROVINCES = [
@@ -158,7 +159,10 @@ function UniversityCard({ uni }: { uni: any }) {
 
   return (
     <div className="bg-surface rounded-lg shadow-card hover:shadow-card-hover transition-all duration-300 p-5">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4">
+        <Link href={`/universities/${uni.id}`} className="shrink-0">
+          <UniversityLogo name={uni.name} logoUrl={uni.logoUrl} size={56} />
+        </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <Link
@@ -256,7 +260,7 @@ function HotUniversitiesSidebar() {
           <Link
             key={uni.id}
             href={`/universities/${uni.id}`}
-            className="flex items-center gap-3 group no-underline py-1.5 px-2 rounded-lg hover:bg-surface-dim transition-colors duration-200"
+            className="flex items-center gap-2.5 group no-underline py-1.5 px-2 rounded-lg hover:bg-surface-dim transition-colors duration-200"
           >
             <span
               className={`w-5 h-5 rounded text-xs flex items-center justify-center font-semibold shrink-0 ${
@@ -267,6 +271,7 @@ function HotUniversitiesSidebar() {
             >
               {idx + 1}
             </span>
+            <UniversityLogo name={uni.name} logoUrl={uni.logoUrl} size={24} />
             <span className="text-sm truncate text-text-tertiary group-hover:text-primary transition-colors duration-200">
               {uni.name}
             </span>
