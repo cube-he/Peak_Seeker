@@ -182,8 +182,10 @@ export class StudentService {
 
     const updated = await this.prisma.studentProfile.update({
       where: { id },
+      // bonusItems / preferredBatches 是 Json 列，DTO 用 class 做嵌套校验，
+      // Prisma 期望 InputJsonValue — 在边界做一次断言交给 Prisma
       data: {
-        ...updateData,
+        ...(updateData as Prisma.StudentProfileUpdateInput),
         ...statusUpdate,
         dataVersion: { increment: 1 },
       },
