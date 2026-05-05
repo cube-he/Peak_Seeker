@@ -97,6 +97,10 @@ export class UniversityService {
           orderBy: { year: 'desc' },
           take: 100,
         },
+        campuses: {
+          where: { geoStatus: 'verified' },
+          orderBy: [{ isMain: 'desc' }, { id: 'asc' }],
+        },
       },
     });
 
