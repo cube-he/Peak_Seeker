@@ -140,3 +140,17 @@ describe('GeoValidator.checkCampusDistance', () => {
     });
   });
 });
+
+describe('GeoValidator.validatePoiCoverage', () => {
+  it('flags poi_zero_subway when subway list is empty', () => {
+    const v = new GeoValidator(fakePrisma() as any, { regeocode: jest.fn() } as any);
+    const issues = v.validatePoiCoverage({ id: 5, name: 'X', subwayCount: 0 });
+    expect(issues.map((i) => i.issueType)).toContain('poi_zero_subway');
+  });
+
+  it('does not flag when subway present', () => {
+    const v = new GeoValidator(fakePrisma() as any, { regeocode: jest.fn() } as any);
+    const issues = v.validatePoiCoverage({ id: 5, name: 'X', subwayCount: 3 });
+    expect(issues.length).toBe(0);
+  });
+});

@@ -43,6 +43,18 @@ export class GeoValidator {
     return { pass: issues.length === 0, issues };
   }
 
+  validatePoiCoverage(args: { id: number; name: string; subwayCount: number; campusId?: number }): GeoIssueDetail[] {
+    const issues: GeoIssueDetail[] = [];
+    if (args.subwayCount === 0) {
+      issues.push({
+        issueType: 'poi_zero_subway',
+        campusId: args.campusId,
+        detail: { campusName: args.name },
+      });
+    }
+    return issues;
+  }
+
   private checkMissing(uni: UniversityLike): GeoIssueDetail[] {
     const issues: GeoIssueDetail[] = [];
     if (!uni.address || uni.latitude == null || uni.longitude == null) {
