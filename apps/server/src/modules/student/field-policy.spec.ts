@@ -53,4 +53,10 @@ describe('field-policy', () => {
       expect(TEACHER_ONLY_FIELDS).toContain(f);
     }
   });
+
+  it('ALL_STUDENT_EDITABLE_FIELDS 去重后长度等于实际数组长度（防止下游迭代双重处理）', () => {
+    expect(ALL_STUDENT_EDITABLE_FIELDS.length).toBe(
+      new Set(ALL_STUDENT_EDITABLE_FIELDS).size,
+    );
+  });
 });
