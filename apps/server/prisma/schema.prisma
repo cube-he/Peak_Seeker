@@ -152,6 +152,40 @@ enum RecommendType {
   HYBRID
 }
 
+// ==================== 学生信息采集 V1 新增枚举 ====================
+
+enum PoliticalStatus {
+  PARTY_MEMBER
+  LEAGUE_MEMBER
+  MASSES
+}
+
+enum BonusPolicyStatus {
+  NONE
+  HAS_BONUS
+  UNKNOWN
+}
+
+enum RemoteAreaAcceptance {
+  ABSOLUTELY_NO
+  BACKUP_ONLY
+  FAMOUS_OK
+  GOOD_MAJOR_OK
+}
+
+enum ColdMajorAcceptance {
+  ABSOLUTELY_NO
+  FAMOUS_OK
+  DEVELOPED_AREA_OK
+  GOOD_PROSPECT_OK
+}
+
+enum FormFiller {
+  STUDENT
+  PARENT
+  TOGETHER
+}
+
 // ==================== 院校相关 ====================
 
 model University {
