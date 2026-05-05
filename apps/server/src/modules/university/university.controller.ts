@@ -8,6 +8,7 @@ import {
 import { ApiTags, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { UniversityService } from './university.service';
 import { QueryUniversityDto } from './dto/query-university.dto';
+import { PoiQueryDto } from './dto/poi-query.dto';
 
 @ApiTags('院校')
 @Controller('universities')
@@ -60,5 +61,20 @@ export class UniversityController {
   @ApiParam({ name: 'id', type: Number })
   async findAdmissions(@Param('id', ParseIntPipe) id: number) {
     return this.universityService.findAdmissions(id);
+  }
+
+  @Get(':uniId/campuses/:campusId/pois')
+  @ApiOperation({ summary: '获取校区周边POI' })
+  @ApiParam({ name: 'uniId', type: Number })
+  @ApiParam({ name: 'campusId', type: Number })
+  async getCampusPois(
+    @Param('uniId', ParseIntPipe) uniId: number,
+    @Param('campusId', ParseIntPipe) campusId: number,
+    @Query() query: PoiQueryDto,
+  ) {
+    return this.universityService.getCampusPois(uniId, campusId, {
+      category: query.category,
+      limit: query.limit,
+    });
   }
 }
