@@ -173,7 +173,10 @@ export interface PivotOptions<F extends string> {
   fields: F[];
   /** 取最近多少年（默认 3） */
   yearLimit?: number;
-  /** 按"最新有数据年份"的哪个字段排序（默认不排序，保留原序） */
+  /**
+   * 按最新年份的某字段排序（默认不排序，保留原序）。
+   * 仅看 `years[0]`：缺该字段的行排到末尾，无回退到更早年份。
+   */
   sortByField?: F;
   /** 'asc'（默认）位次/分数低→高 */
   sortDirection?: 'asc' | 'desc';
@@ -263,7 +266,7 @@ export function pivotByYear<R extends RawYearRecord, F extends string>(
 pnpm --filter web test -- pivotByYear
 ```
 
-Expected: 7 个用例全部 PASS。
+Expected: 8 个用例全部 PASS。
 
 - [ ] **Step 5: Commit**
 
