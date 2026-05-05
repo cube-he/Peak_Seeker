@@ -205,36 +205,47 @@ model University {
   softRanking Int?    @map("soft_ranking")
 
   // 人口统计
-  maleRatio             Int?    @map("male_ratio")
-  femaleRatio           Int?    @map("female_ratio")
-  createdYear           String? @map("created_year") @db.VarChar(20)
-  logoUrl               String? @map("logo_url") @db.VarChar(500)
+  maleRatio   Int?    @map("male_ratio")
+  femaleRatio Int?    @map("female_ratio")
+  createdYear String? @map("created_year") @db.VarChar(20)
+  logoUrl     String? @map("logo_url") @db.VarChar(500)
 
   // A类学科数量
-  aClassDisciplineCount Int?    @map("a_class_discipline_count")
+  aClassDisciplineCount Int? @map("a_class_discipline_count")
 
   // 多维排名
-  rankingAlumni         Int?    @map("ranking_alumni")
-  rankingQS             Int?    @map("ranking_qs")
-  rankingUSNews         Int?    @map("ranking_us_news")
+  rankingAlumni Int? @map("ranking_alumni")
+  rankingQS     Int? @map("ranking_qs")
+  rankingUSNews Int? @map("ranking_us_news")
 
   // 满意度
-  satisfactionOverall   Float?  @map("satisfaction_overall")
-  satisfactionLife      Float?  @map("satisfaction_life")
-  satisfactionEnviron   Float?  @map("satisfaction_environ")
-  satisfactionCount     Int?    @map("satisfaction_count")
+  satisfactionOverall Float? @map("satisfaction_overall")
+  satisfactionLife    Float? @map("satisfaction_life")
+  satisfactionEnviron Float? @map("satisfaction_environ")
+  satisfactionCount   Int?   @map("satisfaction_count")
 
   // 就业
-  employmentRate        String? @map("employment_rate") @db.VarChar(50)
-  furtherStudyRate      String? @map("further_study_rate") @db.VarChar(50)
-  avgSalary             String? @map("avg_salary") @db.VarChar(50)
-  topEmployers          String? @map("top_employers") @db.Text
+  employmentRate   String? @map("employment_rate") @db.VarChar(50)
+  furtherStudyRate String? @map("further_study_rate") @db.VarChar(50)
+  avgSalary        String? @map("avg_salary") @db.VarChar(50)
+  topEmployers     String? @map("top_employers") @db.Text
 
   // 招生章程
-  charterInfo           Json?   @map("charter_info")
+  charterInfo Json? @map("charter_info")
 
   // 备注
   notes String? @db.Text
+
+  // === Geo (主校区/注册地兜底坐标) ===
+  address      String?   @db.VarChar(500)
+  latitude     Decimal?  @db.Decimal(9, 6)
+  longitude    Decimal?  @db.Decimal(9, 6)
+  geoStatus    String    @default("pending") @map("geo_status") @db.VarChar(20)
+  geoSource    String?   @map("geo_source") @db.VarChar(50)
+  geoUpdatedAt DateTime? @map("geo_updated_at")
+
+  campuses  UniversityCampus[]
+  geoIssues UniversityGeoIssue[]
 
   // 关联
   enrollmentPlans  EnrollmentPlan[]
@@ -339,9 +350,9 @@ model EnrollmentPlan {
   isSinoForeign       Boolean @default(false) @map("is_sino_foreign")
 
   // 自然主键字段（冗余存储用于唯一约束和展示）
-  recruitType String  @default("") @map("recruit_type") @db.VarChar(100)
-  majorCode   String  @default("") @map("major_code") @db.VarChar(50)
-  majorName   String  @default("") @map("major_name") @db.VarChar(200)
+  recruitType String @default("") @map("recruit_type") @db.VarChar(100)
+  majorCode   String @default("") @map("major_code") @db.VarChar(50)
+  majorName   String @default("") @map("major_name") @db.VarChar(200)
 
   // 学位点信息
   localMasterPoint   String? @map("local_master_point") @db.VarChar(200)
@@ -409,14 +420,14 @@ model AdmissionRecord {
   filingMinRank  Int? @map("filing_min_rank")
 
   // 自然主键字段
-  recruitType String  @default("") @map("recruit_type") @db.VarChar(100)
-  groupCode   String  @default("") @map("group_code") @db.VarChar(50)
-  majorCode   String  @default("") @map("major_code") @db.VarChar(50)
-  majorName   String  @default("") @map("major_name") @db.VarChar(200)
+  recruitType String @default("") @map("recruit_type") @db.VarChar(100)
+  groupCode   String @default("") @map("group_code") @db.VarChar(50)
+  majorCode   String @default("") @map("major_code") @db.VarChar(50)
+  majorName   String @default("") @map("major_name") @db.VarChar(200)
 
   // 科目和批次信息
-  subjects String  @default("") @db.VarChar(50)
-  batch    String  @default("") @db.VarChar(50)
+  subjects String @default("") @db.VarChar(50)
+  batch    String @default("") @db.VarChar(50)
 
   // 院校整体录取数据
   universityMinScore       Int? @map("university_min_score")
@@ -1434,14 +1445,14 @@ model TimelineEvent {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  key       String   @db.VarChar(30)   // 'gaokao' | 'score_query' | 'early_batch' | 'regular_batch' | 'vocational_batch'
-  name      String   @db.VarChar(30)   // "高考"、"本科提前批"等
-  status    String   @db.VarChar(30)   // 'countdown' | 'estimated' | 'filling' | 'in_progress' | 'collecting_1' | 'collecting_2' | 'collecting_3' | 'available' | 'completed'
-  sortOrder Int      @map("sort_order")
+  key       String    @db.VarChar(30) // 'gaokao' | 'score_query' | 'early_batch' | 'regular_batch' | 'vocational_batch'
+  name      String    @db.VarChar(30) // "高考"、"本科提前批"等
+  status    String    @db.VarChar(30) // 'countdown' | 'estimated' | 'filling' | 'in_progress' | 'collecting_1' | 'collecting_2' | 'collecting_3' | 'available' | 'completed'
+  sortOrder Int       @map("sort_order")
   startDate DateTime? @map("start_date")
   endDate   DateTime? @map("end_date")
-  detail    Json?     // 征集截止时间、子批次信息等
-  sourceUrl String?  @map("source_url") @db.VarChar(500)
+  detail    Json? // 征集截止时间、子批次信息等
+  sourceUrl String?   @map("source_url") @db.VarChar(500)
   year      Int
 
   @@unique([key, year])
@@ -1487,10 +1498,10 @@ model RankPrediction {
   subjects    String @db.VarChar(50) // canonical 物理|历史
   targetYear  Int    @map("target_year") @db.SmallInt
 
-  pointRank        Int? @map("point_rank")
-  conservativeRank Int? @map("conservative_rank")
-  optimisticRank   Int? @map("optimistic_rank")
-  basisYears       Json @map("basis_years") // [2024, 2023, 2022]
+  pointRank        Int?   @map("point_rank")
+  conservativeRank Int?   @map("conservative_rank")
+  optimisticRank   Int?   @map("optimistic_rank")
+  basisYears       Json   @map("basis_years") // [2024, 2023, 2022]
   confidence       String @db.VarChar(20) // high|medium|low
 
   computedAt DateTime @default(now()) @map("computed_at")
@@ -1498,4 +1509,95 @@ model RankPrediction {
   @@unique([universityId, groupCode, batch, recruitType, subjects, targetYear], name: "rank_pred_natural_key")
   @@index([targetYear, subjects])
   @@map("rank_predictions")
+}
+
+// ==================== 校区 ====================
+
+model UniversityCampus {
+  id           Int      @id @default(autoincrement())
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  universityId Int      @map("university_id")
+
+  name     String  @db.VarChar(100)
+  isMain   Boolean @default(false) @map("is_main")
+  province String? @db.VarChar(50)
+  city     String? @db.VarChar(100)
+  district String? @db.VarChar(100)
+
+  address      String?   @db.VarChar(500)
+  latitude     Decimal?  @db.Decimal(9, 6)
+  longitude    Decimal?  @db.Decimal(9, 6)
+  geoStatus    String    @default("pending") @map("geo_status") @db.VarChar(20)
+  geoSource    String?   @map("geo_source") @db.VarChar(50)
+  geoUpdatedAt DateTime? @map("geo_updated_at")
+
+  distanceToCityCenter Int?     @map("distance_to_city_center")
+  nearestSubwayMeters  Int?     @map("nearest_subway_meters")
+  nearestAirportKm     Decimal? @map("nearest_airport_km") @db.Decimal(6, 2)
+
+  discoveredFrom String? @map("discovered_from") @db.VarChar(50)
+
+  university University            @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  pois       UniversityCampusPoi[]
+
+  @@unique([universityId, name])
+  @@index([universityId, geoStatus])
+  @@map("university_campuses")
+}
+
+// ==================== 校区 POI ====================
+
+model UniversityCampusPoi {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  campusId  Int      @map("campus_id")
+
+  amapId   String  @map("amap_id") @db.VarChar(50)
+  name     String  @db.VarChar(200)
+  category String  @db.VarChar(50)
+  typecode String? @db.VarChar(20)
+
+  latitude  Decimal @db.Decimal(9, 6)
+  longitude Decimal @db.Decimal(9, 6)
+  address   String? @db.VarChar(500)
+  distance  Int
+  metadata  Json?
+
+  source    String   @default("amap_around") @db.VarChar(50)
+  fetchedAt DateTime @map("fetched_at")
+  obsolete  Boolean  @default(false)
+
+  campus UniversityCampus @relation(fields: [campusId], references: [id], onDelete: Cascade)
+
+  @@unique([campusId, amapId])
+  @@index([campusId, category, distance])
+  @@map("university_campus_pois")
+}
+
+// ==================== 地理问题追踪 ====================
+
+model UniversityGeoIssue {
+  id           Int      @id @default(autoincrement())
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  universityId Int      @map("university_id")
+  campusId     Int?     @map("campus_id")
+
+  issueType String @map("issue_type") @db.VarChar(50)
+  detail    Json?
+
+  status      String    @default("pending") @db.VarChar(20)
+  retryCount  Int       @default(0) @map("retry_count")
+  lastRetryAt DateTime? @map("last_retry_at")
+  resolvedAt  DateTime? @map("resolved_at")
+  resolvedBy  String?   @map("resolved_by") @db.VarChar(50)
+
+  university University @relation(fields: [universityId], references: [id], onDelete: Cascade)
+
+  @@index([universityId])
+  @@index([status])
+  @@index([issueType])
+  @@map("university_geo_issues")
 }
