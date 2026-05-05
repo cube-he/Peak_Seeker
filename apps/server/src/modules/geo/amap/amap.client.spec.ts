@@ -77,3 +77,57 @@ describe('AmapClient.geocode', () => {
     await expect(client.geocode('清华大学')).rejects.toThrow(AmapApiError);
   });
 });
+
+describe('AmapClient.regeocode', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('returns parsed regeocode result', async () => {
+    const fetchMock = mockFetch({
+      status: '1',
+      info: 'OK',
+      regeocode: {
+        formatted_address: '北京市海淀区清华大学',
+        addressComponent: { province: '北京市', city: '北京市', district: '海淀区' },
+      },
+    });
+
+    const client = makeClient();
+    const result = await client.regeocode(116.331, 40.0);
+
+    expect((fetchMock.mock.calls[0][0] as string)).toContain('/geocode/regeo');
+    expect((fetchMock.mock.calls[0][0] as string)).toContain('location=116.331%2C40');
+    expect(result?.addressComponent.province).toBe('北京市');
+  });
+
+  it('returns null when regeocode is missing', async () => {
+    mockFetch({ status: '1', info: 'OK' });
+    const client = makeClient();
+    expect(await client.regeocode(0, 0)).toBeNull();
+  });
+});
+
+describe('AmapClient.searchPlaceText', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('returns POI list for matching keyword', async () => {
+    mockFetch({
+      status: '1', info: 'OK', count: '1',
+      pois: [{
+        id: 'B0FFLAJV01', name: '哈尔滨工业大学(深圳)',
+        type: '科教文化服务;学校;高等院校',
+        typecode: '141201', location: '113.97,22.59',
+        address: '深圳市南山区桃源街道', pname: '广东省', cityname: '深圳市', adname: '南山区',
+      }],
+    });
+    const client = makeClient();
+    const result = await client.searchPlaceText('哈工大深圳', { city: '深圳' });
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('B0FFLAJV01');
+  });
+
+  it('returns empty array when no pois', async () => {
+    mockFetch({ status: '1', info: 'OK', count: '0' });
+    const client = makeClient();
+    expect(await client.searchPlaceText('不存在')).toEqual([]);
+  });
+});

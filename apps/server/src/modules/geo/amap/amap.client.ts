@@ -4,6 +4,9 @@ import {
   AmapApiError,
   AmapGeocode,
   AmapGeocodeResponse,
+  AmapPoi,
+  AmapPlaceSearchResponse,
+  AmapRegeocodeResponse,
 } from './amap.types';
 import { GEO_CONFIG } from '../geo.config';
 
@@ -36,6 +39,42 @@ export class AmapClient {
     }
     if (!json.geocodes || json.geocodes.length === 0) return null;
     return json.geocodes[0];
+  }
+
+  async regeocode(
+    lng: number,
+    lat: number,
+  ): Promise<AmapRegeocodeResponse['regeocode'] | null> {
+    const json = await this.request<AmapRegeocodeResponse>('/geocode/regeo', {
+      key: this.key,
+      location: `${lng},${lat}`,
+      extensions: 'base',
+      output: 'JSON',
+    });
+    if (json.status === '0') {
+      throw new AmapApiError(`AMap regeocode failed: ${json.info}`, json.info);
+    }
+    return json.regeocode ?? null;
+  }
+
+  async searchPlaceText(
+    keywords: string,
+    opts: { city?: string; types?: string } = {},
+  ): Promise<AmapPoi[]> {
+    const params: Record<string, string> = {
+      key: this.key,
+      keywords,
+      output: 'JSON',
+      offset: '20',
+      page: '1',
+    };
+    if (opts.city) params.city = opts.city;
+    if (opts.types) params.types = opts.types;
+    const json = await this.request<AmapPlaceSearchResponse>('/place/text', params);
+    if (json.status === '0') {
+      throw new AmapApiError(`AMap place/text failed: ${json.info}`, json.info);
+    }
+    return json.pois ?? [];
   }
 
   private async request<T>(path: string, params: Record<string, string>): Promise<T> {
