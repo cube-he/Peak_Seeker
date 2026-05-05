@@ -37,3 +37,46 @@ describe('CampusExtractor.extractFromEnrollmentPlanTags', () => {
     expect(await ex.extractFromEnrollmentPlanTags(1)).toEqual([]);
   });
 });
+
+describe('CampusExtractor.extractFromCharterText', () => {
+  it('extracts campus names from "我校现有 X 个校区,分别位于…"', () => {
+    const ex = new CampusExtractor(fakePrisma([]) as any, fakeAmap() as any);
+    const text =
+      '我校现有 3 个校区，分别位于哈尔滨、威海和深圳，本科生主要在校本部学习。';
+    const result = ex.extractFromCharterText(text);
+    const names = result.map((c) => c.name).sort();
+    expect(names).toContain('威海');
+    expect(names).toContain('深圳');
+    for (const c of result) {
+      expect(c.source).toBe('charter_extract');
+    }
+  });
+
+  it('returns [] when text has no recognised pattern', () => {
+    const ex = new CampusExtractor(fakePrisma([]) as any, fakeAmap() as any);
+    expect(ex.extractFromCharterText('随便一段文字')).toEqual([]);
+  });
+});
+
+describe('CampusExtractor.extract (combined)', () => {
+  it('combines and dedups across sources, preserving best source ordering', async () => {
+    const prisma = {
+      enrollmentPlan: { findMany: jest.fn().mockResolvedValue([
+        { majorName: '[威海]软件', planNotes: null },
+      ])},
+      university: { findUnique: jest.fn().mockResolvedValue({
+        id: 1, name: '哈尔滨工业大学',
+        charterInfo: { fullText: '我校现有威海校区和深圳校区。' },
+      })},
+    };
+    const amap = { searchPlaceText: jest.fn() };
+    const ex = new CampusExtractor(prisma as any, amap as any);
+
+    const result = await ex.extract(1);
+    const names = result.map((c) => c.name).sort();
+    // 威海 found by both sources -> dedup; 深圳 found by charter
+    expect(names).toEqual(['威海', '深圳']);
+    const wei = result.find((c) => c.name === '威海')!;
+    expect(wei.source).toBe('enrollment_plan_tag'); // preferred (higher confidence)
+  });
+});
