@@ -28,6 +28,7 @@ import { EligibleRegionModule } from './modules/eligible-region/eligible-region.
 import { TimelineModule } from './modules/timeline/timeline.module';
 import { ScoreSegmentModule } from './modules/score-segment/score-segment.module';
 import { AlgorithmConfigModule } from './modules/algorithm-config/algorithm-config.module';
+import { GeoModule } from './modules/geo/geo.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { AlgorithmConfigModule } from './modules/algorithm-config/algorithm-conf
     StudentModule,
     TeacherModule,
     UniversityModule,
+    GeoModule,
     MajorModule,
     AdmissionModule,
     PlanModule,
