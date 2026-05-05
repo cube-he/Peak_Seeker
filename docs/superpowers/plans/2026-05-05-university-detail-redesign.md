@@ -165,7 +165,7 @@ export interface RawYearRecord {
   recruitType: string;
   subjects: string;
   majorId: number;
-  [field: string]: any;
+  [field: string]: unknown;
 }
 
 export interface PivotOptions<F extends string> {
@@ -237,14 +237,15 @@ export function pivotByYear<R extends RawYearRecord, F extends string>(
     row.byYear[r.year] = cell;
   }
 
-  let rows = Array.from(map.values());
+  const rows = Array.from(map.values());
 
-  // 排序：按最新年份的 sortByField；缺则回退到次新年份；都缺排最后
-  if (sortByField) {
+  // 排序：按最新年份的 sortByField 升/降序；缺则排末尾（无回退）
+  if (sortByField && years.length > 0) {
+    const latestYear = years[0];
     const dir = sortDirection === 'asc' ? 1 : -1;
     rows.sort((a, b) => {
-      const av = pickSortValue(a, years, sortByField);
-      const bv = pickSortValue(b, years, sortByField);
+      const av = a.byYear[latestYear]?.[sortByField];
+      const bv = b.byYear[latestYear]?.[sortByField];
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
@@ -253,18 +254,6 @@ export function pivotByYear<R extends RawYearRecord, F extends string>(
   }
 
   return { rows, years };
-}
-
-function pickSortValue<F extends string>(
-  row: PivotRow<F>,
-  years: number[],
-  field: F,
-): number | undefined {
-  for (const y of years) {
-    const v = row.byYear[y]?.[field];
-    if (v != null) return v;
-  }
-  return undefined;
 }
 ```
 

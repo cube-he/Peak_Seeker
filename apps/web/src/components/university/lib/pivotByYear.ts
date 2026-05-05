@@ -10,7 +10,7 @@ export interface RawYearRecord {
   recruitType: string;
   subjects: string;
   majorId: number;
-  [field: string]: any;
+  [field: string]: unknown;
 }
 
 export interface PivotOptions<F extends string> {
@@ -18,7 +18,11 @@ export interface PivotOptions<F extends string> {
   fields: F[];
   /** 取最近多少年（默认 3） */
   yearLimit?: number;
-  /** 按"最新有数据年份"的哪个字段排序（默认不排序，保留原序） */
+  /**
+   * 按最新年份（years[0]）的指定字段排序（默认不排序，保留原序）。
+   * 注意：仅看最新年份；若该行在最新年份缺该字段，则被推到末尾，
+   * 不会回退到更早年份取值。
+   */
   sortByField?: F;
   /** 'asc'（默认）位次/分数低→高 */
   sortDirection?: 'asc' | 'desc';
@@ -82,7 +86,7 @@ export function pivotByYear<R extends RawYearRecord, F extends string>(
     row.byYear[r.year] = cell;
   }
 
-  let rows = Array.from(map.values());
+  const rows = Array.from(map.values());
 
   // 排序：仅按最新年份的 sortByField 取值；缺最新年份数据的行排到末尾
   if (sortByField && years.length > 0) {

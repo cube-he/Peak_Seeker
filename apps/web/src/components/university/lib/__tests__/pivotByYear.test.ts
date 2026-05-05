@@ -94,4 +94,16 @@ describe('pivotByYear', () => {
     expect(out.rows[0].majorName).toBe('有数据');
     expect(out.rows[1].majorName).toBe('只老数据');
   });
+
+  it('duplicate (rowKey, year) records: later record overwrites earlier field values', () => {
+    const out = pivotByYear<Rec, 'planCount'>(
+      [
+        base({ year: 2024, planCount: 60 }),
+        base({ year: 2024, planCount: 99 }), // same rowKey + year → later wins on overlapping fields
+      ],
+      { fields: ['planCount'] },
+    );
+    expect(out.rows).toHaveLength(1);
+    expect(out.rows[0].byYear[2024]?.planCount).toBe(99);
+  });
 });
