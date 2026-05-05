@@ -12,13 +12,50 @@ import { QueryStudentDto } from './dto/query-student.dto';
 import { Role, StudentStatus, Prisma } from '@prisma/client';
 import { ProgressService } from './progress.service';
 import { TEACHER_ONLY_FIELDS } from './field-policy';
+import { ScoreSegmentService } from '../score-segment/score-segment.service';
+import type { ExamType } from '../score-segment/exam-type.helper';
 
 @Injectable()
 export class StudentService {
   constructor(
     private prisma: PrismaService,
     private progressService: ProgressService,
+    private scoreSegmentService: ScoreSegmentService,
   ) {}
+
+  /**
+   * 把 Prisma NewExamType 枚举映射成 ScoreSegment 用的中文 ExamType。
+   * 不支持的旧值（COMPREHENSIVE_*）返回 null —— 一分一段表只覆盖物理/历史/理科/文科。
+   */
+  private mapExamTypeForRank(examType: string | null | undefined): ExamType | null {
+    if (!examType) return null;
+    if (examType === 'PHYSICS') return '物理';
+    if (examType === 'HISTORY') return '历史';
+    if (examType === 'COMPREHENSIVE_SCIENCE') return '理科';
+    if (examType === 'COMPREHENSIVE_LIBERAL') return '文科';
+    return null;
+  }
+
+  /**
+   * 学生改了总分/科类时，用 score-segment 自动算位次写回 provincialRank。
+   * 查不到（数据缺失/科类不支持）→ 返回 null（由调用方决定是否清空 provincialRank）。
+   */
+  private async tryComputeRank(
+    examType: string | null | undefined,
+    examYear: number | null | undefined,
+    totalScore: number | null | undefined,
+  ): Promise<number | null> {
+    if (!totalScore || !examType || !examYear) return null;
+    const mapped = this.mapExamTypeForRank(examType);
+    if (!mapped) return null;
+    try {
+      const r = await this.scoreSegmentService.scoreToRank(examYear, mapped, totalScore);
+      return r.rank;
+    } catch {
+      // 一分一段表缺数据 / 分数越界等：静默失败，留位次为空
+      return null;
+    }
+  }
 
   /**
    * Create a student account (User + StudentProfile) assigned to a teacher.
@@ -207,6 +244,27 @@ export class StudentService {
       // Keep ACTIVE — the status already reflects a valid student
     }
 
+    // 自动计算 provincialRank：当 totalScore / examType / examYear 任一变化时
+    // 都用最新组合查一分一段表。学生本人不能在 dto 里直接写 provincialRank（被 STUDENT
+    // updateMyProfile 的字段白名单挡住），但这里是统一的写入路径，老师改也会触发。
+    const rankUpdate: { provincialRank?: number | null } = {};
+    const scoreOrTypeChanged =
+      updateData.totalScore !== undefined ||
+      updateData.examType !== undefined ||
+      updateData.examYear !== undefined;
+    if (scoreOrTypeChanged) {
+      const computed = await this.tryComputeRank(
+        merged.examType,
+        merged.examYear,
+        merged.totalScore,
+      );
+      // 查到 → 写回；查不到 → 不动 provincialRank（保留老师可能已手填的值）。
+      // 选项 a：若需要"分数缺失即清空位次"，可改为 rankUpdate.provincialRank = computed;
+      if (computed !== null) {
+        rankUpdate.provincialRank = computed;
+      }
+    }
+
     const updated = await this.prisma.studentProfile.update({
       where: { id },
       // bonusItems / preferredBatches 是 Json 列，DTO 用 class 做嵌套校验，
@@ -214,6 +272,7 @@ export class StudentService {
       data: {
         ...(updateData as Prisma.StudentProfileUpdateInput),
         ...statusUpdate,
+        ...rankUpdate,
         dataVersion: { increment: 1 },
       },
       include: {

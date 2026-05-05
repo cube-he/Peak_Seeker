@@ -97,8 +97,10 @@ export default function StudentProfilePage() {
 
       {/* ① 老师录入字段（只读） */}
       <Card size="small" title="由老师录入的信息">
-        <TeacherOnlyField label="高考总分" value={profile.totalScore} />
-        <TeacherOnlyField label="全省位次" value={profile.provincialRank} />
+        <TeacherOnlyField
+          label="全省位次"
+          value={profile.provincialRank}
+        />
         <TeacherOnlyField label="加分政策" value={profile.bonusPolicyStatus} />
         <TeacherOnlyField
           label="户籍"
@@ -108,8 +110,21 @@ export default function StudentProfilePage() {
               .join('/') || null
           }
         />
+        <TeacherOnlyField
+          label="高考所在地"
+          value={
+            [
+              profile.examLocationProvince,
+              profile.examLocationCity,
+              profile.examLocationCounty,
+            ]
+              .filter(Boolean)
+              .join('/') || null
+          }
+        />
         <p className="mt-3 text-xs text-text-faint">
-          以上信息由老师录入，学生本人不可修改。如有错误请联系老师。
+          以上信息由老师录入或自动计算，学生本人不可修改。如位次未显示，
+          请确保「阶段 1」中已填写总分和科类，系统会自动算出位次。
         </p>
       </Card>
 

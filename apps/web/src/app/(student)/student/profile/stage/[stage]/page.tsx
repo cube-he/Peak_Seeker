@@ -181,6 +181,57 @@ function Stage1Fields() {
           ]}
         />
       </Form.Item>
+      <Form.Item
+        noStyle
+        shouldUpdate={(prev, cur) => prev.examType !== cur.examType}
+      >
+        {({ getFieldValue, setFieldValue }) => {
+          const et = getFieldValue('examType');
+          const fixedFirst = et === 'PHYSICS' ? '物理' : et === 'HISTORY' ? '历史' : null;
+          // 自动同步 firstChoice 跟随 examType（首选科目就是科类对应的物理/历史）
+          if (fixedFirst && getFieldValue('firstChoice') !== fixedFirst) {
+            setFieldValue('firstChoice', fixedFirst);
+          }
+          return (
+            <Form.Item
+              name="firstChoice"
+              label="首选科目"
+              extra={
+                fixedFirst
+                  ? `根据科类自动设为「${fixedFirst}」`
+                  : '请先选择科类'
+              }
+            >
+              <Input disabled placeholder="选择科类后自动填充" />
+            </Form.Item>
+          );
+        }}
+      </Form.Item>
+      <Form.Item
+        name="reChoices"
+        label="再选科目（任选 2 门）"
+        rules={[
+          {
+            validator: (_, v) => {
+              if (!v || v.length === 0) return Promise.resolve();
+              if (v.length === 2) return Promise.resolve();
+              return Promise.reject(new Error('请正好选择 2 门再选科目'));
+            },
+          },
+        ]}
+      >
+        <Select
+          mode="multiple"
+          maxCount={2}
+          placeholder="化学 / 生物 / 政治 / 地理 中选 2 门"
+          options={[
+            { value: '化学', label: '化学' },
+            { value: '生物', label: '生物' },
+            { value: '政治', label: '政治' },
+            { value: '地理', label: '地理' },
+          ]}
+        />
+      </Form.Item>
       <Form.Item name="formFiller" label="填表人" rules={[{ required: true }]}>
         <Radio.Group>
           <Radio value="STUDENT">学生本人</Radio>
@@ -188,6 +239,41 @@ function Stage1Fields() {
           <Radio value="TOGETHER">共同填写</Radio>
         </Radio.Group>
       </Form.Item>
+
+      {/* 高考分数：学生自填，后端会用一分一段表自动算位次 */}
+      <Form.Item name="totalScore" label="高考总分">
+        <InputNumber
+          min={0}
+          max={750}
+          className="w-full"
+          placeholder="0~750"
+        />
+      </Form.Item>
+      <div className="grid grid-cols-3 gap-4">
+        <Form.Item name="scoreChinese" label="语文">
+          <InputNumber min={0} max={150} className="w-full" />
+        </Form.Item>
+        <Form.Item name="scoreMath" label="数学">
+          <InputNumber min={0} max={150} className="w-full" />
+        </Form.Item>
+        <Form.Item name="scoreEnglish" label="英语">
+          <InputNumber min={0} max={150} className="w-full" />
+        </Form.Item>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <Form.Item name="scoreFirstChoice" label="首选科目分">
+          <InputNumber min={0} max={100} className="w-full" />
+        </Form.Item>
+        <Form.Item name="scoreSub1" label="再选 1 分">
+          <InputNumber min={0} max={100} className="w-full" />
+        </Form.Item>
+        <Form.Item name="scoreSub2" label="再选 2 分">
+          <InputNumber min={0} max={100} className="w-full" />
+        </Form.Item>
+      </div>
+      <p className="text-xs text-text-faint">
+        提示：填好总分和科类后，系统会自动用一分一段表算出全省位次（位次仅老师可看）。
+      </p>
     </>
   );
 }

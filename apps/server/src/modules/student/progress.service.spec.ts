@@ -21,13 +21,24 @@ describe('ProgressService', () => {
         examType: 'PHYSICS',
         parentPhone: '13900000000',
         formFiller: 'STUDENT',
+        // 选科
+        firstChoice: '物理',
+        reChoices: ['化学', '生物'],
+        // 分数
+        totalScore: 600,
+        scoreChinese: 120,
+        scoreMath: 130,
+        scoreEnglish: 140,
+        scoreFirstChoice: 90,
+        scoreSub1: 80,
+        scoreSub2: 70,
       };
       const r = service.compute(profile as any);
       expect(r.stageProgress.stage1.completed).toBe(true);
       expect(r.stageProgress.stage2.completed).toBe(false);
       expect(r.stageProgress.stage3.completed).toBe(false);
       expect(r.studentSelfCompleteness).toBeGreaterThan(0);
-      expect(r.studentSelfCompleteness).toBeLessThan(20);
+      expect(r.studentSelfCompleteness).toBeLessThan(40);
       expect(r.isRecommendable).toBe(false);
     });
 
@@ -67,20 +78,24 @@ describe('ProgressService', () => {
 
     it('teacher 字段全填（含非空 bonusItems）+ stage1：isRecommendable=true', () => {
       const profile = {
+        // STAGE_1 全部 15 字段
         realName: '小王',
         phone: '13800000000',
         gender: 'MALE',
         examType: 'PHYSICS',
         parentPhone: '13900000000',
         formFiller: 'STUDENT',
+        firstChoice: '物理',
+        reChoices: ['化学', '生物'],
         totalScore: 600,
-        provincialRank: 1000,
         scoreChinese: 120,
         scoreMath: 130,
         scoreEnglish: 140,
         scoreFirstChoice: 90,
         scoreSub1: 80,
         scoreSub2: 70,
+        // ① TEACHER_ONLY 全部 10 字段
+        provincialRank: 1000,
         bonusPolicyStatus: 'NONE',
         bonusItems: [{ type: 'minority', value: 5 }],
         province: '四川',

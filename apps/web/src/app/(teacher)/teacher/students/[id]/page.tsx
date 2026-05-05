@@ -211,11 +211,7 @@ export default function StudentDetailPage() {
               },
               {
                 key: 'exam',
-                label: (
-                  <span className="flex items-center gap-1">
-                    <LockOutlined /> 考试成绩（① 老师独占）
-                  </span>
-                ),
+                label: '考试成绩（②，分数学生可填；位次自动计算）',
                 children: <ExamFields />,
               },
               {
@@ -390,11 +386,52 @@ function ExamFields() {
         </Form.Item>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Form.Item name="firstChoice" label="首选科目">
+          <Select
+            placeholder="物理 / 历史"
+            allowClear
+            options={[
+              { value: '物理', label: '物理' },
+              { value: '历史', label: '历史' },
+            ]}
+          />
+        </Form.Item>
+        <Form.Item
+          name="reChoices"
+          label="再选科目（任选 2 门）"
+          rules={[
+            {
+              validator: (_, v) => {
+                if (!v || v.length === 0) return Promise.resolve();
+                if (v.length === 2) return Promise.resolve();
+                return Promise.reject(new Error('需要正好 2 门'));
+              },
+            },
+          ]}
+        >
+          <Select
+            mode="multiple"
+            maxCount={2}
+            placeholder="化学/生物/政治/地理 选 2 门"
+            options={[
+              { value: '化学', label: '化学' },
+              { value: '生物', label: '生物' },
+              { value: '政治', label: '政治' },
+              { value: '地理', label: '地理' },
+            ]}
+          />
+        </Form.Item>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Form.Item name="totalScore" label="总分">
           <InputNumber min={0} max={750} className="w-full" />
         </Form.Item>
-        <Form.Item name="provincialRank" label="全省位次">
-          <InputNumber min={1} className="w-full" />
+        <Form.Item
+          name="provincialRank"
+          label="全省位次"
+          extra="由总分+科类+一分一段表自动计算（保存时刷新）"
+        >
+          <InputNumber min={1} className="w-full" disabled />
         </Form.Item>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

@@ -12,6 +12,17 @@ export const STAGE_1_REQUIRED = [
   'examType',
   'parentPhone',
   'formFiller',
+  // 选科组合（推荐算法硬约束）
+  'firstChoice',
+  'reChoices',
+  // 分数（学生自填；后端用 score-segment 自动计算位次）
+  'totalScore',
+  'scoreChinese',
+  'scoreMath',
+  'scoreEnglish',
+  'scoreFirstChoice',
+  'scoreSub1',
+  'scoreSub2',
 ] as const;
 
 export const STAGE_2_FIELDS = [
@@ -60,14 +71,7 @@ export const STAGE_3_FIELDS = [
 ] as const;
 
 export const TEACHER_ONLY_FIELDS = [
-  'totalScore',
   'provincialRank',
-  'scoreChinese',
-  'scoreMath',
-  'scoreEnglish',
-  'scoreFirstChoice',
-  'scoreSub1',
-  'scoreSub2',
   'bonusPolicyStatus',
   'bonusItems',
   'province',

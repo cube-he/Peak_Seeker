@@ -54,13 +54,21 @@ describe('StudentService', () => {
               studentSelfCompleteness: 50,
               teacherDataCompleteness: 50,
               stageProgress: {
-                stage1: { filled: 1, total: 6, completed: false },
+                stage1: { filled: 1, total: 15, completed: false },
                 stage2: { filled: 0, total: 15, completed: false },
                 stage3: { filled: 0, total: 24, completed: false },
               },
               overallCompleteness: 50,
               isRecommendable: false,
               missingFieldsForRecommend: [],
+            }),
+          },
+        },
+        {
+          provide: require('../score-segment/score-segment.service').ScoreSegmentService,
+          useValue: {
+            scoreToRank: jest.fn().mockResolvedValue({
+              year: 2026, examType: '物理', score: 600, rank: 28500, percentile: 0.04,
             }),
           },
         },
@@ -271,9 +279,8 @@ describe('StudentService', () => {
       });
 
       const result = await service.getMyProfile(100);
-      expect(result).not.toHaveProperty('totalScore');
+      // ① teacher-only 字段被过滤
       expect(result).not.toHaveProperty('provincialRank');
-      expect(result).not.toHaveProperty('scoreChinese');
       expect(result).not.toHaveProperty('province');
       expect(result).not.toHaveProperty('city');
       expect(result).not.toHaveProperty('county');
@@ -281,6 +288,9 @@ describe('StudentService', () => {
       expect(result).not.toHaveProperty('bonusItems');
       expect(result).not.toHaveProperty('bonusPolicyStatus');
       expect(result).not.toHaveProperty('examLocationProvince');
+      // ② 分数字段：学生自填，应该在响应中（即使值是老数据）
+      expect(result).toHaveProperty('totalScore');
+      expect(result).toHaveProperty('scoreChinese');
       // student-visible fields preserved
       expect(result).toHaveProperty('formFiller', 'STUDENT');
       expect(result).toHaveProperty('user');
@@ -310,11 +320,11 @@ describe('StudentService', () => {
   // ── updateMyProfile ─────────────────────────────────────
 
   describe('updateMyProfile', () => {
-    it('包含 TEACHER_ONLY 字段时抛 ForbiddenException', async () => {
+    it('包含 provincialRank 时抛 ForbiddenException（位次仅自动计算）', async () => {
       const dto = {
         dataVersion: 0,
         // ① teacher-only field
-        totalScore: 600,
+        provincialRank: 1000,
       };
       await expect(service.updateMyProfile(100, dto as any)).rejects.toThrow(
         ForbiddenException,
@@ -329,6 +339,21 @@ describe('StudentService', () => {
       await expect(service.updateMyProfile(100, dto as any)).rejects.toThrow(
         ForbiddenException,
       );
+    });
+
+    it('包含 totalScore 字段时正常通过（②，学生自填）', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1, userId: 100, dataVersion: 0,
+      });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 1, userId: 100, totalScore: 600, dataVersion: 1,
+        user: { id: 100, realName: '小王' },
+      });
+      const result = await service.updateMyProfile(100, {
+        dataVersion: 0,
+        totalScore: 600,
+      } as any);
+      expect(result).toHaveProperty('totalScore', 600);
     });
 
     it('正常字段写入成功', async () => {

@@ -40,17 +40,27 @@ describe('field-policy', () => {
     expect(new Set(ALL_STUDENT_EDITABLE_FIELDS)).toEqual(expected);
   });
 
-  it('TEACHER_ONLY_FIELDS 包含考试分数+位次+加分+户籍+高考所在地', () => {
+  it('TEACHER_ONLY_FIELDS 包含位次+加分+户籍+高考所在地（不含分数：分数学生自填）', () => {
     const required = [
-      'totalScore', 'provincialRank',
-      'scoreChinese', 'scoreMath', 'scoreEnglish',
-      'scoreFirstChoice', 'scoreSub1', 'scoreSub2',
+      'provincialRank', // 仅由 score-segment 自动计算，谁都不手填
       'bonusPolicyStatus', 'bonusItems',
       'province', 'city', 'county', 'isRural',
       'examLocationProvince', 'examLocationCity', 'examLocationCounty',
     ];
     for (const f of required) {
       expect(TEACHER_ONLY_FIELDS).toContain(f);
+    }
+  });
+
+  it('分数 + 选科 字段在 STAGE_1（学生自填，不在 TEACHER_ONLY）', () => {
+    const studentFillable = [
+      'totalScore',
+      'scoreChinese', 'scoreMath', 'scoreEnglish',
+      'scoreFirstChoice', 'scoreSub1', 'scoreSub2',
+      'firstChoice', 'reChoices',
+    ];
+    for (const f of studentFillable) {
+      expect(TEACHER_ONLY_FIELDS).not.toContain(f);
     }
   });
 
