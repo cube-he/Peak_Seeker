@@ -92,6 +92,7 @@ export interface UniversitySummary {
   is985: boolean;
   is211: boolean;
   isDoubleFirstClass: boolean;
+  logoUrl?: string | null;
 }
 
 // 专业摘要
@@ -110,6 +111,16 @@ export interface SupplementaryInfo {
   supplementaryRate: number | null; // 征集率 = 征集计划数 / 招生计划数 * 100
 }
 
+// 预估当年最低录取位次（来自 spec-0 模型）
+export interface PredictedMinRank {
+  point: number;
+  conservative: number;
+  optimistic: number;
+  basisYears: number[];
+  confidence: 'high' | 'medium' | 'low';
+  targetYear: number;
+}
+
 // 聚合录取结果 — 一条 = 一个"院校+专业"组合的完整画像
 export interface AggregatedAdmissionItem {
   university: UniversitySummary;
@@ -123,6 +134,7 @@ export interface AggregatedAdmissionItem {
   yearlyData: YearlyAdmissionData[];
   currentPlan: CurrentEnrollmentPlan | null;
   supplementary: SupplementaryInfo | null;
+  predictedMinRank: PredictedMinRank | null;
 }
 
 // 聚合查询参数
@@ -149,4 +161,21 @@ export interface AggregatedAdmissionResponse {
     pageSize: number;
     total: number;
   };
+}
+
+// 批量查 prediction 的请求
+export interface LookupPredictionsRequest {
+  keys: Array<{
+    universityId: number;
+    groupCode: string;
+    batch: string;
+    recruitType: string;
+    subjects: string;
+  }>;
+  targetYear?: number;
+}
+
+// 批量查 prediction 的响应（顺序与 request.keys 一致；找不到的返回 null）
+export interface LookupPredictionsResponse {
+  predictions: Array<PredictedMinRank | null>;
 }

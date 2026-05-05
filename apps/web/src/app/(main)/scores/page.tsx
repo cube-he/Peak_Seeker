@@ -4,21 +4,16 @@ import { useState } from 'react';
 import {
   Form,
   InputNumber,
+  Pagination,
   Select,
-  Table,
-  Tag,
+  Spin,
 } from 'antd';
-import {
-  SearchOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
-  MinusOutlined,
-} from '@ant-design/icons';
+import { SearchOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import StatCard from '@/components/ui/StatCard';
-import ExpandedAdmissionRow from './ExpandedAdmissionRow';
+import AdmissionRow from '@/components/admission/AdmissionRow';
+import LowConfidenceBanner from '@/components/admission/LowConfidenceBanner';
 import { admissionService } from '@/services/admission';
 import { useUserStore } from '@/stores/userStore';
 import {
@@ -30,77 +25,9 @@ import {
 import type {
   AggregatedAdmissionItem,
   AggregatedAdmissionQuery,
-  YearlyAdmissionData,
 } from '@volunteer-helper/shared';
 
 const { Option } = Select;
-
-// 取最佳可用分数：majorMinScore 优先，groupMinScore 兜底
-function getBestScore(yd: YearlyAdmissionData): number | null {
-  return yd.majorMinScore ?? yd.groupMinScore ?? null;
-}
-
-function getBestRank(yd: YearlyAdmissionData): number | null {
-  return yd.majorMinRank ?? yd.groupMinRank ?? null;
-}
-
-// 渲染近3年趋势（数字 + 涨跌箭头）
-function TrendCell({
-  yearlyData,
-  getValue,
-  reverse = false,
-}: {
-  yearlyData: YearlyAdmissionData[];
-  getValue: (yd: YearlyAdmissionData) => number | null;
-  reverse?: boolean; // true = 数值变小是好事（位次）
-}) {
-  const sorted = [...yearlyData].sort((a, b) => b.year - a.year);
-  const recent = sorted.slice(0, 3);
-
-  if (recent.length === 0) return <span className="text-text-faint">-</span>;
-
-  const values = recent.map((yd) => getValue(yd));
-  const latestVal = values.find((v) => v != null);
-  const prevVal = values.length >= 2 ? values.slice(1).find((v) => v != null) : null;
-
-  if (latestVal == null) return <span className="text-text-faint">-</span>;
-
-  let trendIcon = null;
-  if (prevVal != null) {
-    const diff = latestVal - prevVal;
-    if (diff > 0) {
-      const isGood = reverse;
-      trendIcon = (
-        <ArrowUpOutlined
-          className={`text-xs ml-1 ${isGood ? 'text-safe' : 'text-rush'}`}
-        />
-      );
-    } else if (diff < 0) {
-      const isGood = !reverse;
-      trendIcon = (
-        <ArrowDownOutlined
-          className={`text-xs ml-1 ${isGood ? 'text-safe' : 'text-rush'}`}
-        />
-      );
-    } else {
-      trendIcon = <MinusOutlined className="text-xs ml-1 text-text-faint" />;
-    }
-  }
-
-  return (
-    <div className="flex items-center justify-end">
-      <span className="[font-variant-numeric:tabular-nums] text-text-secondary text-xs">
-        {[...recent].reverse()
-          .map((yd) => {
-            const v = getValue(yd);
-            return v != null ? (v > 999 ? v.toLocaleString() : String(v)) : '-';
-          })
-          .join(' → ')}
-      </span>
-      {trendIcon}
-    </div>
-  );
-}
 
 // 筛选行组件（复用院校页模式）
 function FilterRow({
@@ -265,133 +192,6 @@ export default function ScoresPage() {
     setCurrentPage(1);
   };
 
-  const columns = [
-    {
-      title: '院校',
-      key: 'university',
-      width: 200,
-      render: (_: any, record: AggregatedAdmissionItem) => (
-        <div>
-          <Link
-            href={`/universities/${record.university.id}`}
-            className="font-medium text-primary hover:text-primary-light hover:underline transition-colors"
-          >
-            {record.university.name}
-          </Link>
-          <div className="flex items-center gap-1 mt-0.5">
-            <span className="text-xs text-text-muted">
-              {record.university.province}
-            </span>
-            {record.university.runningNature && record.university.runningNature !== '公办' && (
-              <Tag className="rounded-full border-0 bg-accent-fixed text-accent m-0 text-[10px] leading-4 px-1.5">
-                {record.university.runningNature}
-              </Tag>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-1 mt-0.5">
-            {record.university.is985 && (
-              <Tag className="rounded-full border-0 bg-accent-fixed text-accent m-0 text-[10px] leading-4 px-1.5">
-                985
-              </Tag>
-            )}
-            {record.university.is211 && (
-              <Tag className="rounded-full border-0 bg-primary-fixed text-primary m-0 text-[10px] leading-4 px-1.5">
-                211
-              </Tag>
-            )}
-            {record.university.isDoubleFirstClass && (
-              <Tag className="rounded-full border-0 bg-safe-fixed text-safe m-0 text-[10px] leading-4 px-1.5">
-                双一流
-              </Tag>
-            )}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: '专业',
-      key: 'major',
-      width: 180,
-      render: (_: any, record: AggregatedAdmissionItem) => (
-        <div>
-          <Link
-            href={`/majors/${record.major.id}`}
-            className="text-text hover:text-primary transition-colors"
-          >
-            {record.majorName}
-          </Link>
-          <div className="flex items-center gap-1 mt-0.5">
-            <span className="text-xs text-text-muted">{record.major.category}</span>
-            {record.major.softRating && (
-              <Tag className="rounded-full border-0 bg-accent-fixed text-accent m-0 text-[10px] leading-4 px-1.5">
-                {record.major.softRating}
-              </Tag>
-            )}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: '批次',
-      dataIndex: 'batch',
-      key: 'batch',
-      width: 100,
-      render: (val: string) => (
-        <span className="text-xs text-text-secondary">{val}</span>
-      ),
-    },
-    {
-      title: '近3年最低分',
-      key: 'scoreTrend',
-      width: 150,
-      render: (_: any, record: AggregatedAdmissionItem) => (
-        <TrendCell yearlyData={record.yearlyData} getValue={getBestScore} />
-      ),
-    },
-    {
-      title: '近3年最低位次',
-      key: 'rankTrend',
-      width: 160,
-      render: (_: any, record: AggregatedAdmissionItem) => (
-        <TrendCell yearlyData={record.yearlyData} getValue={getBestRank} reverse />
-      ),
-    },
-    {
-      title: '计划',
-      key: 'planCount',
-      width: 60,
-      render: (_: any, record: AggregatedAdmissionItem) => (
-        <span className="[font-variant-numeric:tabular-nums]">
-          {record.currentPlan?.planCount ?? '-'}
-        </span>
-      ),
-    },
-    {
-      title: '学费',
-      key: 'tuition',
-      width: 70,
-      render: (_: any, record: AggregatedAdmissionItem) => (
-        <span className="text-xs text-text-secondary [font-variant-numeric:tabular-nums]">
-          {record.currentPlan?.tuition
-            ? `${(record.currentPlan.tuition / 1000).toFixed(0)}k`
-            : '-'}
-        </span>
-      ),
-    },
-    {
-      title: '征集',
-      key: 'supplementary',
-      width: 70,
-      render: (_: any, record: AggregatedAdmissionItem) => {
-        if (!record.supplementary) return null;
-        return (
-          <Tag className="rounded-full border-0 bg-rush-fixed text-rush m-0 text-[10px] leading-4 px-1.5">
-            征集×{record.supplementary.totalRounds}
-          </Tag>
-        );
-      },
-    },
-  ];
 
   return (
     <MainLayout>
@@ -593,9 +393,9 @@ export default function ScoresPage() {
             </div>
           )}
 
-          {/* 结果表格 */}
-          <div className="bg-surface rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-border">
+          {/* 查询结果列表 */}
+          <div>
+            <div className="px-1 mb-3 flex items-center">
               <span className="font-sans font-semibold text-text text-sm">
                 查询结果
                 {result && (
@@ -605,63 +405,62 @@ export default function ScoresPage() {
                 )}
               </span>
             </div>
-            <Table
-              columns={columns}
-              dataSource={result?.data ?? []}
-              rowKey={(record: AggregatedAdmissionItem) =>
-                `${record.university.id}:${record.majorCode}:${record.groupCode}:${record.batch}:${record.recruitType}`
-              }
-              loading={isLoading}
-              expandable={{
-                expandedRowRender: (record: AggregatedAdmissionItem) => (
-                  <ExpandedAdmissionRow
-                    yearlyData={record.yearlyData}
-                    currentPlan={record.currentPlan}
-                    supplementary={record.supplementary}
-                  />
-                ),
-              }}
-              pagination={{
-                current: currentPage,
-                pageSize: currentPageSize,
-                total: result?.pagination.total ?? 0,
-                showSizeChanger: true,
-                showTotal: (total) => `共 ${total} 条`,
-                onChange: (p, ps) => {
-                  setCurrentPage(p);
-                  setCurrentPageSize(ps);
-                },
-              }}
-              size="small"
-              className="zhiyuanjia-table"
-              scroll={{ x: 920 }}
+
+            <LowConfidenceBanner
+              show={!!result?.data?.some((item: AggregatedAdmissionItem) => item.predictedMinRank?.confidence === 'low')}
             />
+
+            {isLoading ? (
+              <div className="flex justify-center py-12"><Spin size="large" /></div>
+            ) : result?.data && result.data.length > 0 ? (
+              <div>
+                {result.data.map((item: AggregatedAdmissionItem) => (
+                  <AdmissionRow
+                    key={`${item.university.id}:${item.majorCode}:${item.groupCode}:${item.batch}:${item.recruitType}`}
+                    data={{
+                      university: {
+                        id: item.university.id,
+                        name: item.university.name,
+                        logoUrl: item.university.logoUrl,
+                        is985: item.university.is985,
+                        is211: item.university.is211,
+                        isDoubleFirstClass: item.university.isDoubleFirstClass,
+                      },
+                      major: item.major ? { id: item.major.id, name: item.major.name } : null,
+                      majorName: item.majorName,
+                      groupCode: item.groupCode,
+                      batch: item.batch,
+                      recruitType: item.recruitType,
+                      subjects: item.subjects,
+                      predictedMinRank: item.predictedMinRank,
+                    }}
+                    userRank={examInfo.rank}
+                  />
+                ))}
+              </div>
+            ) : queryParams ? (
+              <div className="text-center py-12 text-text-muted">未找到符合条件的院校</div>
+            ) : (
+              <div className="text-center py-12 text-text-muted">请输入分数或位次开始查询</div>
+            )}
+
+            {result && result.pagination.total > 0 && (
+              <div className="flex justify-center mt-6">
+                <Pagination
+                  current={currentPage}
+                  pageSize={currentPageSize}
+                  total={result.pagination.total}
+                  showSizeChanger
+                  showQuickJumper
+                  showTotal={(total) => `共 ${total} 条`}
+                  onChange={(p, ps) => { setCurrentPage(p); setCurrentPageSize(ps); }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 表格样式覆盖 */}
-      <style jsx global>{`
-        .zhiyuanjia-table .ant-table {
-          background: transparent;
-        }
-        .zhiyuanjia-table .ant-table-thead > tr > th {
-          background: var(--color-surface-dim) !important;
-          border-bottom: 1px solid var(--color-border-subtle) !important;
-          color: var(--color-text-secondary) !important;
-          font-weight: 600;
-          font-size: 13px;
-        }
-        .zhiyuanjia-table .ant-table-tbody > tr > td {
-          border-bottom: 1px solid var(--color-border-subtle) !important;
-        }
-        .zhiyuanjia-table .ant-table-tbody > tr:hover > td {
-          background: var(--color-surface-dim) !important;
-        }
-        .zhiyuanjia-table .ant-table-expanded-row > td {
-          background: var(--color-surface-dim) !important;
-        }
-      `}</style>
     </MainLayout>
   );
 }

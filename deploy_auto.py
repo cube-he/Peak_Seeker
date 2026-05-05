@@ -67,6 +67,21 @@ UPLOAD_MAP = {
             'image_preprocessor.py', 'requirements.txt', 'setup.sh',
         ],
     },
+    # 服务器端 ts-node 运行的运维脚本（ETL/seed/校准）
+    'server_scripts': {
+        'local': os.path.join(LOCAL_SERVER, 'scripts'),
+        'remote': 'apps/server/scripts',
+    },
+    # 运维脚本通过 ts-node 引用的纯函数模块（subject-normalize / predict 等）
+    'server_src_scripts': {
+        'local': os.path.join(LOCAL_SERVER, 'src', 'scripts'),
+        'remote': 'apps/server/src/scripts',
+    },
+    # 配置文件目录（rank-prediction.json 等运行时配置）
+    'config': {
+        'local': os.path.join(LOCAL_ROOT, 'config'),
+        'remote': 'config',
+    },
 }
 
 # 需要上传的脚本文件

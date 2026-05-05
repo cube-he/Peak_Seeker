@@ -1,0 +1,6 @@
+{
+  "targetYear": 2026,
+  "switchTrigger": "manual",
+  "lastSwitchedAt": "2026-05-04",
+  "policyNote": "切换条件：上一年度填报+录取批次完整闭环后才推进 targetYear。运行时由 etl-predict-rank.ts 与 admission.service 共同读取此文件。"
+}

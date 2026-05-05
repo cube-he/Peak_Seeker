@@ -240,6 +240,7 @@ model University {
   enrollmentPlans  EnrollmentPlan[]
   admissionRecords AdmissionRecord[]
   favorites        Favorite[]
+  rankPredictions  RankPrediction[]
 
   @@index([province])
   @@index([city])
@@ -1446,4 +1447,55 @@ model TimelineEvent {
   @@unique([key, year])
   @@index([year])
   @@map("timeline_events")
+}
+
+// ==================== 位次预测 ====================
+
+model ProvinceYearStat {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  province String @db.VarChar(50)
+  year     Int    @db.SmallInt
+  examType String @map("exam_type") @db.VarChar(50) // canonical: 物理 | 历史 | 全部
+
+  registrants     Int? // 报名人数（教育考试院通报）
+  examineesActual Int? @map("examinees_actual") // 实际参考人数
+  rankedCount     Int? @map("ranked_count") // 一分一段最大累计（自推算）
+
+  source      String   @db.VarChar(500)
+  fetchedDate DateTime @map("fetched_date")
+  notes       String?  @db.Text
+
+  @@unique([province, year, examType])
+  @@index([year])
+  @@map("province_year_stats")
+}
+
+model RankPrediction {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  universityId Int        @map("university_id")
+  university   University @relation(fields: [universityId], references: [id])
+
+  groupCode   String @map("group_code") @db.VarChar(50)
+  batch       String @db.VarChar(50)
+  recruitType String @map("recruit_type") @db.VarChar(100)
+  subjects    String @db.VarChar(50) // canonical 物理|历史
+  targetYear  Int    @map("target_year") @db.SmallInt
+
+  pointRank        Int? @map("point_rank")
+  conservativeRank Int? @map("conservative_rank")
+  optimisticRank   Int? @map("optimistic_rank")
+  basisYears       Json @map("basis_years") // [2024, 2023, 2022]
+  confidence       String @db.VarChar(20) // high|medium|low
+
+  computedAt DateTime @default(now()) @map("computed_at")
+
+  @@unique([universityId, groupCode, batch, recruitType, subjects, targetYear], name: "rank_pred_natural_key")
+  @@index([targetYear, subjects])
+  @@map("rank_predictions")
 }

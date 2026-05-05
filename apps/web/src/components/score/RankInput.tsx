@@ -5,7 +5,7 @@ import { useStudentRank } from '@/stores/studentRankStore';
 import { scoreSegmentApi, type ExamType } from '@/services/score-segment';
 import { EquivalentScores } from './EquivalentScores';
 
-const EXAM_TYPES: ExamType[] = ['物理', '历史', '理科', '文科'];
+const EXAM_TYPES: ExamType[] = ['物理', '历史'];
 const CURRENT_YEAR = new Date().getFullYear();
 // 2026 一分一段表通常 6 月底才出，前面用 2025 代理
 const PROXY_YEAR = CURRENT_YEAR < 2026 || new Date().getMonth() < 5 ? 2025 : CURRENT_YEAR;

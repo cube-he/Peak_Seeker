@@ -36,8 +36,12 @@ export class UniversityController {
   @Get(':id')
   @ApiOperation({ summary: '获取院校详情' })
   @ApiParam({ name: 'id', type: Number })
-  async findById(@Param('id', ParseIntPipe) id: number) {
-    return this.universityService.findById(id);
+  @ApiQuery({ name: 'subject', required: false, type: String })
+  async findById(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('subject') subject?: string,
+  ) {
+    return this.universityService.findById(id, subject);
   }
 
   @Get(':id/majors')

@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Card, Tabs, Table, Space, Descriptions, Spin } from 'antd';
+import { Card, Tabs, Space, Spin } from 'antd';
 import {
   BankOutlined,
   BookOutlined,
@@ -17,15 +17,27 @@ import { universityService } from '@/services/university';
 import RankingCard from '@/components/university/RankingCard';
 import SatisfactionCard from '@/components/university/SatisfactionCard';
 import EmploymentCard from '@/components/university/EmploymentCard';
+import OverviewCard from '@/components/university/OverviewCard';
+import DisciplineCard from '@/components/university/DisciplineCard';
+import CampusCard from '@/components/university/CampusCard';
+import CharterCard from '@/components/university/CharterCard';
 import QiangjiTable from '@/components/university/QiangjiTable';
+import UniversityLogo from '@/components/university/UniversityLogo';
+import PlanPivotTable from '@/components/university/PlanPivotTable';
+import AdmissionPivotTable from '@/components/university/AdmissionPivotTable';
+import HeroBanner from '@/components/admission/HeroBanner';
+import { useUserStore } from '@/stores/userStore';
 
 export default function UniversityDetailPage() {
   const params = useParams();
   const id = Number(params.id);
 
+  const { examInfo } = useUserStore();
+  const userSubject = examInfo.subjects?.[0];
+
   const { data: university, isLoading } = useQuery({
-    queryKey: ['university', id],
-    queryFn: () => universityService.getById(id),
+    queryKey: ['university', id, userSubject],
+    queryFn: () => universityService.getById(id, userSubject),
     enabled: !!id,
   });
 
@@ -61,172 +73,80 @@ export default function UniversityDetailPage() {
 
   const u = university;
 
-  const planColumns = [
-    {
-      title: '专业组',
-      key: 'group',
-      width: 100,
-      render: (_: any, r: any) => (
-        <span className="text-text-tertiary text-[13px]">{r.groupCode || '-'}</span>
-      ),
-    },
-    {
-      title: '专业名称',
-      dataIndex: ['major', 'name'],
-      key: 'majorName',
-      render: (text: string, r: any) => (
-        <Link href={`/majors/${r.majorId}`} className="text-primary font-medium hover:text-primary-light">
-          {text}
-        </Link>
-      ),
-    },
-    { title: '计划数', dataIndex: 'planCount', key: 'planCount', width: 80, render: (v: number) => v ?? '-' },
-    { title: '批次', dataIndex: 'batch', key: 'batch', width: 90 },
-    { title: '选科', dataIndex: 'subjects', key: 'subjects', width: 110, ellipsis: true },
-    {
-      title: '学费',
-      dataIndex: 'tuition',
-      key: 'tuition',
-      width: 90,
-      render: (v: number) => v ? <span className="text-text">{v}</span> : '-',
-    },
-    {
-      title: '学科评估',
-      dataIndex: 'disciplineEval',
-      key: 'disciplineEval',
-      width: 90,
-      render: (v: string) => v ? (
-        <span className="inline-block rounded-full bg-primary-fixed text-primary text-xs font-medium px-3 py-0.5">{v}</span>
-      ) : '-',
-    },
-    {
-      title: '国家特色',
-      dataIndex: 'isNationalFeature',
-      key: 'isNationalFeature',
-      width: 80,
-      render: (v: boolean) => v ? (
-        <span className="inline-block rounded-full bg-accent-fixed text-accent text-xs font-medium px-3 py-0.5">是</span>
-      ) : '-',
-    },
-    {
-      title: '专业排名',
-      dataIndex: 'majorRanking',
-      key: 'majorRanking',
-      width: 90,
-      render: (v: string) => v ? <span className="font-medium text-text">{v}</span> : '-',
-    },
-  ];
-
-  const admissionColumns = [
-    {
-      title: '专业名称',
-      dataIndex: ['major', 'name'],
-      key: 'majorName',
-      render: (text: string, r: any) => (
-        <Link href={`/majors/${r.majorId}`} className="text-primary hover:text-primary-light">{text}</Link>
-      ),
-    },
-    { title: '年份', dataIndex: 'year', key: 'year', width: 70 },
-    {
-      title: '最低分',
-      dataIndex: 'majorMinScore',
-      key: 'majorMinScore',
-      width: 80,
-      render: (v: number) => v ? <span className="font-medium text-text">{v}</span> : '-',
-    },
-    {
-      title: '最低位次',
-      dataIndex: 'majorMinRank',
-      key: 'majorMinRank',
-      width: 100,
-      render: (v: number) => v ? <span className="text-text-secondary">{v.toLocaleString()}</span> : '-',
-    },
-    {
-      title: '录取人数',
-      dataIndex: 'majorAdmissionCount',
-      key: 'majorAdmissionCount',
-      width: 90,
-      render: (v: number) => v ?? '-',
-    },
-  ];
-
   const tabItems = [
     {
       key: 'info',
       label: <span><BankOutlined className="mr-1" />基本信息</span>,
       children: (
-        <>
-          <Descriptions bordered column={{ xs: 1, sm: 2 }} size="small">
-            <Descriptions.Item label="院校代码">{u.code || '-'}</Descriptions.Item>
-            <Descriptions.Item label="省份/城市">{[u.province, u.city].filter(Boolean).join(' · ') || '-'}</Descriptions.Item>
-            <Descriptions.Item label="类型">{u.type || '-'}</Descriptions.Item>
-            <Descriptions.Item label="层次">{u.level || '-'}</Descriptions.Item>
-            <Descriptions.Item label="办学性质">{u.runningNature || '-'}</Descriptions.Item>
-            <Descriptions.Item label="主管部门">{u.department || '-'}</Descriptions.Item>
-            <Descriptions.Item label="院校排名">{u.ranking ? <span className="font-semibold text-primary">第 {u.ranking} 名</span> : '-'}</Descriptions.Item>
-            <Descriptions.Item label="考研率">{u.postgradRate || '-'}</Descriptions.Item>
-            <Descriptions.Item label="转专业难度">{u.transferDifficulty || '-'}</Descriptions.Item>
-            <Descriptions.Item label="学科评估">{u.disciplineEvaluationLevel || '-'}</Descriptions.Item>
-            <Descriptions.Item label="硕士点">{u.hasMasterProgram ? `${u.masterProgramCount || ''}个` : '无'}</Descriptions.Item>
-            <Descriptions.Item label="博士点">{u.hasDoctoralProgram ? `${u.doctoralProgramCount || ''}个` : '无'}</Descriptions.Item>
-            {u.renameHistory && (
-              <Descriptions.Item label="更名信息" span={2}>{u.renameHistory}</Descriptions.Item>
-            )}
-            {u.admissionGuide && (
-              <Descriptions.Item label="招生章程" span={2}>
-                <div className="max-h-[200px] overflow-auto whitespace-pre-wrap text-[13px]">{u.admissionGuide}</div>
-              </Descriptions.Item>
-            )}
-          </Descriptions>
-          <RankingCard
-            rankingSoft={u.rankingSoft ?? null}
-            rankingAlumni={u.rankingAlumni ?? null}
-            rankingQS={u.rankingQS ?? null}
-            rankingUSNews={u.rankingUSNews ?? null}
-            aClassDisciplineCount={u.aClassDisciplineCount ?? null}
+        <div className="py-4 space-y-4">
+          <CharterCard
+            renameHistory={u.renameHistory ?? null}
+            admissionGuide={u.admissionGuide ?? null}
+            charterInfo={u.charterInfo ?? null}
           />
-          <SatisfactionCard
-            overall={u.satisfactionOverall ?? null}
-            life={u.satisfactionLife ?? null}
-            environ={u.satisfactionEnviron ?? null}
-            count={u.satisfactionCount ?? null}
-          />
-          <EmploymentCard
-            employmentRate={u.employmentRate ?? null}
-            furtherStudyRate={u.furtherStudyRate ?? null}
-            avgSalary={u.avgSalary ?? null}
-            topEmployers={u.topEmployers ?? null}
-          />
-        </>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <OverviewCard
+              code={u.code ?? null}
+              province={u.province ?? null}
+              city={u.city ?? null}
+              type={u.type ?? null}
+              level={u.level ?? null}
+              runningLevel={u.runningLevel ?? null}
+              runningNature={u.runningNature ?? null}
+              department={u.department ?? null}
+              createdYear={u.createdYear ?? null}
+              campusArea={u.campusArea ?? null}
+              maleRatio={u.maleRatio ?? null}
+              femaleRatio={u.femaleRatio ?? null}
+              tags={u.tags ?? null}
+            />
+            <DisciplineCard
+              disciplineEvaluationLevel={u.disciplineEvaluationLevel ?? null}
+              aClassDisciplineCount={u.aClassDisciplineCount ?? null}
+              hasMasterProgram={!!u.hasMasterProgram}
+              masterProgramCount={u.masterProgramCount ?? null}
+              masterPrograms={u.masterPrograms ?? null}
+              hasDoctoralProgram={!!u.hasDoctoralProgram}
+              doctoralProgramCount={u.doctoralProgramCount ?? null}
+              doctoralPrograms={u.doctoralPrograms ?? null}
+              postgradRate={u.postgradRate ?? null}
+              transferDifficulty={u.transferDifficulty ?? null}
+            />
+            <CampusCard
+              militaryTrainingDuration={u.militaryTrainingDuration ?? null}
+            />
+            <RankingCard
+              rankingSoft={u.rankingSoft ?? null}
+              rankingAlumni={u.rankingAlumni ?? null}
+              rankingQS={u.rankingQS ?? null}
+              rankingUSNews={u.rankingUSNews ?? null}
+              aClassDisciplineCount={u.aClassDisciplineCount ?? null}
+            />
+            <SatisfactionCard
+              overall={u.satisfactionOverall ?? null}
+              life={u.satisfactionLife ?? null}
+              environ={u.satisfactionEnviron ?? null}
+              count={u.satisfactionCount ?? null}
+            />
+            <EmploymentCard
+              employmentRate={u.employmentRate ?? null}
+              furtherStudyRate={u.furtherStudyRate ?? null}
+              avgSalary={u.avgSalary ?? null}
+              topEmployers={u.topEmployers ?? null}
+            />
+          </div>
+        </div>
       ),
     },
     {
       key: 'plans',
       label: <span><BookOutlined className="mr-1" />招生计划 ({majors?.length || 0})</span>,
-      children: (
-        <Table
-          columns={planColumns}
-          dataSource={majors || []}
-          rowKey="id"
-          scroll={{ x: 900 }}
-          size="small"
-          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
-        />
-      ),
+      children: <PlanPivotTable data={majors} />,
     },
     {
       key: 'admissions',
       label: <span><HistoryOutlined className="mr-1" />历年录取 ({admissions?.length || 0})</span>,
-      children: (
-        <Table
-          columns={admissionColumns}
-          dataSource={admissions || []}
-          rowKey="id"
-          scroll={{ x: 600 }}
-          size="small"
-          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
-        />
-      ),
+      children: <AdmissionPivotTable data={admissions} />,
     },
     // Only show the tab when there is qiangji data
     ...(u.qiangjiAdmissions?.length > 0
@@ -251,10 +171,11 @@ export default function UniversityDetailPage() {
 
       {/* Hero Header Card */}
       <div className="rounded-xl bg-surface shadow-card p-6 md:p-8 mb-4">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="font-serif text-[36px] font-semibold text-text m-0">{u.name}</h1>
+        <div className="flex items-start gap-5 flex-wrap">
+          <UniversityLogo name={u.name} logoUrl={u.logoUrl} size={80} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <h1 className="font-serif text-[32px] font-semibold text-text m-0">{u.name}</h1>
               <Space size={4}>
                 {u.is985 && (
                   <span className="inline-block rounded-full bg-surface-dim text-text-secondary text-xs font-medium px-3 py-0.5">985</span>
@@ -270,20 +191,19 @@ export default function UniversityDetailPage() {
             <div className="flex items-center gap-1 text-sm text-text-tertiary">
               <EnvironmentOutlined />
               {[u.province, u.city, u.type, u.level, u.runningNature].filter(Boolean).join(' · ')}
+              {u.ranking && <span className="ml-2">· 全国排名 #{u.ranking}</span>}
             </div>
           </div>
-          <div className="flex items-start gap-3">
-            {u.ranking && (
-              <div className="bg-surface rounded-lg shadow-card p-5 border-l-[3px] border-l-accent text-center">
-                <div className="text-2xl font-bold text-primary font-serif">{u.ranking}</div>
-                <div className="text-xs text-text-muted">全国排名</div>
-              </div>
-            )}
-            <div className="w-[280px]">
-              <RankInput variant="compact" className="!bg-surface !border-border" />
-            </div>
+          <div className="w-[280px]">
+            <RankInput variant="compact" className="!bg-surface !border-border" />
           </div>
         </div>
+
+        <HeroBanner
+          university={{ is985: u.is985, is211: u.is211 }}
+          prediction={u.bestPrediction ?? null}
+          userRank={examInfo.rank}
+        />
       </div>
 
       {/* Tabs Card */}

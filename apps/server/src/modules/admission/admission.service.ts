@@ -1,6 +1,38 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { FindAggregatedDto } from './dto/find-aggregated.dto';
+import * as fs from 'fs';
+import * as path from 'path';
+
+let _cachedTargetYear: number | null = null;
+
+/**
+ * Returns the configured target year for rank predictions.
+ * Reads `config/rank-prediction.json` once and caches.
+ * Falls back to current calendar year if config missing.
+ */
+function getTargetYear(): number {
+  if (_cachedTargetYear !== null) return _cachedTargetYear;
+  // Resolve from project root (process.cwd() when server starts there)
+  // Two candidates cover all documented launch modes:
+  //   - Project root cwd (rare): candidate 1
+  //   - apps/server/ cwd (common: nest start, node dist/main): candidate 2
+  const candidates = [
+    path.resolve(process.cwd(), 'config/rank-prediction.json'),
+    path.resolve(process.cwd(), '../../config/rank-prediction.json'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      const cfg = JSON.parse(fs.readFileSync(p, 'utf-8'));
+      if (Number.isInteger(cfg.targetYear)) {
+        _cachedTargetYear = cfg.targetYear as number;
+        return _cachedTargetYear as number;
+      }
+    }
+  }
+  _cachedTargetYear = new Date().getFullYear();
+  return _cachedTargetYear;
+}
 
 @Injectable()
 export class AdmissionService {
@@ -171,6 +203,7 @@ export class AdmissionService {
             is985: true,
             is211: true,
             isDoubleFirstClass: true,
+            logoUrl: true,
           },
         },
         major: {
@@ -355,12 +388,122 @@ export class AdmissionService {
           };
         }
       }
+
+      // Inject predictedMinRank — multi-to-one join (same prediction shared across
+      // all majors in the same group). spec-0 ETL writes one row per
+      // (uniId, groupCode, batch, recruitType, subjects, targetYear).
+      const targetYear = getTargetYear();
+
+      const preds = await this.prisma.rankPrediction.findMany({
+        where: {
+          targetYear,
+          OR: paginatedGroups.map((g) => ({
+            universityId: g.university.id,
+            groupCode: g.groupCode,
+            batch: g.batch,
+            recruitType: g.recruitType,
+            subjects: g.subjects,
+          })),
+        },
+      });
+
+      const predMap = new Map<string, (typeof preds)[number]>();
+      for (const p of preds) {
+        const k = [p.universityId, p.groupCode, p.batch, p.recruitType, p.subjects].join('|');
+        predMap.set(k, p);
+      }
+
+      for (const g of paginatedGroups) {
+        const k = [g.university.id, g.groupCode, g.batch, g.recruitType, g.subjects].join('|');
+        const pred = predMap.get(k);
+        (g as any).predictedMinRank = pred
+          ? {
+              point: pred.pointRank,
+              conservative: pred.conservativeRank,
+              optimistic: pred.optimisticRank,
+              basisYears: pred.basisYears as number[],
+              confidence: pred.confidence,
+              targetYear: pred.targetYear,
+            }
+          : null;
+      }
     }
 
     return {
       data: paginatedGroups,
       pagination: { page, pageSize, total },
     };
+  }
+
+  /**
+   * Read targetYear from config — exposed as a method so other services can call.
+   * Wraps the existing module-level getTargetYear() helper.
+   */
+  async getTargetYear(): Promise<number> {
+    return getTargetYear();
+  }
+
+  /**
+   * Batch lookup of RankPrediction by natural-key tuples.
+   * Used by other services (university, major, plan endpoints) that need to
+   * inject predictedMinRank without rebuilding the query each time.
+   *
+   * Returns a Map from "uniId|groupCode|batch|recruitType|subjects" → prediction object.
+   */
+  async lookupPredictionsByKeys(
+    keys: Array<{
+      universityId: number;
+      groupCode: string;
+      batch: string;
+      recruitType: string;
+      subjects: string;
+    }>,
+    targetYearOverride?: number,
+  ): Promise<Map<string, {
+    point: number;
+    conservative: number;
+    optimistic: number;
+    basisYears: number[];
+    confidence: string;
+    targetYear: number;
+  }>> {
+    if (keys.length === 0) return new Map();
+
+    const targetYear = targetYearOverride ?? (await this.getTargetYear());
+
+    const preds = await this.prisma.rankPrediction.findMany({
+      where: {
+        targetYear,
+        OR: keys.map((k) => ({
+          universityId: k.universityId,
+          groupCode: k.groupCode,
+          batch: k.batch,
+          recruitType: k.recruitType,
+          subjects: k.subjects,
+        })),
+      },
+    });
+
+    const result = new Map<string, {
+      point: number;
+      conservative: number;
+      optimistic: number;
+      basisYears: number[];
+      confidence: string;
+      targetYear: number;
+    }>();
+    for (const p of preds) {
+      const k = [p.universityId, p.groupCode, p.batch, p.recruitType, p.subjects].join('|');
+      result.set(k, {
+        point: p.pointRank!,
+        conservative: p.conservativeRank!,
+        optimistic: p.optimisticRank!,
+        basisYears: p.basisYears as number[],
+        confidence: p.confidence,
+        targetYear: p.targetYear,
+      });
+    }
+    return result;
   }
 
   // 取最新年份的最佳可用分数（majorMinScore 优先，groupMinScore 兜底）

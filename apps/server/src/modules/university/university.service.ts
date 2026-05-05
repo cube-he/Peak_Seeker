@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { QueryUniversityDto } from './dto/query-university.dto';
+import { AdmissionService } from '../admission/admission.service';
 
 @Injectable()
 export class UniversityService {
   constructor(
     private prisma: PrismaService,
     private redis: RedisService,
+    private admissionService: AdmissionService,
   ) {}
 
   async findAll(query: QueryUniversityDto) {
@@ -79,8 +81,8 @@ export class UniversityService {
     };
   }
 
-  async findById(id: number) {
-    const cacheKey = `university:${id}`;
+  async findById(id: number, subject?: string) {
+    const cacheKey = `university:${id}:subject:${subject ?? 'none'}`;
     const cached = await this.redis.getCache(cacheKey);
     if (cached) return cached;
 
@@ -108,10 +110,50 @@ export class UniversityService {
       orderBy: [{ major: 'asc' }, { year: 'desc' }],
     });
 
-    const result = { ...university, qiangjiAdmissions };
+    // bestPrediction: among 普通类本科 / 普通类高职(专科) recruitTypes that match
+    // user's subject, pick the one with the smallest pointRank
+    // (hardest to get into = "best benchmark").
+    let bestPrediction:
+      | {
+          point: number;
+          conservative: number;
+          optimistic: number;
+          basisYears: number[];
+          confidence: string;
+          targetYear: number;
+          subjects: string;
+          batch: string;
+        }
+      | null = null;
+    if (subject) {
+      const targetYear = await this.admissionService.getTargetYear();
+      const candidates = await this.prisma.rankPrediction.findMany({
+        where: {
+          universityId: id,
+          targetYear,
+          subjects: subject,
+          recruitType: { in: ['普通类本科', '普通类高职(专科)'] },
+        },
+        orderBy: { pointRank: 'asc' },
+        take: 1,
+      });
+      if (candidates.length > 0) {
+        const p = candidates[0];
+        bestPrediction = {
+          point: p.pointRank!,
+          conservative: p.conservativeRank!,
+          optimistic: p.optimisticRank!,
+          basisYears: p.basisYears as number[],
+          confidence: p.confidence,
+          targetYear: p.targetYear,
+          subjects: p.subjects,
+          batch: p.batch,
+        };
+      }
+    }
 
+    const result = { ...university, qiangjiAdmissions, bestPrediction };
     await this.redis.setCache(cacheKey, result, 3600);
-
     return result;
   }
 
