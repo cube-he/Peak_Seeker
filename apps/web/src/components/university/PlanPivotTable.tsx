@@ -21,6 +21,7 @@ export default function PlanPivotTable({ data }: Props) {
     const normalized: RawPlan[] = data.map((p) => ({
       year: p.year,
       majorName: p.major?.name ?? p.majorName ?? '',
+      majorCode: p.majorCode ?? '',
       groupCode: p.groupCode ?? '',
       recruitType: p.recruitType ?? '',
       subjects: p.subjects ?? '',
@@ -71,12 +72,17 @@ export default function PlanPivotTable({ data }: Props) {
     {
       title: '专业名称',
       key: 'majorName',
-      width: 200,
+      width: 220,
       fixed: 'left' as const,
       render: (_, r) => (
-        <Link href={`/majors/${r.majorId}`} className="text-primary font-medium hover:text-primary-light">
-          {r.majorName}
-        </Link>
+        <div className="leading-tight">
+          <Link href={`/majors/${r.majorId}`} className="text-primary font-medium hover:text-primary-light">
+            {r.majorName}
+          </Link>
+          {r.majorCode && (
+            <div className="text-text-tertiary text-[12px] mt-0.5 font-mono">{r.majorCode}</div>
+          )}
+        </div>
       ),
     },
     {

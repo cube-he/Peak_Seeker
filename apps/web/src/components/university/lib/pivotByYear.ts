@@ -1,11 +1,12 @@
 /**
- * GROUP BY (majorName + groupCode + recruitType + subjects) → 透视为按年份的二维结构。
- * 同名跨组/跨招生类型/跨选科组合不合并（与 7 字段自然主键策略一致）。
+ * GROUP BY (majorName + majorCode + groupCode + recruitType + subjects) → 透视为按年份的二维结构。
+ * 同名跨代码/跨组/跨招生类型/跨选科组合不合并（与 7 字段自然主键策略一致）。
  */
 
 export interface RawYearRecord {
   year: number;
   majorName: string;
+  majorCode: string;
   groupCode: string;
   recruitType: string;
   subjects: string;
@@ -31,6 +32,7 @@ export interface PivotOptions<F extends string> {
 export interface PivotRow<F extends string> {
   rowKey: string;
   majorName: string;
+  majorCode: string;
   groupCode: string;
   recruitType: string;
   subjects: string;
@@ -45,7 +47,7 @@ export interface PivotResult<F extends string> {
 }
 
 const buildRowKey = (r: RawYearRecord) =>
-  `${r.majorName}||${r.groupCode}||${r.recruitType}||${r.subjects}`;
+  `${r.majorName}||${r.majorCode}||${r.groupCode}||${r.recruitType}||${r.subjects}`;
 
 export function pivotByYear<R extends RawYearRecord, F extends string>(
   records: R[],
@@ -70,6 +72,7 @@ export function pivotByYear<R extends RawYearRecord, F extends string>(
       row = {
         rowKey: key,
         majorName: r.majorName,
+        majorCode: r.majorCode,
         groupCode: r.groupCode,
         recruitType: r.recruitType,
         subjects: r.subjects,

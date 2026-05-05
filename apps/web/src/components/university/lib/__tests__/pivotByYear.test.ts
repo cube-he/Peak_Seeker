@@ -3,6 +3,7 @@ import { pivotByYear } from '../pivotByYear';
 type Rec = {
   year: number;
   majorName: string;
+  majorCode: string;
   groupCode: string;
   recruitType: string;
   subjects: string;
@@ -14,6 +15,7 @@ type Rec = {
 const base = (over: Partial<Rec>): Rec => ({
   year: 2024,
   majorName: '计算机',
+  majorCode: '080901',
   groupCode: '01',
   recruitType: '普通类本科',
   subjects: '物理',
@@ -48,6 +50,18 @@ describe('pivotByYear', () => {
       { fields: ['planCount'] },
     );
     expect(out.rows).toHaveLength(2);
+  });
+
+  it('does NOT collapse same major name with different majorCode', () => {
+    const out = pivotByYear<Rec, 'planCount'>(
+      [
+        base({ majorName: '计算机类', majorCode: '080901', planCount: 60 }),
+        base({ majorName: '计算机类', majorCode: '080902', planCount: 30 }),
+      ],
+      { fields: ['planCount'] },
+    );
+    expect(out.rows).toHaveLength(2);
+    expect(out.rows.map((r) => r.majorCode).sort()).toEqual(['080901', '080902']);
   });
 
   it('does NOT collapse same major across different recruitType / subjects', () => {

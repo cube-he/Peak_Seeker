@@ -25,6 +25,7 @@ export default function AdmissionPivotTable({ data }: Props) {
     const normalized: RawAdm[] = data.map((a) => ({
       year: a.year,
       majorName: a.major?.name ?? a.majorName ?? '',
+      majorCode: a.majorCode ?? '',
       groupCode: a.groupCode ?? '',
       recruitType: a.recruitType ?? '',
       subjects: a.subjects ?? '',
@@ -126,12 +127,17 @@ export default function AdmissionPivotTable({ data }: Props) {
     {
       title: '专业名称',
       key: 'majorName',
-      width: 200,
+      width: 220,
       fixed: 'left' as const,
       render: (_, r) => (
-        <Link href={`/majors/${r.majorId}`} className="text-primary hover:text-primary-light">
-          {r.majorName}
-        </Link>
+        <div className="leading-tight">
+          <Link href={`/majors/${r.majorId}`} className="text-primary hover:text-primary-light">
+            {r.majorName}
+          </Link>
+          {r.majorCode && (
+            <div className="text-text-tertiary text-[12px] mt-0.5 font-mono">{r.majorCode}</div>
+          )}
+        </div>
       ),
     },
     {
