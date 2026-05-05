@@ -1,0 +1,109 @@
+import { Injectable } from '@nestjs/common';
+import {
+  TEACHER_ONLY_FIELDS,
+  STAGE_1_REQUIRED,
+  STAGE_2_FIELDS,
+  STAGE_3_FIELDS,
+  STUDENT_ONLY_FIELDS,
+} from './field-policy';
+
+export interface StageStatus {
+  filled: number;
+  total: number;
+  completed: boolean;
+}
+
+export interface ProfileProgress {
+  studentSelfCompleteness: number;
+  teacherDataCompleteness: number;
+  stageProgress: {
+    stage1: StageStatus;
+    stage2: StageStatus;
+    stage3: StageStatus;
+  };
+  overallCompleteness: number;
+  isRecommendable: boolean;
+  missingFieldsForRecommend: string[];
+}
+
+@Injectable()
+export class ProgressService {
+  /** 字段已填判定：null/undefined 视为未填；空数组视为未填；空字符串视为未填 */
+  private isFilled(value: unknown): boolean {
+    if (value === null || value === undefined) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.length > 0;
+    return true;
+  }
+
+  private countFilled(profile: Record<string, unknown>, fields: readonly string[]): number {
+    return fields.filter((f) => this.isFilled(profile[f])).length;
+  }
+
+  compute(profile: Record<string, unknown>): ProfileProgress {
+    const stage1Filled = this.countFilled(profile, STAGE_1_REQUIRED);
+    const stage2Filled = this.countFilled(profile, STAGE_2_FIELDS);
+    const stage3Filled = this.countFilled(profile, STAGE_3_FIELDS);
+
+    // 学生端总字段集（去重 — formFiller 在 STAGE_1 和 STUDENT_ONLY 都有）
+    const studentFieldSet = new Set<string>([
+      ...STAGE_1_REQUIRED,
+      ...STAGE_2_FIELDS,
+      ...STAGE_3_FIELDS,
+      ...STUDENT_ONLY_FIELDS,
+    ]);
+    const studentTotalFilled = Array.from(studentFieldSet).filter((f) =>
+      this.isFilled(profile[f]),
+    ).length;
+    const studentSelfCompleteness = Math.round(
+      (studentTotalFilled / studentFieldSet.size) * 100,
+    );
+
+    const teacherFilled = this.countFilled(profile, TEACHER_ONLY_FIELDS);
+    const teacherDataCompleteness = Math.round(
+      (teacherFilled / TEACHER_ONLY_FIELDS.length) * 100,
+    );
+
+    const stageProgress = {
+      stage1: {
+        filled: stage1Filled,
+        total: STAGE_1_REQUIRED.length,
+        completed: stage1Filled === STAGE_1_REQUIRED.length,
+      },
+      stage2: {
+        filled: stage2Filled,
+        total: STAGE_2_FIELDS.length,
+        completed: stage2Filled === STAGE_2_FIELDS.length,
+      },
+      stage3: {
+        filled: stage3Filled,
+        total: STAGE_3_FIELDS.length,
+        completed: stage3Filled === STAGE_3_FIELDS.length,
+      },
+    };
+
+    const overallCompleteness = Math.round(
+      teacherDataCompleteness * 0.4 + studentSelfCompleteness * 0.6,
+    );
+
+    const missingFieldsForRecommend: string[] = TEACHER_ONLY_FIELDS.filter(
+      (f) => !this.isFilled(profile[f]),
+    );
+    if (!stageProgress.stage1.completed) {
+      for (const f of STAGE_1_REQUIRED) {
+        if (!this.isFilled(profile[f])) missingFieldsForRecommend.push(f);
+      }
+    }
+    const isRecommendable =
+      teacherDataCompleteness === 100 && stageProgress.stage1.completed;
+
+    return {
+      studentSelfCompleteness,
+      teacherDataCompleteness,
+      stageProgress,
+      overallCompleteness,
+      isRecommendable,
+      missingFieldsForRecommend,
+    };
+  }
+}
