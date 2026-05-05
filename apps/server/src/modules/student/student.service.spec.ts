@@ -219,53 +219,5 @@ describe('StudentService', () => {
     });
   });
 
-  // ── calculateCompleteness ───────────────────────────────
-
-  describe('calculateCompleteness', () => {
-    it('should return 0 for empty profile', () => {
-      expect(service.calculateCompleteness({})).toBe(0);
-    });
-
-    it('should return 70 when all required fields are filled', () => {
-      const profile = {
-        highSchool: '成都七中',
-        examYear: 2026,
-        examType: 'PHYSICS',
-        firstChoice: '物理',
-        totalScore: 600,
-        priorityMode: 'BALANCED',
-        careerPlan: 'POSTGRADUATE',
-      };
-      expect(service.calculateCompleteness(profile)).toBe(70);
-    });
-
-    it('should return 100 when all fields are filled', () => {
-      const profile = {
-        // Required
-        highSchool: '成都七中',
-        examYear: 2026,
-        examType: 'PHYSICS',
-        firstChoice: '物理',
-        totalScore: 600,
-        priorityMode: 'BALANCED',
-        careerPlan: 'POSTGRADUATE',
-        // Optional
-        city: '成都',
-        classInfo: '3班',
-        parentPhone: '13800000000',
-        scoreChinese: 120,
-        scoreMath: 130,
-        scoreEnglish: 140,
-        scoreFirstChoice: 90,
-        scoreSub1: 80,
-        scoreSub2: 70,
-        provincialRank: 1000,
-        careerDirection: '计算机',
-        preferredProvinces: ['四川'],
-        preferredMajors: ['计算机'],
-        preferredUniversityTypes: ['985'],
-      };
-      expect(service.calculateCompleteness(profile)).toBe(100);
-    });
-  });
+  // calculateCompleteness 旧测试已删除；新算法覆盖在 progress.service.spec.ts
 });

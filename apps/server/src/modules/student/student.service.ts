@@ -236,54 +236,12 @@ export class StudentService {
   }
 
   /**
-   * Calculate profile completeness as a percentage.
-   * Required fields: highSchool, examYear, examType, firstChoice, totalScore, priorityMode, careerPlan
-   * Optional fields contribute the remaining weight.
+   * @deprecated 用 ProgressService.compute() 替代。
+   * 本方法保留旧签名以兼容现有调用方，内部委托给新双轨算法的 overallCompleteness。
    */
   calculateCompleteness(profile: Record<string, any>): number {
-    const requiredFields = [
-      'highSchool',
-      'examYear',
-      'examType',
-      'firstChoice',
-      'totalScore',
-      'priorityMode',
-      'careerPlan',
-    ];
-
-    const optionalFields = [
-      'city',
-      'classInfo',
-      'parentPhone',
-      'scoreChinese',
-      'scoreMath',
-      'scoreEnglish',
-      'scoreFirstChoice',
-      'scoreSub1',
-      'scoreSub2',
-      'provincialRank',
-      'careerDirection',
-      'preferredProvinces',
-      'preferredMajors',
-      'preferredUniversityTypes',
-    ];
-
-    // Required fields account for 70% of completeness
-    const requiredWeight = 70;
-    const requiredFilled = requiredFields.filter(
-      (f) => profile[f] !== null && profile[f] !== undefined,
-    ).length;
-    const requiredScore =
-      (requiredFilled / requiredFields.length) * requiredWeight;
-
-    // Optional fields account for 30% of completeness
-    const optionalWeight = 30;
-    const optionalFilled = optionalFields.filter(
-      (f) => profile[f] !== null && profile[f] !== undefined,
-    ).length;
-    const optionalScore =
-      (optionalFilled / optionalFields.length) * optionalWeight;
-
-    return Math.round(requiredScore + optionalScore);
+    // Lazy require 避免循环依赖；deprecated 方法保持简单，不通过 DI 注入
+    const { ProgressService } = require('./progress.service');
+    return new ProgressService().compute(profile).overallCompleteness;
   }
 }
