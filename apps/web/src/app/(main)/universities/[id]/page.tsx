@@ -78,7 +78,7 @@ export default function UniversityDetailPage() {
       key: 'info',
       label: <span><BankOutlined className="mr-1" />基本信息</span>,
       children: (
-        <div className="px-6 py-4 space-y-4">
+        <div className="py-4 space-y-4">
           <CharterCard
             renameHistory={u.renameHistory ?? null}
             admissionGuide={u.admissionGuide ?? null}
