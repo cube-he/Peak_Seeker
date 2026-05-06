@@ -374,6 +374,256 @@ git push origin master
 
 ---
 
+## v2 Extension: geocodeCampus exception fallback
+
+After v1 implementation, only 13/32 unis transitioned to verified. Diagnosis revealed `geocodeCampus()` lacks try/catch around `amap.geocode()`, so when AMap returns 6× transient errors and throws `AmapUnavailableError`, the fallback to `/place/text` is never reached. This v2 extension fixes that.
+
+### Task 7: RED test for geocodeCampus exception fallback
+
+**Files:**
+- Modify: `apps/server/src/modules/geo/services/geocoder.service.spec.ts`
+
+- [ ] **Step 1: Add new `it()` block inside the existing `describe('GeocoderService.geocodeCampus', ...)`**
+
+Find the existing `geocodeCampus` describe block (around lines 46-103). Inside it, append this new test case after the last existing case (after `coerces empty-array AMap fields...`):
+
+```ts
+  it('falls back to PlaceSearch when amap.geocode throws AmapUnavailableError after retries', async () => {
+    const { AmapUnavailableError } = await import('../amap/amap.types');
+    const geocode = jest.fn().mockRejectedValue(new AmapUnavailableError('AMap unreachable after 6 attempts'));
+    const searchPlaceText = jest.fn().mockResolvedValue([{
+      id: 'X', name: '西南交通大学犀浦校区',
+      type: '科教文化服务;学校;高等院校', typecode: '141201',
+      location: '103.986,30.764',
+      address: '犀安路999号',
+      pname: '四川省', cityname: '成都市', adname: '郫都区',
+    }]);
+    const amap = fakeAmap({ geocode, searchPlaceText });
+    const svc = new GeocoderService(amap);
+
+    const result = await svc.geocodeCampus('西南交通大学', '犀浦', { city: '成都' });
+
+    expect(geocode).toHaveBeenCalled();
+    expect(searchPlaceText).toHaveBeenCalledWith(
+      '西南交通大学犀浦',
+      { city: '成都', types: '141201' },
+    );
+    expect(result?.source).toBe('amap_poi');
+    expect(result?.city).toBe('成都市');
+  });
+```
+
+- [ ] **Step 2: Run the test to verify it FAILS**
+
+```bash
+cd apps/server && pnpm jest src/modules/geo/services/geocoder.service.spec.ts -t "AmapUnavailableError" -v
+```
+
+Expected: 1 FAIL with the unhandled `AmapUnavailableError` propagating up (test expected `result?.source` = 'amap_poi' but got an exception).
+
+- [ ] **Step 3: Commit (RED)**
+
+```bash
+git add apps/server/src/modules/geo/services/geocoder.service.spec.ts
+git commit -m "test(geo): RED for geocodeCampus AmapUnavailableError fallback"
+```
+
+---
+
+### Task 8: GREEN fix geocodeCampus with try/catch
+
+**Files:**
+- Modify: `apps/server/src/modules/geo/services/geocoder.service.ts`
+
+- [ ] **Step 1: Add import for AmapUnavailableError + AmapApiError**
+
+At the top of the file, in the import line that already imports from `../amap/amap.types`, add `AmapUnavailableError` and `AmapApiError`. Find:
+
+```ts
+import { AmapGeocode, AmapPoi } from '../amap/amap.types';
+```
+
+Replace with:
+
+```ts
+import { AmapApiError, AmapGeocode, AmapPoi, AmapUnavailableError } from '../amap/amap.types';
+```
+
+- [ ] **Step 2: Wrap `amap.geocode` in `geocodeCampus` with try/catch**
+
+Find the existing `geocodeCampus` method (around line 37-49):
+
+```ts
+  async geocodeCampus(
+    universityName: string,
+    campusName: string,
+    hint: { city?: string; province?: string } = {},
+  ): Promise<GeoResult | null> {
+    const query = `${universityName}(${campusName})`;
+    const direct = await this.amap.geocode(query, { city: hint.city });
+    if (direct) return this.fromGeocode(query, direct);
+    const pois = await this.amap.searchPlaceText(`${universityName}${campusName}`, {
+      city: hint.city, types: '141201', // 高等院校
+    });
+    return pois.length > 0 ? this.fromPoi(pois[0]) : null;
+  }
+```
+
+Replace with:
+
+```ts
+  async geocodeCampus(
+    universityName: string,
+    campusName: string,
+    hint: { city?: string; province?: string } = {},
+  ): Promise<GeoResult | null> {
+    const query = `${universityName}(${campusName})`;
+    try {
+      const direct = await this.amap.geocode(query, { city: hint.city });
+      if (direct) return this.fromGeocode(query, direct);
+    } catch (e) {
+      // amap.geocode signals failure via exception (AmapApiError on status=0,
+      // AmapUnavailableError after 6 retries). Fall through to POI fallback.
+      if (!(e instanceof AmapApiError) && !(e instanceof AmapUnavailableError)) throw e;
+    }
+    const pois = await this.amap.searchPlaceText(`${universityName}${campusName}`, {
+      city: hint.city, types: '141201', // 高等院校
+    });
+    return pois.length > 0 ? this.fromPoi(pois[0]) : null;
+  }
+```
+
+- [ ] **Step 3: Run the new test to verify it passes**
+
+```bash
+cd apps/server && pnpm jest src/modules/geo/services/geocoder.service.spec.ts -t "AmapUnavailableError" -v
+```
+
+Expected: 1 PASS.
+
+- [ ] **Step 4: Run full geocoder spec to confirm no regressions**
+
+```bash
+cd apps/server && pnpm jest src/modules/geo/services/geocoder.service.spec.ts -v
+```
+
+Expected: All 11 tests pass (5 geocode + 4 geocodeCampus original + 5 geocodeUniversity + 1 new = 11... actually 5+4+5+1=15... we'll count when we see the output).
+
+- [ ] **Step 5: Type-check**
+
+```bash
+cd apps/server && pnpm tsc --noEmit
+```
+
+Expected: 0 errors.
+
+- [ ] **Step 6: Commit (GREEN)**
+
+```bash
+git add apps/server/src/modules/geo/services/geocoder.service.ts
+git commit -m "fix(geo): geocodeCampus falls back to PlaceSearch on AmapUnavailableError/AmapApiError"
+```
+
+---
+
+### Task 9: Redeploy + rerun backfill
+
+**Files:** none
+
+- [ ] **Step 1: SCP the updated geocoder.service.ts to prod**
+
+```bash
+cd C:/Users/Administrator/Documents/VolunteerHelper/.claude/worktrees/geo-empty-address
+scp -i C:/Users/Administrator/Documents/VolunteerHelper/cube.pem -o StrictHostKeyChecking=no \
+  apps/server/src/modules/geo/services/geocoder.service.ts \
+  ubuntu@132.232.245.53:/home/ubuntu/apps/volunteer-helper/apps/server/src/modules/geo/services/geocoder.service.ts
+```
+
+Expected: 1 file copied.
+
+- [ ] **Step 2: Verify prod has try/catch**
+
+```bash
+ssh -i C:/Users/Administrator/Documents/VolunteerHelper/cube.pem -o StrictHostKeyChecking=no ubuntu@132.232.245.53 \
+  "grep -A 3 'try {' /home/ubuntu/apps/volunteer-helper/apps/server/src/modules/geo/services/geocoder.service.ts | head"
+```
+
+Expected: try block visible inside geocodeCampus.
+
+- [ ] **Step 3: Kick off backfill (single process, no parallel)**
+
+```bash
+ssh -i C:/Users/Administrator/Documents/VolunteerHelper/cube.pem -o StrictHostKeyChecking=no ubuntu@132.232.245.53 \
+  "cd /home/ubuntu/apps/volunteer-helper/apps/server && set -a && source .env && set +a && \
+   nohup ts-node \
+     --require /home/ubuntu/apps/volunteer-helper/node_modules/.pnpm/tsconfig-paths@4.2.0/node_modules/tsconfig-paths/register \
+     --transpile-only scripts/geo-backfill.ts --resume --skip-poi \
+     > logs/backfill-v2-final-2026-05-06.log 2>&1 < /dev/null & \
+   echo PID=\$! && disown"
+```
+
+Expected: PID printed.
+
+- [ ] **Step 4: Wait for completion (~3-5 min)**
+
+```bash
+sleep 240
+```
+
+- [ ] **Step 5: Read report and DB state**
+
+```bash
+ssh -i C:/Users/Administrator/Documents/VolunteerHelper/cube.pem -o StrictHostKeyChecking=no ubuntu@132.232.245.53 \
+  "echo '=== running ==='; pgrep -af 'geo-backfill' | grep -v 'pgrep\\|grep' || echo FINISHED; \
+   echo '=== latest report ==='; ls -t /home/ubuntu/apps/volunteer-helper/apps/server/logs/geo-backfill-2026-05-06T*.json | head -1 | xargs cat; \
+   echo '=== error breakdown ==='; grep 'error for' /home/ubuntu/apps/volunteer-helper/apps/server/logs/backfill-v2-final-2026-05-06.log 2>/dev/null | sed -E 's/.*: (.*)/\\1/' | sort | uniq -c"
+```
+
+Expected: report shows total≈19, verified≥17, errors≤2.
+
+- [ ] **Step 6: Confirm pending count dropped**
+
+```bash
+ssh -i C:/Users/Administrator/Documents/VolunteerHelper/cube.pem -o StrictHostKeyChecking=no ubuntu@132.232.245.53 "cat > /home/ubuntu/apps/volunteer-helper/apps/server/_check.js <<'EOF'
+const {PrismaClient}=require('@prisma/client');
+const {PrismaMariaDb}=require('@prisma/adapter-mariadb');
+const p=new PrismaClient({adapter:new PrismaMariaDb(process.env.DATABASE_URL)});
+(async()=>{
+  console.log(JSON.stringify({
+    pending: await p.university.count({where:{geoStatus:'pending'}}),
+    verified: await p.university.count({where:{geoStatus:'verified'}}),
+    invalid: await p.university.count({where:{geoStatus:'invalid'}}),
+  }));
+  await p.\$disconnect();
+})();
+EOF
+cd /home/ubuntu/apps/volunteer-helper/apps/server && set -a && source .env && set +a && node _check.js && rm _check.js"
+```
+
+Expected: pending ≤ 2, verified ≥ 2198.
+
+- [ ] **Step 7: Spot-check 5 newly resolved unis**
+
+```bash
+ssh -i C:/Users/Administrator/Documents/VolunteerHelper/cube.pem -o StrictHostKeyChecking=no ubuntu@132.232.245.53 "cat > /home/ubuntu/apps/volunteer-helper/apps/server/_spot.js <<'EOF'
+const {PrismaClient}=require('@prisma/client');
+const {PrismaMariaDb}=require('@prisma/adapter-mariadb');
+const p=new PrismaClient({adapter:new PrismaMariaDb(process.env.DATABASE_URL)});
+(async()=>{
+  for (const id of [9004,9023,9319,9590,11042]) {
+    const u=await p.university.findUnique({where:{id},select:{name:true,latitude:true,longitude:true,geoStatus:true,geoSource:true}});
+    console.log(id,'|',u?.name,'|',Number(u?.latitude),Number(u?.longitude),'|',u?.geoStatus,u?.geoSource);
+  }
+  await p.\$disconnect();
+})();
+EOF
+cd /home/ubuntu/apps/volunteer-helper/apps/server && set -a && source .env && set +a && node _spot.js && rm _spot.js"
+```
+
+Expected: at least 4/5 verified with non-null lat/lng.
+
+---
+
 ## Self-review notes
 
 **Spec coverage:**

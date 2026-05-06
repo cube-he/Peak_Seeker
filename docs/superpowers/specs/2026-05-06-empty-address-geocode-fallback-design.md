@@ -2,7 +2,7 @@
 
 **日期**：2026-05-06
 **作者**：Claude (with @user)
-**状态**：approved, pending implementation
+**状态**：approved (v1 implemented; v2 extension pending — see "扩展（v2）" 节末尾)
 
 ## 背景
 
@@ -151,3 +151,54 @@ const main = await deps.geocoder.geocodeUniversity(uni.name, {
 | 部分院校 POI 选错 | 低 | 局部数据偏差 | 抽样校验，人工 patch |
 | `/place/text` 配额耗尽 | 极低 | 32 条仍然 pending | 等明天免费额度刷新 |
 | 单测覆盖不到的边界场景 | 低 | 部署后小修小补 | 生产验证抽样 |
+
+## 扩展（v2）：geocodeCampus 异常 fallback
+
+### 背景
+
+v1 实施后，32 校 pending 中只有 13 校转为 verified，剩 19 校仍报 `AMap unreachable after 6 attempts`。
+
+诊断发现：`geocodeUniversity` 实际上 19 校全部能拿到坐标（直接 NestJS bootstrap 调用，0 错）。失败发生在后续的 **campus loop**：每个校区调用 `geocodeCampus(uniName, campusName, {city})` 走 `/geocode/geo`，对 `"西南交通大学(犀浦)"` / `"中央戏剧学院(昌平)"` 等查询，AMap 持续返回 `ENGINE_RESPONSE_DATA_ERROR`，6 次重试都失败 → 抛 `AmapUnavailableError`。
+
+`geocodeCampus` 当前代码：
+
+```ts
+async geocodeCampus(...) {
+  const direct = await this.amap.geocode(query, { city });  // 抛异常 → 直接传播
+  if (direct) return this.fromGeocode(query, direct);
+  const pois = await this.amap.searchPlaceText(...);  // 永远到不了
+  return pois.length > 0 ? this.fromPoi(pois[0]) : null;
+}
+```
+
+`amap.geocode` 用**异常**而不是 null 表达失败，导致设计中"geocode 失败 → POI fallback"的 fallback 永远进不到。这是 v1 已有的 bug，被 v1 暴露在 backfill 流程上。
+
+### 修复
+
+在 `geocodeCampus` 包 try/catch，让 `AmapUnavailableError` / `AmapApiError` 也走 fallback：
+
+```ts
+async geocodeCampus(...) {
+  try {
+    const direct = await this.amap.geocode(query, { city });
+    if (direct) return this.fromGeocode(query, direct);
+  } catch (e) {
+    if (!(e instanceof AmapUnavailableError) && !(e instanceof AmapApiError)) throw e;
+    // expected: fall through to POI fallback
+  }
+  const pois = await this.amap.searchPlaceText(...);
+  return pois.length > 0 ? this.fromPoi(pois[0]) : null;
+}
+```
+
+### 测试
+
+新增 1 个单测 case：mock `amap.geocode` 抛 `AmapUnavailableError`，验证 `geocodeCampus` 调用 `searchPlaceText` 并返回 POI 结果（而不是把异常向上抛）。
+
+### 验证
+
+部署后重跑 `geo-backfill.ts --resume --skip-poi`，预期 19 校全部 verified（容许 ≤2 例 invalid）。
+
+### 范围说明
+
+**只**改 `geocodeCampus`。`geocode()` 主方法保持原异常传播行为（4 个 retry strategies 依赖它）。`geocodeUniversity()` 不变（其内部只调 `searchPlaceText`，无 `amap.geocode` 异常风险）。
