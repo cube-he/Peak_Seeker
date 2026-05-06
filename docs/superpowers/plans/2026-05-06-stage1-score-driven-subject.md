@@ -350,7 +350,7 @@ export function validate6Subjects(form: Subject9Form): string | null {
   if (!hasPhysics && !hasHistory) return '请填写物理或历史的成绩（首选科目）';
 
   const reCount = RE_SUBJECTS_ORDER.filter((s) => form[RE_KEY_MAP[s]] != null).length;
-  if (reCount !== 2) return '请填写 2 门再选科目（化/生/政/地）的成绩';
+  if (reCount !== 2) return '再选科目需填写 2 门（化/生/政/地）';
 
   return null;
 }
