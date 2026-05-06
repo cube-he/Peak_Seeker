@@ -150,6 +150,27 @@ describe('stage1-score-mapping', () => {
       expect(restored.scoreEnglish).toBe(profile.scoreEnglish);
       expect(restored.totalScore).toBe(120 + 130 + 125 + 92 + 88 + 85);
     });
+
+    it('非规范 reChoices 顺序：语义保留（化学=88, 生物=85 仍然 化=88, 生=85）', () => {
+      // 老数据：reChoices=['生物','化学'] 表示 sub1=生物=85, sub2=化学=88
+      const profile = {
+        firstChoice: '物理',
+        reChoices: ['生物', '化学'],
+        scoreChinese: 120, scoreMath: 130, scoreEnglish: 125,
+        scoreFirstChoice: 92, scoreSub1: 85, scoreSub2: 88,
+      };
+      const form = to9Subjects(profile);
+      // to9Subjects 应正确按名称归位
+      expect(form.scoreBiology).toBe(85);
+      expect(form.scoreChemistry).toBe(88);
+
+      // from9Subjects 会 normalize 顺序为 化→生→政→地
+      const restored = from9Subjects(form);
+      expect(restored.reChoices).toEqual(['化学', '生物']);
+      // 关键不变量：scoreSub1 仍然对应 reChoices[0]，scoreSub2 仍然对应 reChoices[1]
+      expect(restored.scoreSub1).toBe(88); // reChoices[0]='化学' 对应 化学=88
+      expect(restored.scoreSub2).toBe(85); // reChoices[1]='生物' 对应 生物=85
+    });
   });
 
   describe('validate6Subjects', () => {
@@ -177,14 +198,14 @@ describe('stage1-score-mapping', () => {
       expect(validate6Subjects(f)).toMatch(/只能填一门/);
     });
 
-    it('再选只填了 1 门：返回再选数量错误', () => {
+    it('再选只填了 1 门：返回再选不足错误', () => {
       const f = { ...completeForm, scoreBiology: undefined };
-      expect(validate6Subjects(f)).toMatch(/再选.*2 门/);
+      expect(validate6Subjects(f)).toBe('再选科目需填写 2 门（化/生/政/地）');
     });
 
-    it('再选填了 3 门：返回再选数量错误', () => {
+    it('再选填了 3 门：返回再选过多错误', () => {
       const f = { ...completeForm, scorePolitics: 70 };
-      expect(validate6Subjects(f)).toMatch(/再选.*2 门/);
+      expect(validate6Subjects(f)).toBe('再选科目只能填 2 门');
     });
   });
 
