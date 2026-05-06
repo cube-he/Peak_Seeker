@@ -67,6 +67,8 @@ export default function StudentStageFormPage() {
     const initial: Record<string, any> = {};
     if (stage === '1') {
       // stage 1 走 9 科语义层：先回填非分数字段，再用 to9Subjects 解构槽位为具体科目
+      // nonScoreFields 是 STAGE_1_REQUIRED 中非分数字段的子集；dataVersion 在下方单独设置；
+      // 分数字段由 to9Subjects 从槽位字段解码生成，所以不在这里手动复制
       const nonScoreFields = ['realName', 'phone', 'parentPhone', 'gender', 'formFiller'];
       for (const f of nonScoreFields) initial[f] = profile[f];
       Object.assign(initial, to9Subjects(profile));
