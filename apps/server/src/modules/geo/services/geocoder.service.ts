@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AmapClient } from '../amap/amap.client';
 import { GeoResult } from '../dto/geo-result.dto';
-import { AmapGeocode, AmapPoi } from '../amap/amap.types';
+import { AmapApiError, AmapGeocode, AmapPoi, AmapUnavailableError } from '../amap/amap.types';
 
 /**
  * AMap returns `[]` (empty array) for any missing string field instead of
@@ -40,8 +40,14 @@ export class GeocoderService {
     hint: { city?: string; province?: string } = {},
   ): Promise<GeoResult | null> {
     const query = `${universityName}(${campusName})`;
-    const direct = await this.amap.geocode(query, { city: hint.city });
-    if (direct) return this.fromGeocode(query, direct);
+    try {
+      const direct = await this.amap.geocode(query, { city: hint.city });
+      if (direct) return this.fromGeocode(query, direct);
+    } catch (e) {
+      // amap.geocode signals failure via exception (AmapApiError on status=0,
+      // AmapUnavailableError after 6 retries). Fall through to POI fallback.
+      if (!(e instanceof AmapApiError) && !(e instanceof AmapUnavailableError)) throw e;
+    }
     const pois = await this.amap.searchPlaceText(`${universityName}${campusName}`, {
       city: hint.city, types: '141201', // 高等院校
     });
