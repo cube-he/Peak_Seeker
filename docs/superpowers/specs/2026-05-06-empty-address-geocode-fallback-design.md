@@ -1,8 +1,7 @@
 # Empty-address Geocode Fallback Design
 
 **日期**：2026-05-06
-**作者**：Claude (with @user)
-**状态**：approved (v1 implemented; v2 extension pending — see "扩展（v2）" 节末尾)
+**状态**：implemented 2026-05-06 (v1 + v2 extension)
 
 ## 背景
 
