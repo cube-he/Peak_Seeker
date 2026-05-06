@@ -1,15 +1,17 @@
 /**
  * ① 老师独占字段：学生端不可见、不可写。
  *
- * 调整记录（2026-05-06）：
- * - 移除 totalScore + 6 个单科分（scoreChinese/Math/English/FirstChoice/Sub1/Sub2）
- *   → 学生自己最清楚自己分数，移到 STAGE_1（②）让学生填
- * - provincialRank 保留：永远由 ScoreSegment.scoreToRank 自动计算，谁都不手填
- * - bonusPolicyStatus + bonusItems 保留：政策解读，老师专业判断
- * - 户籍 / 高考所在地 保留：正式信息，老师录入
+ * 调整记录（2026-05-06 redesign）：
+ * - 户籍/加分/考试地 9 个字段下放给学生（移到 STUDENT_NEWLY_WRITABLE）
+ * - provincialRank 仍由 ScoreSegment.scoreToRank 自动计算，不属于人工录入
  */
-export const TEACHER_ONLY_FIELDS = [
-  'provincialRank',
+export const TEACHER_ONLY_FIELDS = ['provincialRank'] as const;
+
+/**
+ * 2026-05-06 重新放权：学生可填，老师可改/审核。
+ * 这些字段不再过滤；学生 PATCH 时后端写对应组的 *UpdatedBy/*UpdatedAt provenance。
+ */
+export const STUDENT_NEWLY_WRITABLE = [
   'bonusPolicyStatus',
   'bonusItems',
   'province',
@@ -20,6 +22,21 @@ export const TEACHER_ONLY_FIELDS = [
   'examLocationCity',
   'examLocationCounty',
 ] as const;
+
+/** 字段所属的 provenance 组（用于决定写哪一对 *UpdatedBy/At） */
+export const FIELD_TO_PROVENANCE_GROUP = {
+  bonusPolicyStatus: 'bonus',
+  bonusItems: 'bonus',
+  province: 'hukou',
+  city: 'hukou',
+  county: 'hukou',
+  isRural: 'hukou',
+  examLocationProvince: 'examLocation',
+  examLocationCity: 'examLocation',
+  examLocationCounty: 'examLocation',
+} as const;
+
+export type ProvenanceGroup = 'hukou' | 'bonus' | 'examLocation';
 
 /**
  * ③ 学生端独有字段：仅学生端写。
@@ -115,6 +132,7 @@ const _STUDENT_EDITABLE_TUPLE = [
   ...STAGE_2_FIELDS,
   ...STAGE_3_FIELDS,
   ...STUDENT_ONLY_FIELDS,
+  ...STUDENT_NEWLY_WRITABLE,
 ] as const;
 
 /**
