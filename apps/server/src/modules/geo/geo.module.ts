@@ -16,6 +16,9 @@ import { PickHighestScoreStrategy } from './strategies/pick-highest-score.strate
 import { FetchFromCharterStrategy } from './strategies/fetch-from-charter.strategy';
 import { FetchFromSunlightStrategy } from './strategies/fetch-from-sunlight.strategy';
 
+import { FacilityScorer } from './facilities/facility-scorer.service';
+import { CafeteriaScraper } from './facilities/cafeteria-scraper.service';
+
 const STRATEGY_PROVIDERS = [
   GeocodeWithoutBracketStrategy,
   GeocodeWithProvinceCityStrategy,
@@ -66,9 +69,12 @@ const STRATEGY_PROVIDERS = [
       ],
     },
     RetryChain,
+    FacilityScorer,
+    CafeteriaScraper,
   ],
   exports: [
     AmapClient, GeocoderService, CampusExtractor, GeoValidator, RetryChain,
+    FacilityScorer, CafeteriaScraper,
   ],
 })
 export class GeoModule {}
