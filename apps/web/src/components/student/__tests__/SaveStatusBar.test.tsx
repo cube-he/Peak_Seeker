@@ -1,35 +1,48 @@
-/**
- * @jest-environment jsdom
- */
-import { render, screen, act } from '@testing-library/react';
+/** @jest-environment jsdom */
+import { render, act } from '@testing-library/react';
 import SaveStatusBar from '../SaveStatusBar';
 import { useStudentSaveStore } from '@/stores/student-save-state';
+import { message } from 'antd';
 
-describe('SaveStatusBar', () => {
+jest.mock('antd', () => ({
+  message: {
+    loading: jest.fn(),
+    success: jest.fn(),
+    error: jest.fn(),
+    destroy: jest.fn(),
+  },
+}));
+
+describe('SaveStatusBar (toast)', () => {
   beforeEach(() => {
+    (message.loading as jest.Mock).mockReset();
+    (message.success as jest.Mock).mockReset();
+    (message.error as jest.Mock).mockReset();
+    (message.destroy as jest.Mock).mockReset();
     act(() => useStudentSaveStore.getState().reset());
   });
 
-  it('renders nothing when state is idle', () => {
-    const { container } = render(<SaveStatusBar />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it('shows "保存中…" when state is saving', () => {
+  it('calls message.loading on saving', () => {
+    render(<SaveStatusBar />);
     act(() => useStudentSaveStore.getState().setSaving());
-    render(<SaveStatusBar />);
-    expect(screen.getByText('保存中…')).toBeInTheDocument();
+    expect(message.loading).toHaveBeenCalledWith(
+      expect.objectContaining({ content: '保存中…', duration: 0 }),
+    );
   });
 
-  it('shows "已保存" when state is saved', () => {
+  it('calls message.success on saved', () => {
+    render(<SaveStatusBar />);
     act(() => useStudentSaveStore.getState().setSaved());
-    render(<SaveStatusBar />);
-    expect(screen.getByText(/已保存/)).toBeInTheDocument();
+    expect(message.success).toHaveBeenCalledWith(
+      expect.objectContaining({ content: '已保存', duration: 1.5 }),
+    );
   });
 
-  it('shows error message when state is error', () => {
-    act(() => useStudentSaveStore.getState().setError('网络错误'));
+  it('calls message.error on error', () => {
     render(<SaveStatusBar />);
-    expect(screen.getByText(/网络错误/)).toBeInTheDocument();
+    act(() => useStudentSaveStore.getState().setError('网络错误'));
+    expect(message.error).toHaveBeenCalledWith(
+      expect.objectContaining({ content: '网络错误' }),
+    );
   });
 });
