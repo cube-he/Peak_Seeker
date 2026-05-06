@@ -1,41 +1,26 @@
 'use client';
-
-import { Card, Form } from 'antd';
+import { Form, Row, Col } from 'antd';
 import AutoSaveField from '../auto-save/AutoSaveField';
+import AutoSaveRadio from '../auto-save/AutoSaveRadio';
+interface Props { profile: Record<string, any>; }
 
-interface Props {
-  profile: Record<string, any>;
-}
+const GENDER = [{label:'男',value:'M'},{label:'女',value:'F'}];
+const EXAM_TYPE = [{label:'物理类',value:'PHYSICS'},{label:'历史类',value:'HISTORY'}];
+const FORM_FILLER = [{label:'本人',value:'STUDENT'},{label:'家长',value:'PARENT'},{label:'共同',value:'TOGETHER'}];
 
 export default function BasicInfoSection({ profile }: Props) {
   return (
-    <Card title="1. 基础信息" size="small">
-      <Form layout="vertical" size="small">
-        <Form.Item label="姓名">
-          <AutoSaveField fieldKey="realName" defaultValue={profile.realName ?? ''} />
-        </Form.Item>
-        <Form.Item label="手机">
-          <AutoSaveField fieldKey="phone" defaultValue={profile.phone ?? ''} />
-        </Form.Item>
-        <Form.Item label="性别">
-          <AutoSaveField fieldKey="gender" defaultValue={profile.gender ?? ''} placeholder="男/女" />
-        </Form.Item>
-        <Form.Item label="科类">
-          <AutoSaveField fieldKey="examType" defaultValue={profile.examType ?? ''} placeholder="物理类/历史类" />
-        </Form.Item>
-        <Form.Item label="家长手机">
-          <AutoSaveField fieldKey="parentPhone" defaultValue={profile.parentPhone ?? ''} />
-        </Form.Item>
-        <Form.Item label="本表填写人">
-          <AutoSaveField fieldKey="formFiller" defaultValue={profile.formFiller ?? ''} placeholder="本人/家长/老师" />
-        </Form.Item>
-        <Form.Item label="民族">
-          <AutoSaveField fieldKey="ethnicity" defaultValue={profile.ethnicity ?? ''} />
-        </Form.Item>
-        <Form.Item label="政治面貌">
-          <AutoSaveField fieldKey="politicalStatus" defaultValue={profile.politicalStatus ?? ''} />
-        </Form.Item>
-      </Form>
-    </Card>
+    <Form layout="horizontal" labelCol={{ span: 8 }} wrapperCol={{ span: 16 }} size="small">
+      <Row gutter={[16, 0]}>
+        <Col xs={24} sm={12} md={8}><Form.Item label="姓名"><AutoSaveField fieldKey="realName" defaultValue={profile.realName ?? ''} /></Form.Item></Col>
+        <Col xs={24} sm={12} md={8}><Form.Item label="手机"><AutoSaveField fieldKey="phone" defaultValue={profile.phone ?? ''} /></Form.Item></Col>
+        <Col xs={24} sm={12} md={8}><Form.Item label="家长手机"><AutoSaveField fieldKey="parentPhone" defaultValue={profile.parentPhone ?? ''} /></Form.Item></Col>
+        <Col xs={24} sm={12} md={8}><Form.Item label="性别"><AutoSaveRadio fieldKey="gender" options={GENDER} defaultValue={profile.gender ?? null} /></Form.Item></Col>
+        <Col xs={24} sm={12} md={8}><Form.Item label="科类"><AutoSaveRadio fieldKey="examType" options={EXAM_TYPE} defaultValue={profile.examType ?? null} /></Form.Item></Col>
+        <Col xs={24} sm={12} md={8}><Form.Item label="填表人"><AutoSaveRadio fieldKey="formFiller" options={FORM_FILLER} defaultValue={profile.formFiller ?? null} /></Form.Item></Col>
+        <Col xs={24} sm={12} md={8}><Form.Item label="民族"><AutoSaveField fieldKey="ethnicity" defaultValue={profile.ethnicity ?? ''} /></Form.Item></Col>
+        <Col xs={24} sm={12} md={8}><Form.Item label="政治面貌"><AutoSaveField fieldKey="politicalStatus" defaultValue={profile.politicalStatus ?? ''} /></Form.Item></Col>
+      </Row>
+    </Form>
   );
 }

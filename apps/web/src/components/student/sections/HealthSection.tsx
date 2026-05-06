@@ -1,49 +1,25 @@
 'use client';
-
-import { Card, Form } from 'antd';
-import AutoSaveField from '../auto-save/AutoSaveField';
-
-interface Props {
-  profile: Record<string, any>;
-}
-
-const boolStr = (v: any) => v === true ? 'true' : v === false ? 'false' : '';
+import { Form, Row, Col } from 'antd';
+import AutoSaveNumber from '../auto-save/AutoSaveNumber';
+import AutoSaveSwitch from '../auto-save/AutoSaveSwitch';
+import AutoSaveTextArea from '../auto-save/AutoSaveTextArea';
+interface Props { profile: Record<string, any>; }
 
 export default function HealthSection({ profile }: Props) {
   return (
-    <Card title="5. 健康条件" size="small">
-      <Form layout="vertical" size="small">
-        <Form.Item label="身高 (cm)">
-          <AutoSaveField fieldKey="height" defaultValue={String(profile.height ?? '')} />
-        </Form.Item>
-        <Form.Item label="体重 (kg)">
-          <AutoSaveField fieldKey="weight" defaultValue={String(profile.weight ?? '')} />
-        </Form.Item>
-        <Form.Item label="左眼裸视">
-          <AutoSaveField fieldKey="visionLeft" defaultValue={String(profile.visionLeft ?? '')} />
-        </Form.Item>
-        <Form.Item label="右眼裸视">
-          <AutoSaveField fieldKey="visionRight" defaultValue={String(profile.visionRight ?? '')} />
-        </Form.Item>
-        <Form.Item label="左眼矫正后">
-          <AutoSaveField fieldKey="visionLeftCorrected" defaultValue={String(profile.visionLeftCorrected ?? '')} />
-        </Form.Item>
-        <Form.Item label="右眼矫正后">
-          <AutoSaveField fieldKey="visionRightCorrected" defaultValue={String(profile.visionRightCorrected ?? '')} />
-        </Form.Item>
-        <Form.Item label="色盲" help="true / false">
-          <AutoSaveField fieldKey="colorBlind" defaultValue={boolStr(profile.colorBlind)} placeholder="true / false" />
-        </Form.Item>
-        <Form.Item label="色弱" help="true / false">
-          <AutoSaveField fieldKey="colorWeak" defaultValue={boolStr(profile.colorWeak)} placeholder="true / false" />
-        </Form.Item>
-        <Form.Item label="身体限制">
-          <AutoSaveField fieldKey="physicalLimits" defaultValue={profile.physicalLimits ?? ''} />
-        </Form.Item>
-        <Form.Item label="病史">
-          <AutoSaveField fieldKey="medicalHistory" defaultValue={profile.medicalHistory ?? ''} />
-        </Form.Item>
-      </Form>
-    </Card>
+    <Form layout="horizontal" labelCol={{ span: 10 }} wrapperCol={{ span: 14 }} size="small">
+      <Row gutter={[16, 0]}>
+        <Col xs={12} md={6}><Form.Item label="身高(cm)"><AutoSaveNumber fieldKey="height" defaultValue={profile.height ? Number(profile.height) : null} step={0.1} min={100} max={250} /></Form.Item></Col>
+        <Col xs={12} md={6}><Form.Item label="体重(kg)"><AutoSaveNumber fieldKey="weight" defaultValue={profile.weight ? Number(profile.weight) : null} step={0.1} min={20} max={200} /></Form.Item></Col>
+        <Col xs={12} md={6}><Form.Item label="左眼裸视"><AutoSaveNumber fieldKey="visionLeft" defaultValue={profile.visionLeft ? Number(profile.visionLeft) : null} step={0.1} min={0} max={5} /></Form.Item></Col>
+        <Col xs={12} md={6}><Form.Item label="右眼裸视"><AutoSaveNumber fieldKey="visionRight" defaultValue={profile.visionRight ? Number(profile.visionRight) : null} step={0.1} min={0} max={5} /></Form.Item></Col>
+        <Col xs={12} md={6}><Form.Item label="左眼矫正"><AutoSaveNumber fieldKey="visionLeftCorrected" defaultValue={profile.visionLeftCorrected ? Number(profile.visionLeftCorrected) : null} step={0.1} min={0} max={5} /></Form.Item></Col>
+        <Col xs={12} md={6}><Form.Item label="右眼矫正"><AutoSaveNumber fieldKey="visionRightCorrected" defaultValue={profile.visionRightCorrected ? Number(profile.visionRightCorrected) : null} step={0.1} min={0} max={5} /></Form.Item></Col>
+        <Col xs={12} md={6}><Form.Item label="色盲"><AutoSaveSwitch fieldKey="colorBlind" defaultValue={profile.colorBlind} /></Form.Item></Col>
+        <Col xs={12} md={6}><Form.Item label="色弱"><AutoSaveSwitch fieldKey="colorWeak" defaultValue={profile.colorWeak} /></Form.Item></Col>
+        <Col xs={24}><Form.Item label="身体限制" labelCol={{span:2}} wrapperCol={{span:22}}><AutoSaveTextArea fieldKey="physicalLimits" defaultValue={profile.physicalLimits ?? ''} rows={2} /></Form.Item></Col>
+        <Col xs={24}><Form.Item label="病史" labelCol={{span:2}} wrapperCol={{span:22}}><AutoSaveTextArea fieldKey="medicalHistory" defaultValue={profile.medicalHistory ?? ''} rows={2} /></Form.Item></Col>
+      </Row>
+    </Form>
   );
 }
