@@ -110,10 +110,10 @@ async function processOne(
   const uni = await deps.prisma.university.findUnique({ where: { id } });
   if (!uni) return { status: 'invalid', issueTypes: [] };
 
-  const main = await deps.geocoder.geocode(
-    uni.address ?? `${uni.province ?? ''}${uni.city ?? ''}${uni.name}`,
-    { city: uni.city ?? undefined },
-  );
+  const main = await deps.geocoder.geocodeUniversity(uni.name, {
+    city: uni.city ?? undefined,
+    address: uni.address ?? undefined,
+  });
 
   const candidates = await deps.extractor.extract(id);
 
