@@ -101,3 +101,101 @@ describe('GeocoderService.geocodeCampus', () => {
     expect(typeof result?.city).toBe('string');
   });
 });
+
+describe('GeocoderService.geocodeUniversity', () => {
+  it('uses /geocode/geo when address is provided and AMap returns a result', async () => {
+    const geocode = jest.fn().mockResolvedValue({
+      formatted_address: '四川省成都市金牛区西南交通大学',
+      province: '四川省', city: '成都市', district: '金牛区',
+      location: '104.053,30.698', level: '兴趣点',
+    });
+    const searchPlaceText = jest.fn();
+    const amap = fakeAmap({ geocode, searchPlaceText });
+    const svc = new GeocoderService(amap);
+
+    const result = await svc.geocodeUniversity('西南交通大学', {
+      city: '成都', address: '四川省成都市金牛区二环路北一段111号',
+    });
+
+    expect(geocode).toHaveBeenCalledWith(
+      '四川省成都市金牛区二环路北一段111号',
+      { city: '成都' },
+    );
+    expect(searchPlaceText).not.toHaveBeenCalled();
+    expect(result?.source).toBe('amap_geocode');
+    expect(result?.longitude).toBe(104.053);
+  });
+
+  it('falls back to /place/text when address is provided but geocode returns null', async () => {
+    const amap = fakeAmap({
+      geocode: jest.fn().mockResolvedValue(null),
+      searchPlaceText: jest.fn().mockResolvedValue([{
+        id: 'X', name: '西南交通大学九里校区',
+        type: '科教文化服务;学校;高等院校', typecode: '141201',
+        location: '104.053,30.698',
+        address: '二环路北一段111号',
+        pname: '四川省', cityname: '成都市', adname: '金牛区',
+      }]),
+    });
+    const svc = new GeocoderService(amap);
+
+    const result = await svc.geocodeUniversity('西南交通大学', {
+      city: '成都', address: 'garbage-address',
+    });
+
+    expect(amap.searchPlaceText).toHaveBeenCalledWith(
+      '西南交通大学',
+      { city: '成都', types: '141201' },
+    );
+    expect(result?.source).toBe('amap_poi');
+    expect(result?.city).toBe('成都市');
+  });
+
+  it('skips geocode and goes straight to /place/text when address is undefined', async () => {
+    const geocode = jest.fn();
+    const searchPlaceText = jest.fn().mockResolvedValue([{
+      id: 'X', name: '西南交通大学',
+      type: '科教文化服务;学校;高等院校', typecode: '141201',
+      location: '104.053,30.698',
+      address: [], pname: '四川省', cityname: '成都市', adname: '金牛区',
+    }]);
+    const amap = fakeAmap({ geocode, searchPlaceText });
+    const svc = new GeocoderService(amap);
+
+    const result = await svc.geocodeUniversity('西南交通大学', { city: '成都' });
+
+    expect(geocode).not.toHaveBeenCalled();
+    expect(searchPlaceText).toHaveBeenCalledWith(
+      '西南交通大学',
+      { city: '成都', types: '141201' },
+    );
+    expect(result?.source).toBe('amap_poi');
+  });
+
+  it('skips geocode when address is whitespace only', async () => {
+    const geocode = jest.fn();
+    const searchPlaceText = jest.fn().mockResolvedValue([]);
+    const amap = fakeAmap({ geocode, searchPlaceText });
+    const svc = new GeocoderService(amap);
+
+    await svc.geocodeUniversity('某大学', { city: '北京', address: '   ' });
+
+    expect(geocode).not.toHaveBeenCalled();
+    expect(searchPlaceText).toHaveBeenCalledWith(
+      '某大学',
+      { city: '北京', types: '141201' },
+    );
+  });
+
+  it('returns null when both paths yield no result', async () => {
+    const amap = fakeAmap({
+      geocode: jest.fn().mockResolvedValue(null),
+      searchPlaceText: jest.fn().mockResolvedValue([]),
+    });
+    const svc = new GeocoderService(amap);
+
+    const result = await svc.geocodeUniversity('某大学', { city: '北京' });
+
+    expect(result).toBeNull();
+  });
+});
