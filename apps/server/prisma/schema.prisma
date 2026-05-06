@@ -704,6 +704,14 @@ model StudentProfile {
   parentSignedAt    DateTime?   @map("parent_signed_at")
   intakeFormVersion String?     @default("2025-v1") @map("intake_form_version") @db.VarChar(10)
 
+  // --- 字段溯源（记录关键字段最后由谁在何时写入）---
+  hukouUpdatedBy        String?   @map("hukou_updated_by") @db.VarChar(20)
+  hukouUpdatedAt        DateTime? @map("hukou_updated_at")
+  bonusUpdatedBy        String?   @map("bonus_updated_by") @db.VarChar(20)
+  bonusUpdatedAt        DateTime? @map("bonus_updated_at")
+  examLocationUpdatedBy String?   @map("exam_location_updated_by") @db.VarChar(20)
+  examLocationUpdatedAt DateTime? @map("exam_location_updated_at")
+
   // 关联
   volunteerPlans VolunteerPlan[]
 
