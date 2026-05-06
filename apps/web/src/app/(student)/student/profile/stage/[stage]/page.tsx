@@ -25,6 +25,15 @@ import {
   STAGE_LABELS,
 } from '@/components/student/stage-fields';
 import HealthCheckboxGroup from '@/components/student/HealthCheckboxGroup';
+import {
+  type Subject9Form,
+  to9Subjects,
+  from9Subjects,
+  validate6Subjects,
+} from '@/components/student/stage1-score-mapping';
+// Keep the three functions imported; they are consumed in Task 3 (load) and Task 4 (save).
+// Silence TS6133 until then:
+void [to9Subjects, from9Subjects, validate6Subjects];
 
 const STAGE_FIELD_MAP: Record<string, readonly string[]> = {
   '1': STAGE_1_REQUIRED,
@@ -172,66 +181,6 @@ function Stage1Fields() {
           <Radio value="FEMALE">女</Radio>
         </Radio.Group>
       </Form.Item>
-      <Form.Item name="examType" label="科类" rules={[{ required: true }]}>
-        <Select
-          placeholder="选择科类"
-          options={[
-            { value: 'PHYSICS', label: '物理类（首选物理）' },
-            { value: 'HISTORY', label: '历史类（首选历史）' },
-          ]}
-        />
-      </Form.Item>
-      <Form.Item
-        noStyle
-        shouldUpdate={(prev, cur) => prev.examType !== cur.examType}
-      >
-        {({ getFieldValue, setFieldValue }) => {
-          const et = getFieldValue('examType');
-          const fixedFirst = et === 'PHYSICS' ? '物理' : et === 'HISTORY' ? '历史' : null;
-          // 自动同步 firstChoice 跟随 examType（首选科目就是科类对应的物理/历史）
-          if (fixedFirst && getFieldValue('firstChoice') !== fixedFirst) {
-            setFieldValue('firstChoice', fixedFirst);
-          }
-          return (
-            <Form.Item
-              name="firstChoice"
-              label="首选科目"
-              extra={
-                fixedFirst
-                  ? `根据科类自动设为「${fixedFirst}」`
-                  : '请先选择科类'
-              }
-            >
-              <Input disabled placeholder="选择科类后自动填充" />
-            </Form.Item>
-          );
-        }}
-      </Form.Item>
-      <Form.Item
-        name="reChoices"
-        label="再选科目（任选 2 门）"
-        rules={[
-          {
-            validator: (_, v) => {
-              if (!v || v.length === 0) return Promise.resolve();
-              if (v.length === 2) return Promise.resolve();
-              return Promise.reject(new Error('请正好选择 2 门再选科目'));
-            },
-          },
-        ]}
-      >
-        <Select
-          mode="multiple"
-          maxCount={2}
-          placeholder="化学 / 生物 / 政治 / 地理 中选 2 门"
-          options={[
-            { value: '化学', label: '化学' },
-            { value: '生物', label: '生物' },
-            { value: '政治', label: '政治' },
-            { value: '地理', label: '地理' },
-          ]}
-        />
-      </Form.Item>
       <Form.Item name="formFiller" label="填表人" rules={[{ required: true }]}>
         <Radio.Group>
           <Radio value="STUDENT">学生本人</Radio>
@@ -240,39 +189,149 @@ function Stage1Fields() {
         </Radio.Group>
       </Form.Item>
 
-      {/* 高考分数：学生自填，后端会用一分一段表自动算位次 */}
-      <Form.Item name="totalScore" label="高考总分">
-        <InputNumber
-          min={0}
-          max={750}
-          className="w-full"
-          placeholder="0~750"
-        />
+      {/* ─── 高考成绩：9 科分数驱动选科 ─── */}
+      <div className="mt-6 mb-2 text-sm font-semibold text-text">高考成绩</div>
+      <p className="mb-3 text-xs text-text-secondary">
+        填语数外 + 物理或历史 + 任选 2 门（化/生/政/地）。系统会自动识别你的科类和选考组合。
+      </p>
+
+      <div className="grid grid-cols-3 gap-4">
+        <Form.Item name="scoreChinese" label="语文" rules={[{ required: true, message: '必填' }]}>
+          <InputNumber min={0} max={150} className="w-full" />
+        </Form.Item>
+        <Form.Item name="scoreMath" label="数学" rules={[{ required: true, message: '必填' }]}>
+          <InputNumber min={0} max={150} className="w-full" />
+        </Form.Item>
+        <Form.Item name="scoreEnglish" label="英语" rules={[{ required: true, message: '必填' }]}>
+          <InputNumber min={0} max={150} className="w-full" />
+        </Form.Item>
+      </div>
+
+      {/* 物理/历史 互斥锁死 */}
+      <Form.Item
+        noStyle
+        shouldUpdate={(p, c) =>
+          p.scorePhysics !== c.scorePhysics || p.scoreHistory !== c.scoreHistory
+        }
+      >
+        {({ getFieldValue }) => {
+          const hasPhysics = getFieldValue('scorePhysics') != null;
+          const hasHistory = getFieldValue('scoreHistory') != null;
+          return (
+            <div className="grid grid-cols-2 gap-4">
+              <Form.Item name="scorePhysics" label="物理">
+                <InputNumber
+                  min={0}
+                  max={100}
+                  className="w-full"
+                  disabled={hasHistory}
+                  placeholder={hasHistory ? '已选历史' : ''}
+                />
+              </Form.Item>
+              <Form.Item name="scoreHistory" label="历史">
+                <InputNumber
+                  min={0}
+                  max={100}
+                  className="w-full"
+                  disabled={hasPhysics}
+                  placeholder={hasPhysics ? '已选物理' : ''}
+                />
+              </Form.Item>
+            </div>
+          );
+        }}
       </Form.Item>
-      <div className="grid grid-cols-3 gap-4">
-        <Form.Item name="scoreChinese" label="语文">
-          <InputNumber min={0} max={150} className="w-full" />
-        </Form.Item>
-        <Form.Item name="scoreMath" label="数学">
-          <InputNumber min={0} max={150} className="w-full" />
-        </Form.Item>
-        <Form.Item name="scoreEnglish" label="英语">
-          <InputNumber min={0} max={150} className="w-full" />
-        </Form.Item>
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        <Form.Item name="scoreFirstChoice" label="首选科目分">
-          <InputNumber min={0} max={100} className="w-full" />
-        </Form.Item>
-        <Form.Item name="scoreSub1" label="再选 1 分">
-          <InputNumber min={0} max={100} className="w-full" />
-        </Form.Item>
-        <Form.Item name="scoreSub2" label="再选 2 分">
-          <InputNumber min={0} max={100} className="w-full" />
-        </Form.Item>
-      </div>
+
+      {/* 化生政地：最多 2 个有值，第 3 个 disabled */}
+      <Form.Item
+        noStyle
+        shouldUpdate={(p, c) =>
+          p.scoreChemistry !== c.scoreChemistry ||
+          p.scoreBiology !== c.scoreBiology ||
+          p.scorePolitics !== c.scorePolitics ||
+          p.scoreGeography !== c.scoreGeography
+        }
+      >
+        {({ getFieldValue }) => {
+          const reKeys = ['scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography'] as const;
+          const filledCount = reKeys.filter((k) => getFieldValue(k) != null).length;
+          const lockOthers = filledCount >= 2;
+          const isFilled = (k: string) => getFieldValue(k) != null;
+          return (
+            <div className="grid grid-cols-4 gap-4">
+              <Form.Item name="scoreChemistry" label="化学">
+                <InputNumber
+                  min={0}
+                  max={100}
+                  className="w-full"
+                  disabled={lockOthers && !isFilled('scoreChemistry')}
+                />
+              </Form.Item>
+              <Form.Item name="scoreBiology" label="生物">
+                <InputNumber
+                  min={0}
+                  max={100}
+                  className="w-full"
+                  disabled={lockOthers && !isFilled('scoreBiology')}
+                />
+              </Form.Item>
+              <Form.Item name="scorePolitics" label="政治">
+                <InputNumber
+                  min={0}
+                  max={100}
+                  className="w-full"
+                  disabled={lockOthers && !isFilled('scorePolitics')}
+                />
+              </Form.Item>
+              <Form.Item name="scoreGeography" label="地理">
+                <InputNumber
+                  min={0}
+                  max={100}
+                  className="w-full"
+                  disabled={lockOthers && !isFilled('scoreGeography')}
+                />
+              </Form.Item>
+            </div>
+          );
+        }}
+      </Form.Item>
+
+      {/* 总分自动累加显示 */}
+      <Form.Item
+        noStyle
+        shouldUpdate={(p, c) =>
+          p.scoreChinese !== c.scoreChinese ||
+          p.scoreMath !== c.scoreMath ||
+          p.scoreEnglish !== c.scoreEnglish ||
+          p.scorePhysics !== c.scorePhysics ||
+          p.scoreHistory !== c.scoreHistory ||
+          p.scoreChemistry !== c.scoreChemistry ||
+          p.scoreBiology !== c.scoreBiology ||
+          p.scorePolitics !== c.scorePolitics ||
+          p.scoreGeography !== c.scoreGeography
+        }
+      >
+        {({ getFieldsValue }) => {
+          const v = getFieldsValue([
+            'scoreChinese', 'scoreMath', 'scoreEnglish',
+            'scorePhysics', 'scoreHistory',
+            'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
+          ]) as Subject9Form;
+          const total =
+            (v.scoreChinese ?? 0) + (v.scoreMath ?? 0) + (v.scoreEnglish ?? 0) +
+            (v.scorePhysics ?? v.scoreHistory ?? 0) +
+            (v.scoreChemistry ?? 0) + (v.scoreBiology ?? 0) +
+            (v.scorePolitics ?? 0) + (v.scoreGeography ?? 0);
+          return (
+            <div className="mt-2 mb-2 rounded-md bg-surface-2 px-4 py-3 text-base">
+              总分（自动累加）：<span className="font-semibold">{total}</span> 分
+            </div>
+          );
+        }}
+      </Form.Item>
+
       <p className="text-xs text-text-faint">
-        提示：填好总分和科类后，系统会自动用一分一段表算出全省位次（位次仅老师可看）。
+        提示：填好成绩后，系统会自动用一分一段表算出全省位次（位次仅老师可看；如有政策加分，老师录入后参与位次计算）。
       </p>
     </>
   );
