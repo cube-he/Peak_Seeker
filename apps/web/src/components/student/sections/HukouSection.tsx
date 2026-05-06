@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, Form } from 'antd';
-import AutoSaveField from '../AutoSaveField';
+import AutoSaveField from '../auto-save/AutoSaveField';
 import ProvenanceBadge from '../ProvenanceBadge';
 
 interface Props {

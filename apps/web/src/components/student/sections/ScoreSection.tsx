@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, Form, Tag } from 'antd';
-import AutoSaveField from '../AutoSaveField';
+import AutoSaveField from '../auto-save/AutoSaveField';
 
 interface Props {
   profile: Record<string, any>;
