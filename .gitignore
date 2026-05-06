@@ -68,8 +68,10 @@ scripts/_*.txt
 掌上高考*.html
 阳光高考*.html
 
-# 原始数据目录（大文件，不入库）
-data/
+# 原始数据目录（大文件，不入库）— 仅排除根 data/ 和 scripts 子目录里的 data/
+/data/
+scripts/**/data/
+# 注：apps/web/src/data 是前端选项数据（民族/省市县），需要入库
 
 # 数据处理中间产物（保留最终output）
 scripts/data-processing/output/*.sql
