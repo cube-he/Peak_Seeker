@@ -193,8 +193,8 @@ export const studentApi = {
     return api.post('/recommend/quick', params) as any;
   },
 
-  /** PATCH /students/me — sends only the changed field(s) */
+  /** PUT /students/me — sends only the changed field(s); DTO fields all @IsOptional */
   patchMyProfile(data: Partial<UpdateStudentDto>): Promise<any> {
-    return api.patch('/students/me', data) as any;
+    return api.put('/students/me', data) as any;
   },
 };
