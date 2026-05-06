@@ -192,4 +192,9 @@ export const studentApi = {
   quickRecommend(params: { score: number }): Promise<any> {
     return api.post('/recommend/quick', params) as any;
   },
+
+  /** PATCH /students/me — sends only the changed field(s) */
+  patchMyProfile(data: Partial<UpdateStudentDto>): Promise<any> {
+    return api.patch('/students/me', data) as any;
+  },
 };
