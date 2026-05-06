@@ -70,18 +70,11 @@ export const STAGE_3_FIELDS = [
   'politicalStatus',
 ] as const;
 
-export const TEACHER_ONLY_FIELDS = [
-  'provincialRank',
-  'bonusPolicyStatus',
-  'bonusItems',
-  'province',
-  'city',
-  'county',
-  'isRural',
-  'examLocationProvince',
-  'examLocationCity',
-  'examLocationCounty',
-] as const;
+/**
+ * 镜像后端 TEACHER_ONLY_FIELDS。2026-05-06 redesign 后只剩 provincialRank。
+ * 户籍/加分/考试地 9 个字段已下放给学生（见后端 STUDENT_NEWLY_WRITABLE）。
+ */
+export const TEACHER_ONLY_FIELDS = ['provincialRank'] as const;
 
 /** W3 阶段卡片的展示文案 */
 export const STAGE_LABELS: Record<
