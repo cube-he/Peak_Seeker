@@ -647,7 +647,13 @@ git commit -m "feat(web): AutoSaveRadio + AutoSaveCheckbox + AutoSaveSelect"
 
 ---
 
-### Task 4: AutoSaveCascader (reuse CountyCascader)
+### Task 4: SKIPPED (no Cascader needed)
+
+After audit: existing `CountyCascader` is just a text Input, and there is no province/city/county dataset bundled. Adding one would require ~3000 lines of region data. Decision: **HukouSection uses 3 separate AutoSaveField inputs** for 省/市/县, matching the existing pattern. AutoSaveCascader component is NOT created.
+
+The HukouSection in Task 7 below has been updated accordingly (3 text fields per address group).
+
+### Task 4 (REPLACED): AutoSaveCascader (reuse CountyCascader) — SKIPPED
 
 **Files:**
 - Create: `apps/web/src/components/student/auto-save/AutoSaveCascader.tsx`
@@ -1045,58 +1051,31 @@ export default function ScoreSection({ profile }: Props) {
 }
 ```
 
-#### HukouSection (Cascader×2 + Switch)
-
-NOTE: Need to find the existing options data for province/city/county. Check `CountyCascader` source. If options live in a separate data file like `data/china-region.ts`, import from there.
+#### HukouSection (3 text fields per address group + Switch)
 
 ```tsx
 'use client';
 import { Form, Row, Col } from 'antd';
-import AutoSaveCascader from '../auto-save/AutoSaveCascader';
+import AutoSaveField from '../auto-save/AutoSaveField';
 import AutoSaveSwitch from '../auto-save/AutoSaveSwitch';
-// import region options - investigate during implementation:
-// likely from CountyCascader source; if it's hardcoded inside, refactor to export
-
 interface Props { profile: Record<string, any>; }
-// Placeholder; replace with actual options import discovered during implementation
-import { CHINA_REGION_OPTIONS } from '../CountyCascader';
 
 export default function HukouSection({ profile }: Props) {
   return (
-    <Form layout="horizontal" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }} size="small">
+    <Form layout="horizontal" labelCol={{ span: 8 }} wrapperCol={{ span: 16 }} size="small">
       <Row gutter={[16, 0]}>
-        <Col xs={24} md={12}>
-          <Form.Item label="户籍">
-            <AutoSaveCascader
-              fieldKeys={['province','city','county']}
-              defaultValue={[profile.province, profile.city, profile.county].filter(Boolean) as any}
-              options={CHINA_REGION_OPTIONS}
-              placeholder="选择省/市/县"
-            />
-          </Form.Item>
-        </Col>
-        <Col xs={24} md={12}>
-          <Form.Item label="高考报名地">
-            <AutoSaveCascader
-              fieldKeys={['examLocationProvince','examLocationCity','examLocationCounty']}
-              defaultValue={[profile.examLocationProvince, profile.examLocationCity, profile.examLocationCounty].filter(Boolean) as any}
-              options={CHINA_REGION_OPTIONS}
-              placeholder="选择省/市/县"
-            />
-          </Form.Item>
-        </Col>
-        <Col xs={12} md={6}>
-          <Form.Item label="农村户籍">
-            <AutoSaveSwitch fieldKey="isRural" defaultValue={profile.isRural} />
-          </Form.Item>
-        </Col>
+        <Col xs={24} md={8}><Form.Item label="户籍省"><AutoSaveField fieldKey="province" defaultValue={profile.province ?? ''} placeholder="如 四川" /></Form.Item></Col>
+        <Col xs={24} md={8}><Form.Item label="户籍市"><AutoSaveField fieldKey="city" defaultValue={profile.city ?? ''} /></Form.Item></Col>
+        <Col xs={24} md={8}><Form.Item label="户籍县"><AutoSaveField fieldKey="county" defaultValue={profile.county ?? ''} /></Form.Item></Col>
+        <Col xs={24} md={8}><Form.Item label="高考报名省"><AutoSaveField fieldKey="examLocationProvince" defaultValue={profile.examLocationProvince ?? ''} /></Form.Item></Col>
+        <Col xs={24} md={8}><Form.Item label="高考报名市"><AutoSaveField fieldKey="examLocationCity" defaultValue={profile.examLocationCity ?? ''} /></Form.Item></Col>
+        <Col xs={24} md={8}><Form.Item label="高考报名县"><AutoSaveField fieldKey="examLocationCounty" defaultValue={profile.examLocationCounty ?? ''} /></Form.Item></Col>
+        <Col xs={24} md={8}><Form.Item label="农村户籍"><AutoSaveSwitch fieldKey="isRural" defaultValue={profile.isRural} /></Form.Item></Col>
       </Row>
     </Form>
   );
 }
 ```
-
-> **IMPORTANT**: If `CountyCascader` does NOT export `CHINA_REGION_OPTIONS`, the implementer MUST refactor it to export the data, OR find the existing data source. Do not invent a placeholder — fail fast and report.
 
 #### BonusPolicySection
 
