@@ -17,6 +17,7 @@
     "@volunteer-helper/shared": "workspace:*",
     "antd": "^5.13.2",
     "axios": "^1.6.5",
+    "china-area-data": "^5.0.1",
     "dayjs": "^1.11.10",
     "echarts": "^5.4.3",
     "echarts-for-react": "^3.0.2",

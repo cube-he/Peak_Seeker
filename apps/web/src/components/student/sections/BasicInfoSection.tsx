@@ -2,6 +2,8 @@
 import { Form, Row, Col } from 'antd';
 import AutoSaveField from '../auto-save/AutoSaveField';
 import AutoSaveRadio from '../auto-save/AutoSaveRadio';
+import AutoSaveSelect from '../auto-save/AutoSaveSelect';
+import { ETHNICITY_OPTIONS, POLITICAL_STATUS_OPTIONS } from '@/data/student-options';
 interface Props { profile: Record<string, any>; }
 
 const GENDER = [{label:'男',value:'M'},{label:'女',value:'F'}];
@@ -18,8 +20,8 @@ export default function BasicInfoSection({ profile }: Props) {
         <Col xs={24} sm={12} md={8}><Form.Item label="性别"><AutoSaveRadio fieldKey="gender" options={GENDER} defaultValue={profile.gender ?? null} /></Form.Item></Col>
         <Col xs={24} sm={12} md={8}><Form.Item label="科类"><AutoSaveRadio fieldKey="examType" options={EXAM_TYPE} defaultValue={profile.examType ?? null} /></Form.Item></Col>
         <Col xs={24} sm={12} md={8}><Form.Item label="填表人"><AutoSaveRadio fieldKey="formFiller" options={FORM_FILLER} defaultValue={profile.formFiller ?? null} /></Form.Item></Col>
-        <Col xs={24} sm={12} md={8}><Form.Item label="民族"><AutoSaveField fieldKey="ethnicity" defaultValue={profile.ethnicity ?? ''} /></Form.Item></Col>
-        <Col xs={24} sm={12} md={8}><Form.Item label="政治面貌"><AutoSaveField fieldKey="politicalStatus" defaultValue={profile.politicalStatus ?? ''} /></Form.Item></Col>
+        <Col xs={24} sm={12} md={8}><Form.Item label="民族"><AutoSaveSelect fieldKey="ethnicity" mode="single" options={ETHNICITY_OPTIONS} defaultValue={profile.ethnicity ?? null} placeholder="选择民族" /></Form.Item></Col>
+        <Col xs={24} sm={12} md={8}><Form.Item label="政治面貌"><AutoSaveSelect fieldKey="politicalStatus" mode="single" options={POLITICAL_STATUS_OPTIONS} defaultValue={profile.politicalStatus ?? null} placeholder="选择政治面貌" /></Form.Item></Col>
       </Row>
     </Form>
   );
