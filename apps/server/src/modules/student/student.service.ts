@@ -11,7 +11,7 @@ import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
 import { Role, StudentStatus, Prisma } from '@prisma/client';
 import { ProgressService } from './progress.service';
-import { TEACHER_ONLY_FIELDS } from './field-policy';
+import { TEACHER_ONLY_FIELDS, FIELD_TO_PROVENANCE_GROUP } from './field-policy';
 import { ScoreSegmentService } from '../score-segment/score-segment.service';
 import type { ExamType } from '../score-segment/exam-type.helper';
 
@@ -213,10 +213,32 @@ export class StudentService {
   }
 
   /**
+   * Compute provenance updates to merge into a PATCH payload.
+   * Maps incoming fields to {hukou,bonus,examLocation}UpdatedBy/At pairs.
+   */
+  private computeProvenanceUpdates(
+    dto: Record<string, any>,
+    actor: 'student' | 'teacher',
+  ): Record<string, any> {
+    const groups = new Set<string>();
+    for (const key of Object.keys(dto)) {
+      const group = (FIELD_TO_PROVENANCE_GROUP as Record<string, string>)[key];
+      if (group) groups.add(group);
+    }
+    const now = new Date();
+    const out: Record<string, any> = {};
+    for (const g of groups) {
+      out[`${g}UpdatedBy`] = actor;
+      out[`${g}UpdatedAt`] = now;
+    }
+    return out;
+  }
+
+  /**
    * Update student profile with optimistic locking.
    * Automatically calculates infoCompleteness and may upgrade status.
    */
-  async updateProfile(id: number, dto: UpdateStudentProfileDto) {
+  async updateProfile(id: number, dto: UpdateStudentProfileDto, actor: 'student' | 'teacher' = 'teacher') {
     const { dataVersion, ...updateData } = dto;
 
     // Optimistic lock: only update if dataVersion matches
@@ -265,6 +287,8 @@ export class StudentService {
       }
     }
 
+    const provenance = this.computeProvenanceUpdates(updateData as Record<string, any>, actor);
+
     const updated = await this.prisma.studentProfile.update({
       where: { id },
       // bonusItems / preferredBatches 是 Json 列，DTO 用 class 做嵌套校验，
@@ -273,6 +297,7 @@ export class StudentService {
         ...(updateData as Prisma.StudentProfileUpdateInput),
         ...statusUpdate,
         ...rankUpdate,
+        ...provenance,
         dataVersion: { increment: 1 },
       },
       include: {
@@ -379,11 +404,12 @@ export class StudentService {
   }
 
   /**
-   * 学生本人更新自己的档案。拒绝任何 ① 字段（抛 ForbiddenException）。
-   * 校验通过后委托给 updateProfile（含乐观锁）。
+   * 学生本人更新自己的档案。
+   * - 拒绝 ① TEACHER_ONLY_FIELDS（仅 provincialRank）
+   * - 接受 STUDENT_NEWLY_WRITABLE 9 个字段，写入 hukou/bonus/examLocation provenance
+   * - 委托 updateProfile 持久化（含乐观锁）
    */
   async updateMyProfile(userId: number, dto: UpdateStudentProfileDto) {
-    // 拒绝 ① 字段：哪怕 dto 携带了一个 teacher-only 字段，也立刻拒绝（不静默忽略）
     for (const f of TEACHER_ONLY_FIELDS) {
       if ((dto as Record<string, any>)[f] !== undefined) {
         throw new ForbiddenException(`字段 ${f} 仅老师可修改`);
@@ -396,6 +422,6 @@ export class StudentService {
     if (!profile) {
       throw new NotFoundException('学生档案不存在');
     }
-    return this.updateProfile(profile.id, dto);
+    return this.updateProfile(profile.id, dto, 'student');
   }
 }

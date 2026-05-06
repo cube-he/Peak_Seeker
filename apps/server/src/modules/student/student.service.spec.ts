@@ -279,18 +279,19 @@ describe('StudentService', () => {
       });
 
       const result = await service.getMyProfile(100);
-      // ① teacher-only 字段被过滤
+      // ① teacher-only 字段被过滤（2026-05-06: 只剩 provincialRank）
       expect(result).not.toHaveProperty('provincialRank');
-      expect(result).not.toHaveProperty('province');
-      expect(result).not.toHaveProperty('city');
-      expect(result).not.toHaveProperty('county');
-      expect(result).not.toHaveProperty('isRural');
-      expect(result).not.toHaveProperty('bonusItems');
-      expect(result).not.toHaveProperty('bonusPolicyStatus');
-      expect(result).not.toHaveProperty('examLocationProvince');
-      // ② 分数字段：学生自填，应该在响应中（即使值是老数据）
+      // ② 分数字段：学生自填，应该在响应中
       expect(result).toHaveProperty('totalScore');
       expect(result).toHaveProperty('scoreChinese');
+      // 户籍/加分/高考所在地字段：2026-05-06 重新放权给学生，现在应出现在响应中
+      expect(result).toHaveProperty('province');
+      expect(result).toHaveProperty('city');
+      expect(result).toHaveProperty('county');
+      expect(result).toHaveProperty('isRural');
+      expect(result).toHaveProperty('bonusItems');
+      expect(result).toHaveProperty('bonusPolicyStatus');
+      expect(result).toHaveProperty('examLocationProvince');
       // student-visible fields preserved
       expect(result).toHaveProperty('formFiller', 'STUDENT');
       expect(result).toHaveProperty('user');
@@ -317,6 +318,73 @@ describe('StudentService', () => {
     });
   });
 
+  // ── updateMyProfile (2026-05-06 redesign) ───────────────
+
+  describe('updateMyProfile (2026-05-06 redesign)', () => {
+    it('accepts province/city/county and writes hukouUpdatedBy=student', async () => {
+      const profileId = 100;
+      prisma.studentProfile.findUnique.mockResolvedValue({ id: profileId, userId: 1, dataVersion: 0 });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: profileId, userId: 1, province: '四川', city: '成都', dataVersion: 1,
+        user: { id: 1, realName: '小王' },
+      });
+
+      await service.updateMyProfile(1, { dataVersion: 0, province: '四川', city: '成都' } as any);
+
+      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            province: '四川',
+            city: '成都',
+            hukouUpdatedBy: 'student',
+            hukouUpdatedAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('accepts bonusPolicyStatus and writes bonusUpdatedBy=student', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({ id: 100, userId: 1, dataVersion: 0 });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 100, userId: 1, bonusPolicyStatus: 'MINORITY', dataVersion: 1,
+        user: { id: 1, realName: '小王' },
+      });
+
+      await service.updateMyProfile(1, { dataVersion: 0, bonusPolicyStatus: 'MINORITY' } as any);
+
+      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            bonusPolicyStatus: 'MINORITY',
+            bonusUpdatedBy: 'student',
+            bonusUpdatedAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('still rejects provincialRank from student PATCH', async () => {
+      await expect(
+        service.updateMyProfile(1, { provincialRank: 12345 } as any),
+      ).rejects.toThrow('仅老师可修改');
+    });
+
+    it('does NOT write provenance when no STUDENT_NEWLY_WRITABLE field is in dto', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({ id: 100, userId: 1, dataVersion: 0 });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 100, userId: 1, dataVersion: 1,
+        user: { id: 1, realName: 'X' },
+      });
+
+      await service.updateMyProfile(1, { dataVersion: 0, realName: 'X' } as any);
+
+      const call = prisma.studentProfile.update.mock.calls[0][0] as any;
+      expect(call.data.hukouUpdatedBy).toBeUndefined();
+      expect(call.data.bonusUpdatedBy).toBeUndefined();
+      expect(call.data.examLocationUpdatedBy).toBeUndefined();
+    });
+  });
+
   // ── updateMyProfile ─────────────────────────────────────
 
   describe('updateMyProfile', () => {
@@ -331,14 +399,19 @@ describe('StudentService', () => {
       );
     });
 
-    it('包含 province 字段时抛 ForbiddenException（户籍是 ① 老师独占）', async () => {
-      const dto = {
+    it('包含 province 字段时正常通过（2026-05-06 重新放权给学生）', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1, userId: 100, dataVersion: 0,
+      });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 1, userId: 100, province: '四川', dataVersion: 1,
+        user: { id: 100, realName: '小王' },
+      });
+      const result = await service.updateMyProfile(100, {
         dataVersion: 0,
         province: '四川',
-      };
-      await expect(service.updateMyProfile(100, dto as any)).rejects.toThrow(
-        ForbiddenException,
-      );
+      } as any);
+      expect(result).toHaveProperty('province', '四川');
     });
 
     it('包含 totalScore 字段时正常通过（②，学生自填）', async () => {

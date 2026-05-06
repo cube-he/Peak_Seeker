@@ -53,6 +53,11 @@ export class UpdateStudentProfileDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  province?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   city?: string;
 
   @ApiPropertyOptional()
