@@ -100,6 +100,30 @@ describe('GeocoderService.geocodeCampus', () => {
     expect(typeof result?.province).toBe('string'); // explicit anti-array assertion
     expect(typeof result?.city).toBe('string');
   });
+
+  it('falls back to PlaceSearch when amap.geocode throws AmapUnavailableError after retries', async () => {
+    const { AmapUnavailableError } = await import('../amap/amap.types');
+    const geocode = jest.fn().mockRejectedValue(new AmapUnavailableError('AMap unreachable after 6 attempts'));
+    const searchPlaceText = jest.fn().mockResolvedValue([{
+      id: 'X', name: '西南交通大学犀浦校区',
+      type: '科教文化服务;学校;高等院校', typecode: '141201',
+      location: '103.986,30.764',
+      address: '犀安路999号',
+      pname: '四川省', cityname: '成都市', adname: '郫都区',
+    }]);
+    const amap = fakeAmap({ geocode, searchPlaceText });
+    const svc = new GeocoderService(amap);
+
+    const result = await svc.geocodeCampus('西南交通大学', '犀浦', { city: '成都' });
+
+    expect(geocode).toHaveBeenCalled();
+    expect(searchPlaceText).toHaveBeenCalledWith(
+      '西南交通大学犀浦',
+      { city: '成都', types: '141201' },
+    );
+    expect(result?.source).toBe('amap_poi');
+    expect(result?.city).toBe('成都市');
+  });
 });
 
 describe('GeocoderService.geocodeUniversity', () => {
