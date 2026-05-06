@@ -48,6 +48,23 @@ export class GeocoderService {
     return pois.length > 0 ? this.fromPoi(pois[0]) : null;
   }
 
+  async geocodeUniversity(
+    name: string,
+    opts: { city?: string; address?: string } = {},
+  ): Promise<GeoResult | null> {
+    // 1. If we have a non-empty address, try /geocode/geo first
+    if (opts.address && opts.address.trim()) {
+      const direct = await this.amap.geocode(opts.address, { city: opts.city });
+      if (direct) return this.fromGeocode(opts.address, direct);
+    }
+    // 2. Fall back to POI text search filtered by 高等院校 typecode
+    const pois = await this.amap.searchPlaceText(name, {
+      city: opts.city,
+      types: '141201',
+    });
+    return pois.length > 0 ? this.fromPoi(pois[0]) : null;
+  }
+
   private fromGeocode(address: string, g: AmapGeocode): GeoResult | null {
     const loc = parseLocation(g.location);
     if (!loc) return null;
