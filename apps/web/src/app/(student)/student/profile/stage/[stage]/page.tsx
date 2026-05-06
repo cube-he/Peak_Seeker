@@ -29,6 +29,8 @@ import {
   type Subject9Form,
   sum9Subjects,
   to9Subjects,
+  from9Subjects,
+  validate6Subjects,
 } from '@/components/student/stage1-score-mapping';
 
 const STAGE_FIELD_MAP: Record<string, readonly string[]> = {
@@ -117,6 +119,37 @@ export default function StudentStageFormPage() {
 
   const onSave = () => {
     form.validateFields().then((values) => {
+      if (stage === '1') {
+        // stage 1: 9 科 → 6 门齐全校验 → 翻译为后端槽位字段
+        const subj9 = {
+          scoreChinese: values.scoreChinese,
+          scoreMath: values.scoreMath,
+          scoreEnglish: values.scoreEnglish,
+          scorePhysics: values.scorePhysics,
+          scoreHistory: values.scoreHistory,
+          scoreChemistry: values.scoreChemistry,
+          scoreBiology: values.scoreBiology,
+          scorePolitics: values.scorePolitics,
+          scoreGeography: values.scoreGeography,
+        } as Subject9Form;
+        const err = validate6Subjects(subj9);
+        if (err) {
+          void message.error(err);
+          return;
+        }
+        const translated = from9Subjects(subj9);
+        const payload: UpdateStudentDto = {
+          dataVersion: values.dataVersion,
+          realName: values.realName,
+          phone: values.phone,
+          parentPhone: values.parentPhone,
+          gender: values.gender,
+          formFiller: values.formFiller,
+          ...translated,
+        };
+        saveMutation.mutate(payload);
+        return;
+      }
       saveMutation.mutate(values as UpdateStudentDto);
     });
   };
