@@ -74,7 +74,7 @@ describe('FacilityScorer.score', () => {
   it('rejects POI without uni name and not within 500m + 050', () => {
     const poi: PoiInput = {
       id: 'P6', name: '某餐厅', typecode: '050100',
-      location: '116.330500,40.005000',  // ~600m
+      location: '116.335000,40.003213',  // ~700m east, > 500m typecode_radius limit
     };
     const out = scorer.score([poi], [campus], '清华大学');
     expect(out[0]).toMatchObject({ accept: false });
