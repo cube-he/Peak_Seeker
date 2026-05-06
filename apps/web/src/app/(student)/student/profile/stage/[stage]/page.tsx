@@ -28,6 +28,7 @@ import HealthCheckboxGroup from '@/components/student/HealthCheckboxGroup';
 import {
   type Subject9Form,
   sum9Subjects,
+  to9Subjects,
 } from '@/components/student/stage1-score-mapping';
 
 const STAGE_FIELD_MAP: Record<string, readonly string[]> = {
@@ -64,10 +65,17 @@ export default function StudentStageFormPage() {
   useEffect(() => {
     if (!profile || !fields) return;
     const initial: Record<string, any> = {};
-    for (const f of fields) initial[f] = profile[f];
+    if (stage === '1') {
+      // stage 1 走 9 科语义层：先回填非分数字段，再用 to9Subjects 解构槽位为具体科目
+      const nonScoreFields = ['realName', 'phone', 'parentPhone', 'gender', 'formFiller'];
+      for (const f of nonScoreFields) initial[f] = profile[f];
+      Object.assign(initial, to9Subjects(profile));
+    } else {
+      for (const f of fields) initial[f] = profile[f];
+    }
     initial.dataVersion = profile.dataVersion ?? 0;
     form.setFieldsValue(initial);
-  }, [profile, fields, form]);
+  }, [profile, fields, form, stage]);
 
   const saveMutation = useMutation({
     mutationFn: (values: UpdateStudentDto) => studentApi.updateMyProfile(values),
