@@ -60,6 +60,20 @@ export function to9Subjects(profile: Record<string, any>): Subject9Form {
   return out;
 }
 
+/** 9 科表单 → 6 科裸分总分（未填的科目按 0 计；物理/历史互斥时取已填那个）。 */
+export function sum9Subjects(form: Subject9Form): number {
+  const reChoices = RE_SUBJECTS_ORDER.filter(
+    (s) => form[RE_KEY_MAP[s]] != null,
+  );
+  return (
+    (form.scoreChinese ?? 0) +
+    (form.scoreMath ?? 0) +
+    (form.scoreEnglish ?? 0) +
+    (form.scorePhysics ?? form.scoreHistory ?? 0) +
+    reChoices.reduce((s, k) => s + (form[RE_KEY_MAP[k]] ?? 0), 0)
+  );
+}
+
 /** 9 科表单 → 后端 DTO 子集（提交时翻译）。要求 6 门已凑齐。 */
 export function from9Subjects(form: Subject9Form): {
   examType: 'PHYSICS' | 'HISTORY';
@@ -77,12 +91,7 @@ export function from9Subjects(form: Subject9Form): {
   const reChoices = RE_SUBJECTS_ORDER.filter(
     (s) => form[RE_KEY_MAP[s]] != null,
   );
-  const total =
-    (form.scoreChinese ?? 0) +
-    (form.scoreMath ?? 0) +
-    (form.scoreEnglish ?? 0) +
-    (form.scorePhysics ?? form.scoreHistory ?? 0) +
-    reChoices.reduce((s, k) => s + (form[RE_KEY_MAP[k]] ?? 0), 0);
+  const total = sum9Subjects(form);
   return {
     examType: isPhysics ? 'PHYSICS' : 'HISTORY',
     firstChoice: isPhysics ? '物理' : '历史',

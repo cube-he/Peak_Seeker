@@ -27,13 +27,8 @@ import {
 import HealthCheckboxGroup from '@/components/student/HealthCheckboxGroup';
 import {
   type Subject9Form,
-  to9Subjects,
-  from9Subjects,
-  validate6Subjects,
+  sum9Subjects,
 } from '@/components/student/stage1-score-mapping';
-// Keep the three functions imported; they are consumed in Task 3 (load) and Task 4 (save).
-// Silence TS6133 until then:
-void [to9Subjects, from9Subjects, validate6Subjects];
 
 const STAGE_FIELD_MAP: Record<string, readonly string[]> = {
   '1': STAGE_1_REQUIRED,
@@ -160,6 +155,7 @@ export default function StudentStageFormPage() {
 }
 
 function Stage1Fields() {
+  const form = Form.useFormInstance();
   return (
     <>
       <Form.Item name="realName" label="姓名" rules={[{ required: true }]}>
@@ -226,6 +222,9 @@ function Stage1Fields() {
                   className="w-full"
                   disabled={hasHistory}
                   placeholder={hasHistory ? '已选历史' : ''}
+                  onChange={(v) => {
+                    if (v != null) form.setFieldValue('scoreHistory', undefined);
+                  }}
                 />
               </Form.Item>
               <Form.Item name="scoreHistory" label="历史">
@@ -235,6 +234,9 @@ function Stage1Fields() {
                   className="w-full"
                   disabled={hasPhysics}
                   placeholder={hasPhysics ? '已选物理' : ''}
+                  onChange={(v) => {
+                    if (v != null) form.setFieldValue('scorePhysics', undefined);
+                  }}
                 />
               </Form.Item>
             </div>
@@ -317,11 +319,7 @@ function Stage1Fields() {
             'scorePhysics', 'scoreHistory',
             'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
           ]) as Subject9Form;
-          const total =
-            (v.scoreChinese ?? 0) + (v.scoreMath ?? 0) + (v.scoreEnglish ?? 0) +
-            (v.scorePhysics ?? v.scoreHistory ?? 0) +
-            (v.scoreChemistry ?? 0) + (v.scoreBiology ?? 0) +
-            (v.scorePolitics ?? 0) + (v.scoreGeography ?? 0);
+          const total = sum9Subjects(v);
           return (
             <div className="mt-2 mb-2 rounded-md bg-surface-2 px-4 py-3 text-base">
               总分（自动累加）：<span className="font-semibold">{total}</span> 分

@@ -2,6 +2,7 @@ import {
   to9Subjects,
   from9Subjects,
   validate6Subjects,
+  sum9Subjects,
   type Subject9Form,
 } from '../stage1-score-mapping';
 
@@ -184,6 +185,33 @@ describe('stage1-score-mapping', () => {
     it('再选填了 3 门：返回再选数量错误', () => {
       const f = { ...completeForm, scorePolitics: 70 };
       expect(validate6Subjects(f)).toMatch(/再选.*2 门/);
+    });
+  });
+
+  describe('sum9Subjects', () => {
+    it('物理类典型 6 门齐：累加正确', () => {
+      expect(sum9Subjects({
+        scoreChinese: 120, scoreMath: 130, scoreEnglish: 125,
+        scorePhysics: 92, scoreChemistry: 88, scoreBiology: 85,
+      })).toBe(640);
+    });
+    it('历史类 + 政治地理：累加正确', () => {
+      expect(sum9Subjects({
+        scoreChinese: 115, scoreMath: 105, scoreEnglish: 130,
+        scoreHistory: 80, scorePolitics: 78, scoreGeography: 82,
+      })).toBe(590);
+    });
+    it('空表单：返回 0', () => {
+      expect(sum9Subjects({})).toBe(0);
+    });
+    it('部分填写：用 ?? 0 处理 undefined', () => {
+      expect(sum9Subjects({ scoreChinese: 100, scoreMath: 100 })).toBe(200);
+    });
+    it('物理/历史互斥取已填那个', () => {
+      const onlyPhysics = sum9Subjects({ scorePhysics: 90 });
+      expect(onlyPhysics).toBe(90);
+      const onlyHistory = sum9Subjects({ scoreHistory: 75 });
+      expect(onlyHistory).toBe(75);
     });
   });
 });
