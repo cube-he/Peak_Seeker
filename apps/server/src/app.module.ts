@@ -31,6 +31,7 @@ import { AlgorithmConfigModule } from './modules/algorithm-config/algorithm-conf
 import { GeoModule } from './modules/geo/geo.module';
 import { PolicyModule } from './modules/policy/policy.module';
 import { BatchConfigModule } from './modules/batch-config/batch-config.module';
+import { PlanCandidateModule } from './modules/plan-candidate/plan-candidate.module';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { BatchConfigModule } from './modules/batch-config/batch-config.module';
     ScoreSegmentModule,
     AlgorithmConfigModule,
     BatchConfigModule,
+    PlanCandidateModule,
   ],
   providers: [
     // 全局应用限流守卫
