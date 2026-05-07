@@ -21,4 +21,19 @@ describe('CITIES', () => {
     const codes = CITIES.map((c) => c.code);
     expect(new Set(codes).size).toBe(codes.length);
   });
+
+  it('成都市 has 6-digit code 510100 with provinceCode 510000', () => {
+    const cd = CITIES.find((c) => c.name === '成都市')!;
+    expect(cd.code).toBe('510100');
+    expect(cd.provinceCode).toBe('510000');
+  });
+
+  it('all codes are 6-digit GB/T 2260 strings', () => {
+    expect(CITIES.every((c) => /^\d{6}$/.test(c.code))).toBe(true);
+    expect(CITIES.every((c) => /^\d{6}$/.test(c.provinceCode))).toBe(true);
+  });
+
+  it('does not contain literal 市辖区 entries', () => {
+    expect(CITIES.find((c) => c.name === '市辖区')).toBeUndefined();
+  });
 });
