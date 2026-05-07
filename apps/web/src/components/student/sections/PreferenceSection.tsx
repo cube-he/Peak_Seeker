@@ -36,6 +36,7 @@ export default function PreferenceSection({ profile }: Props) {
         <Col xs={24} md={12}><Form.Item label="排除城市"><AutoSavePicker fieldKey="excludedCities" defaultValue={profile.excludedCities ?? []} optionsHook={useCityOptions} placeholder="搜索城市" /></Form.Item></Col>
         <Col xs={24} md={12}><Form.Item label="排除院校"><AutoSavePicker fieldKey="excludedUniversities" defaultValue={profile.excludedUniversities ?? []} optionsHook={useUniversityOptions} placeholder="搜索院校" /></Form.Item></Col>
         <Col xs={24} md={12}><Form.Item label="排除专业"><AutoSavePicker fieldKey="excludedMajors" defaultValue={profile.excludedMajors ?? []} optionsHook={useMajorOptions} placeholder="搜索专业" /></Form.Item></Col>
+        <Col xs={24} md={12}><Form.Item label="排除专业类别"><AutoSavePicker fieldKey="excludedMajorCategories" defaultValue={profile.excludedMajorCategories ?? []} optionsHook={useMajorCategoryOptions} placeholder="搜索专业类别" /></Form.Item></Col>
       </Row>
     </Form>
   );
