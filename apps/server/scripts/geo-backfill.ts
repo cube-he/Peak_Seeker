@@ -137,10 +137,13 @@ async function processOne(
     });
   }
   for (const c of candidates) {
-    const r = await deps.geocoder.geocodeCampus(uni.name, c.name, {
-      city: c.hint?.city ?? uni.city ?? undefined,
-      province: c.hint?.province ?? uni.province ?? undefined,
-    });
+    const r =
+      main && main.latitude != null && main.longitude != null
+        ? await deps.geocoder.geocodeCampus(uni.name, c.name, {
+            latitude: main.latitude,
+            longitude: main.longitude,
+          })
+        : null;
     campuses.push({
       name: c.name, isMain: c.name === '本部' || c.name === '主校区',
       province: r?.province, city: r?.city, district: r?.district,

@@ -4,7 +4,10 @@ import { GeoResult } from '../dto/geo-result.dto';
 import { AmapGeocode, AmapPoi } from '../amap/amap.types';
 import { haversineMeters } from '../utils/haversine';
 
-/** Branch campuses < this distance from main are treated as polluted (AMap fell back to main). */
+/**
+ * Branch campuses < this distance from main are treated as polluted (AMap fell back to main).
+ * Tune via spot-check on multi-campus universities; lower if false negatives, raise if false positives.
+ */
 const CAMPUS_POLLUTION_THRESHOLD_METERS = 300;
 
 /**
@@ -43,6 +46,9 @@ export class GeocoderService {
     campusName: string,
     mainCoords: { latitude: number; longitude: number },
   ): Promise<GeoResult | null> {
+    if (!Number.isFinite(mainCoords.latitude) || !Number.isFinite(mainCoords.longitude)) {
+      return null;
+    }
     const query = `${universityName}${campusName}`;
     const pois = await this.amap.searchPlaceText(query, { types: '141201' });
     if (pois.length === 0) return null;

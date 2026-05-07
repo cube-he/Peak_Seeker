@@ -135,6 +135,17 @@ describe('GeocoderService.geocodeCampus', () => {
     expect(geocode).not.toHaveBeenCalled();
     expect(searchPlaceText).toHaveBeenCalledTimes(1);
   });
+
+  it('returns null without calling AMap when mainCoords contains NaN', async () => {
+    const searchPlaceText = jest.fn();
+    const amap = fakeAmap({ searchPlaceText });
+    const svc = new GeocoderService(amap);
+
+    const result = await svc.geocodeCampus('某大学', '某', { latitude: NaN, longitude: 100 });
+
+    expect(result).toBeNull();
+    expect(searchPlaceText).not.toHaveBeenCalled();
+  });
 });
 
 describe('GeocoderService.geocodeUniversity', () => {
