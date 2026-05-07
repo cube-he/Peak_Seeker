@@ -1,11 +1,13 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
+import { CreatePlanV2Dto } from './dto/create-plan-v2.dto';
+import { PlanStateMachineService } from './plan-state-machine.service';
 
 @Injectable()
 export class PlanService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private sm: PlanStateMachineService) {}
 
   async create(userId: number, dto: CreatePlanDto) {
     // Legacy path: use userId as both createdById and look up studentProfile for studentId
@@ -96,6 +98,48 @@ export class PlanService {
       data: {
         isFavorite: !plan.isFavorite,
       },
+    });
+  }
+
+  async createForStudent(creatorUserId: number, studentId: number, dto: CreatePlanV2Dto) {
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      include: { user: true },
+    });
+    if (!student) throw new NotFoundException('学生不存在');
+
+    const batchConfig = await this.prisma.batchConfig.findUnique({
+      where: { id: dto.batchConfigId },
+    });
+    if (!batchConfig) throw new NotFoundException('批次配置不存在');
+
+    const name = dto.name ?? `${student.user.realName ?? student.user.username}-${batchConfig.batch}-初版`;
+
+    return this.prisma.volunteerPlan.create({
+      data: {
+        studentId, createdById: creatorUserId,
+        name, year: batchConfig.year, province: batchConfig.province,
+        batchName: batchConfig.batch, batchConfigId: batchConfig.id,
+        recommendType: 'MANUAL',
+        status: 'DRAFT', versionNo: 1,
+        notes: dto.notes,
+      },
+    });
+  }
+
+  async listForStudent(studentId: number, opts: { batchConfigId?: number; latestOnly?: boolean }) {
+    const where: any = { studentId };
+    if (opts.batchConfigId) where.batchConfigId = opts.batchConfigId;
+    const all = await this.prisma.volunteerPlan.findMany({
+      where, orderBy: [{ batchConfigId: 'asc' }, { versionNo: 'desc' }],
+    });
+    if (!opts.latestOnly) return all;
+    const seen = new Set<number>();
+    return all.filter((p) => {
+      if (!p.batchConfigId) return true;
+      if (seen.has(p.batchConfigId)) return false;
+      seen.add(p.batchConfigId);
+      return true;
     });
   }
 }
