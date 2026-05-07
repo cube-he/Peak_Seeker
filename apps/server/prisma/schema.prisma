@@ -758,8 +758,22 @@ model VolunteerPlan {
   isFavorite Boolean    @default(false) @map("is_favorite")
 
   // 批次与考试来源
+  /// @deprecated 用 batchName + batchConfigId 取代
   batch      Batch?      @map("plan_batch")
   examSource ExamSource? @map("exam_source")
+
+  // 新批次字段（对齐 BatchConfig.batch 真实 18 批次）
+  batchName     String? @map("batch_name") @db.VarChar(100)
+  batchConfigId Int?    @map("batch_config_id")
+
+  // 方案来源标记（首期写死 MANUAL，半人工/全自动后期接入）
+  recommendType RecommendType? @map("recommend_type")
+
+  // 当前主管（REVIEWING 阶段持有）
+  currentReviewerId Int? @map("current_reviewer_id")
+
+  // 梯度算法版本（复盘元数据）
+  gradientSource String? @map("gradient_source") @db.VarChar(20)
 
   // 版本链
   versionNo       Int             @default(1) @map("version_no")
@@ -800,13 +814,15 @@ model VolunteerPlan {
   reviews     PlanReview[]
   evaluations PlanEvaluation[]
 
-  @@unique([studentId, batch, versionNo])
+  @@unique([studentId, batchConfigId, versionNo], name: "plan_natural_key")
   @@index([studentId])
   @@index([createdById])
   @@index([userId])
   @@index([year])
   @@index([status])
   @@index([parentVersionId])
+  @@index([batchConfigId])
+  @@index([currentReviewerId])
   @@map("volunteer_plans")
 }
 
