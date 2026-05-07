@@ -6,7 +6,7 @@ describe('getPickerOptions', () => {
       major: {
         findMany: jest.fn().mockResolvedValue([
           { id: 1, code: '080901', name: '计算机科学与技术' },
-          { id: 2, code: null,     name: '艺术学理论' },
+          { id: 2, code: '020101', name: '艺术学理论' },
         ]),
       },
     };
@@ -16,25 +16,26 @@ describe('getPickerOptions', () => {
     return { service, prisma };
   };
 
-  it('returns array of {id, code, name} for all majors', async () => {
+  it('returns array of {id, code, name} for in-Sichuan majors', async () => {
     const { service } = buildService();
     const result = await service.getPickerOptions();
     expect(Array.isArray(result)).toBe(true);
-    if (result.length > 0) {
-      expect(result[0]).toEqual(
-        expect.objectContaining({
-          id: expect.any(Number),
-          name: expect.any(String),
-        }),
-      );
-    }
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        id: expect.any(Number),
+        code: expect.any(String),
+        name: expect.any(String),
+      }),
+    );
   });
 
-  it('queries with select projection only (no relations)', async () => {
+  it('queries with select projection + Sichuan filter', async () => {
     const { service, prisma } = buildService();
     const findManySpy = jest.spyOn(prisma.major, 'findMany').mockResolvedValueOnce([]);
     await service.getPickerOptions();
     expect(findManySpy).toHaveBeenCalledWith({
+      where: { enrollmentPlans: { some: { province: '四川' } } },
       select: { id: true, code: true, name: true },
       orderBy: { name: 'asc' },
     });

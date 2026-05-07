@@ -134,7 +134,13 @@ export class MajorService {
   }
 
   async getPickerOptions(): Promise<{ id: number; code: string | null; name: string }[]> {
+    // 仅返回在川招生计划中出现过的专业（避免学生在 picker 里选到四川没人招的专业）
     return this.prisma.major.findMany({
+      where: {
+        enrollmentPlans: {
+          some: { province: '四川' },
+        },
+      },
       select: { id: true, code: true, name: true },
       orderBy: { name: 'asc' },
     });
