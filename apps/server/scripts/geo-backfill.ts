@@ -4,6 +4,7 @@
  * Usage:
  *   pnpm ts-node scripts/geo-backfill.ts --resume
  *   pnpm ts-node scripts/geo-backfill.ts --force --filter 985,211
+ *   pnpm ts-node scripts/geo-backfill.ts --force --ids 10676,10611,10618
  *   pnpm ts-node scripts/geo-backfill.ts --dry-run --concurrency 1
  *   pnpm ts-node scripts/geo-backfill.ts --skip-poi
  */
@@ -24,6 +25,7 @@ interface RunOptions {
   dryRun: boolean;
   skipPoi: boolean;
   filter?: string[];
+  ids?: number[];
   concurrency: number;
 }
 
@@ -35,6 +37,9 @@ async function main() {
     dryRun: flags['dry-run'] === true,
     skipPoi: flags['skip-poi'] === true,
     filter: typeof flags.filter === 'string' ? flags.filter.split(',') : undefined,
+    ids: typeof flags.ids === 'string'
+      ? flags.ids.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n))
+      : undefined,
     concurrency: Number(flags.concurrency ?? 1),
   };
 
@@ -54,6 +59,9 @@ async function main() {
     if (opts.filter.includes('211')) where.OR.push({ is211: true });
     if (opts.filter.includes('dfc')) where.OR.push({ isDoubleFirstClass: true });
     if (where.OR.length === 0) delete where.OR;
+  }
+  if (opts.ids && opts.ids.length > 0) {
+    where.id = { in: opts.ids };
   }
   const list = await prisma.university.findMany({
     where, select: { id: true },
