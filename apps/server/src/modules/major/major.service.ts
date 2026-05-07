@@ -135,15 +135,22 @@ export class MajorService {
 
   async getPickerOptions(): Promise<{ id: number; code: string | null; name: string }[]> {
     // 仅返回在川招生计划中出现过的专业（避免学生在 picker 里选到四川没人招的专业）
-    return this.prisma.major.findMany({
+    const rows = await this.prisma.major.findMany({
       where: {
         enrollmentPlans: {
           some: { province: '四川' },
         },
       },
       select: { id: true, code: true, name: true },
-      orderBy: { name: 'asc' },
+      orderBy: { id: 'asc' },  // deterministic order before dedup
     });
+    // dedup by name (Major 表存在多 code 同 name 的记录，picker UX 上视作一项)
+    const seen = new Map<string, { id: number; code: string | null; name: string }>();
+    for (const r of rows) {
+      if (!seen.has(r.name)) seen.set(r.name, r);
+    }
+    // alphabetical for picker display
+    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
   }
 
   async getHotMajors(limit?: number) {
