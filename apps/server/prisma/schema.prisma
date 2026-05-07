@@ -1200,6 +1200,12 @@ model BatchConfig {
   eligibilityRules Json? @map("eligibility_rules")
   algorithmConfig  Json? @map("algorithm_config")
 
+  // 政策约束（2026-05-07 加入，对应四川 2026 招生政策）
+  // 该批次投档时是否享受加分（民语为主/加授民文/预科/不分省艺术/高水平运动队 = false）
+  bonusEligible    Boolean @default(true) @map("bonus_eligible")
+  // 该批次允许的降分上限（分），0 = 不可降；e.g. 农村医学定向 20、川大国防预科 90
+  discountAllowed  Int     @default(0)    @map("discount_allowed")
+
   @@unique([year, province, batch, examType])
   @@index([year])
   @@index([province])
