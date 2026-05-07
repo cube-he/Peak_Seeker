@@ -29,6 +29,7 @@ import { TimelineModule } from './modules/timeline/timeline.module';
 import { ScoreSegmentModule } from './modules/score-segment/score-segment.module';
 import { AlgorithmConfigModule } from './modules/algorithm-config/algorithm-config.module';
 import { GeoModule } from './modules/geo/geo.module';
+import { PolicyModule } from './modules/policy/policy.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { GeoModule } from './modules/geo/geo.module';
     UserModule,
     StudentModule,
     TeacherModule,
+    PolicyModule,
     UniversityModule,
     GeoModule,
     MajorModule,
