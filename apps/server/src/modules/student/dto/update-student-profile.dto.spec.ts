@@ -2,22 +2,40 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { UpdateStudentProfileDto } from './update-student-profile.dto';
 
+async function validatePreferredBatches(value: unknown) {
+  const dto = plainToInstance(UpdateStudentProfileDto, { preferredBatches: value });
+  const errors = await validate(dto);
+  return errors.filter((e) => e.property === 'preferredBatches');
+}
+
 describe('UpdateStudentProfileDto.preferredBatches', () => {
-  it('accepts arbitrary batch name strings (not constrained to Batch enum)', async () => {
-    const dto = plainToInstance(UpdateStudentProfileDto, {
-      preferredBatches: ['本科提前批A段', '本科批A段', '高职专科批'],
-    });
-    const errors = await validate(dto);
-    const batchErrors = errors.filter((e) => e.property === 'preferredBatches');
-    expect(batchErrors).toHaveLength(0);
+  it('accepts arbitrary batch name strings', async () => {
+    const errors = await validatePreferredBatches(['本科提前批A段', '本科批A段', '高职专科批']);
+    expect(errors).toHaveLength(0);
   });
 
-  it('rejects non-string array elements', async () => {
-    const dto = plainToInstance(UpdateStudentProfileDto, {
-      preferredBatches: [123, true],
-    });
-    const errors = await validate(dto);
-    const batchErrors = errors.filter((e) => e.property === 'preferredBatches');
-    expect(batchErrors.length).toBeGreaterThan(0);
+  it('rejects non-string array elements with isString constraint', async () => {
+    const errors = await validatePreferredBatches([123, true]);
+    expect(errors.length).toBeGreaterThan(0);
+    // 检查报错来自 @IsString({ each: true })
+    const errStr = JSON.stringify(errors);
+    expect(errStr).toMatch(/isString/);
+  });
+
+  it('accepts empty array (optional + array)', async () => {
+    const errors = await validatePreferredBatches([]);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('accepts undefined (field is optional)', async () => {
+    const errors = await validatePreferredBatches(undefined);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects single string (must be array)', async () => {
+    const errors = await validatePreferredBatches('本科批A段');
+    expect(errors.length).toBeGreaterThan(0);
+    const errStr = JSON.stringify(errors);
+    expect(errStr).toMatch(/isArray/);
   });
 });
