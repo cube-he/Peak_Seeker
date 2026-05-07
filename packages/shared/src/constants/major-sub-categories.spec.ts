@@ -33,4 +33,16 @@ describe('MAJOR_SUB_CATEGORIES', () => {
       expect(validCodes).toContain(sub.categoryCode);
     }
   });
+
+  it('every code starts with its categoryCode (4-digit = 2-digit category + 2-digit subcategory)', () => {
+    for (const sub of MAJOR_SUB_CATEGORIES) {
+      expect(sub.code.startsWith(sub.categoryCode)).toBe(true);
+    }
+  });
+
+  it('all codes match /^\\d{4}$/ format', () => {
+    for (const sub of MAJOR_SUB_CATEGORIES) {
+      expect(sub.code).toMatch(/^\d{4}$/);
+    }
+  });
 });
