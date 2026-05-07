@@ -30,6 +30,7 @@ import { ScoreSegmentModule } from './modules/score-segment/score-segment.module
 import { AlgorithmConfigModule } from './modules/algorithm-config/algorithm-config.module';
 import { GeoModule } from './modules/geo/geo.module';
 import { PolicyModule } from './modules/policy/policy.module';
+import { BatchConfigModule } from './modules/batch-config/batch-config.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { PolicyModule } from './modules/policy/policy.module';
     TimelineModule,
     ScoreSegmentModule,
     AlgorithmConfigModule,
+    BatchConfigModule,
   ],
   providers: [
     // 全局应用限流守卫
