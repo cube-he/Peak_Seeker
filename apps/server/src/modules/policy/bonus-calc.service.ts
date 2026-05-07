@@ -89,7 +89,8 @@ export class BonusCalcService {
     }
 
     // 2. 申报项加分（学生 declaredItems 数组）
-    const declared = input.declaredItems || [];
+    // 历史数据中 bonusItems 字段曾是自由文本（string），需防御性过滤
+    const declared = Array.isArray(input.declaredItems) ? input.declaredItems : [];
     for (const item of declared) {
       const type = item.type as BonusItemType | undefined;
       if (!type || !(type in this.ITEM_VALUE)) continue; // 未知 type 忽略

@@ -28,6 +28,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type UpdateStudentDto } from '@/services/student-api';
 import ProgressBar from '@/components/student/ProgressBar';
 import HealthCheckboxGroup from '@/components/student/HealthCheckboxGroup';
+import BonusCalcCard from '@/components/policy/BonusCalcCard';
 
 /**
  * 老师端学生详情页 (M6.1+M6.3)
@@ -221,7 +222,12 @@ export default function StudentDetailPage() {
                     <LockOutlined /> 加分政策（① 老师独占）
                   </span>
                 ),
-                children: <BonusFields />,
+                children: (
+                  <div className="space-y-3">
+                    <BonusFields />
+                    <BonusCalcCard studentProfileId={Number(studentId)} />
+                  </div>
+                ),
               },
               {
                 key: 'physical',
