@@ -40,6 +40,7 @@ export function useAutoSave(fieldKey: string) {
         if (USER_FIELD_KEYS.has(fieldKey)) {
           await userService.updateProfile({ [fieldKey]: val } as any);
         } else {
+          // TODO(typed-patch): replace `as any` with typed `PatchProfileDto<K>` helper across all autosave components
           await studentApi.patchMyProfile({ [fieldKey]: val } as any);
         }
         setSaved();

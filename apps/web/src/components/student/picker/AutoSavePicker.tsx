@@ -1,10 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Select } from 'antd';
-import { useQueryClient } from '@tanstack/react-query';
-import { studentApi } from '@/services/student-api';
-import { useStudentSaveStore } from '@/stores/student-save-state';
+import { useAutoSave } from '../auto-save/useAutoSave';
 
 export interface PickerOption {
   label: string;
@@ -29,25 +27,20 @@ export default function AutoSavePicker({
   maxTagCount = 'responsive',
 }: Props) {
   const [value, setValue] = useState<string[]>(defaultValue);
-  const [open, setOpen] = useState(false);
   // 选项由调用方 hook 提供，支持静态常量或 React Query 两种形式
   const { data: options, isLoading } = optionsHook();
-  const setSaving = useStudentSaveStore((s) => s.setSaving);
-  const setSaved = useStudentSaveStore((s) => s.setSaved);
-  const setError = useStudentSaveStore((s) => s.setError);
-  const queryClient = useQueryClient();
+  const { commit } = useAutoSave(fieldKey);
 
-  const handleChange = async (v: string[]) => {
+  // I4: 父组件 refetch profile 后 defaultValue 变更时同步本地 state
+  // (老师并发改动 / BonusCalc 服务端回写场景)
+  useEffect(() => {
+    setValue(defaultValue);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(defaultValue)]);
+
+  const handleChange = (v: string[]) => {
     setValue(v);
-    setSaving();
-    try {
-      await studentApi.patchMyProfile({ [fieldKey]: v } as any);
-      setSaved();
-      // picker 字段（城市/专业类别等）可能影响加分计算，改动后让 BonusCalcCard 重算
-      queryClient.invalidateQueries({ queryKey: ['bonus-calc'] });
-    } catch (e) {
-      setError((e as Error).message ?? '保存失败');
-    }
+    commit(v);
   };
 
   return (
@@ -63,8 +56,6 @@ export default function AutoSavePicker({
       placeholder={placeholder ?? '搜索并勾选'}
       value={value}
       onChange={handleChange}
-      open={open}
-      onOpenChange={setOpen}
       style={{ width: '100%' }}
     />
   );

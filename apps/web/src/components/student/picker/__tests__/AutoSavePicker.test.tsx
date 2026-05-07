@@ -82,4 +82,38 @@ describe('AutoSavePicker', () => {
       expect(screen.getByText('成都市')).toBeInTheDocument();
     });
   });
+
+  it('calls patchMyProfile with correct {fieldKey: value} payload after change', async () => {
+    // useAutoSave 内部用 setTimeout(1500ms) 做 debounce，需要 fake timers flush
+    jest.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    const { studentApi } = require('@/services/student-api');
+    studentApi.patchMyProfile.mockClear();
+
+    wrap(
+      <AutoSavePicker
+        fieldKey="preferredCities"
+        defaultValue={[]}
+        optionsHook={fakeHook}
+        maxTagCount={10}
+      />,
+    );
+
+    const input = screen.getByRole('combobox');
+    await user.click(input);
+    // dropdown 打开后点选 "成都市"
+    const opt = await screen.findByText('成都市');
+    await user.click(opt);
+
+    // flush debounce timer
+    jest.advanceTimersByTime(1600);
+
+    await waitFor(() => {
+      expect(studentApi.patchMyProfile).toHaveBeenCalledWith({
+        preferredCities: ['CD'],
+      });
+    });
+
+    jest.useRealTimers();
+  });
 });
