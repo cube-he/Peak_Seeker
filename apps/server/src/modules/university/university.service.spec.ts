@@ -192,7 +192,43 @@ describe('getPickerOptions', () => {
     expect(findManySpy).toHaveBeenCalledWith({
       where: { enrollmentPlans: { some: { province: '四川' } } },
       select: { id: true, code: true, name: true },
-      orderBy: { name: 'asc' },
+      orderBy: { id: 'asc' },
     });
+  });
+
+  it('dedupes by name when same name appears multiple times', async () => {
+    const prisma = {
+      university: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 1, code: '10001', name: '东南大学' },
+          { id: 2, code: '10002', name: '东南大学' },  // 重名
+          { id: 3, code: '10003', name: '清华大学' },
+        ]),
+      },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const service = new UniversityService(prisma as any, redis as any, admissionService as any);
+    const result = await service.getPickerOptions();
+    expect(result).toHaveLength(2);
+    expect(result.find(r => r.name === '东南大学')?.id).toBe(1);
+  });
+
+  it('sorts result alphabetically by name (zh-CN locale)', async () => {
+    const prisma = {
+      university: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 1, code: 'A', name: '清华大学' },
+          { id: 2, code: 'B', name: '北京大学' },
+          { id: 3, code: 'C', name: '安庆师范大学' },
+        ]),
+      },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const service = new UniversityService(prisma as any, redis as any, admissionService as any);
+    const result = await service.getPickerOptions();
+    // 拼音 zh-CN sort: 安(a) < 北(b) < 清(q)
+    expect(result.map(r => r.name)).toEqual(['安庆师范大学', '北京大学', '清华大学']);
   });
 });

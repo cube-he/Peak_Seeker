@@ -270,13 +270,19 @@ export class UniversityService {
 
   async getPickerOptions(): Promise<{ id: number; code: string | null; name: string }[]> {
     // 仅返回在川招生的院校（四川单省数据约 2,237 所），过滤掉全国其他未招四川学生的院校
-    return this.prisma.university.findMany({
+    const rows = await this.prisma.university.findMany({
       where: {
         enrollmentPlans: { some: { province: '四川' } },
       },
       select: { id: true, code: true, name: true },
-      orderBy: { name: 'asc' },
+      orderBy: { id: 'asc' },  // deterministic order before dedup
     });
+    // dedup by name (生产数据有少量同名重复，picker UX 视作一项)
+    const seen = new Map<string, { id: number; code: string | null; name: string }>();
+    for (const r of rows) {
+      if (!seen.has(r.name)) seen.set(r.name, r);
+    }
+    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
   }
 
   async getFilters() {
