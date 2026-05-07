@@ -4,6 +4,7 @@
  * Usage:
  *   pnpm ts-node scripts/geo-backfill.ts --resume
  *   pnpm ts-node scripts/geo-backfill.ts --force --filter 985,211
+ *   pnpm ts-node scripts/geo-backfill.ts --force --ids 10676,10611,10618
  *   pnpm ts-node scripts/geo-backfill.ts --dry-run --concurrency 1
  *   pnpm ts-node scripts/geo-backfill.ts --skip-poi
  */
@@ -24,6 +25,7 @@ interface RunOptions {
   dryRun: boolean;
   skipPoi: boolean;
   filter?: string[];
+  ids?: number[];
   concurrency: number;
 }
 
@@ -35,8 +37,16 @@ async function main() {
     dryRun: flags['dry-run'] === true,
     skipPoi: flags['skip-poi'] === true,
     filter: typeof flags.filter === 'string' ? flags.filter.split(',') : undefined,
+    ids: typeof flags.ids === 'string'
+      ? flags.ids.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n))
+      : undefined,
     concurrency: Number(flags.concurrency ?? 1),
   };
+
+  if (typeof flags.ids === 'string' && (opts.ids?.length ?? 0) === 0) {
+    console.error(`[backfill] --ids was provided ("${flags.ids}") but parsed to no valid IDs. Refusing to run a full-table backfill.`);
+    process.exit(2);
+  }
 
   const app = await NestFactory.createApplicationContext(GeoCliModule, { logger: false });
   const prisma = app.get(PrismaService);
@@ -54,6 +64,9 @@ async function main() {
     if (opts.filter.includes('211')) where.OR.push({ is211: true });
     if (opts.filter.includes('dfc')) where.OR.push({ isDoubleFirstClass: true });
     if (where.OR.length === 0) delete where.OR;
+  }
+  if (opts.ids && opts.ids.length > 0) {
+    where.id = { in: opts.ids };
   }
   const list = await prisma.university.findMany({
     where, select: { id: true },
@@ -137,10 +150,13 @@ async function processOne(
     });
   }
   for (const c of candidates) {
-    const r = await deps.geocoder.geocodeCampus(uni.name, c.name, {
-      city: c.hint?.city ?? uni.city ?? undefined,
-      province: c.hint?.province ?? uni.province ?? undefined,
-    });
+    const r =
+      main && main.latitude != null && main.longitude != null
+        ? await deps.geocoder.geocodeCampus(uni.name, c.name, {
+            latitude: main.latitude,
+            longitude: main.longitude,
+          })
+        : null;
     campuses.push({
       name: c.name, isMain: c.name === '本部' || c.name === '主校区',
       province: r?.province, city: r?.city, district: r?.district,

@@ -11,7 +11,6 @@ import { RetryChain, STRATEGY_TABLE, StrategyTable } from './services/retry-chai
 import { GeocodeWithoutBracketStrategy } from './strategies/geocode-without-bracket.strategy';
 import { GeocodeWithProvinceCityStrategy } from './strategies/geocode-with-province-city.strategy';
 import { GeocodeAsPoiStrategy } from './strategies/geocode-as-poi.strategy';
-import { ReGeocodeCampusStrategy } from './strategies/re-geocode-campus.strategy';
 import { PickHighestScoreStrategy } from './strategies/pick-highest-score.strategy';
 import { FetchFromCharterStrategy } from './strategies/fetch-from-charter.strategy';
 import { FetchFromSunlightStrategy } from './strategies/fetch-from-sunlight.strategy';
@@ -23,7 +22,6 @@ const STRATEGY_PROVIDERS = [
   GeocodeWithoutBracketStrategy,
   GeocodeWithProvinceCityStrategy,
   GeocodeAsPoiStrategy,
-  ReGeocodeCampusStrategy,
   PickHighestScoreStrategy,
   FetchFromCharterStrategy,
   FetchFromSunlightStrategy,
@@ -43,18 +41,17 @@ const STRATEGY_PROVIDERS = [
         a: GeocodeWithoutBracketStrategy,
         b: GeocodeWithProvinceCityStrategy,
         c: GeocodeAsPoiStrategy,
-        d: ReGeocodeCampusStrategy,
-        e: PickHighestScoreStrategy,
-        f: FetchFromCharterStrategy,
-        g: FetchFromSunlightStrategy,
+        d: PickHighestScoreStrategy,
+        e: FetchFromCharterStrategy,
+        f: FetchFromSunlightStrategy,
       ): StrategyTable => ({
-        missing: [f, g],
+        missing: [e, f],
         geocode_no_result: [a, b, c],
         out_of_china: [b],
         province_mismatch: [b],
         duplicate_coord: [],
-        campus_distance_anomaly: [d],
-        address_ambiguous: [e],
+        campus_distance_anomaly: [],
+        address_ambiguous: [d],
         poi_zero_subway: [],
         poi_fetch_failed: [],
       }),
@@ -62,7 +59,6 @@ const STRATEGY_PROVIDERS = [
         GeocodeWithoutBracketStrategy,
         GeocodeWithProvinceCityStrategy,
         GeocodeAsPoiStrategy,
-        ReGeocodeCampusStrategy,
         PickHighestScoreStrategy,
         FetchFromCharterStrategy,
         FetchFromSunlightStrategy,
