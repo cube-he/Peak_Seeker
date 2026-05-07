@@ -154,3 +154,41 @@ describe('UniversityService.getCampusPois', () => {
     ).rejects.toThrow(/not found/i);
   });
 });
+
+describe('getPickerOptions', () => {
+  const buildService = () => {
+    const prisma = {
+      university: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 1, code: 'SC001', name: '四川大学' },
+          { id: 2, code: 'SC002', name: '电子科技大学' },
+        ]),
+      },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const service = new UniversityService(prisma as any, redis as any, admissionService as any);
+    return { service, prisma };
+  };
+
+  it('returns array of {id, code, name} for all universities', async () => {
+    const { service } = buildService();
+    const result = await service.getPickerOptions();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        id: expect.any(Number),
+        code: expect.any(String),
+        name: expect.any(String),
+      }),
+    );
+  });
+
+  it('result entries do NOT contain heavy fields like admissionRecords / scoreLines', async () => {
+    const { service } = buildService();
+    const result = await service.getPickerOptions();
+    expect(result[0]).not.toHaveProperty('admissionRecords');
+    expect(result[0]).not.toHaveProperty('scoreLines');
+  });
+});

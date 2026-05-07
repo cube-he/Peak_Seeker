@@ -268,6 +268,13 @@ export class UniversityService {
     }));
   }
 
+  async getPickerOptions(): Promise<{ id: number; code: string | null; name: string }[]> {
+    return this.prisma.university.findMany({
+      select: { id: true, code: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async getFilters() {
     const cacheKey = 'university-filters';
     const cached = await this.redis.getCache(cacheKey);
