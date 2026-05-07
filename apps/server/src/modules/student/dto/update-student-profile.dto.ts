@@ -268,6 +268,11 @@ export class UpdateStudentProfileDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsArray()
+  excludedMajorCategories?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsEnum(AcceptLevel)
   acceptLevel?: AcceptLevel;
 

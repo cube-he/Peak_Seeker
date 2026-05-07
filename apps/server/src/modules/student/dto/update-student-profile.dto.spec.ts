@@ -39,3 +39,20 @@ describe('UpdateStudentProfileDto.preferredBatches', () => {
     expect(errStr).toMatch(/isArray/);
   });
 });
+
+describe('UpdateStudentProfileDto.excludedMajorCategories', () => {
+  it('accepts string array', async () => {
+    const dto = plainToInstance(UpdateStudentProfileDto, {
+      excludedMajorCategories: ['草学类', '林学类'],
+    });
+    const errors = await validate(dto);
+    const e = errors.filter(x => x.property === 'excludedMajorCategories');
+    expect(e).toHaveLength(0);
+  });
+
+  it('accepts undefined (optional)', async () => {
+    const dto = plainToInstance(UpdateStudentProfileDto, {});
+    const errors = await validate(dto);
+    expect(errors.filter(x => x.property === 'excludedMajorCategories')).toHaveLength(0);
+  });
+});

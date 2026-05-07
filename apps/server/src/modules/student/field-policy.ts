@@ -110,6 +110,7 @@ export const STAGE_3_FIELDS = [
   'excludedCities',
   'excludedUniversities',
   'excludedMajors',
+  'excludedMajorCategories',
   'interests',
   'personalityType',
   'selfDescription',

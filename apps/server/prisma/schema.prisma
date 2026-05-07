@@ -667,8 +667,9 @@ model StudentProfile {
   excludedProvinces    Json?        @map("excluded_provinces")
   excludedCities       Json?        @map("excluded_cities")
   excludedUniversities Json?        @map("excluded_universities")
-  excludedMajors       Json?        @map("excluded_majors")
-  acceptLevel          AcceptLevel? @map("accept_level")
+  excludedMajors           Json?        @map("excluded_majors")
+  excludedMajorCategories  Json?        @map("excluded_major_categories")
+  acceptLevel              AcceptLevel? @map("accept_level")
 
   // --- 加分政策（① 老师独占）---
   bonusPolicyStatus BonusPolicyStatus? @map("bonus_policy_status")
