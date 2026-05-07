@@ -85,9 +85,6 @@ export default function UniversityDetailPage() {
             admissionGuide={u.admissionGuide ?? null}
             charterInfo={u.charterInfo ?? null}
           />
-          {u.campuses && u.campuses.length > 0 && (
-            <CampusLocationTab universityId={u.id} campuses={u.campuses} />
-          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <OverviewCard
               code={u.code ?? null}
@@ -139,6 +136,9 @@ export default function UniversityDetailPage() {
               topEmployers={u.topEmployers ?? null}
             />
           </div>
+          {u.campuses && u.campuses.length > 0 && (
+            <CampusLocationTab universityId={u.id} campuses={u.campuses} />
+          )}
         </div>
       ),
     },

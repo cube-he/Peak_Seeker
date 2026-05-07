@@ -14,11 +14,11 @@ export function CampusPanel({ universityId, selectedCampus }: CampusPanelProps) 
   return (
     <div className="bg-surface rounded-lg p-4">
       <CampusInfo campus={selectedCampus} />
-      <PoiList
-        universityId={universityId}
-        campusId={selectedCampus.id}
-        category="subway"
-      />
+      <div className="space-y-3">
+        <PoiList universityId={universityId} campusId={selectedCampus.id} category="subway" />
+        <PoiList universityId={universityId} campusId={selectedCampus.id} category="mall" />
+        <PoiList universityId={universityId} campusId={selectedCampus.id} category="airport" />
+      </div>
     </div>
   );
 }
