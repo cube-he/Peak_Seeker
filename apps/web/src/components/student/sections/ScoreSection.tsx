@@ -15,6 +15,7 @@ export default function ScoreSection({ profile }: Props) {
   return (
     <Form layout="horizontal" labelCol={{ span: 10 }} wrapperCol={{ span: 14 }} size="small">
       <Row gutter={[16, 0]}>
+        <Col xs={12} md={6}><Form.Item label="高考年份"><AutoSaveNumber fieldKey="examYear" defaultValue={profile.examYear ?? null} min={2020} max={2030} /></Form.Item></Col>
         <Col xs={12} md={6}><Form.Item label="总分"><AutoSaveNumber fieldKey="totalScore" defaultValue={profile.totalScore ?? null} min={0} max={750} /></Form.Item></Col>
         <Col xs={12} md={6}><Form.Item label="语文"><AutoSaveNumber fieldKey="scoreChinese" defaultValue={profile.scoreChinese ?? null} min={0} max={150} /></Form.Item></Col>
         <Col xs={12} md={6}><Form.Item label="数学"><AutoSaveNumber fieldKey="scoreMath" defaultValue={profile.scoreMath ?? null} min={0} max={150} /></Form.Item></Col>

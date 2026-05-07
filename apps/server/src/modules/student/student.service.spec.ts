@@ -246,6 +246,37 @@ describe('StudentService', () => {
         service.updateProfile(999, { dataVersion: 0 }),
       ).rejects.toThrow(NotFoundException);
     });
+
+    // 自动保存场景：前端 PATCH 单字段时不发 dataVersion，应跳过乐观锁正常更新（last-write-wins）
+    it('should skip optimistic lock when dataVersion is omitted (auto-save)', async () => {
+      const current = {
+        id: 10,
+        dataVersion: 7,
+        status: StudentStatus.ACTIVE,
+        examYear: null,
+        examType: null,
+        firstChoice: null,
+        totalScore: null,
+        priorityMode: null,
+        careerPlan: null,
+      };
+      prisma.studentProfile.findUnique.mockResolvedValue(current);
+      prisma.studentProfile.update.mockResolvedValue({ ...current, totalScore: 750, dataVersion: 8 });
+
+      await expect(
+        service.updateProfile(10, { totalScore: 750 } as any),
+      ).resolves.toBeDefined();
+
+      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 10 },
+          data: expect.objectContaining({
+            totalScore: 750,
+            dataVersion: { increment: 1 },
+          }),
+        }),
+      );
+    });
   });
 
   // calculateCompleteness 旧测试已删除；新算法覆盖在 progress.service.spec.ts

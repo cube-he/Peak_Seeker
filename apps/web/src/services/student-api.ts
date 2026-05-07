@@ -40,7 +40,7 @@ export interface UpdateStudentDto {
   ethnicity?: string;
   politicalStatus?: 'PARTY_MEMBER' | 'LEAGUE_MEMBER' | 'MASSES';
 
-  // ── 户籍 + 高考所在地 (① 老师独占) ──
+  // ── 户籍 + 高考所在地 (② 学生 / 老师都可写，2026-05-06 redesign 已下放) ──
   province?: string;
   city?: string;
   county?: string;
@@ -49,7 +49,7 @@ export interface UpdateStudentDto {
   examLocationCity?: string;
   examLocationCounty?: string;
 
-  // ── 考试成绩 (① 老师独占) ──
+  // ── 考试成绩 (② 学生自填，仅 provincialRank ① 后端自动算) ──
   examType?: 'PHYSICS' | 'HISTORY' | 'COMPREHENSIVE_LIBERAL' | 'COMPREHENSIVE_SCIENCE';
   examSource?: 'REAL_EXAM' | 'MOCK_EXAM' | 'ESTIMATED';
   totalScore?: number;
@@ -63,7 +63,7 @@ export interface UpdateStudentDto {
   firstChoice?: string;
   reChoices?: string[];
 
-  // ── 加分政策 (① 老师独占) ──
+  // ── 加分政策 (② 学生 / 老师都可写，2026-05-06 redesign 已下放) ──
   bonusPolicyStatus?: 'NONE' | 'HAS_BONUS' | 'UNKNOWN';
   bonusItems?: BonusItem[];
 

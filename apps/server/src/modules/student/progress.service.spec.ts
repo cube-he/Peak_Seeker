@@ -19,6 +19,7 @@ describe('ProgressService', () => {
         phone: '13800000000',
         gender: 'MALE',
         examType: 'PHYSICS',
+        examYear: 2026,
         parentPhone: '13900000000',
         formFiller: 'STUDENT',
         // 选科
@@ -78,11 +79,12 @@ describe('ProgressService', () => {
 
     it('teacher 字段全填（含非空 bonusItems）+ stage1：isRecommendable=true', () => {
       const profile = {
-        // STAGE_1 全部 15 字段
+        // STAGE_1 全部 16 字段
         realName: '小王',
         phone: '13800000000',
         gender: 'MALE',
         examType: 'PHYSICS',
+        examYear: 2026,
         parentPhone: '13900000000',
         formFiller: 'STUDENT',
         firstChoice: '物理',

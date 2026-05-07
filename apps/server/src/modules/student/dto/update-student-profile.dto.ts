@@ -29,9 +29,11 @@ import {
 import { BonusItemDto } from './bonus-item.dto';
 
 export class UpdateStudentProfileDto {
-  @ApiProperty({ description: '数据版本号（乐观锁）' })
+  // 自动保存场景下前端不会带 dataVersion（只发改动字段），此时跳过乐观锁走 last-write-wins
+  @ApiPropertyOptional({ description: '数据版本号（乐观锁）；省略时跳过版本校验' })
+  @IsOptional()
   @IsInt()
-  dataVersion: number;
+  dataVersion?: number;
 
   // --- 基本信息 ---
 

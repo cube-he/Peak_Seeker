@@ -250,7 +250,8 @@ export class StudentService {
       throw new NotFoundException('学生不存在');
     }
 
-    if (current.dataVersion !== dataVersion) {
+    // dataVersion 缺失（auto-save 单字段保存）时跳过乐观锁；显式传入时严格校验
+    if (dataVersion !== undefined && current.dataVersion !== dataVersion) {
       throw new ConflictException(
         '数据已被其他人修改，请刷新后重试',
       );

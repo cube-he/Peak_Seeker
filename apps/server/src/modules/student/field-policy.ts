@@ -60,6 +60,7 @@ export const STAGE_1_REQUIRED = [
   'phone',
   'gender',
   'examType',
+  'examYear',
   'parentPhone',
   // 同时归入 STUDENT_ONLY_FIELDS：学生端必填，但权限层视为 student-only 字段
   'formFiller',
