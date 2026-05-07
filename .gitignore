@@ -93,3 +93,6 @@ scripts/data-processing/output/data_bundle.tar.gz
 
 # Data integration pipeline intermediate artifacts (not versioned)
 data/_pipeline/
+
+# Git worktrees (isolated workspaces for feature work)
+.worktrees/
