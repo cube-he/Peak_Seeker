@@ -43,6 +43,11 @@ async function main() {
     concurrency: Number(flags.concurrency ?? 1),
   };
 
+  if (typeof flags.ids === 'string' && (opts.ids?.length ?? 0) === 0) {
+    console.error(`[backfill] --ids was provided ("${flags.ids}") but parsed to no valid IDs. Refusing to run a full-table backfill.`);
+    process.exit(2);
+  }
+
   const app = await NestFactory.createApplicationContext(GeoCliModule, { logger: false });
   const prisma = app.get(PrismaService);
   const geocoder = app.get(GeocoderService);
