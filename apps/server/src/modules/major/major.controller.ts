@@ -1,6 +1,8 @@
-import { Controller, Get, Param, Query, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Header, Param, Query, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { MajorService } from './major.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { MajorPickerOptionDto } from './dto/picker-option.dto';
 
 @ApiTags('专业')
 @Controller('majors')
@@ -38,6 +40,15 @@ export class MajorController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async getHot(@Query('limit') limit?: number) {
     return this.majorService.getHotMajors(limit);
+  }
+
+  @Get('picker-options')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: '专业 picker 选项（id/code/name 精简）' })
+  @ApiResponse({ status: 200, type: [MajorPickerOptionDto] })
+  @Header('Cache-Control', 'private, max-age=86400')
+  async getPickerOptions(): Promise<MajorPickerOptionDto[]> {
+    return this.majorService.getPickerOptions();
   }
 
   @Get(':id')

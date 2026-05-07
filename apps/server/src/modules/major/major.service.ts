@@ -133,6 +133,13 @@ export class MajorService {
     return result;
   }
 
+  async getPickerOptions(): Promise<{ id: number; code: string | null; name: string }[]> {
+    return this.prisma.major.findMany({
+      select: { id: true, code: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async getHotMajors(limit?: number) {
     // Prisma 7 rejects `take: undefined`. Coerce defensively (see UniversityService.getHotUniversities note).
     const safeLimit = Number.isFinite(limit) && limit! > 0 ? limit! : 10;
