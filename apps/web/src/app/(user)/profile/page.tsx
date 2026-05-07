@@ -38,16 +38,9 @@ export default function ProfilePage() {
     }
   }, [authUser?.role, router]);
 
-  // STUDENT 角色在 effect 跳转前先显示 loading，避免闪烁旧 form
-  if (authUser?.role === 'STUDENT') {
-    return (
-      <MainLayout>
-        <div className="flex justify-center py-32">
-          <Spin size="large" tip="正在跳转..." />
-        </div>
-      </MainLayout>
-    );
-  }
+  // 所有 hooks 必须在任何 early return 之前调用，否则 STUDENT vs 其他角色
+  // 渲染时 hook 数量不同，触发 React error #300
+  // "Rendered more hooks than during the previous render"
   const [profileForm] = Form.useForm();
   const [examForm] = Form.useForm();
   const [prefForm] = Form.useForm();
@@ -55,7 +48,7 @@ export default function ProfilePage() {
   const { data: user, isLoading } = useQuery({
     queryKey: ['user-me'],
     queryFn: () => userService.getMe(),
-    enabled: isLoggedIn,
+    enabled: isLoggedIn && authUser?.role !== 'STUDENT',
   });
 
   const updateProfile = useMutation({
@@ -81,6 +74,17 @@ export default function ProfilePage() {
       message.success('偏好设置已更新');
     },
   });
+
+  // STUDENT 角色在 effect 跳转前先显示 loading，避免闪烁旧 form
+  if (authUser?.role === 'STUDENT') {
+    return (
+      <MainLayout>
+        <div className="flex justify-center py-32">
+          <Spin size="large" tip="正在跳转..." />
+        </div>
+      </MainLayout>
+    );
+  }
 
   if (!isLoggedIn) {
     return (

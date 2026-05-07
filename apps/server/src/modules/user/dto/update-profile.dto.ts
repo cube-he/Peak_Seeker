@@ -8,10 +8,20 @@ export class UpdateProfileDto {
   @IsString()
   realName?: string;
 
+  @ApiPropertyOptional({ description: '手机号' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
   @ApiPropertyOptional({ description: '性别' })
   @IsOptional()
   @IsString()
   gender?: string;
+
+  @ApiPropertyOptional({ description: '民族' })
+  @IsOptional()
+  @IsString()
+  ethnicity?: string;
 
   @ApiPropertyOptional({ description: '出生日期' })
   @IsOptional()

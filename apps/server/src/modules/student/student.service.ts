@@ -401,7 +401,15 @@ export class StudentService {
         filtered[k] = v;
       }
     }
-    return { ...filtered, progress };
+    // 把 User 上的字段铺平到顶层（autosave/section 组件按 fieldKey 平面访问，不再走 profile.user.*）
+    return {
+      ...filtered,
+      realName: profile.user.realName,
+      phone: profile.user.phone,
+      gender: profile.user.gender,
+      ethnicity: profile.user.ethnicity,
+      progress,
+    };
   }
 
   /**

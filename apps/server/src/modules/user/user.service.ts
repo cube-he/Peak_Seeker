@@ -63,7 +63,9 @@ export class UserService {
 
   async updateProfile(id: number, data: {
     realName?: string;
+    phone?: string;
     gender?: string;
+    ethnicity?: string;
     birthDate?: Date;
     avatar?: string;
   }) {

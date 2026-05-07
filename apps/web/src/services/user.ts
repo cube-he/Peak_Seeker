@@ -2,7 +2,9 @@ import api from './api';
 
 export interface UpdateProfileDto {
   realName?: string;
+  phone?: string;
   gender?: string;
+  ethnicity?: string;
   birthDate?: string;
   avatar?: string;
 }
