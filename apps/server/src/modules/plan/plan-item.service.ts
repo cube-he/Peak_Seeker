@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanStateMachineService } from './plan-state-machine.service';
 import { AddPlanItemDto } from './dto/add-plan-item.dto';
+import { UpdatePlanItemDto } from './dto/update-plan-item.dto';
 import { calcGradient } from '../plan-candidate/gradient-calculator';
 
 @Injectable()
@@ -68,5 +69,36 @@ export class PlanItemService {
         selectionReason: dto.selectionReason ?? null,
       },
     });
+  }
+
+  async update(planId: number, itemId: number, dto: UpdatePlanItemDto) {
+    const plan = await this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
+    if (!plan) throw new NotFoundException('方案不存在');
+    if (!this.sm.canEditItems(plan.status)) throw new ConflictException(`方案状态 ${plan.status} 不允许编辑`);
+    const item = await this.prisma.planItem.findUnique({ where: { id: itemId } });
+    if (!item || item.planId !== planId) throw new NotFoundException('志愿项不存在');
+    return this.prisma.planItem.update({
+      where: { id: itemId },
+      data: { ...dto, isManuallyModified: true },
+    });
+  }
+
+  async remove(planId: number, itemId: number) {
+    const plan = await this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
+    if (!plan) throw new NotFoundException('方案不存在');
+    if (!this.sm.canEditItems(plan.status)) throw new ConflictException(`方案状态 ${plan.status} 不允许编辑`);
+    return this.prisma.planItem.delete({ where: { id: itemId } });
+  }
+
+  async reorder(planId: number, itemIds: number[]) {
+    const plan = await this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
+    if (!plan) throw new NotFoundException('方案不存在');
+    if (!this.sm.canEditItems(plan.status)) throw new ConflictException(`方案状态 ${plan.status} 不允许编辑`);
+    await this.prisma.$transaction(
+      itemIds.map((id, idx) =>
+        this.prisma.planItem.update({ where: { id }, data: { sequence: idx + 1 } }),
+      ),
+    );
+    return { ok: true, count: itemIds.length };
   }
 }
