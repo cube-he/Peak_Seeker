@@ -93,24 +93,29 @@ export function isInEthnicArea(
   const fullCounty = (county || '').trim();
 
   // 三州（city 字段承载州名）
-  if (
-    ETHNIC_AREA_PREFECTURES.some((p) => fullCity.includes(p) || p.includes(fullCity)) ||
-    ETHNIC_AREA_PREFECTURES_SHORT.includes(fullCity)
-  ) {
-    return true;
+  // 注：必须 fullCity 非空才走 includes 比较——否则 "X".includes("") === true 会误判
+  if (fullCity) {
+    if (
+      ETHNIC_AREA_PREFECTURES.some((p) => fullCity.includes(p) || p.includes(fullCity)) ||
+      ETHNIC_AREA_PREFECTURES_SHORT.includes(fullCity)
+    ) {
+      return true;
+    }
   }
 
   // 十七县（county 字段承载）
-  if (
-    ETHNIC_AREA_COUNTIES.some((c) => fullCounty.includes(c) || c.includes(fullCounty)) ||
-    ETHNIC_AREA_COUNTIES_SHORT.includes(fullCounty)
-  ) {
-    return true;
-  }
+  if (fullCounty) {
+    if (
+      ETHNIC_AREA_COUNTIES.some((c) => fullCounty.includes(c) || c.includes(fullCounty)) ||
+      ETHNIC_AREA_COUNTIES_SHORT.includes(fullCounty)
+    ) {
+      return true;
+    }
 
-  // 两区（county 字段承载，攀枝花/乐山下辖）
-  if (ETHNIC_AREA_DISTRICTS.includes(fullCounty)) {
-    return true;
+    // 两区（county 字段承载，攀枝花/乐山下辖）
+    if (ETHNIC_AREA_DISTRICTS.includes(fullCounty)) {
+      return true;
+    }
   }
 
   return false;

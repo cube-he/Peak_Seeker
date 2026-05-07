@@ -29,6 +29,19 @@ describe('BonusCalcService', () => {
       const r = service.calculate({});
       expect(r.bonusValue).toBe(0);
     });
+
+    it('四川但 city/county 都是 null：不应被判为"位于民族地区"（regression: 空字符串 includes 怪行为）', () => {
+      const r = service.calculate({ province: '四川', city: null, county: null });
+      expect(r.bonusValue).toBe(0);
+      expect(r.matchedItems).toEqual([]);
+      expect(r.rejectedItems).toEqual([]);
+    });
+
+    it('四川但 city/county 都是空字符串：同上', () => {
+      const r = service.calculate({ province: '四川', city: '', county: '' });
+      expect(r.bonusValue).toBe(0);
+      expect(r.rejectedItems).toEqual([]);
+    });
   });
 
   describe('民族地区加分（5）', () => {
