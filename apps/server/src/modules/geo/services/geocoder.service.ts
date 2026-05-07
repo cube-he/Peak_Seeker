@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { AmapClient } from '../amap/amap.client';
 import { GeoResult } from '../dto/geo-result.dto';
-import { AmapApiError, AmapGeocode, AmapPoi, AmapUnavailableError } from '../amap/amap.types';
+import { AmapGeocode, AmapPoi } from '../amap/amap.types';
+import { haversineMeters } from '../utils/haversine';
+
+/** Branch campuses < this distance from main are treated as polluted (AMap fell back to main). */
+const CAMPUS_POLLUTION_THRESHOLD_METERS = 300;
 
 /**
  * AMap returns `[]` (empty array) for any missing string field instead of
@@ -37,21 +41,19 @@ export class GeocoderService {
   async geocodeCampus(
     universityName: string,
     campusName: string,
-    hint: { city?: string; province?: string } = {},
+    mainCoords: { latitude: number; longitude: number },
   ): Promise<GeoResult | null> {
-    const query = `${universityName}(${campusName})`;
-    try {
-      const direct = await this.amap.geocode(query, { city: hint.city });
-      if (direct) return this.fromGeocode(query, direct);
-    } catch (e) {
-      // amap.geocode signals failure via exception (AmapApiError on status=0,
-      // AmapUnavailableError after 6 retries). Fall through to POI fallback.
-      if (!(e instanceof AmapApiError) && !(e instanceof AmapUnavailableError)) throw e;
-    }
-    const pois = await this.amap.searchPlaceText(`${universityName}${campusName}`, {
-      city: hint.city, types: '141201', // 高等院校
-    });
-    return pois.length > 0 ? this.fromPoi(pois[0]) : null;
+    const query = `${universityName}${campusName}`;
+    const pois = await this.amap.searchPlaceText(query, { types: '141201' });
+    if (pois.length === 0) return null;
+    const result = this.fromPoi(pois[0]);
+    if (!result) return null;
+    const distMeters = haversineMeters(
+      mainCoords.latitude, mainCoords.longitude,
+      result.latitude, result.longitude,
+    );
+    if (distMeters < CAMPUS_POLLUTION_THRESHOLD_METERS) return null;
+    return result;
   }
 
   async geocodeUniversity(
