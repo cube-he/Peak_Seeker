@@ -24,7 +24,6 @@ import {
   RemoteAreaAcceptance,
   ColdMajorAcceptance,
   FormFiller,
-  Batch,
 } from '@prisma/client';
 import { BonusItemDto } from './bonus-item.dto';
 
@@ -383,11 +382,11 @@ export class UpdateStudentProfileDto {
 
   // --- V1 新增：意向批次（②）---
 
-  @ApiPropertyOptional({ enum: Batch, isArray: true })
+  @ApiPropertyOptional({ description: '意向批次（batch_config 中的 batch 字段值，多省份扩展友好）', isArray: true })
   @IsOptional()
   @IsArray()
-  @IsEnum(Batch, { each: true })
-  preferredBatches?: Batch[];
+  @IsString({ each: true })
+  preferredBatches?: string[];
 
   // --- V1 新增：偏远 / 冷门接受度（②）---
 
