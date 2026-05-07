@@ -185,10 +185,14 @@ describe('getPickerOptions', () => {
     );
   });
 
-  it('result entries do NOT contain heavy fields like admissionRecords / scoreLines', async () => {
-    const { service } = buildService();
-    const result = await service.getPickerOptions();
-    expect(result[0]).not.toHaveProperty('admissionRecords');
-    expect(result[0]).not.toHaveProperty('scoreLines');
+  it('queries with select projection (id/code/name only, no relations) and filters to in-Sichuan', async () => {
+    const { service, prisma } = buildService();
+    const findManySpy = jest.spyOn(prisma.university, 'findMany');
+    await service.getPickerOptions();
+    expect(findManySpy).toHaveBeenCalledWith({
+      where: { enrollmentPlans: { some: { province: '四川' } } },
+      select: { id: true, code: true, name: true },
+      orderBy: { name: 'asc' },
+    });
   });
 });

@@ -269,7 +269,11 @@ export class UniversityService {
   }
 
   async getPickerOptions(): Promise<{ id: number; code: string | null; name: string }[]> {
+    // 仅返回在川招生的院校（四川单省数据约 2,237 所），过滤掉全国其他未招四川学生的院校
     return this.prisma.university.findMany({
+      where: {
+        enrollmentPlans: { some: { province: '四川' } },
+      },
       select: { id: true, code: true, name: true },
       orderBy: { name: 'asc' },
     });

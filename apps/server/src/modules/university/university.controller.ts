@@ -5,12 +5,14 @@ import {
   Param,
   Query,
   ParseIntPipe,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { UniversityPickerOptionDto } from './dto/picker-option.dto';
 import { UniversityService } from './university.service';
 import { QueryUniversityDto } from './dto/query-university.dto';
 import { PoiQueryDto } from './dto/poi-query.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('院校')
 @Controller('universities')
@@ -37,9 +39,10 @@ export class UniversityController {
   }
 
   @Get('picker-options')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: '院校 picker 选项（id/code/name 精简）' })
   @ApiResponse({ status: 200, type: [UniversityPickerOptionDto] })
-  @Header('Cache-Control', 'public, max-age=86400')
+  @Header('Cache-Control', 'private, max-age=86400')
   async getPickerOptions(): Promise<UniversityPickerOptionDto[]> {
     return this.universityService.getPickerOptions();
   }
