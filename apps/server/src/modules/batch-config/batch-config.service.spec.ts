@@ -52,5 +52,14 @@ describe('BatchConfigService', () => {
       const result = await service.getPickerOptions(2026, '四川');
       expect(result.map((r) => r.code)).toEqual(['A', 'B', 'C']);
     });
+
+    it('takes minimum admissionOrder when same batch has different orders across examType', async () => {
+      prismaMock.batchConfig.findMany.mockResolvedValue([
+        { batch: '某批', admissionOrder: 5, examType: '物理' },
+        { batch: '某批', admissionOrder: 3, examType: '历史' },
+      ]);
+      const result = await service.getPickerOptions(2026, '四川');
+      expect(result).toEqual([{ code: '某批', name: '某批', order: 3 }]);
+    });
   });
 });

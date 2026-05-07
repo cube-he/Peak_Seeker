@@ -18,11 +18,15 @@ export class BatchConfigService {
       where: { year, province },
       select: { batch: true, admissionOrder: true },
     });
-    // 同一 batch 在物理 / 历史下可能各有一行，按 batch 名去重
+    // 同一 batch 在物理 / 历史下可能各有一行，按 batch 名去重；
+    // 若两行 admissionOrder 不一致（schema 未强制相等），取较小者（更早录取）
     const map = new Map<string, BatchPickerOption>();
     for (const r of rows) {
-      if (!map.has(r.batch)) {
+      const existing = map.get(r.batch);
+      if (!existing) {
         map.set(r.batch, { code: r.batch, name: r.batch, order: r.admissionOrder });
+      } else if (r.admissionOrder < existing.order) {
+        existing.order = r.admissionOrder;
       }
     }
     return Array.from(map.values()).sort((a, b) => a.order - b.order);
