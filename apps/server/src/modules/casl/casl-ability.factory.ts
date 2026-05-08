@@ -56,6 +56,13 @@ export class CaslAbilityFactory {
       createdById: user.id,
     } as any);
 
+    // Read plans of students under this teacher (collaboration read)
+    if (user.teacherProfileId) {
+      can('read', 'VolunteerPlan', {
+        'student.teacherId': user.teacherProfileId,
+      } as any);
+    }
+
     // Plan items: manage items within own plans
     can(['create', 'read', 'update', 'delete'], 'PlanItem', {
       createdById: user.id,
@@ -69,6 +76,10 @@ export class CaslAbilityFactory {
     if (user.isSupervisor) {
       can('review', 'VolunteerPlan');
       can('publish', 'VolunteerPlan');
+      // Read any plan currently in review pipeline
+      can('read', 'VolunteerPlan', {
+        status: { $in: ['PENDING_REVIEW', 'REVIEWING'] },
+      } as any);
     }
   }
 

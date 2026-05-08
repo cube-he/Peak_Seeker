@@ -154,6 +154,65 @@ describe('CaslAbilityFactory', () => {
     expect(ability.can('publish', 'VolunteerPlan')).toBe(true);
   });
 
+  it('supervisor can read any plan in PENDING_REVIEW or REVIEWING status', () => {
+    const supervisor: JwtPayloadUser = {
+      id: 99,
+      username: 'sup',
+      role: 'TEACHER',
+      teacherProfileId: 50,
+      isSupervisor: true,
+    };
+    const ability = factory.createForUser(supervisor);
+
+    expect(
+      ability.can('read', {
+        __caslSubjectType__: 'VolunteerPlan',
+        createdById: 1, // not own
+        status: 'PENDING_REVIEW',
+      } as any),
+    ).toBe(true);
+    expect(
+      ability.can('read', {
+        __caslSubjectType__: 'VolunteerPlan',
+        createdById: 1,
+        status: 'REVIEWING',
+      } as any),
+    ).toBe(true);
+    expect(
+      ability.can('read', {
+        __caslSubjectType__: 'VolunteerPlan',
+        createdById: 1,
+        status: 'DRAFT',
+      } as any),
+    ).toBe(false);
+  });
+
+  it('teacher can read plans of students under their care', () => {
+    const teacher: JwtPayloadUser = {
+      id: 7,
+      username: 'teacher2',
+      role: 'TEACHER',
+      teacherProfileId: 20,
+      isSupervisor: false,
+    };
+    const ability = factory.createForUser(teacher);
+
+    expect(
+      ability.can('read', {
+        __caslSubjectType__: 'VolunteerPlan',
+        createdById: 999,
+        student: { teacherId: 20 },
+      } as any),
+    ).toBe(true);
+    expect(
+      ability.can('read', {
+        __caslSubjectType__: 'VolunteerPlan',
+        createdById: 999,
+        student: { teacherId: 21 },
+      } as any),
+    ).toBe(false);
+  });
+
   // --- Student ---
 
   it('should allow student to read universities and majors', () => {
