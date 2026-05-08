@@ -85,6 +85,16 @@ export class PlanController {
     return this.planService.startReview(id, req.user.id);
   }
 
+  @Post(':id/derive-version')
+  @ApiOperation({ summary: '派生新版本（拷贝 PlanItem，状态回到 DRAFT）' })
+  @ApiParam({ name: 'id', type: Number })
+  async derive(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
+    return this.planService.deriveVersion(id, req.user.id);
+  }
+
   @Post(':id/review')
   @ApiOperation({ summary: '审核动作（APPROVE/REJECT/REQUEST_CHANGE/COMMENT）' })
   @ApiParam({ name: 'id', type: Number })

@@ -220,6 +220,70 @@ export class PlanService {
     });
   }
 
+  async deriveVersion(planId: number, userId: number) {
+    const parent = await this.findById(planId, userId);
+    if (!this.sm.canDeriveVersion(parent.status)) {
+      throw new ConflictException(`状态 ${parent.status} 不允许派生`);
+    }
+    const items = await this.prisma.planItem.findMany({
+      where: { planId },
+      orderBy: { sequence: 'asc' },
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      const baseName = parent.name?.replace(/-(初版|v\d+)$/, '') ?? parent.name;
+      const newPlan = await tx.volunteerPlan.create({
+        data: {
+          studentId: parent.studentId,
+          createdById: userId,
+          name: `${baseName}-v${parent.versionNo + 1}`,
+          year: parent.year,
+          province: parent.province,
+          batchName: parent.batchName,
+          batchConfigId: parent.batchConfigId,
+          recommendType: 'MANUAL',
+          status: 'DRAFT',
+          versionNo: parent.versionNo + 1,
+          parentVersionId: parent.id,
+          notes: parent.notes,
+        },
+      });
+      if (items.length > 0) {
+        await tx.planItem.createMany({
+          data: items.map((it) => ({
+            planId: newPlan.id,
+            sequence: it.sequence,
+            gradient: it.gradient,
+            universityId: it.universityId,
+            universityName: it.universityName,
+            universityCode: it.universityCode,
+            groupCode: it.groupCode,
+            groupName: it.groupName,
+            majorId: it.majorId,
+            majorName: it.majorName,
+            majorCode: it.majorCode,
+            anchorMajor: it.anchorMajor,
+            groupMajorCount: it.groupMajorCount,
+            subjectRequirement: it.subjectRequirement,
+            acceptAdjust: it.acceptAdjust,
+            score25Group: it.score25Group,
+            rank25Group: it.rank25Group,
+            score25Major: it.score25Major,
+            rank25Major: it.rank25Major,
+            score24Major: it.score24Major,
+            rank24Major: it.rank24Major,
+            planCount: it.planCount,
+            tuition: it.tuition,
+            selectionReason: it.selectionReason,
+            isManuallyModified: false,
+            originalItemId: it.id,
+          })),
+        });
+      }
+      return newPlan;
+    });
+  }
+
   async review(planId: number, supervisorUserId: number, dto: ReviewPlanDto) {
     const plan = await this.prisma.volunteerPlan.findUnique({
       where: { id: planId },
