@@ -16,10 +16,11 @@ import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
 import { ReviewPlanDto } from './dto/review-plan.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PoliciesGuard, CheckPolicies } from '../casl';
 
 @ApiTags('志愿方案')
 @Controller('plans')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PoliciesGuard)
 @ApiBearerAuth()
 export class PlanController {
   constructor(private planService: PlanService) {}
@@ -76,6 +77,7 @@ export class PlanController {
   }
 
   @Post(':id/start-review')
+  @CheckPolicies((ab) => ab.can('review', 'VolunteerPlan'))
   @ApiOperation({ summary: '主管认领审核（PENDING_REVIEW → REVIEWING，乐观锁）' })
   @ApiParam({ name: 'id', type: Number })
   async startReview(
@@ -106,6 +108,7 @@ export class PlanController {
   }
 
   @Post(':id/review')
+  @CheckPolicies((ab) => ab.can('review', 'VolunteerPlan'))
   @ApiOperation({ summary: '审核动作（APPROVE/REJECT/REQUEST_CHANGE/COMMENT）' })
   @ApiParam({ name: 'id', type: Number })
   async review(
