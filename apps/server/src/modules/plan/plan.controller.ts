@@ -74,6 +74,16 @@ export class PlanController {
     return this.planService.deleteDraft(id, req.user.id);
   }
 
+  @Post(':id/start-review')
+  @ApiOperation({ summary: '主管认领审核（PENDING_REVIEW → REVIEWING，乐观锁）' })
+  @ApiParam({ name: 'id', type: Number })
+  async startReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
+    return this.planService.startReview(id, req.user.id);
+  }
+
   @Post(':id/submit-review')
   @ApiOperation({ summary: '提交审核（DRAFT → PENDING_REVIEW）' })
   @ApiParam({ name: 'id', type: Number })

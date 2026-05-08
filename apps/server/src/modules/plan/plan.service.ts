@@ -170,6 +170,35 @@ export class PlanService {
     });
   }
 
+  async startReview(planId: number, supervisorUserId: number) {
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { userId: supervisorUserId },
+    });
+    if (!teacher?.isSupervisor) {
+      throw new ForbiddenException('仅主管可认领审核');
+    }
+
+    // 乐观锁 UPDATE
+    const result = await this.prisma.$executeRaw`
+      UPDATE volunteer_plans
+      SET status = 'REVIEWING', current_reviewer_id = ${supervisorUserId}
+      WHERE id = ${planId} AND status = 'PENDING_REVIEW'
+    `;
+    if (result === 0) {
+      throw new ConflictException('方案已被他人认领或不在 PENDING_REVIEW 状态');
+    }
+    await this.prisma.planReview.create({
+      data: {
+        planId,
+        reviewerId: supervisorUserId,
+        reviewerRole: 'SUPERVISOR',
+        action: 'COMMENT',
+        comment: '开始审核',
+      },
+    });
+    return this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
+  }
+
   async submitReview(planId: number, userId: number) {
     const plan = await this.findById(planId, userId);
     const itemCount = await this.prisma.planItem.count({ where: { planId } });
