@@ -90,6 +90,33 @@ export class PlanService {
     });
   }
 
+  async findByIdWithItems(id: number) {
+    const plan = await this.prisma.volunteerPlan.findUnique({
+      where: { id },
+      include: { planItems: { orderBy: { sequence: 'asc' } } },
+    });
+    if (!plan) throw new NotFoundException('方案不存在');
+    return plan;
+  }
+
+  async getVersionTree(planId: number) {
+    const plan = await this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
+    if (!plan) throw new NotFoundException('方案不存在');
+    if (!plan.batchConfigId) return [plan];
+    return this.prisma.volunteerPlan.findMany({
+      where: { studentId: plan.studentId, batchConfigId: plan.batchConfigId },
+      orderBy: { versionNo: 'asc' },
+    });
+  }
+
+  async deleteDraft(id: number, userId: number) {
+    const plan = await this.findById(id, userId);
+    if (plan.status !== 'DRAFT') {
+      throw new ConflictException('仅 DRAFT 方案可删除');
+    }
+    return this.prisma.volunteerPlan.delete({ where: { id } });
+  }
+
   async toggleFavorite(id: number, userId: number) {
     const plan = await this.findById(id, userId);
 

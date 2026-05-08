@@ -42,6 +42,20 @@ export class PlanController {
     return this.planService.findById(id, req.user.id);
   }
 
+  @Get(':id/full')
+  @ApiOperation({ summary: '获取方案详情（含 planItems）' })
+  @ApiParam({ name: 'id', type: Number })
+  async findFull(@Param('id', ParseIntPipe) id: number) {
+    return this.planService.findByIdWithItems(id);
+  }
+
+  @Get(':id/version-tree')
+  @ApiOperation({ summary: '获取方案版本树' })
+  @ApiParam({ name: 'id', type: Number })
+  async versionTree(@Param('id', ParseIntPipe) id: number) {
+    return this.planService.getVersionTree(id);
+  }
+
   @Put(':id')
   @ApiOperation({ summary: '更新方案' })
   @ApiParam({ name: 'id', type: Number })
@@ -54,10 +68,10 @@ export class PlanController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: '删除方案' })
+  @ApiOperation({ summary: '删除方案（仅 DRAFT）' })
   @ApiParam({ name: 'id', type: Number })
   async delete(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
-    return this.planService.delete(id, req.user.id);
+    return this.planService.deleteDraft(id, req.user.id);
   }
 
   @Post(':id/favorite')
