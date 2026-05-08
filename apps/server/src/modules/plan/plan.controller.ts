@@ -8,10 +8,13 @@ import {
   Param,
   UseGuards,
   Request,
+  Res,
   ParseIntPipe,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { PlanService } from './plan.service';
+import { PlanExportService } from './plan-export.service';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
 import { ReviewPlanDto } from './dto/review-plan.dto';
@@ -23,7 +26,10 @@ import { PoliciesGuard, CheckPolicies } from '../casl';
 @UseGuards(JwtAuthGuard, PoliciesGuard)
 @ApiBearerAuth()
 export class PlanController {
-  constructor(private planService: PlanService) {}
+  constructor(
+    private planService: PlanService,
+    private exportService: PlanExportService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: '创建方案' })
@@ -85,6 +91,21 @@ export class PlanController {
     @Request() req: any,
   ) {
     return this.planService.startReview(id, req.user.id);
+  }
+
+  @Get(':id/export.pdf')
+  @ApiOperation({ summary: '导出方案 PDF（需服务端已安装 puppeteer）' })
+  @ApiParam({ name: 'id', type: Number })
+  async exportPdf(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    const buf = await this.exportService.exportPdf(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=plan-${id}.pdf`,
+    });
+    res.send(buf);
   }
 
   @Post(':id/finalize')
