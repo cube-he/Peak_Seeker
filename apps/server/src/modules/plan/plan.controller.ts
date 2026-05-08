@@ -14,6 +14,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger'
 import { PlanService } from './plan.service';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
+import { ReviewPlanDto } from './dto/review-plan.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('志愿方案')
@@ -82,6 +83,17 @@ export class PlanController {
     @Request() req: any,
   ) {
     return this.planService.startReview(id, req.user.id);
+  }
+
+  @Post(':id/review')
+  @ApiOperation({ summary: '审核动作（APPROVE/REJECT/REQUEST_CHANGE/COMMENT）' })
+  @ApiParam({ name: 'id', type: Number })
+  async review(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+    @Body() dto: ReviewPlanDto,
+  ) {
+    return this.planService.review(id, req.user.id, dto);
   }
 
   @Post(':id/submit-review')

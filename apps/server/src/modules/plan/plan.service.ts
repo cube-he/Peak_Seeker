@@ -3,7 +3,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
 import { CreatePlanV2Dto } from './dto/create-plan-v2.dto';
-import { PlanStateMachineService } from './plan-state-machine.service';
+import { ReviewPlanDto } from './dto/review-plan.dto';
+import { PlanStateMachineService, PlanAction } from './plan-state-machine.service';
 
 @Injectable()
 export class PlanService {
@@ -216,6 +217,38 @@ export class PlanService {
     return this.prisma.volunteerPlan.update({
       where: { id: planId },
       data: { status: next },
+    });
+  }
+
+  async review(planId: number, supervisorUserId: number, dto: ReviewPlanDto) {
+    const plan = await this.prisma.volunteerPlan.findUnique({
+      where: { id: planId },
+    });
+    if (!plan) throw new NotFoundException('方案不存在');
+    if (plan.currentReviewerId !== supervisorUserId) {
+      throw new ForbiddenException('您不是当前审核人');
+    }
+    const next = this.sm.transition(plan.status, dto.action as PlanAction);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.volunteerPlan.update({
+        where: { id: planId },
+        data: {
+          status: next,
+          currentReviewerId: dto.action === 'COMMENT' ? supervisorUserId : null,
+        },
+      });
+      await tx.planReview.create({
+        data: {
+          planId,
+          reviewerId: supervisorUserId,
+          reviewerRole: 'SUPERVISOR',
+          action: dto.action,
+          comment: dto.comment ?? null,
+          itemAnnotations: (dto.itemAnnotations as any) ?? undefined,
+        },
+      });
+      return updated;
     });
   }
 }
