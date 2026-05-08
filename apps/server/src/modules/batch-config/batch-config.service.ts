@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface BatchPickerOption {
@@ -30,5 +30,35 @@ export class BatchConfigService {
       }
     }
     return Array.from(map.values()).sort((a, b) => a.order - b.order);
+  }
+
+  async listEligibleForStudent(studentId: number) {
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+    });
+    if (!student) throw new NotFoundException('学生不存在');
+    const examTypeMap: Record<string, string> = {
+      PHYSICS: '物理',
+      HISTORY: '历史',
+      COMPREHENSIVE_LIBERAL: '文科',
+      COMPREHENSIVE_SCIENCE: '理科',
+    };
+    const examType = examTypeMap[student.examType ?? 'PHYSICS'] || '物理';
+    const list = await this.prisma.batchConfig.findMany({
+      where: {
+        year: student.examYear ?? 2026,
+        province: student.province ?? '四川',
+        examType,
+      },
+      orderBy: { admissionOrder: 'asc' },
+    });
+    return list.map((b) => ({
+      batchConfigId: b.id,
+      batchName: b.batch,
+      maxGroupCount: b.maxGroupCount,
+      maxMajorPerGroup: b.maxMajorPerGroup,
+      volunteerMode: b.volunteerMode,
+      admissionOrder: b.admissionOrder,
+    }));
   }
 }
