@@ -74,6 +74,16 @@ export class PlanController {
     return this.planService.deleteDraft(id, req.user.id);
   }
 
+  @Post(':id/submit-review')
+  @ApiOperation({ summary: '提交审核（DRAFT → PENDING_REVIEW）' })
+  @ApiParam({ name: 'id', type: Number })
+  async submitReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
+    return this.planService.submitReview(id, req.user.id);
+  }
+
   @Post(':id/favorite')
   @ApiOperation({ summary: '切换收藏状态' })
   @ApiParam({ name: 'id', type: Number })

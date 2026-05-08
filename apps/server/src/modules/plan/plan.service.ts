@@ -169,4 +169,24 @@ export class PlanService {
       return true;
     });
   }
+
+  async submitReview(planId: number, userId: number) {
+    const plan = await this.findById(planId, userId);
+    const itemCount = await this.prisma.planItem.count({ where: { planId } });
+    let maxGroupCount = 0;
+    if (plan.batchConfigId) {
+      const bc = await this.prisma.batchConfig.findUnique({
+        where: { id: plan.batchConfigId },
+      });
+      maxGroupCount = bc?.maxGroupCount ?? 0;
+    }
+    const next = this.sm.transition(plan.status, 'SUBMIT_REVIEW', {
+      itemCount,
+      maxGroupCount,
+    });
+    return this.prisma.volunteerPlan.update({
+      where: { id: planId },
+      data: { status: next },
+    });
+  }
 }
