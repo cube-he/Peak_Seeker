@@ -220,6 +220,42 @@ export class PlanService {
     });
   }
 
+  async finalize(planId: number, userId: number) {
+    const plan = await this.findById(planId, userId);
+    const next = this.sm.transition(plan.status, 'FINALIZE');
+    if (!plan.batchConfigId) {
+      return this.prisma.volunteerPlan.update({
+        where: { id: planId },
+        data: {
+          status: next,
+          isFinal: true,
+          finalizedAt: new Date(),
+          finalizedBy: userId,
+        },
+      });
+    }
+    return this.prisma.$transaction(async (tx) => {
+      await tx.volunteerPlan.updateMany({
+        where: {
+          studentId: plan.studentId,
+          batchConfigId: plan.batchConfigId,
+          isFinal: true,
+          NOT: { id: planId },
+        },
+        data: { isFinal: false },
+      });
+      return tx.volunteerPlan.update({
+        where: { id: planId },
+        data: {
+          status: next,
+          isFinal: true,
+          finalizedAt: new Date(),
+          finalizedBy: userId,
+        },
+      });
+    });
+  }
+
   async deriveVersion(planId: number, userId: number) {
     const parent = await this.findById(planId, userId);
     if (!this.sm.canDeriveVersion(parent.status)) {
