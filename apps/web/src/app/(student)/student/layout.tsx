@@ -12,6 +12,7 @@ import {
   BellOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
+import BrandLogo from '@/components/layout/BrandLogo';
 
 const bottomTabs = [
   { href: '/student/dashboard', icon: AppstoreOutlined, label: '首页' },
@@ -43,14 +44,7 @@ export default function StudentLayout({ children }: StudentLayoutProps) {
       {/* Header */}
       <header className="sticky top-0 z-50 h-14 backdrop-blur-xl bg-[rgba(250,249,245,0.92)] shadow-nav">
         <div className="flex items-center justify-between px-4 h-full max-w-[600px] mx-auto lg:max-w-none lg:px-8">
-          <Link href="/student/dashboard" className="no-underline flex items-center gap-2">
-            <span className="w-8 h-8 bg-gradient-to-br from-primary to-primary-light rounded-lg flex items-center justify-center text-white font-serif font-bold text-sm">
-              智
-            </span>
-            <span className="font-serif text-base font-semibold text-text">
-              智愿家
-            </span>
-          </Link>
+          <BrandLogo href="/student/dashboard" size="sm" showSubtitle={false} />
 
           <div className="flex items-center gap-3">
             <button className="w-8 h-8 bg-surface-dim rounded-full flex items-center justify-center text-text-tertiary border-0 cursor-pointer hover:text-primary transition-colors">

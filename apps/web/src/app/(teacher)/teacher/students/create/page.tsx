@@ -1,9 +1,9 @@
 'use client';
 
-import { Form, Input, Button, Card, message, Radio } from 'antd';
-import { ArrowLeftOutlined, UserAddOutlined } from '@ant-design/icons';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Button, Card, Form, Input, message, Radio } from 'antd';
+import { ArrowLeftOutlined, UserAddOutlined } from '@ant-design/icons';
 import { useMutation } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
 
@@ -30,67 +30,56 @@ export default function CreateStudentPage() {
     },
   });
 
-  const onFinish = (values: CreateStudentForm) => {
-    createMutation.mutate(values);
-  };
-
   return (
-    <div className="max-w-[600px] mx-auto space-y-6">
-      {/* Back Link */}
+    <div className="mx-auto max-w-[720px] space-y-5">
       <Link
         href="/teacher/students"
-        className="inline-flex items-center gap-2 text-sm text-text-tertiary hover:text-primary no-underline transition-colors"
+        className="inline-flex items-center gap-2 text-sm text-text-tertiary no-underline transition-colors hover:text-primary"
       >
         <ArrowLeftOutlined /> 返回学生列表
       </Link>
 
-      <Card>
-        <div className="mb-6">
-          <h1 className="font-serif text-xl font-semibold text-text">创建学生</h1>
-          <p className="text-sm text-text-muted mt-1">
-            创建学生账号，后续可逐步完善学生信息
-          </p>
-        </div>
+      <section className="rounded-2xl bg-[#1e3a5f] px-6 py-6 text-white shadow-card">
+        <p className="text-[11px] uppercase tracking-[2px] text-accent-light">Create Student</p>
+        <h1 className="mt-2 font-serif text-3xl font-semibold">创建学生</h1>
+        <p className="mt-2 text-sm leading-6 text-white/70">
+          先创建登录账号，后续可在学生详情中补全成绩、户籍、偏好和健康信息。
+        </p>
+      </section>
 
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={onFinish}
-          requiredMark="optional"
-        >
-          <Form.Item
-            name="username"
-            label="登录用户名"
-            rules={[
-              { required: true, message: '请输入用户名' },
-              { min: 3, message: '用户名至少3个字符' },
-            ]}
-          >
-            <Input placeholder="学生登录时使用的用户名" />
-          </Form.Item>
+      <Card className="rounded-2xl shadow-card">
+        <Form form={form} layout="vertical" onFinish={(values) => createMutation.mutate(values)} requiredMark="optional">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Form.Item
+              name="username"
+              label="登录用户名"
+              rules={[
+                { required: true, message: '请输入用户名' },
+                { min: 3, message: '用户名至少 3 个字符' },
+              ]}
+            >
+              <Input placeholder="学生登录时使用" />
+            </Form.Item>
 
-          <Form.Item
-            name="password"
-            label="初始密码"
-            rules={[
-              { required: true, message: '请设置初始密码' },
-              { min: 6, message: '密码至少6个字符' },
-            ]}
-          >
-            <Input.Password placeholder="设置初始密码，学生可后续修改" />
-          </Form.Item>
+            <Form.Item
+              name="password"
+              label="初始密码"
+              rules={[
+                { required: true, message: '请设置初始密码' },
+                { min: 6, message: '密码至少 6 个字符' },
+              ]}
+            >
+              <Input.Password placeholder="学生可后续修改" />
+            </Form.Item>
 
-          <Form.Item
-            name="realName"
-            label="真实姓名"
-            rules={[{ required: true, message: '请输入学生真实姓名' }]}
-          >
-            <Input placeholder="学生真实姓名" />
-          </Form.Item>
+            <Form.Item name="realName" label="真实姓名" rules={[{ required: true, message: '请输入学生真实姓名' }]}>
+              <Input placeholder="学生真实姓名" />
+            </Form.Item>
 
-          <Form.Item name="phone" label="手机号">
-            <Input placeholder="学生或家长手机号（选填）" />
-          </Form.Item>
+            <Form.Item name="phone" label="手机号">
+              <Input placeholder="学生或家长手机号（选填）" />
+            </Form.Item>
+          </div>
 
           <Form.Item name="gender" label="性别">
             <Radio.Group>
@@ -99,13 +88,14 @@ export default function CreateStudentPage() {
             </Radio.Group>
           </Form.Item>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 border-t border-border-subtle pt-4">
             <Button
               type="primary"
               htmlType="submit"
               icon={<UserAddOutlined />}
               loading={createMutation.isPending}
               size="large"
+              className="border-0"
             >
               创建学生
             </Button>

@@ -1,10 +1,14 @@
 'use client';
-import { Form, Row, Col } from 'antd';
+
+import { Col, Form, Row } from 'antd';
 import AutoSaveSelect from '../auto-save/AutoSaveSelect';
 import AutoSaveTextArea from '../auto-save/AutoSaveTextArea';
 import { BONUS_POLICY_OPTIONS } from '@/data/student-options';
 import BonusCalcCard from '@/components/policy/BonusCalcCard';
-interface Props { profile: Record<string, any>; }
+
+interface Props {
+  profile: Record<string, any>;
+}
 
 export default function BonusPolicySection({ profile }: Props) {
   return (
@@ -28,14 +32,13 @@ export default function BonusPolicySection({ profile }: Props) {
                 fieldKey="bonusItems"
                 defaultValue={profile.bonusItems ?? ''}
                 rows={2}
-                placeholder="如 +5 / +10 / 具体细则说明"
+                placeholder="例如 +5 / +10 / 具体细则说明"
               />
             </Form.Item>
           </Col>
         </Row>
       </Form>
 
-      {/* 系统自动测算（学生端用 /me 端点） */}
       <BonusCalcCard />
     </div>
   );

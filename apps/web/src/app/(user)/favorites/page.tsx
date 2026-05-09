@@ -231,19 +231,38 @@ export default function FavoritesPage() {
       ),
     },
   ];
+  const currentCount = favorites?.length || 0;
 
   return (
     <MainLayout>
-      {/* Page Header */}
-      <div className="mb-6">
-        <h1 className="font-serif text-[22px] sm:text-2xl font-semibold text-text m-0 flex items-center gap-2">
-          <StarFilled className="text-accent" />
-          我的收藏
-        </h1>
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">
+            My Favorites · 收藏夹
+          </div>
+          <h1 className="m-0 font-serif text-[32px] font-semibold leading-tight text-text">
+            已收藏 <span className="text-accent">{currentCount}</span> 项
+          </h1>
+          <p className="mt-2 text-sm text-text-tertiary">
+            收藏的院校与专业会在生成推荐方案时作为偏好参考。
+          </p>
+        </div>
+        <Link href={activeTab === 'university' ? '/universities' : '/majors'}>
+          <button className="inline-flex items-center justify-center rounded-lg border-0 bg-gradient-to-br from-primary to-primary-light px-5 py-2.5 text-sm font-semibold text-white shadow-glow-primary transition-all hover:shadow-glow-primary-lg">
+            继续发现
+          </button>
+        </Link>
       </div>
 
-      {/* Tabs Section */}
-      <div className="bg-surface rounded-xl p-4 sm:p-6 shadow-card">
+      <div className="mb-5 flex items-start gap-3 rounded-xl border-l-[3px] border-l-accent bg-accent-fixed px-4 py-3 text-sm text-text-secondary">
+        <StarFilled className="mt-0.5 text-accent" />
+        <div>
+          <strong className="text-text">提示：</strong>
+          当前后端按“院校/专业”分类返回收藏数据；设计稿里的批量加入方案、回收站和多维筛选需要后续补接口。
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-surface p-4 shadow-card sm:p-6">
         <Tabs
           items={tabItems}
           activeKey={activeTab}

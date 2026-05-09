@@ -1,9 +1,13 @@
 'use client';
-import { Form, Row, Col } from 'antd';
+
+import { Col, Form, Row } from 'antd';
 import AutoSaveCascader from '../auto-save/AutoSaveCascader';
 import AutoSaveSwitch from '../auto-save/AutoSaveSwitch';
 import { getRegionCascaderOptions } from '@/data/student-options';
-interface Props { profile: Record<string, any>; }
+
+interface Props {
+  profile: Record<string, any>;
+}
 
 export default function HukouSection({ profile }: Props) {
   const regionOptions = getRegionCascaderOptions();
@@ -16,7 +20,7 @@ export default function HukouSection({ profile }: Props) {
               fieldKeys={['province', 'city', 'county']}
               defaultValue={[profile.province, profile.city, profile.county]}
               options={regionOptions}
-              placeholder="选择 省 / 市 / 县"
+              placeholder="选择省 / 市 / 县"
             />
           </Form.Item>
         </Col>
@@ -26,12 +30,14 @@ export default function HukouSection({ profile }: Props) {
               fieldKeys={['examLocationProvince', 'examLocationCity', 'examLocationCounty']}
               defaultValue={[profile.examLocationProvince, profile.examLocationCity, profile.examLocationCounty]}
               options={regionOptions}
-              placeholder="选择 省 / 市 / 县"
+              placeholder="选择省 / 市 / 县"
             />
           </Form.Item>
         </Col>
         <Col xs={12} md={6}>
-          <Form.Item label="农村户籍"><AutoSaveSwitch fieldKey="isRural" defaultValue={profile.isRural} /></Form.Item>
+          <Form.Item label="农村户籍">
+            <AutoSaveSwitch fieldKey="isRural" defaultValue={profile.isRural} />
+          </Form.Item>
         </Col>
       </Row>
     </Form>

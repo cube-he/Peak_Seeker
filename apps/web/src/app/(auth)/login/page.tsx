@@ -1,7 +1,7 @@
 'use client';
 
-import { Form, Input, Button, message } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { Button, Checkbox, Form, Input, message } from 'antd';
+import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -21,8 +21,7 @@ export default function LoginPage() {
         accessToken: data.accessToken,
         refreshToken: data.refreshToken,
       });
-      message.success('登录成功！');
-      // 根据角色跳转到对应 dashboard
+      message.success('登录成功');
       const role = data.user?.role;
       const dashboards: Record<string, string> = {
         ADMIN: '/admin/dashboard',
@@ -43,65 +42,85 @@ export default function LoginPage() {
 
   return (
     <AuthLayout
-      heroTitle="AI 驱动，智选未来"
-      heroSubtitle="基于大数据深度洞察，为每一位学子构建精准的升学规划路径，让理想前程有据可依。"
+      heroTitle="从迷茫到从容，三步抵达你的志愿。"
+      heroSubtitle="智愿家汇集 2022-2025 年四川在川招生录取数据，AI 帮你科学规划冲稳保。但最终决定权，永远在你手里。"
       features={[
-        { icon: '📊', title: '精准位次预测', description: '基于近十年千万级招录数据，采用非线性回归模型，预测误差率极低。' },
-        { icon: '🏛️', title: '名校资源库', description: '权威覆盖全国 2,800+ 所高校，深度解析双一流及 985/211 核心学科数据。' },
+        { title: '保留你的规划进度', description: '收藏院校、推荐方案和位次查询记录都会跟随账号保存。' },
+        { title: '继续使用真实数据', description: '院校、专业和录取记录按同一数据口径持续更新。' },
       ]}
-      socialProof="125万+ 家庭的共同选择"
+      socialProof="SIGN IN · 智愿家"
     >
-      <div className="w-full max-w-md mx-auto px-4 sm:px-0">
-        <h2 className="font-serif text-[22px] sm:text-[28px] font-semibold text-text">
-          欢迎回来
-        </h2>
-        <p className="text-[15px] text-text-tertiary mt-2 mb-8">
-          登录你的智愿家账号
-        </p>
+      <div>
+        <div className="mb-8 flex justify-end text-[13px] text-text-tertiary">
+          还没账号？
+          <Link href="/register" className="ml-1 font-medium text-primary no-underline hover:text-primary-light">
+            免费注册 →
+          </Link>
+        </div>
 
-        <Form layout="vertical" onFinish={handleLogin} size="large">
+        <div className="mb-7">
+          <div className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">SIGN IN · 登录</div>
+          <h1 className="m-0 font-serif text-[30px] font-semibold leading-tight text-text">
+            欢迎回来
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-text-tertiary">
+            你的志愿规划进度、收藏院校与方案历史都已为你保留。
+          </p>
+        </div>
+
+        <div className="mb-6 flex gap-6 border-b border-border">
+          <span className="border-b-2 border-primary pb-2 text-sm font-medium text-primary">账号密码</span>
+          <span className="pb-2 text-sm text-text-muted">短信登录待接入</span>
+        </div>
+
+        <Form layout="vertical" onFinish={handleLogin} size="large" requiredMark={false}>
           <Form.Item
+            label={<span className="text-xs font-medium text-text-secondary">用户名</span>}
             name="username"
             rules={[{ required: true, message: '请输入用户名' }]}
           >
             <Input
               prefix={<UserOutlined className="text-text-muted" />}
-              placeholder="用户名"
+              placeholder="请输入用户名"
               className="bg-surface-dim"
             />
           </Form.Item>
 
           <Form.Item
+            label={<span className="text-xs font-medium text-text-secondary">密码</span>}
             name="password"
             rules={[{ required: true, message: '请输入密码' }]}
           >
             <Input.Password
               prefix={<LockOutlined className="text-text-muted" />}
-              placeholder="密码"
+              placeholder="请输入密码"
               className="bg-surface-dim"
             />
           </Form.Item>
 
-          <Form.Item className="mb-6">
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={loginMutation.isPending}
-              block
-              className="bg-gradient-to-br from-primary to-primary-light text-white h-12 rounded text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 w-full"
-            >
-              登录
-            </Button>
-          </Form.Item>
+          <div className="mb-5 flex items-center justify-between gap-3 text-[13px]">
+            <Checkbox className="text-text-tertiary">30 天内自动登录</Checkbox>
+            <span className="text-right text-text-muted">忘记密码请联系管理员</span>
+          </div>
+
+          <Button
+            type="primary"
+            htmlType="submit"
+            loading={loginMutation.isPending}
+            block
+            className="h-12 rounded-lg bg-gradient-to-br from-primary to-primary-light text-[15px] font-semibold text-white shadow-glow-primary transition-all duration-200 hover:-translate-y-px hover:shadow-glow-primary-lg"
+          >
+            登录智愿家
+          </Button>
         </Form>
 
-        <div className="text-center">
-          <p className="text-sm text-text-tertiary">
-            还没有账号？{' '}
-            <Link href="/register" className="text-primary-light hover:text-primary font-medium no-underline hover:underline">
-              立即注册
-            </Link>
-          </p>
+        <div className="mt-8 text-center text-xs leading-relaxed text-text-muted">
+          继续即代表同意智愿家的
+          <span className="text-text-tertiary">《用户协议》</span>
+          与
+          <span className="text-text-tertiary">《隐私政策》</span>
+          <br />
+          <span className="mt-1 inline-block text-text-faint">你的成绩与个人信息仅用于推荐计算。</span>
         </div>
       </div>
     </AuthLayout>

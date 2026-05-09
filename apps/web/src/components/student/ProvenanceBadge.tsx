@@ -18,9 +18,5 @@ function formatRelative(date: Date): string {
 export default function ProvenanceBadge({ updatedBy, updatedAt }: Props) {
   if (updatedBy !== 'teacher' || !updatedAt) return null;
   const date = updatedAt instanceof Date ? updatedAt : new Date(updatedAt);
-  return (
-    <span className="ml-2 text-xs text-text-faint">
-      由老师修改 · {formatRelative(date)}
-    </span>
-  );
+  return <span className="ml-2 text-xs text-text-faint">由老师修改 · {formatRelative(date)}</span>;
 }

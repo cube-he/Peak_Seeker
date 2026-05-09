@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useState } from 'react';
+import BrandLogo from './BrandLogo';
 import FooterSection from './FooterSection';
 import MobileBottomNav from './MobileBottomNav';
 
@@ -27,9 +28,10 @@ interface MainLayoutProps {
   children: React.ReactNode;
   maxWidth?: string;
   noPadding?: boolean;
+  hideMobileBottomNav?: boolean;
 }
 
-export default function MainLayout({ children, maxWidth, noPadding }: MainLayoutProps) {
+export default function MainLayout({ children, maxWidth, noPadding, hideMobileBottomNav }: MainLayoutProps) {
   const pathname = usePathname();
   const { isLoggedIn, user, logout } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -53,19 +55,7 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
       <header className="sticky top-0 z-50 h-16 backdrop-blur-xl bg-[rgba(250,249,245,0.92)] shadow-nav">
         <nav className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 h-full flex items-center justify-between">
           {/* Brand */}
-          <Link href="/" className="no-underline flex items-center gap-2.5">
-            <span className="w-[34px] h-[34px] bg-gradient-to-br from-primary to-primary-light rounded-lg flex items-center justify-center text-white font-serif font-bold text-[17px]">
-              智
-            </span>
-            <div className="flex flex-col">
-              <span className="font-serif text-[19px] font-semibold text-text leading-tight">
-                智愿家
-              </span>
-              <span className="hidden sm:block text-[9px] text-text-muted tracking-[1.5px] leading-tight">
-                智慧 · 志愿 · 专家
-              </span>
-            </div>
-          </Link>
+          <BrandLogo />
 
           {/* Desktop Nav */}
           <div className="hidden lg:flex items-center gap-8">
@@ -158,7 +148,7 @@ export default function MainLayout({ children, maxWidth, noPadding }: MainLayout
       <FooterSection />
 
       {/* Mobile Bottom Navigation */}
-      <MobileBottomNav />
+      {!hideMobileBottomNav && <MobileBottomNav />}
     </div>
   );
 }

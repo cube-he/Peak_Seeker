@@ -19,6 +19,7 @@ import {
   CloseOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
+import BrandLogo from './BrandLogo';
 
 const mainNavItems = [
   { href: '/plan', icon: <AppstoreOutlined />, label: '控制面板' },
@@ -54,15 +55,7 @@ export default function SideNavLayout({ children, pageTitle, pageSubtitle }: Sid
     <>
       {/* Brand */}
       <div className="p-6 mb-2">
-        <Link href="/" className="no-underline flex items-center gap-2.5">
-          <span className="w-[34px] h-[34px] bg-gradient-to-br from-primary to-primary-light rounded-lg flex items-center justify-center text-white font-serif font-bold text-[17px]">
-            智
-          </span>
-          <span className="font-serif text-[19px] font-semibold text-text">
-            智愿家
-          </span>
-        </Link>
-        <p className="text-xs text-text-muted mt-1.5 ml-[46px] hidden sm:block">智慧 · 志愿 · 专家</p>
+        <BrandLogo />
       </div>
 
       {/* Main Nav Items */}

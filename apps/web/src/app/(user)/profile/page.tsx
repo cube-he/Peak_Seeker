@@ -182,7 +182,7 @@ export default function ProfilePage() {
             </Col>
             <Col xs={24} sm={8}>
               <Form.Item name="examYear" label="高考年份">
-                <InputNumber min={2020} max={2030} className="w-full" />
+                <InputNumber min={2020} max={2030} className="w-full" style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={8}>
@@ -198,12 +198,12 @@ export default function ProfilePage() {
           <Row gutter={16}>
             <Col xs={24} sm={12}>
               <Form.Item name="score" label="高考分数">
-                <InputNumber min={0} max={750} className="w-full" placeholder="输入分数" />
+                <InputNumber min={0} max={750} className="w-full" style={{ width: '100%' }} placeholder="输入分数" />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>
               <Form.Item name="rank" label="省排名位次">
-                <InputNumber min={1} className="w-full" placeholder="输入位次" />
+                <InputNumber min={1} className="w-full" style={{ width: '100%' }} placeholder="输入位次" />
               </Form.Item>
             </Col>
           </Row>
@@ -278,18 +278,23 @@ export default function ProfilePage() {
 
   return (
     <MainLayout>
-      {/* Page Header */}
       <div className="mb-6">
-        <h1 className="font-serif text-[22px] sm:text-2xl font-semibold text-text m-0">
+        <div className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">
+          Profile · 个人中心
+        </div>
+        <h1 className="m-0 font-serif text-[32px] font-semibold leading-tight text-text">
           个人中心
         </h1>
+        <p className="mt-2 text-sm text-text-tertiary">
+          管理基础资料、考试信息和推荐偏好，保证后续推荐使用最新口径。
+        </p>
       </div>
 
       {/* User Summary Card */}
-      <div className="bg-surface rounded-xl p-4 sm:p-6 mb-6 shadow-card">
+      <div className="mb-6 rounded-xl bg-surface p-4 shadow-card sm:p-6">
         <div className="flex flex-col sm:flex-row items-center gap-5">
           {/* Avatar */}
-          <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center text-white font-serif text-2xl shrink-0">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-light font-serif text-2xl text-white">
             {avatarInitial}
           </div>
           {/* User info */}
@@ -307,7 +312,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Tabs Section */}
-      <div className="bg-surface rounded-xl p-4 sm:p-6 shadow-card">
+      <div className="rounded-xl bg-surface p-4 shadow-card sm:p-6">
         <Tabs items={tabItems} />
       </div>
     </MainLayout>

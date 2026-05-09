@@ -1,7 +1,7 @@
 'use client';
 
-import { Form, Input, Button, message, Select } from 'antd';
-import { UserOutlined, LockOutlined, PhoneOutlined, EnvironmentOutlined } from '@ant-design/icons';
+import { Button, Checkbox, Form, Input, message, Select } from 'antd';
+import { EnvironmentOutlined, LockOutlined, PhoneOutlined, UserOutlined } from '@ant-design/icons';
 import { useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -24,7 +24,7 @@ export default function RegisterPage() {
         accessToken: data.accessToken,
         refreshToken: data.refreshToken,
       });
-      message.success('注册成功！');
+      message.success('注册成功');
       const role = data.user?.role;
       const dashboards: Record<string, string> = {
         ADMIN: '/admin/dashboard',
@@ -39,60 +39,82 @@ export default function RegisterPage() {
     },
   });
 
-  const handleRegister = (values: RegisterParams & { confirmPassword?: string }) => {
-    const { confirmPassword, ...params } = values;
+  const handleRegister = (values: RegisterParams & { confirmPassword?: string; terms?: boolean }) => {
+    const { confirmPassword, terms, ...params } = values;
+    void confirmPassword;
+    void terms;
     registerMutation.mutate(params);
   };
 
   return (
     <AuthLayout
-      heroTitle="千万考生的信赖选择"
-      heroSubtitle="依托学术级大数据算法，为每一位学子构建精准的升学路线图，让理想前程有据可依。"
+      heroTitle="每一个志愿，都值得被认真对待。"
+      heroSubtitle="免费注册，开启你的 2026 高考志愿决策。基于 4 年录取数据、AI 智能推荐与位次趋势分析。"
       features={[
-        { icon: '📈', title: '精准位次预测', description: '基于近十年千万级招录数据，采用非线性回归模型，预测误差率极低。' },
-        { icon: '🏫', title: '名校资源库', description: '权威覆盖全国 2,800+ 所高校，深度解析双一流及 985/211 核心学科数据。' },
+        { title: '完全免费', description: '无广告，无诱导消费，无隐藏付费。' },
+        { title: '数据可信', description: '围绕四川省教育考试院、阳光高考与高校招生数据口径整理。' },
+        { title: '陪伴一整年', description: '从备考到录取，每个节点都能回到方案继续调整。' },
       ]}
-      socialProof="125万+ 家庭的共同选择"
+      socialProof="CREATE ACCOUNT · 智愿家"
     >
-      <div className="w-full max-w-md mx-auto px-4 sm:px-0">
-        <h2 className="font-serif text-[22px] sm:text-[28px] font-semibold text-text">
-          加入智愿家
-        </h2>
-        <p className="text-[15px] text-text-tertiary mt-2 mb-8">
-          创建账号，开始你的升学规划
-        </p>
+      <div>
+        <div className="mb-8 flex justify-between text-[13px] text-text-tertiary">
+          <span>已有账号？</span>
+          <Link href="/login" className="font-medium text-primary no-underline hover:text-primary-light">
+            立即登录 →
+          </Link>
+        </div>
 
-        <Form layout="vertical" onFinish={handleRegister} size="large">
+        <div className="mb-7">
+          <div className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">SIGN UP · 注册</div>
+          <h1 className="m-0 font-serif text-[30px] font-semibold leading-tight text-text">
+            开通账号
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-text-tertiary">
+            填写基本信息，1 分钟开始你的志愿规划。
+          </p>
+        </div>
+
+        <Form
+          layout="vertical"
+          onFinish={handleRegister}
+          size="large"
+          requiredMark={false}
+          initialValues={{ province: '四川省', terms: true }}
+        >
           <Form.Item
+            label={<span className="text-xs font-medium text-text-secondary">用户名</span>}
             name="username"
             rules={[
               { required: true, message: '请输入用户名' },
-              { min: 3, message: '用户名至少3个字符' },
+              { min: 3, message: '用户名至少 3 个字符' },
             ]}
           >
             <Input
               prefix={<UserOutlined className="text-text-muted" />}
-              placeholder="用户名"
+              placeholder="用于登录的用户名"
               className="bg-surface-dim"
             />
           </Form.Item>
 
           <Form.Item
+            label={<span className="text-xs font-medium text-text-secondary">设置密码</span>}
             name="password"
             rules={[
               { required: true, message: '请输入密码' },
-              { min: 6, message: '密码至少6个字符' },
+              { min: 6, message: '密码至少 6 个字符' },
               { pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, message: '需包含大写字母、小写字母和数字' },
             ]}
           >
             <Input.Password
               prefix={<LockOutlined className="text-text-muted" />}
-              placeholder="设置密码"
+              placeholder="至少 6 位，含大小写字母和数字"
               className="bg-surface-dim"
             />
           </Form.Item>
 
           <Form.Item
+            label={<span className="text-xs font-medium text-text-secondary">确认密码</span>}
             name="confirmPassword"
             dependencies={['password']}
             rules={[
@@ -109,20 +131,26 @@ export default function RegisterPage() {
           >
             <Input.Password
               prefix={<LockOutlined className="text-text-muted" />}
-              placeholder="确认密码"
+              placeholder="再次输入密码"
               className="bg-surface-dim"
             />
           </Form.Item>
 
-          <Form.Item name="phone">
+          <Form.Item
+            label={<span className="text-xs font-medium text-text-secondary">手机号</span>}
+            name="phone"
+          >
             <Input
               prefix={<PhoneOutlined className="text-text-muted" />}
-              placeholder="手机号码（选填）"
+              placeholder="选填，用于后续提醒"
               className="bg-surface-dim"
             />
           </Form.Item>
 
-          <Form.Item name="province">
+          <Form.Item
+            label={<span className="text-xs font-medium text-text-secondary">高考省份</span>}
+            name="province"
+          >
             <Select
               placeholder="选择高考省份"
               allowClear
@@ -136,27 +164,36 @@ export default function RegisterPage() {
             </Select>
           </Form.Item>
 
-          <Form.Item className="mb-4">
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={registerMutation.isPending}
-              block
-              className="bg-gradient-to-br from-primary to-primary-light text-white h-12 rounded text-[15px] font-medium shadow-glow-primary hover:shadow-glow-primary-lg hover:-translate-y-px transition-all duration-200 w-full"
-            >
-              创建账号
-            </Button>
+          <Form.Item
+            name="terms"
+            valuePropName="checked"
+            rules={[
+              {
+                validator: (_, value) =>
+                  value ? Promise.resolve() : Promise.reject(new Error('请先同意用户协议和隐私政策')),
+              },
+            ]}
+            className="mb-4"
+          >
+            <Checkbox className="text-[12.5px] leading-relaxed text-text-tertiary">
+              我已阅读并同意
+              <span className="text-primary">《用户服务协议》</span>
+              和
+              <span className="text-primary">《隐私政策》</span>
+              ，授权智愿家在我同意范围内使用信息生成个性化推荐。
+            </Checkbox>
           </Form.Item>
-        </Form>
 
-        <div className="text-center">
-          <p className="text-sm text-text-tertiary">
-            已有账号？{' '}
-            <Link href="/login" className="text-primary-light hover:text-primary font-medium no-underline hover:underline">
-              去登录
-            </Link>
-          </p>
-        </div>
+          <Button
+            type="primary"
+            htmlType="submit"
+            loading={registerMutation.isPending}
+            block
+            className="h-12 rounded-lg bg-gradient-to-br from-primary to-primary-light text-[15px] font-semibold text-white shadow-glow-primary transition-all duration-200 hover:-translate-y-px hover:shadow-glow-primary-lg"
+          >
+            免费创建账号 →
+          </Button>
+        </Form>
       </div>
     </AuthLayout>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import BrandLogo from './BrandLogo';
 
 export default function FooterSection() {
   return (
@@ -9,12 +10,7 @@ export default function FooterSection() {
         <div className="grid grid-cols-2 md:grid-cols-[2fr_1fr_1fr_1fr] gap-8 lg:gap-12">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <div className="font-serif text-xl font-semibold text-text">
-              智愿家
-            </div>
-            <div className="text-[13px] text-text-muted tracking-[2px] mt-1.5">
-              智慧 · 志愿 · 专家
-            </div>
+            <BrandLogo className="mb-3" />
             <p className="text-[13px] text-text-tertiary mt-3 leading-relaxed">
               基于 AI 与大数据的升学决策平台，让每一个志愿都被认真对待。
             </p>

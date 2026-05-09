@@ -72,7 +72,7 @@ export function RankInput({ variant = 'default', className = '' }: Props) {
           </div>
           <button
             onClick={reset}
-            className="text-[11px] text-accent-light hover:text-accent underline"
+            className="border-0 bg-transparent text-[11px] text-accent-light underline hover:text-accent"
           >
             修改
           </button>
@@ -97,7 +97,7 @@ export function RankInput({ variant = 'default', className = '' }: Props) {
           <button
             key={t}
             onClick={() => setExamType(t)}
-            className={`text-[12px] px-2 py-0.5 rounded ${
+            className={`rounded border-0 px-2 py-0.5 text-[12px] ${
               examType === t ? 'bg-accent text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'
             }`}
           >
@@ -120,7 +120,7 @@ export function RankInput({ variant = 'default', className = '' }: Props) {
         <button
           onClick={submit}
           disabled={loading}
-          className="bg-accent hover:bg-accent-light text-white px-4 py-2 rounded text-[13px] font-medium disabled:opacity-50"
+          className="rounded border-0 bg-accent px-4 py-2 text-[13px] font-medium text-white hover:bg-accent-light disabled:opacity-50"
         >
           {loading ? '...' : '查位次'}
         </button>

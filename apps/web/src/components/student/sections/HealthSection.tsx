@@ -1,9 +1,14 @@
 'use client';
-import { Form, Row, Col } from 'antd';
+
+import { Col, Form, Row } from 'antd';
 import AutoSaveNumber from '../auto-save/AutoSaveNumber';
+import AutoSaveSelect from '../auto-save/AutoSaveSelect';
 import AutoSaveSwitch from '../auto-save/AutoSaveSwitch';
 import AutoSaveTextArea from '../auto-save/AutoSaveTextArea';
-interface Props { profile: Record<string, any>; }
+
+interface Props {
+  profile: Record<string, any>;
+}
 
 export default function HealthSection({ profile }: Props) {
   return (
@@ -17,8 +22,16 @@ export default function HealthSection({ profile }: Props) {
         <Col xs={12} md={6}><Form.Item label="右眼矫正"><AutoSaveNumber fieldKey="visionRightCorrected" defaultValue={profile.visionRightCorrected ? Number(profile.visionRightCorrected) : null} step={0.1} min={0} max={5} /></Form.Item></Col>
         <Col xs={12} md={6}><Form.Item label="色盲"><AutoSaveSwitch fieldKey="colorBlind" defaultValue={profile.colorBlind} /></Form.Item></Col>
         <Col xs={12} md={6}><Form.Item label="色弱"><AutoSaveSwitch fieldKey="colorWeak" defaultValue={profile.colorWeak} /></Form.Item></Col>
-        <Col xs={24}><Form.Item label="身体限制" labelCol={{span:2}} wrapperCol={{span:22}}><AutoSaveTextArea fieldKey="physicalLimits" defaultValue={profile.physicalLimits ?? ''} rows={2} /></Form.Item></Col>
-        <Col xs={24}><Form.Item label="病史" labelCol={{span:2}} wrapperCol={{span:22}}><AutoSaveTextArea fieldKey="medicalHistory" defaultValue={profile.medicalHistory ?? ''} rows={2} /></Form.Item></Col>
+        <Col xs={24}>
+          <Form.Item label="身体限制" labelCol={{ span: 4 }} wrapperCol={{ span: 20 }}>
+            <AutoSaveSelect fieldKey="physicalLimits" defaultValue={profile.physicalLimits ?? []} mode="tags" placeholder="回车添加限制项" />
+          </Form.Item>
+        </Col>
+        <Col xs={24}>
+          <Form.Item label="病史" labelCol={{ span: 4 }} wrapperCol={{ span: 20 }}>
+            <AutoSaveTextArea fieldKey="medicalHistory" defaultValue={profile.medicalHistory ?? ''} rows={2} />
+          </Form.Item>
+        </Col>
       </Row>
     </Form>
   );

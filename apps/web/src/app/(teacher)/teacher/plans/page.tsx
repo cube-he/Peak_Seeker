@@ -1,25 +1,34 @@
 'use client';
 
-import { useState } from 'react';
-import { Table, Input, Select, Button, Tag, Card, Segmented, Empty, Spin } from 'antd';
-import {
-  SearchOutlined,
-  PlusOutlined,
-  AppstoreOutlined,
-  UnorderedListOutlined,
-  EyeOutlined,
-} from '@ant-design/icons';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Button, Card, Empty, Input, Segmented, Select, Spin, Table, Tag } from 'antd';
+import {
+  AppstoreOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  UnorderedListOutlined,
+} from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
+import type { ColumnsType } from 'antd/es/table';
 import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
-import type { ColumnsType } from 'antd/es/table';
 
 const BATCH_OPTIONS = [
   { label: '本科提前批', value: 'EARLY' },
   { label: '本科一批', value: 'BATCH_1' },
   { label: '本科二批', value: 'BATCH_2' },
   { label: '专科批', value: 'JUNIOR_COLLEGE' },
+];
+
+const STATUS_OPTIONS = [
+  { label: '草稿', value: 'DRAFT' },
+  { label: '待审核', value: 'PENDING_REVIEW' },
+  { label: '已通过', value: 'APPROVED' },
+  { label: '已定稿', value: 'FINALIZED' },
+  { label: '已退回', value: 'REJECTED' },
+  { label: '已归档', value: 'ARCHIVED' },
 ];
 
 interface Plan {
@@ -35,6 +44,18 @@ interface Plan {
   updatedAt: string;
 }
 
+function getBatchLabel(batch: string) {
+  return BATCH_OPTIONS.find((option) => option.value === batch)?.label || batch;
+}
+
+function formatDate(value?: string) {
+  if (!value) return '--';
+  return new Date(value).toLocaleDateString('zh-CN', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export default function TeacherPlansPage() {
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   const [search, setSearch] = useState('');
@@ -43,11 +64,21 @@ export default function TeacherPlansPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['teacher-plans', search, batchFilter, statusFilter],
-    queryFn: () =>
-      planApi.getTeacherPlans({ search, batch: batchFilter, status: statusFilter }),
+    queryFn: () => planApi.getTeacherPlans({ search, batch: batchFilter, status: statusFilter }),
   });
 
   const plans: Plan[] = data?.data || [];
+
+  const counts = useMemo(
+    () => ({
+      all: plans.length,
+      pending: plans.filter((plan) => plan.status === 'PENDING_REVIEW').length,
+      approved: plans.filter((plan) => plan.status === 'APPROVED').length,
+      finalized: plans.filter((plan) => plan.status === 'FINALIZED').length,
+      rejected: plans.filter((plan) => plan.status === 'REJECTED').length,
+    }),
+    [plans],
+  );
 
   const columns: ColumnsType<Plan> = [
     {
@@ -64,49 +95,49 @@ export default function TeacherPlansPage() {
       title: '批次',
       dataIndex: 'batch',
       key: 'batch',
-      width: 120,
-      render: (batch: string) => {
-        const found = BATCH_OPTIONS.find((b) => b.value === batch);
-        return <span className="text-sm">{found?.label || batch}</span>;
-      },
+      width: 130,
+      render: (batch: string) => <span className="text-sm">{getBatchLabel(batch)}</span>,
     },
     {
       title: '来源',
       dataIndex: 'examSource',
       key: 'examSource',
-      width: 100,
+      width: 120,
       render: (source: string) =>
-        source === 'GAOKAO' ? (
-          <Tag color="green">高考正式</Tag>
-        ) : (
-          <Tag color="default">二诊预案</Tag>
-        ),
+        source === 'GAOKAO' ? <Tag color="green">高考正式</Tag> : <Tag color="default">模拟预案</Tag>,
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 100,
+      width: 110,
       render: (status: string) => <PlanStatusBadge status={status} />,
     },
     {
       title: '版本',
       dataIndex: 'version',
       key: 'version',
-      width: 60,
-      render: (v: number) => <span className="text-xs text-text-muted">v{v}</span>,
+      width: 80,
+      render: (version: number) => <span className="text-xs text-text-muted">v{version}</span>,
     },
     {
       title: '志愿数',
       dataIndex: 'itemCount',
       key: 'itemCount',
-      width: 80,
+      width: 90,
       render: (count: number) => <span className="text-sm">{count}</span>,
+    },
+    {
+      title: '更新',
+      dataIndex: 'updatedAt',
+      key: 'updatedAt',
+      width: 110,
+      render: (updatedAt: string) => <span className="text-xs text-text-muted">{formatDate(updatedAt)}</span>,
     },
     {
       title: '操作',
       key: 'actions',
-      width: 100,
+      width: 110,
       render: (_, record) => (
         <Link href={`/teacher/plans/${record.id}`}>
           <Button type="text" size="small" icon={<EyeOutlined />}>
@@ -118,64 +149,76 @@ export default function TeacherPlansPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-5">
+      <header className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
-          <h1 className="font-serif text-xl font-semibold text-text">方案管理</h1>
-          <p className="text-sm text-text-muted mt-1">查看和管理所有学生的志愿方案</p>
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">Plan Review</p>
+          <h1 className="font-serif text-3xl font-semibold text-text">方案管理</h1>
+          <p className="mt-2 text-sm text-text-muted">
+            {counts.all} 份方案 · {counts.pending} 份待审核 · {counts.finalized} 份已定稿
+          </p>
         </div>
-        <Button type="primary" icon={<PlusOutlined />}>
+        <Button type="primary" icon={<PlusOutlined />} className="w-fit border-0" title="批量生成待接入">
           批量生成
         </Button>
+      </header>
+
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+        {[
+          ['全部', counts.all, 'border-l-primary'],
+          ['待审核', counts.pending, 'border-l-rush'],
+          ['已通过', counts.approved, 'border-l-accent'],
+          ['已定稿', counts.finalized, 'border-l-safe'],
+          ['已退回', counts.rejected, 'border-l-border'],
+        ].map(([label, count, tone]) => (
+          <div key={label as string} className={`rounded-2xl border-l-[3px] ${tone} bg-surface px-4 py-3 shadow-card`}>
+            <p className="text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">{label}</p>
+            <p className="mt-1 font-serif text-2xl font-semibold text-text">{count}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-        <Input
-          placeholder="搜索学生姓名"
-          prefix={<SearchOutlined className="text-text-muted" />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="sm:w-[240px]"
-          allowClear
-        />
-        <Select
-          placeholder="批次"
-          value={batchFilter}
-          onChange={setBatchFilter}
-          allowClear
-          className="sm:w-[140px]"
-          options={BATCH_OPTIONS}
-        />
-        <Select
-          placeholder="状态"
-          value={statusFilter}
-          onChange={setStatusFilter}
-          allowClear
-          className="sm:w-[120px]"
-          options={[
-            { label: '草稿', value: 'DRAFT' },
-            { label: '待审核', value: 'PENDING_REVIEW' },
-            { label: '已通过', value: 'APPROVED' },
-            { label: '已定版', value: 'FINALIZED' },
-          ]}
-        />
-        <div className="ml-auto">
-          <Segmented
-            options={[
-              { value: 'table', icon: <UnorderedListOutlined /> },
-              { value: 'card', icon: <AppstoreOutlined /> },
-            ]}
-            value={viewMode}
-            onChange={(v) => setViewMode(v as 'table' | 'card')}
+      <section className="rounded-2xl bg-surface px-4 py-4 shadow-card">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <Input
+            placeholder="搜索学生姓名"
+            prefix={<SearchOutlined className="text-text-muted" />}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="xl:w-[260px]"
+            allowClear
           />
+          <Select
+            placeholder="批次"
+            value={batchFilter}
+            onChange={setBatchFilter}
+            allowClear
+            className="xl:w-[150px]"
+            options={BATCH_OPTIONS}
+          />
+          <Select
+            placeholder="状态"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            allowClear
+            className="xl:w-[140px]"
+            options={STATUS_OPTIONS}
+          />
+          <div className="xl:ml-auto">
+            <Segmented
+              options={[
+                { value: 'table', icon: <UnorderedListOutlined /> },
+                { value: 'card', icon: <AppstoreOutlined /> },
+              ]}
+              value={viewMode}
+              onChange={(value) => setViewMode(value as 'table' | 'card')}
+            />
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Content */}
       {isLoading ? (
-        <div className="flex justify-center py-20">
+        <div className="rounded-2xl bg-surface py-20 text-center shadow-card">
           <Spin size="large" />
         </div>
       ) : viewMode === 'table' ? (
@@ -183,39 +226,42 @@ export default function TeacherPlansPage() {
           columns={columns}
           dataSource={plans}
           rowKey="id"
-          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 个方案` }}
-          scroll={{ x: 800 }}
+          pagination={{ pageSize: 20, showTotal: (total) => `共 ${total} 个方案` }}
+          scroll={{ x: 900 }}
+          className="rounded-2xl bg-surface shadow-card"
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {plans.length === 0 ? (
-            <div className="col-span-full py-16">
+            <div className="col-span-full rounded-2xl bg-surface py-16 shadow-card">
               <Empty description="暂无方案" />
             </div>
           ) : (
             plans.map((plan) => (
               <Link key={plan.id} href={`/teacher/plans/${plan.id}`} className="no-underline">
-                <Card
-                  hoverable
-                  size="small"
-                  className="h-full"
-                  bodyStyle={{ padding: '16px' }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-text">{plan.studentName}</span>
+                <Card hoverable size="small" className="h-full border-l-[3px] border-l-accent" bodyStyle={{ padding: '16px' }}>
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-text">{plan.studentName}</p>
+                      <p className="mt-1 text-xs text-text-muted">
+                        {getBatchLabel(plan.batch)} · v{plan.version}
+                      </p>
+                    </div>
                     <PlanStatusBadge status={plan.status} />
                   </div>
-                  <div className="text-xs text-text-muted space-y-1">
-                    <div>批次: {BATCH_OPTIONS.find((b) => b.value === plan.batch)?.label || plan.batch}</div>
-                    <div className="flex items-center gap-2">
-                      <span>志愿数: {plan.itemCount}</span>
-                      <span>v{plan.version}</span>
+                  <div className="grid grid-cols-3 rounded-xl bg-bg py-3 text-center">
+                    <div className="border-r border-border-subtle px-2">
+                      <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">志愿</p>
+                      <p className="font-serif text-lg font-semibold text-text">{plan.itemCount}</p>
                     </div>
-                    {plan.examSource === 'GAOKAO' ? (
-                      <Tag color="green" className="text-[10px] mt-1">高考正式</Tag>
-                    ) : (
-                      <Tag color="default" className="text-[10px] mt-1">二诊预案</Tag>
-                    )}
+                    <div className="border-r border-border-subtle px-2">
+                      <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">来源</p>
+                      <p className="text-xs text-text-secondary">{plan.examSource === 'GAOKAO' ? '高考' : '模拟'}</p>
+                    </div>
+                    <div className="px-2">
+                      <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">更新</p>
+                      <p className="text-xs text-text-secondary">{formatDate(plan.updatedAt)}</p>
+                    </div>
                   </div>
                 </Card>
               </Link>
@@ -223,6 +269,10 @@ export default function TeacherPlansPage() {
           )}
         </div>
       )}
+
+      <div className="rounded-2xl border border-dashed border-border bg-surface px-5 py-4 text-sm text-text-muted">
+        批量审核、导出全量报告需要后端补充批处理接口；当前已保留单方案查看与筛选能力。
+      </div>
     </div>
   );
 }

@@ -151,7 +151,7 @@ export default function RecommendPage() {
         />
         <div
           className="absolute inset-0"
-          style={{ background: 'linear-gradient(to bottom, transparent 70%, var(--color-bg) 100%)' }}
+          style={{ background: 'linear-gradient(to bottom, transparent 70%, #f5f4ed 100%)' }}
         />
         <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 pt-8 pb-10">
           <h2 className="font-serif text-2xl sm:text-3xl lg:text-[32px] font-semibold text-white mb-1">智能推荐</h2>
@@ -184,7 +184,7 @@ export default function RecommendPage() {
                 label={<span className="text-[11px] uppercase tracking-wider text-text-muted font-sans">高考分数</span>}
                 rules={[{ required: true, message: '请输入分数' }]}
               >
-                <InputNumber min={0} max={750} className="w-full" placeholder="请输入高考分数" />
+                <InputNumber min={0} max={750} className="w-full" style={{ width: '100%' }} placeholder="请输入高考分数" />
               </Form.Item>
 
               <Form.Item
@@ -192,7 +192,7 @@ export default function RecommendPage() {
                 label={<span className="text-[11px] uppercase tracking-wider text-text-muted font-sans">省排名位次</span>}
                 rules={[{ required: true, message: '请输入位次' }]}
               >
-                <InputNumber min={1} className="w-full" placeholder="请输入省排名位次" />
+                <InputNumber min={1} className="w-full" style={{ width: '100%' }} placeholder="请输入省排名位次" />
               </Form.Item>
 
               <Form.Item
@@ -216,7 +216,7 @@ export default function RecommendPage() {
                       key={opt.value}
                       type="button"
                       onClick={() => handleStrategyChange(opt.value)}
-                      className={`w-full text-left p-3 rounded-lg border transition-all duration-300 cursor-pointer ${
+                      className={`w-full cursor-pointer rounded-lg border p-3 text-left transition-all duration-300 ${
                         selectedStrategy === opt.value
                           ? 'border-primary bg-primary-fixed'
                           : 'border-transparent bg-surface-dim hover:border-border-subtle'
@@ -238,21 +238,21 @@ export default function RecommendPage() {
                   label={<StatusChip variant="rush" size="sm">冲</StatusChip>}
                   className="mb-0"
                 >
-                  <InputNumber min={0} max={50} className="w-full" />
+                  <InputNumber min={0} max={50} className="w-full" style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item
                   name="stableCount"
                   label={<StatusChip variant="stable" size="sm">稳</StatusChip>}
                   className="mb-0"
                 >
-                  <InputNumber min={0} max={60} className="w-full" />
+                  <InputNumber min={0} max={60} className="w-full" style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item
                   name="safeCount"
                   label={<StatusChip variant="safe" size="sm">保</StatusChip>}
                   className="mb-0"
                 >
-                  <InputNumber min={0} max={50} className="w-full" />
+                  <InputNumber min={0} max={50} className="w-full" style={{ width: '100%' }} />
                 </Form.Item>
               </div>
 

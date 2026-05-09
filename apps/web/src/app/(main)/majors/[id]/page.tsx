@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Card, Tabs, Table, Spin, Descriptions, Typography } from 'antd';
+import { Tabs, Table, Spin, Descriptions, Typography } from 'antd';
 import { BankOutlined, HistoryOutlined, RocketOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -44,6 +44,22 @@ export default function MajorDetailPage() {
   }
 
   const m = major;
+  const employmentRate = m.employmentRate ? `${m.employmentRate}%` : '--';
+  const avgSalary = m.avgSalary ? `¥${m.avgSalary.toLocaleString()}` : '--';
+  const heroTags = [
+    m.category,
+    m.discipline,
+    m.level,
+    m.degree,
+    m.softRating ? `${m.softRating} 评级` : null,
+    m.isRestricted ? '限报提示' : null,
+  ].filter(Boolean);
+  const statItems = [
+    { label: '就业率', value: employmentRate, sub: '毕业去向参考' },
+    { label: '平均薪资', value: avgSalary, sub: '样本统计口径' },
+    { label: '学制', value: m.standardDuration || '4年', sub: m.degree || '授予学位待补充' },
+    { label: '开设院校', value: m.enrollmentPlans?.length || '-', sub: '当前招生计划记录' },
+  ];
 
 
   const admissionColumns = [
@@ -145,97 +161,119 @@ export default function MajorDetailPage() {
   ];
 
   return (
-    <MainLayout>
-      {/* Breadcrumb */}
-      <nav className="mb-4 text-sm">
-        <Link href="/majors" className="text-text-tertiary hover:text-primary">专业库</Link>
-        <span className="text-text-muted mx-2">/</span>
-        <span className="text-text">{m.name}</span>
-      </nav>
+    <MainLayout noPadding>
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary to-[#15212e] text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(700px_360px_at_90%_110%,rgba(184,134,11,0.2),transparent_60%)]" />
+        <div className="relative mx-auto grid max-w-[1200px] gap-6 px-4 py-9 sm:px-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-end lg:px-12">
+          <div className="min-w-0">
+            <nav className="mb-3 text-xs text-white/50">
+              <Link href="/majors" className="text-white/60 no-underline hover:text-white">
+                专业库
+              </Link>
+              <span className="mx-2">/</span>
+              <span>{m.name}</span>
+            </nav>
+            <div className="mb-2 text-[11px] uppercase tracking-[1.8px] text-white/45">
+              Major · {m.category || '未分类'} · {m.discipline || '专业类待补充'}
+            </div>
+            <h1 className="m-0 flex flex-wrap items-baseline gap-3 font-serif text-[42px] font-semibold leading-tight text-white">
+              {m.name}
+              {m.code && (
+                <span className="rounded-md bg-accent/20 px-3 py-1 font-mono text-sm font-normal text-accent-light">
+                  {m.code}
+                </span>
+              )}
+            </h1>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {heroTags.map((tag) => (
+                <span key={String(tag)} className="rounded-full border border-white/15 bg-white/8 px-3 py-1 text-xs text-white/78">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
 
-      {/* Hero Header Card */}
-      <div className="rounded-xl bg-surface shadow-card p-6 md:p-8 mb-4 flex flex-col md:flex-row md:gap-6 md:items-start">
-        <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-3 mb-3">
-          <h1 className="font-serif text-[36px] font-semibold text-text m-0">{m.name}</h1>
-          {m.code && (
-            <span className="inline-block rounded-full bg-surface-dim text-text-secondary text-[13px] font-medium px-3 py-0.5">{m.code}</span>
-          )}
-          {m.level && (
-            <span className={`inline-block rounded-full text-xs font-medium px-3 py-0.5 ${
-              m.level === '本科'
-                ? 'bg-primary-fixed text-primary'
-                : 'bg-accent-fixed text-accent'
-            }`}>
-              {m.level}
-            </span>
-          )}
+          <div className="grid grid-cols-2 gap-3 rounded-xl border border-white/15 bg-white/8 p-4 backdrop-blur-md sm:grid-cols-4 lg:grid-cols-2">
+            {statItems.map((item) => (
+              <div key={item.label} className="text-center">
+                <div className="text-[10px] uppercase tracking-[1.4px] text-white/50">{item.label}</div>
+                <div className="mt-1 font-serif text-[26px] font-bold leading-none text-accent-light tabular-nums">
+                  {item.value}
+                </div>
+                <div className="mt-1 text-[10px] text-white/45">{item.sub}</div>
+              </div>
+            ))}
+          </div>
         </div>
-        {(m.category || m.discipline) && (
-          <p className="text-sm text-text-secondary mb-4">
-            {[m.category, m.discipline].filter(Boolean).join(' · ')}
-          </p>
-        )}
-        {m.description && (
-          <Typography.Paragraph
-            ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}
-            className="text-text-secondary text-sm mb-4"
-          >
-            {m.description}
-          </Typography.Paragraph>
-        )}
-        <Descriptions bordered column={{ xs: 1, sm: 2, md: 4 }} size="small">
-          <Descriptions.Item label="专业代码">{m.code || '-'}</Descriptions.Item>
-          <Descriptions.Item label="门类">{m.category || '-'}</Descriptions.Item>
-          <Descriptions.Item label="本地硕士点">
-            {m.localMasterPoint ? (
-              <span className="inline-block rounded-full bg-stable-fixed text-stable text-xs font-medium px-3 py-0.5">有</span>
+      </section>
+
+      <div className="mx-auto grid max-w-[1200px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-12">
+        <main className="min-w-0">
+          <section className="mb-6 rounded-2xl bg-surface p-6 shadow-card sm:p-7">
+            <div className="mb-2 text-[11px] uppercase tracking-[1.5px] text-accent">Overview · 专业概览</div>
+            <h2 className="m-0 font-serif text-[24px] font-semibold text-text">
+              {m.name} 的培养路径
+            </h2>
+            {m.description ? (
+              <Typography.Paragraph
+                ellipsis={{ rows: 4, expandable: true, symbol: '展开' }}
+                className="!mb-0 !mt-3 !text-sm !leading-relaxed !text-text-tertiary"
+              >
+                {m.description}
+              </Typography.Paragraph>
             ) : (
-              <span className="text-text-muted">无</span>
+              <p className="m-0 mt-3 text-sm leading-relaxed text-text-tertiary">
+                当前专业介绍暂未补充，页面优先展示已接入的开设院校、历年录取、课程与就业方向数据。
+              </p>
             )}
-          </Descriptions.Item>
-          <Descriptions.Item label="本地博士点">
-            {m.localDoctoralPoint ? (
-              <span className="inline-block rounded-full bg-elite-fixed text-elite text-xs font-medium px-3 py-0.5">有</span>
-            ) : (
-              <span className="text-text-muted">无</span>
-            )}
-          </Descriptions.Item>
-          {m.degree && (
-            <Descriptions.Item label="授予学位">{m.degree}</Descriptions.Item>
-          )}
-          {m.standardDuration && (
-            <Descriptions.Item label="学制">{m.standardDuration}年</Descriptions.Item>
-          )}
-          {m.satisfactionScore && (
-            <Descriptions.Item label="满意度">
-              <span className="font-semibold">{Number(m.satisfactionScore).toFixed(1)}/5</span>
-            </Descriptions.Item>
-          )}
-          {m.studentScale && (
-            <Descriptions.Item label="毕业生规模">{m.studentScale}</Descriptions.Item>
-          )}
-          {m.employmentRate && (
-            <Descriptions.Item label="就业率">
-              <span className="font-semibold text-safe">{`${m.employmentRate}%`}</span>
-            </Descriptions.Item>
-          )}
-          {m.avgSalary && (
-            <Descriptions.Item label="平均薪资">
-              <span className="font-serif font-semibold text-accent [font-variant-numeric:tabular-nums]">{'\u00a5'}{m.avgSalary.toLocaleString()}</span>
-            </Descriptions.Item>
-          )}
-        </Descriptions>
-        </div>
-        <div className="md:w-[300px] md:flex-shrink-0 mt-4 md:mt-0">
-          <RankInput variant="compact" className="!bg-surface-dim !border-border" />
-        </div>
+          </section>
+
+          <section className="mb-6 rounded-2xl bg-surface p-5 shadow-card sm:p-6">
+            <div className="mb-4 text-[11px] uppercase tracking-[1.5px] text-accent">Facts · 关键事实</div>
+            <Descriptions bordered column={{ xs: 1, sm: 2, md: 4 }} size="small">
+              <Descriptions.Item label="专业代码">{m.code || '-'}</Descriptions.Item>
+              <Descriptions.Item label="门类">{m.category || '-'}</Descriptions.Item>
+              <Descriptions.Item label="本地硕士点">
+                {m.localMasterPoint ? <span className="rounded-full bg-stable-fixed px-3 py-0.5 text-xs font-medium text-stable">有</span> : <span className="text-text-muted">无</span>}
+              </Descriptions.Item>
+              <Descriptions.Item label="本地博士点">
+                {m.localDoctoralPoint ? <span className="rounded-full bg-elite-fixed px-3 py-0.5 text-xs font-medium text-elite">有</span> : <span className="text-text-muted">无</span>}
+              </Descriptions.Item>
+              {m.degree && <Descriptions.Item label="授予学位">{m.degree}</Descriptions.Item>}
+              {m.standardDuration && <Descriptions.Item label="学制">{m.standardDuration}</Descriptions.Item>}
+              {m.satisfactionScore && (
+                <Descriptions.Item label="满意度">
+                  <span className="font-semibold">{Number(m.satisfactionScore).toFixed(1)}/5</span>
+                </Descriptions.Item>
+              )}
+              {m.studentScale && <Descriptions.Item label="毕业生规模">{m.studentScale}</Descriptions.Item>}
+            </Descriptions>
+          </section>
+
+          <section className="rounded-2xl bg-surface p-2 shadow-card">
+            <Tabs items={tabItems} style={{ padding: '0 18px' }} />
+          </section>
+        </main>
+
+        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <RankInput variant="compact" className="!border-border !bg-surface" />
+          <div className="rounded-xl bg-surface p-5 shadow-card">
+            <h3 className="m-0 font-serif text-base font-semibold text-text">填报提示</h3>
+            <p className="m-0 mt-2 text-sm leading-relaxed text-text-tertiary">
+              设计稿里的薪资趋势和职业分布图需要聚合统计接口。当前先复用专业详情、课程、就业方向和院校录取数据，后续接口补齐后可直接升级为图表。
+            </p>
+          </div>
+          <div className="rounded-xl bg-gradient-to-br from-primary to-primary-light p-5 text-white shadow-card">
+            <h3 className="m-0 font-serif text-base font-semibold text-white">基于你的当前位次</h3>
+            <p className="m-0 mt-2 text-sm leading-relaxed text-white/75">
+              查看哪些院校正在招收该专业，并把合适的院校专业组合加入志愿方案。
+            </p>
+            <Link href="/recommend" className="mt-4 inline-flex w-full justify-center rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white no-underline hover:bg-white/15">
+              生成完整推荐 →
+            </Link>
+          </div>
+        </aside>
       </div>
-
-      {/* Tabs Card */}
-      <Card styles={{ body: { padding: '4px 0 0' } }}>
-        <Tabs items={tabItems} style={{ padding: '0 24px' }} />
-      </Card>
     </MainLayout>
   );
 }

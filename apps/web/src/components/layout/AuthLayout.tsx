@@ -1,13 +1,14 @@
 'use client';
 
-import Link from 'next/link';
+import BrandLogo from './BrandLogo';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
   heroTitle: string;
   heroSubtitle: string;
-  features?: { icon: string; title: string; description: string }[];
+  features?: { title: string; description: string }[];
   socialProof?: string;
+  eyebrow?: string;
 }
 
 export default function AuthLayout({
@@ -16,51 +17,59 @@ export default function AuthLayout({
   heroSubtitle,
   features,
   socialProof,
+  eyebrow = '每一个志愿，都值得被认真对待',
 }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row">
-      {/* Left Brand Panel */}
-      <div className="hidden lg:flex lg:w-[45%] bg-primary relative flex-col justify-between p-12 overflow-hidden">
-        {/* 背景图：低 opacity 作为底纹 */}
+    <div className="min-h-screen bg-bg lg:grid lg:grid-cols-[1.05fr_1fr]">
+      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-primary to-[#15212e] px-12 py-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div
-          className="absolute inset-0 opacity-40"
+          className="absolute inset-0 opacity-45"
           style={{
             backgroundImage: `url('/images/bg-auth-panel.webp')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
           }}
         />
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/35 to-[#15212e]/90" />
 
         <div className="relative z-10">
-          {/* Brand Logo */}
-          <Link href="/" className="no-underline">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-white/15 rounded-lg flex items-center justify-center">
-                <span className="text-white font-serif font-bold text-lg">智</span>
-              </div>
-            </div>
-            <h2 className="font-serif text-3xl font-bold text-white mt-4">智愿家</h2>
-            <p className="text-accent-light/80 text-[13px] tracking-[3px] mt-2">智慧 · 志愿 · 专家</p>
-          </Link>
+          <BrandLogo variant="reverse" size="md" />
+        </div>
 
-          {/* Hero Text */}
-          <h1 className="text-white font-serif font-extrabold text-4xl lg:text-5xl leading-tight mt-12 mb-6">
+        <div className="relative z-10 mx-auto max-w-[480px]">
+          <div className="mb-4 text-[11px] font-medium uppercase tracking-[2px] text-accent-light">
+            {eyebrow}
+          </div>
+          <h1 className="m-0 font-serif text-[42px] font-semibold leading-tight tracking-normal text-white">
             {heroTitle}
           </h1>
-          <p className="text-white/65 text-base leading-relaxed max-w-md mb-12">
+          <p className="mt-5 text-base leading-relaxed text-white/75">
             {heroSubtitle}
           </p>
-
-          {/* Features */}
+          <div className="mt-8 grid grid-cols-3 gap-5 border-t border-white/15 pt-6">
+            {[
+              ['2,237', '在川招生院校'],
+              ['14.4 万', '录取记录'],
+              ['4 年', '数据纵深'],
+            ].map(([value, label]) => (
+              <div key={label}>
+                <div className="font-serif text-[26px] font-bold leading-none text-accent-light tabular-nums">
+                  {value}
+                </div>
+                <div className="mt-2 text-[11px] uppercase tracking-[1.4px] text-white/50">{label}</div>
+              </div>
+            ))}
+          </div>
           {features && features.length > 0 && (
-            <div className="space-y-5">
-              {features.map((feat, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <span className="text-accent-light text-sm mt-0.5">✓</span>
+            <div className="mt-8 space-y-4">
+              {features.map((feat) => (
+                <div key={feat.title} className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-accent/25 text-xs text-accent-light">
+                    ✓
+                  </span>
                   <div>
-                    <h3 className="text-white/85 font-semibold text-sm mb-1">{feat.title}</h3>
-                    <p className="text-white/55 text-xs leading-relaxed">{feat.description}</p>
+                    <div className="text-sm font-semibold text-white/90">{feat.title}</div>
+                    <p className="m-0 mt-1 text-xs leading-relaxed text-white/55">{feat.description}</p>
                   </div>
                 </div>
               ))}
@@ -68,21 +77,17 @@ export default function AuthLayout({
           )}
         </div>
 
-        {/* Social Proof */}
-        <div className="relative z-10 mt-8">
-          <div className="h-px bg-white/15 mb-6" />
-          <p className="text-white/45 text-sm">
-            {socialProof || '125万+ 家庭的共同选择'}
-          </p>
+        <div className="relative z-10 flex justify-between gap-6 text-[11px] uppercase tracking-[1.2px] text-white/40">
+          <span>{socialProof || '2026 高考志愿决策'}</span>
+          <span>四川省教育考试院数据口径</span>
         </div>
-      </div>
+      </aside>
 
-      {/* Right Form Panel */}
-      <div className="flex-1 flex items-center justify-center px-4 sm:px-8 lg:px-12 py-6 lg:py-12 bg-surface min-h-screen lg:min-h-0">
-        <div className="w-full max-w-md mx-auto">
+      <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-8 sm:px-8 lg:min-h-0 lg:px-12 lg:py-12">
+        <div className="w-full max-w-[420px]">
           {children}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

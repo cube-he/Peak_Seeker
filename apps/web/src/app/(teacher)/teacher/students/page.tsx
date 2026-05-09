@@ -1,26 +1,26 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Table, Input, Select, Button, Tag, Space, Progress, Avatar } from 'antd';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Avatar, Button, Input, Progress, Select, Space, Table, Tag } from 'antd';
 import {
+  EditOutlined,
+  FileTextOutlined,
   PlusOutlined,
   SearchOutlined,
   UploadOutlined,
   UserOutlined,
-  EditOutlined,
-  FileTextOutlined,
 } from '@ant-design/icons';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { studentApi, type ProfileProgress } from '@/services/student-api';
 import type { ColumnsType } from 'antd/es/table';
+import { studentApi, type ProfileProgress } from '@/services/student-api';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   COLLECTING: { label: '待采集', color: 'default' },
   GENERATING: { label: '待生成', color: 'blue' },
   REVIEWING: { label: '待审核', color: 'orange' },
-  FINALIZED: { label: '已定版', color: 'green' },
+  FINALIZED: { label: '已定稿', color: 'green' },
   SUBMITTED: { label: '已填报', color: 'cyan' },
 };
 
@@ -40,6 +40,11 @@ interface Student {
 
 type ProgressFilter = 'all' | 'self_low' | 'self_mid' | 'teacher_pending' | 'recommendable';
 
+function formatNumber(value?: number | null) {
+  if (value === null || value === undefined) return '--';
+  return value.toLocaleString('zh-CN');
+}
+
 export default function TeacherStudentsPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -53,40 +58,44 @@ export default function TeacherStudentsPage() {
 
   const allStudents: Student[] = data?.data?.data ?? data?.data ?? [];
 
-  // 进度筛选在前端做（数据量小，B 范围足够；后续如需要可下沉到后端 query）
   const students = useMemo(() => {
     if (progressFilter === 'all') return allStudents;
-    return allStudents.filter((s) => {
-      const p = s.progress;
-      if (!p) return progressFilter === 'self_low';
+    return allStudents.filter((student) => {
+      const progress = student.progress;
+      if (!progress) return progressFilter === 'self_low';
       switch (progressFilter) {
         case 'self_low':
-          return p.studentSelfCompleteness < 50;
+          return progress.studentSelfCompleteness < 50;
         case 'self_mid':
-          return p.studentSelfCompleteness >= 50 && p.studentSelfCompleteness < 80;
+          return progress.studentSelfCompleteness >= 50 && progress.studentSelfCompleteness < 80;
         case 'teacher_pending':
-          return p.teacherDataCompleteness < 100;
+          return progress.teacherDataCompleteness < 100;
         case 'recommendable':
-          return p.isRecommendable;
+          return progress.isRecommendable;
         default:
           return true;
       }
     });
   }, [allStudents, progressFilter]);
 
-  const renderProgress = (pct: number | undefined) => {
-    const v = pct ?? 0;
-    const color = v >= 80 ? '#276749' : v >= 50 ? '#b8860b' : '#c53030';
+  const counts = useMemo(
+    () => ({
+      all: allStudents.length,
+      attention: allStudents.filter((student) => (student.progress?.studentSelfCompleteness ?? 0) < 60).length,
+      noPlan: allStudents.filter((student) => !student.planCount).length,
+      reviewing: allStudents.filter((student) => student.status === 'REVIEWING').length,
+      highScore: allStudents.filter((student) => (student.totalScore ?? 0) >= 640).length,
+    }),
+    [allStudents],
+  );
+
+  const renderProgress = (percent: number | undefined) => {
+    const value = percent ?? 0;
+    const color = value >= 80 ? '#276749' : value >= 50 ? '#b8860b' : '#c53030';
     return (
       <div className="flex items-center gap-2">
-        <Progress
-          percent={v}
-          size="small"
-          showInfo={false}
-          strokeColor={color}
-          className="flex-1"
-        />
-        <span className="w-8 text-right text-xs text-text-muted">{v}%</span>
+        <Progress percent={value} size="small" showInfo={false} strokeColor={color} className="flex-1" />
+        <span className="w-8 text-right text-xs text-text-muted">{value}%</span>
       </div>
     );
   };
@@ -99,17 +108,13 @@ export default function TeacherStudentsPage() {
         const name = record.user?.realName || record.realName || record.username;
         const phone = record.user?.phone || record.phone;
         return (
-          <div className="flex items-center gap-2">
-            <Avatar
-              size="small"
-              icon={<UserOutlined />}
-              className="flex-shrink-0 bg-primary"
-            />
+          <div className="flex items-center gap-3">
+            <Avatar size="small" icon={<UserOutlined />} className="flex-shrink-0 bg-primary">
+              {name?.charAt(0)}
+            </Avatar>
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-text">{name}</div>
-              {phone && (
-                <div className="text-xs text-text-muted">{phone}</div>
-              )}
+              {phone ? <div className="text-xs text-text-muted">{phone}</div> : null}
             </div>
           </div>
         );
@@ -121,14 +126,14 @@ export default function TeacherStudentsPage() {
       key: 'status',
       width: 100,
       render: (status: string) => {
-        const s = STATUS_MAP[status] || { label: status, color: 'default' };
-        return <Tag color={s.color}>{s.label}</Tag>;
+        const state = STATUS_MAP[status] || { label: status, color: 'default' };
+        return <Tag color={state.color}>{state.label}</Tag>;
       },
     },
     {
       title: '分数/位次',
       key: 'scoreRank',
-      width: 120,
+      width: 140,
       render: (_, record) => (
         <div className="text-sm">
           {record.totalScore ? (
@@ -136,49 +141,39 @@ export default function TeacherStudentsPage() {
           ) : (
             <span className="text-text-faint">未填写</span>
           )}
-          {record.provincialRank && (
-            <span className="ml-1 text-xs text-text-muted">
-              / {record.provincialRank}位
-            </span>
-          )}
+          {record.provincialRank ? (
+            <span className="ml-1 text-xs text-text-muted">/ {formatNumber(record.provincialRank)} 位</span>
+          ) : null}
         </div>
       ),
     },
     {
       title: '自填进度',
       key: 'selfProgress',
-      width: 140,
-      sorter: (a, b) =>
-        (a.progress?.studentSelfCompleteness ?? 0) -
-        (b.progress?.studentSelfCompleteness ?? 0),
-      render: (_, r) => renderProgress(r.progress?.studentSelfCompleteness),
+      width: 150,
+      sorter: (a, b) => (a.progress?.studentSelfCompleteness ?? 0) - (b.progress?.studentSelfCompleteness ?? 0),
+      render: (_, record) => renderProgress(record.progress?.studentSelfCompleteness),
     },
     {
       title: '录入进度',
       key: 'teacherProgress',
-      width: 140,
-      sorter: (a, b) =>
-        (a.progress?.teacherDataCompleteness ?? 0) -
-        (b.progress?.teacherDataCompleteness ?? 0),
-      render: (_, r) => renderProgress(r.progress?.teacherDataCompleteness),
+      width: 150,
+      sorter: (a, b) => (a.progress?.teacherDataCompleteness ?? 0) - (b.progress?.teacherDataCompleteness ?? 0),
+      render: (_, record) => renderProgress(record.progress?.teacherDataCompleteness),
     },
     {
       title: '可推荐',
       key: 'recommendable',
-      width: 80,
-      render: (_, r) =>
-        r.progress?.isRecommendable ? (
-          <Tag color="success">就绪</Tag>
-        ) : (
-          <Tag color="default">未达</Tag>
-        ),
+      width: 90,
+      render: (_, record) =>
+        record.progress?.isRecommendable ? <Tag color="success">就绪</Tag> : <Tag color="default">未达</Tag>,
     },
     {
       title: '操作',
       key: 'actions',
-      width: 160,
+      width: 180,
       render: (_, record) => (
-        <Space size="small">
+        <Space size="small" onClick={(event) => event.stopPropagation()}>
           <Link href={`/teacher/students/${record.id}`}>
             <Button type="text" size="small" icon={<EditOutlined />}>
               详情
@@ -195,66 +190,95 @@ export default function TeacherStudentsPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-5">
+      <header className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
-          <h1 className="font-serif text-xl font-semibold text-text">学生管理</h1>
-          <p className="text-sm text-text-muted mt-1">管理您负责的学生信息</p>
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">Class Roster</p>
+          <h1 className="font-serif text-3xl font-semibold text-text">学生管理</h1>
+          <p className="mt-2 text-sm text-text-muted">
+            {allStudents.length} 名学生 · {counts.attention} 名需要关注 · {counts.reviewing} 份待审核
+          </p>
         </div>
-        <Space>
+        <Space wrap>
           <Button icon={<UploadOutlined />}>批量导入</Button>
           <Link href="/teacher/students/create">
-            <Button type="primary" icon={<PlusOutlined />}>
+            <Button type="primary" icon={<PlusOutlined />} className="border-0">
               创建学生
             </Button>
           </Link>
         </Space>
+      </header>
+
+      <section className="rounded-2xl bg-surface px-4 py-4 shadow-card">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <Input
+            placeholder="按姓名、学号或手机号搜索"
+            prefix={<SearchOutlined className="text-text-muted" />}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="xl:w-[300px]"
+            allowClear
+          />
+          <Select
+            placeholder="筛选状态"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            allowClear
+            className="xl:w-[160px]"
+            options={Object.entries(STATUS_MAP).map(([value, state]) => ({ value, label: state.label }))}
+          />
+          <Select<ProgressFilter>
+            value={progressFilter}
+            onChange={setProgressFilter}
+            className="xl:w-[220px]"
+            options={[
+              { value: 'all', label: '全部学生' },
+              { value: 'self_low', label: '自填 < 50%' },
+              { value: 'self_mid', label: '自填 50%~80%' },
+              { value: 'teacher_pending', label: '老师录入未完成' },
+              { value: 'recommendable', label: '可推荐' },
+            ]}
+          />
+          <div className="text-sm text-text-muted xl:ml-auto">
+            当前显示 <strong className="text-text">{students.length}</strong> 名
+          </div>
+        </div>
+      </section>
+
+      <div className="flex flex-wrap gap-2">
+        {[
+          ['全部', counts.all, progressFilter === 'all'],
+          ['需关注', counts.attention, false],
+          ['未建方案', counts.noPlan, false],
+          ['待审核', counts.reviewing, statusFilter === 'REVIEWING'],
+          ['≥640 分', counts.highScore, false],
+        ].map(([label, count, active]) => (
+          <span
+            key={label as string}
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+              active ? 'border-primary bg-primary text-white' : 'border-border bg-surface text-text-secondary'
+            }`}
+          >
+            {label} <span className="ml-1 opacity-70">{count}</span>
+          </span>
+        ))}
+        <span className="rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-medium text-text-muted">
+          自定义筛选待接入
+        </span>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <Input
-          placeholder="搜索学生姓名或手机号"
-          prefix={<SearchOutlined className="text-text-muted" />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="sm:w-[280px]"
-          allowClear
-        />
-        <Select
-          placeholder="筛选状态"
-          value={statusFilter}
-          onChange={setStatusFilter}
-          allowClear
-          className="sm:w-[160px]"
-          options={Object.entries(STATUS_MAP).map(([k, v]) => ({
-            value: k,
-            label: v.label,
-          }))}
-        />
-        <Select<ProgressFilter>
-          value={progressFilter}
-          onChange={setProgressFilter}
-          className="sm:w-[200px]"
-          options={[
-            { value: 'all', label: '全部学生' },
-            { value: 'self_low', label: '自填 < 50%（催学生）' },
-            { value: 'self_mid', label: '自填 50%~80%' },
-            { value: 'teacher_pending', label: '录入未完成（自己补）' },
-            { value: 'recommendable', label: '可推荐' },
-          ]}
-        />
-      </div>
-
-      {/* Table */}
       <Table
         columns={columns}
         dataSource={students}
         loading={isLoading}
         rowKey="id"
-        pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 名学生` }}
-        scroll={{ x: 800 }}
+        pagination={{
+          pageSize: 20,
+          showSizeChanger: true,
+          showTotal: (total) => `共 ${total} 名学生`,
+        }}
+        scroll={{ x: 900 }}
+        className="rounded-2xl bg-surface shadow-card"
         onRow={(record) => ({
           className: 'cursor-pointer',
           onClick: () => router.push(`/teacher/students/${record.id}`),

@@ -1,29 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
+  Avatar,
+  Button,
+  Form,
+  Input,
+  message,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
   Table,
   Tabs,
-  Input,
-  Button,
   Tag,
-  Space,
-  Modal,
-  Form,
-  Select,
-  message,
-  Popconfirm,
 } from 'antd';
 import {
+  DeleteOutlined,
+  EditOutlined,
+  KeyOutlined,
   PlusOutlined,
   SearchOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  KeyOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminApi } from '@/services/admin-api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
+import { adminApi } from '@/services/admin-api';
 
 interface User {
   id: number;
@@ -61,6 +63,15 @@ export default function AdminUsersPage() {
 
   const users: User[] = data?.data || [];
 
+  const counts = useMemo(
+    () => ({
+      total: users.length,
+      active: users.filter((user) => user.status === 'ACTIVE').length,
+      disabled: users.filter((user) => user.status !== 'ACTIVE').length,
+    }),
+    [users],
+  );
+
   const createMutation = useMutation({
     mutationFn: (values: Record<string, unknown>) => adminApi.createUser(values),
     onSuccess: () => {
@@ -82,15 +93,22 @@ export default function AdminUsersPage() {
 
   const columns: ColumnsType<User> = [
     {
-      title: '用户名',
-      dataIndex: 'username',
-      key: 'username',
-    },
-    {
-      title: '姓名',
-      dataIndex: 'realName',
-      key: 'realName',
-      render: (name: string) => name || '-',
+      title: '用户',
+      key: 'user',
+      render: (_, record) => {
+        const name = record.realName || record.username;
+        return (
+          <div className="flex items-center gap-3">
+            <Avatar size="small" icon={<UserOutlined />} className="bg-primary">
+              {name.charAt(0)}
+            </Avatar>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-text">{name}</div>
+              <div className="text-xs text-text-muted">{record.username}</div>
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: '手机',
@@ -103,17 +121,13 @@ export default function AdminUsersPage() {
       dataIndex: 'role',
       key: 'role',
       width: 100,
-      render: (role: string) => (
-        <Tag color={ROLE_COLORS[role] || 'default'}>
-          {ROLE_LABELS[role] || role}
-        </Tag>
-      ),
+      render: (role: string) => <Tag color={ROLE_COLORS[role] || 'default'}>{ROLE_LABELS[role] || role}</Tag>,
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 80,
+      width: 90,
       render: (status: string) => (
         <Tag color={status === 'ACTIVE' ? 'green' : 'default'}>
           {status === 'ACTIVE' ? '正常' : '禁用'}
@@ -121,21 +135,31 @@ export default function AdminUsersPage() {
       ),
     },
     {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 130,
+      render: (value: string) =>
+        value
+          ? new Date(value).toLocaleDateString('zh-CN', {
+              month: 'short',
+              day: 'numeric',
+            })
+          : '-',
+    },
+    {
       title: '操作',
       key: 'actions',
-      width: 180,
+      width: 220,
       render: (_, record) => (
         <Space size="small">
-          <Button type="text" size="small" icon={<EditOutlined />}>
+          <Button type="text" size="small" icon={<EditOutlined />} disabled title="编辑待接入">
             编辑
           </Button>
-          <Button type="text" size="small" icon={<KeyOutlined />}>
+          <Button type="text" size="small" icon={<KeyOutlined />} disabled title="权限弹窗待接入">
             权限
           </Button>
-          <Popconfirm
-            title="确定删除此用户？"
-            onConfirm={() => deleteMutation.mutate(record.id)}
-          >
+          <Popconfirm title="确定删除此用户？" onConfirm={() => deleteMutation.mutate(record.id)}>
             <Button type="text" size="small" icon={<DeleteOutlined />} danger>
               删除
             </Button>
@@ -146,52 +170,70 @@ export default function AdminUsersPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-5">
+      <header className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
-          <h1 className="font-serif text-xl font-semibold text-text">用户管理</h1>
-          <p className="text-sm text-text-muted mt-1">管理系统中的教师和学生账户</p>
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">User Directory</p>
+          <h1 className="font-serif text-3xl font-semibold text-text">用户管理</h1>
+          <p className="mt-2 text-sm text-text-muted">
+            管理系统中的教师、学生和管理员账号。
+          </p>
         </div>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setCreateModalOpen(true)}
-        >
+        <Button type="primary" icon={<PlusOutlined />} className="w-fit border-0" onClick={() => setCreateModalOpen(true)}>
           创建用户
         </Button>
+      </header>
+
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          ['当前列表', counts.total],
+          ['正常账号', counts.active],
+          ['禁用账号', counts.disabled],
+        ].map(([label, value]) => (
+          <div key={label as string} className="rounded-2xl bg-surface px-5 py-4 shadow-card">
+            <p className="text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">{label}</p>
+            <p className="mt-2 font-serif text-2xl font-semibold text-text">{value}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Tabs */}
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={[
-          { key: 'TEACHER', label: '教师' },
-          { key: 'STUDENT', label: '学生' },
-        ]}
-      />
+      <section className="rounded-2xl bg-surface px-4 py-4 shadow-card">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            className="min-w-[260px]"
+            items={[
+              { key: 'TEACHER', label: '教师' },
+              { key: 'STUDENT', label: '学生' },
+              { key: 'ADMIN', label: '管理员' },
+            ]}
+          />
+          <Input
+            placeholder="搜索用户名、姓名或手机号"
+            prefix={<SearchOutlined className="text-text-muted" />}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="xl:ml-auto xl:w-[320px]"
+            allowClear
+          />
+        </div>
+      </section>
 
-      {/* Search */}
-      <Input
-        placeholder="搜索用户名或姓名"
-        prefix={<SearchOutlined className="text-text-muted" />}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="max-w-[300px]"
-        allowClear
-      />
-
-      {/* Table */}
       <Table
         columns={columns}
         dataSource={users}
         loading={isLoading}
         rowKey="id"
-        pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 名用户` }}
-        scroll={{ x: 700 }}
+        pagination={{ pageSize: 20, showTotal: (total) => `共 ${total} 名用户` }}
+        scroll={{ x: 850 }}
+        className="rounded-2xl bg-surface shadow-card"
       />
 
-      {/* Create User Modal */}
+      <div className="rounded-2xl border border-dashed border-border bg-surface px-5 py-4 text-sm text-text-muted">
+        编辑资料和权限细分已有接口基础，但当前页面缺少完整交互弹窗，本轮先保留创建、删除和筛选能力。
+      </div>
+
       <Modal
         title="创建用户"
         open={createModalOpen}
@@ -205,10 +247,10 @@ export default function AdminUsersPage() {
           onFinish={(values) => createMutation.mutate(values)}
           initialValues={{ role: activeTab }}
         >
-          <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
+          <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
             <Input placeholder="登录用户名" />
           </Form.Item>
-          <Form.Item name="password" label="密码" rules={[{ required: true }]}>
+          <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入初始密码' }]}>
             <Input.Password placeholder="初始密码" />
           </Form.Item>
           <Form.Item name="realName" label="姓名">
@@ -217,7 +259,7 @@ export default function AdminUsersPage() {
           <Form.Item name="phone" label="手机号">
             <Input placeholder="手机号" />
           </Form.Item>
-          <Form.Item name="role" label="角色" rules={[{ required: true }]}>
+          <Form.Item name="role" label="角色" rules={[{ required: true, message: '请选择角色' }]}>
             <Select
               options={[
                 { label: '教师', value: 'TEACHER' },

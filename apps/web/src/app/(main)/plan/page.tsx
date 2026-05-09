@@ -392,7 +392,7 @@ export default function PlanPage() {
             <Input placeholder="例如：第一志愿方案" />
           </Form.Item>
           <Form.Item name="year" label="年份" rules={[{ required: true }]}>
-            <InputNumber min={2020} max={2030} className="w-full" />
+            <InputNumber min={2020} max={2030} className="w-full" style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="province" label="省份">
             <Select>

@@ -12,7 +12,7 @@ export default function SaveStatusBar() {
 
   useEffect(() => {
     if (state === 'saving') {
-      message.loading({ content: '保存中…', key: TOAST_KEY, duration: 0 });
+      message.loading({ content: '保存中...', key: TOAST_KEY, duration: 0 });
     } else if (state === 'saved') {
       message.success({ content: '已保存', key: TOAST_KEY, duration: 1.5 });
     } else if (state === 'error') {
