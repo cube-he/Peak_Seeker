@@ -8,6 +8,28 @@ async function validatePreferredBatches(value: unknown) {
   return errors.filter((e) => e.property === 'preferredBatches');
 }
 
+async function validateWithStrictPipe(payload: Record<string, unknown>) {
+  const dto = plainToInstance(UpdateStudentProfileDto, payload);
+  return validate(dto, { whitelist: true, forbidNonWhitelisted: true });
+}
+
+describe('UpdateStudentProfileDto stage 1 contact fields', () => {
+  it('accepts the student stage 1 identity payload under strict whitelist validation', async () => {
+    const errors = await validateWithStrictPipe({
+      dataVersion: 1,
+      realName: 'Li Bai',
+      phone: '13800138000',
+      parentPhone: '13900139000',
+      gender: 'MALE',
+      ethnicity: '汉族',
+      politicalStatus: 'LEAGUE_MEMBER',
+      formFiller: 'STUDENT',
+    });
+
+    expect(errors).toHaveLength(0);
+  });
+});
+
 describe('UpdateStudentProfileDto.preferredBatches', () => {
   it('accepts arbitrary batch name strings', async () => {
     const errors = await validatePreferredBatches(['本科提前批A段', '本科批A段', '高职专科批']);

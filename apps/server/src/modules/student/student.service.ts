@@ -11,9 +11,15 @@ import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
 import { Role, StudentStatus, Prisma } from '@prisma/client';
 import { ProgressService } from './progress.service';
-import { TEACHER_ONLY_FIELDS, FIELD_TO_PROVENANCE_GROUP } from './field-policy';
+import {
+  TEACHER_ONLY_FIELDS,
+  FIELD_TO_PROVENANCE_GROUP,
+  USER_LEVEL_FIELDS,
+} from './field-policy';
 import { ScoreSegmentService } from '../score-segment/score-segment.service';
 import type { ExamType } from '../score-segment/exam-type.helper';
+
+const USER_LEVEL_FIELD_SET = new Set<string>(USER_LEVEL_FIELDS);
 
 @Injectable()
 export class StudentService {
@@ -234,16 +240,43 @@ export class StudentService {
     return out;
   }
 
+  private splitUserLevelUpdates(dto: Record<string, any>) {
+    const profileUpdates: Record<string, any> = {};
+    const userUpdates: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(dto)) {
+      if (USER_LEVEL_FIELD_SET.has(key)) {
+        userUpdates[key] = value;
+      } else {
+        profileUpdates[key] = value;
+      }
+    }
+
+    return { profileUpdates, userUpdates };
+  }
+
   /**
    * Update student profile with optimistic locking.
    * Automatically calculates infoCompleteness and may upgrade status.
    */
   async updateProfile(id: number, dto: UpdateStudentProfileDto, actor: 'student' | 'teacher' = 'teacher') {
-    const { dataVersion, ...updateData } = dto;
+    const { dataVersion, ...rawUpdateData } = dto as Record<string, any>;
+    const { profileUpdates: updateData, userUpdates } =
+      this.splitUserLevelUpdates(rawUpdateData);
 
     // Optimistic lock: only update if dataVersion matches
     const current = await this.prisma.studentProfile.findUnique({
       where: { id },
+      include: {
+        user: {
+          select: {
+            realName: true,
+            phone: true,
+            gender: true,
+            ethnicity: true,
+          },
+        },
+      },
     });
 
     if (!current) {
@@ -258,7 +291,15 @@ export class StudentService {
     }
 
     // Merge current + incoming to calculate completeness on the resulting state
-    const merged = { ...current, ...updateData };
+    const merged = {
+      ...current,
+      realName: current.user?.realName,
+      phone: current.user?.phone,
+      gender: current.user?.gender,
+      ethnicity: current.user?.ethnicity,
+      ...updateData,
+      ...userUpdates,
+    };
     const completeness = this.calculateCompleteness(merged);
 
     // Auto-update status to ACTIVE if info completeness >= 80% and currently ACTIVE
@@ -288,7 +329,8 @@ export class StudentService {
       }
     }
 
-    const provenance = this.computeProvenanceUpdates(updateData as Record<string, any>, actor);
+    const provenance = this.computeProvenanceUpdates(updateData, actor);
+    const hasUserUpdates = Object.keys(userUpdates).length > 0;
 
     const updated = await this.prisma.studentProfile.update({
       where: { id },
@@ -296,6 +338,7 @@ export class StudentService {
       // Prisma 期望 InputJsonValue — 在边界做一次断言交给 Prisma
       data: {
         ...(updateData as Prisma.StudentProfileUpdateInput),
+        ...(hasUserUpdates ? { user: { update: userUpdates } } : {}),
         ...statusUpdate,
         ...rankUpdate,
         ...provenance,
@@ -307,6 +350,9 @@ export class StudentService {
             id: true,
             username: true,
             realName: true,
+            phone: true,
+            gender: true,
+            ethnicity: true,
           },
         },
       },

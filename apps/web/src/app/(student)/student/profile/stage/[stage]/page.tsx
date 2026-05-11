@@ -36,6 +36,11 @@ import {
   from9Subjects,
   validate6Subjects,
 } from '@/components/student/stage1-score-mapping';
+import {
+  ETHNICITY_OPTIONS,
+  POLITICAL_STATUS_OPTIONS,
+  getRegionCascaderOptions,
+} from '@/data/student-options';
 import StudentSummaryRail from '@/components/student/workspace/StudentSummaryRail';
 import {
   StudentWorkspace,
@@ -69,6 +74,42 @@ const STAGE_FIELD_MAP: Record<string, readonly string[]> = {
   '2': STAGE_2_FIELDS,
   '3': STAGE_3_FIELDS,
 };
+
+const REGION_OPTIONS = getRegionCascaderOptions();
+const PROVINCE_OPTIONS = REGION_OPTIONS.map(({ value, label }) => ({
+  value,
+  label,
+}));
+const CITY_OPTIONS = Array.from(
+  new Map(
+    REGION_OPTIONS.flatMap((province) => province.children ?? []).map((city) => [
+      city.value,
+      { value: city.value, label: city.label },
+    ]),
+  ).values(),
+);
+const PERSONALITY_TYPE_OPTIONS = [
+  'ISTJ',
+  'ISFJ',
+  'INFJ',
+  'INTJ',
+  'ISTP',
+  'ISFP',
+  'INFP',
+  'INTP',
+  'ESTP',
+  'ESFP',
+  'ENFP',
+  'ENTP',
+  'ESTJ',
+  'ESFJ',
+  'ENFJ',
+  'ENTJ',
+  '内向',
+  '外向',
+  '偏研究型',
+  '偏实践型',
+].map((value) => ({ value, label: value }));
 
 /**
  * 阶段表单页 (W3) - 学生填某一阶段的字段。
@@ -541,19 +582,21 @@ function Stage1Fields() {
               ]}
             />
           </Form.Item>
-          <Form.Item name="ethnicity" label="民族">
-            <Input placeholder="如 汉族" />
+          <Form.Item name="ethnicity" label="民族" rules={[{ required: true }]}>
+            <Select
+              showSearch
+              allowClear
+              placeholder="选择民族"
+              optionFilterProp="label"
+              options={ETHNICITY_OPTIONS}
+            />
           </Form.Item>
-          <Form.Item name="politicalStatus" label="政治面貌">
+          <Form.Item name="politicalStatus" label="政治面貌" rules={[{ required: true }]}>
             <Radio.Group
               optionType="button"
               buttonStyle="solid"
               className="w-full"
-              options={[
-                { value: 'PARTY_MEMBER', label: '党员' },
-                { value: 'LEAGUE_MEMBER', label: '团员' },
-                { value: 'MASSES', label: '群众' },
-              ]}
+              options={POLITICAL_STATUS_OPTIONS}
             />
           </Form.Item>
           <Form.Item name="formFiller" label="填表人" rules={[{ required: true }]}>
@@ -767,20 +810,20 @@ function Stage2Fields() {
               mode="multiple"
               placeholder="选择意向省份"
               allowClear
-              options={[
-                { value: '四川', label: '四川' },
-                { value: '北京', label: '北京' },
-                { value: '上海', label: '上海' },
-                { value: '广东', label: '广东' },
-                { value: '浙江', label: '浙江' },
-                { value: '江苏', label: '江苏' },
-                { value: '湖北', label: '湖北' },
-                { value: '陕西', label: '陕西' },
-              ]}
+              showSearch
+              optionFilterProp="label"
+              options={PROVINCE_OPTIONS}
             />
           </Form.Item>
           <Form.Item name="preferredCities" label="意向城市">
-            <Select mode="tags" placeholder="输入意向城市" allowClear />
+            <Select
+              mode="multiple"
+              placeholder="选择意向城市"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={CITY_OPTIONS}
+            />
           </Form.Item>
           <Form.Item name="preferredUniversities" label="意向院校">
             <Select mode="tags" placeholder="输入意向院校" allowClear />
@@ -888,10 +931,24 @@ function Stage3Fields() {
         </Form.Item>
         <FieldGrid columns="lg:grid-cols-2">
           <Form.Item name="excludedProvinces" label="不接受的省份">
-            <Select mode="tags" placeholder="输入" allowClear />
+            <Select
+              mode="multiple"
+              placeholder="选择不接受的省份"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={PROVINCE_OPTIONS}
+            />
           </Form.Item>
           <Form.Item name="excludedCities" label="不接受的城市">
-            <Select mode="tags" placeholder="输入" allowClear />
+            <Select
+              mode="multiple"
+              placeholder="选择不接受的城市"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={CITY_OPTIONS}
+            />
           </Form.Item>
           <Form.Item name="excludedUniversities" label="不接受的院校">
             <Select mode="tags" placeholder="输入" allowClear />
@@ -914,7 +971,13 @@ function Stage3Fields() {
             <Select mode="tags" placeholder="输入" allowClear />
           </Form.Item>
           <Form.Item name="personalityType" label="性格类型">
-            <Input placeholder="如 INTJ / 内向 / 善于沟通" />
+            <Select
+              showSearch
+              allowClear
+              placeholder="选择性格类型"
+              optionFilterProp="label"
+              options={PERSONALITY_TYPE_OPTIONS}
+            />
           </Form.Item>
         </FieldGrid>
         <Form.Item name="selfDescription" label="自我描述">

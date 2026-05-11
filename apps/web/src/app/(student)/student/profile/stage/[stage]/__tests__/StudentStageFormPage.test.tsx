@@ -102,6 +102,7 @@ describe('StudentStageFormPage', () => {
     const stage1 = render(<StudentStageFormPage />);
     expect(screen.getByText('民族')).toBeInTheDocument();
     expect(screen.getByText('政治面貌')).toBeInTheDocument();
+    expect(screen.getByText('选择民族')).toBeInTheDocument();
     stage1.unmount();
 
     mockStage = '3';

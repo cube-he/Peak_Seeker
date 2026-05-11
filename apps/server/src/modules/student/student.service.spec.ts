@@ -277,6 +277,60 @@ describe('StudentService', () => {
         }),
       );
     });
+
+    it('splits user-level identity fields into the related user update', async () => {
+      const current = {
+        id: 10,
+        dataVersion: 1,
+        status: StudentStatus.ACTIVE,
+        examYear: null,
+        examType: null,
+        firstChoice: null,
+        totalScore: null,
+        priorityMode: null,
+        careerPlan: null,
+        user: {
+          realName: 'Old Name',
+          phone: '13800000000',
+          gender: 'FEMALE',
+          ethnicity: '汉族',
+        },
+      };
+      prisma.studentProfile.findUnique.mockResolvedValue(current);
+      prisma.studentProfile.update.mockResolvedValue({
+        ...current,
+        politicalStatus: 'LEAGUE_MEMBER',
+        dataVersion: 2,
+      });
+
+      await service.updateProfile(10, {
+        dataVersion: 1,
+        realName: 'Li Bai',
+        phone: '13800138000',
+        gender: 'MALE',
+        ethnicity: '汉族',
+        politicalStatus: 'LEAGUE_MEMBER',
+      } as any);
+
+      const call = prisma.studentProfile.update.mock.calls[0][0] as any;
+      expect(call.data).toEqual(
+        expect.objectContaining({
+          politicalStatus: 'LEAGUE_MEMBER',
+          user: {
+            update: {
+              realName: 'Li Bai',
+              phone: '13800138000',
+              gender: 'MALE',
+              ethnicity: '汉族',
+            },
+          },
+        }),
+      );
+      expect(call.data.realName).toBeUndefined();
+      expect(call.data.phone).toBeUndefined();
+      expect(call.data.gender).toBeUndefined();
+      expect(call.data.ethnicity).toBeUndefined();
+    });
   });
 
   // calculateCompleteness 旧测试已删除；新算法覆盖在 progress.service.spec.ts

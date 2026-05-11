@@ -34,6 +34,26 @@ export class UpdateStudentProfileDto {
   @IsInt()
   dataVersion?: number;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  realName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  gender?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  ethnicity?: string;
+
   // --- 基本信息 ---
 
   @ApiPropertyOptional()
