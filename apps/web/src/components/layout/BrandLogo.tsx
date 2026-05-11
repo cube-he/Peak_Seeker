@@ -37,13 +37,7 @@ function CompassHomeMark({
 
   return (
     <svg className={className} viewBox="0 0 58 58" fill="none" aria-hidden="true">
-      <path
-        d="M8 22L29 8L50 22"
-        stroke={ink}
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M8 22L29 8L50 22" stroke={ink} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
       <line x1="29" y1="6" x2="29" y2="11" stroke={ink} strokeWidth="2.4" strokeLinecap="round" />
       <circle cx="29" cy="36" r="13" stroke={circleInk} strokeWidth="1.4" />
       <circle cx="29" cy="36" r="1.6" fill={ink} />
@@ -74,7 +68,7 @@ export default function BrandLogo({
           智愿家
         </span>
         {showSubtitle && (
-          <span className={`${styles.subtitle} uppercase leading-tight tracking-normal ${subtitleColor}`}>
+          <span className={`${styles.subtitle} uppercase leading-tight tracking-[1.5px] ${subtitleColor}`}>
             ZHIYUANJIA · WILLNEST
           </span>
         )}

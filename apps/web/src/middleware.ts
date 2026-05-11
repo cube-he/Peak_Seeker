@@ -27,11 +27,20 @@ function isPublicRoute(pathname: string): boolean {
 function getRoleFromToken(token: string): string | null {
   // Decode JWT payload (middle segment) without verification.
   // Full verification happens server-side; middleware only needs a routing hint.
+  // Middleware runs in the Edge runtime, so avoid Node-only Buffer APIs here.
   try {
-    const payload = JSON.parse(
-      Buffer.from(token.split('.')[1], 'base64').toString()
+    const payloadPart = token.split('.')[1];
+    if (!payloadPart) return null;
+
+    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    const json = decodeURIComponent(
+      Array.from(atob(padded))
+        .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`)
+        .join('')
     );
-    return payload.role || null;
+    const payload = JSON.parse(json);
+    return payload.role || payload.user?.role || null;
   } catch {
     return null;
   }

@@ -29,7 +29,7 @@ interface AuthState {
 function setTokenCookie(token: string | null) {
   if (typeof document === 'undefined') return;
   if (token) {
-    document.cookie = `access_token=${token}; path=/; max-age=1800; SameSite=Lax`;
+    document.cookie = `access_token=${token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
   } else {
     document.cookie = 'access_token=; path=/; max-age=0';
   }
@@ -94,6 +94,11 @@ export const useAuthStore = create<AuthState>()(
           removeItem: () => {},
         };
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.accessToken) {
+          setTokenCookie(state.accessToken);
+        }
+      },
     }
   )
 );

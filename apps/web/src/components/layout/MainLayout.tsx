@@ -1,16 +1,11 @@
 'use client';
 
 import { Dropdown, Space } from 'antd';
-import {
-  UserOutlined,
-  BellOutlined,
-  LoginOutlined,
-  MenuOutlined,
-} from '@ant-design/icons';
+import { BellOutlined, LoginOutlined, MenuOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuthStore } from '@/stores/authStore';
 import { useState } from 'react';
+import { useAuthStore } from '@/stores/authStore';
 import BrandLogo from './BrandLogo';
 import FooterSection from './FooterSection';
 import MobileBottomNav from './MobileBottomNav';
@@ -50,23 +45,18 @@ export default function MainLayout({ children, maxWidth, noPadding, hideMobileBo
   ];
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col">
-      {/* Navbar */}
-      <header className="sticky top-0 z-50 h-16 backdrop-blur-xl bg-[rgba(250,249,245,0.92)] shadow-nav">
-        <nav className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 h-full flex items-center justify-between">
-          {/* Brand */}
+    <div className="flex min-h-screen flex-col bg-bg">
+      <header className="sticky top-0 z-50 h-16 bg-[rgba(250,249,245,0.92)] shadow-nav backdrop-blur-xl">
+        <nav className="flex h-full items-center justify-between px-4 sm:px-6 lg:px-8">
           <BrandLogo />
 
-          {/* Desktop Nav */}
-          <div className="hidden lg:flex items-center gap-8">
+          <div className="hidden items-center gap-7 lg:flex">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 className={`text-sm no-underline transition-colors duration-200 ${
-                  isActive(item.href)
-                    ? 'text-primary font-medium'
-                    : 'text-text-tertiary hover:text-primary'
+                  isActive(item.href) ? 'font-medium text-primary' : 'text-text-tertiary hover:text-primary'
                 }`}
               >
                 {item.label}
@@ -74,16 +64,22 @@ export default function MainLayout({ children, maxWidth, noPadding, hideMobileBo
             ))}
           </div>
 
-          {/* Right Section */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <button
+              className="hidden h-8 w-8 cursor-pointer items-center justify-center rounded-full border-0 bg-surface-dim text-text-tertiary transition-colors duration-200 hover:text-primary sm:inline-flex"
+              aria-label="搜索"
+            >
+              <SearchOutlined className="text-sm" />
+            </button>
+
             {isLoggedIn ? (
               <>
-                <button className="w-8 h-8 bg-surface-dim rounded-full flex items-center justify-center text-text-tertiary border-0 cursor-pointer transition-colors duration-200 hover:text-primary">
+                <button className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-0 bg-surface-dim text-text-tertiary transition-colors duration-200 hover:text-primary">
                   <BellOutlined className="text-base" />
                 </button>
                 <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
                   <Space className="cursor-pointer">
-                    <span className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white text-[13px] font-sans font-medium">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[13px] font-medium text-white">
                       {user?.username?.charAt(0) || <UserOutlined />}
                     </span>
                   </Space>
@@ -91,41 +87,36 @@ export default function MainLayout({ children, maxWidth, noPadding, hideMobileBo
               </>
             ) : (
               <Space size={8}>
-                <Link href="/login" className="text-sm text-text-tertiary hover:text-primary no-underline transition-colors duration-200">
+                <Link href="/login" className="text-sm text-text-tertiary no-underline transition-colors duration-200 hover:text-primary">
                   <LoginOutlined className="mr-1" />
                   登录
                 </Link>
-                <Link href="/register">
-                  <button className="bg-gradient-to-br from-primary to-primary-light text-white text-[13px] font-medium px-5 py-2 rounded border-0 cursor-pointer hover:opacity-90 transition-opacity duration-200">
-                    注册
-                  </button>
+                <Link href="/register" className="btn-willnest btn-primary-willnest px-4 py-2 text-[13px]">
+                  注册
                 </Link>
               </Space>
             )}
 
-            {/* Mobile Menu Toggle */}
             <button
-              className="lg:hidden w-8 h-8 flex items-center justify-center rounded-full bg-surface-dim text-text-tertiary border-0 cursor-pointer transition-colors duration-200 hover:text-primary"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-0 bg-surface-dim text-text-tertiary transition-colors duration-200 hover:text-primary lg:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="打开导航"
             >
               <MenuOutlined className="text-base" />
             </button>
           </div>
         </nav>
 
-        {/* Mobile Nav Menu */}
         {mobileMenuOpen && (
-          <div className="lg:hidden bg-surface border-t border-border">
-            <div className="flex flex-col py-2 px-4">
+          <div className="border-t border-border bg-surface lg:hidden">
+            <div className="flex flex-col px-4 py-2">
               {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`py-3 px-4 rounded-lg text-sm no-underline transition-colors duration-200 ${
-                    isActive(item.href)
-                      ? 'text-primary font-medium bg-primary/5'
-                      : 'text-text-tertiary hover:text-primary hover:bg-surface-dim'
+                  className={`rounded-lg px-4 py-3 text-sm no-underline transition-colors duration-200 ${
+                    isActive(item.href) ? 'bg-primary/5 font-medium text-primary' : 'text-text-tertiary hover:bg-surface-dim hover:text-primary'
                   }`}
                 >
                   {item.label}
@@ -136,18 +127,15 @@ export default function MainLayout({ children, maxWidth, noPadding, hideMobileBo
         )}
       </header>
 
-      {/* Content */}
       <main
-        className={`flex-1 min-w-0 pb-16 lg:pb-0 ${noPadding ? '' : 'max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-12 py-8 w-full'}`}
+        className={`min-w-0 flex-1 pb-16 lg:pb-0 ${noPadding ? '' : 'mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 lg:px-8'}`}
         style={noPadding ? { maxWidth: maxWidth || undefined, margin: '0 auto', width: '100%' } : { maxWidth: maxWidth || '1200px' }}
       >
         {children}
       </main>
 
-      {/* Footer */}
       <FooterSection />
 
-      {/* Mobile Bottom Navigation */}
       {!hideMobileBottomNav && <MobileBottomNav />}
     </div>
   );
