@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button, Empty, InputNumber, Spin } from 'antd';
 import {
   BankOutlined,
@@ -16,6 +17,11 @@ import {
 } from '@ant-design/icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
+import StudentSummaryRail from '@/components/student/workspace/StudentSummaryRail';
+import {
+  StudentWorkspace,
+  StudentWorkspacePanel,
+} from '@/components/student/workspace/StudentWorkspace';
 
 interface RecommendResult {
   id: number;
@@ -55,6 +61,7 @@ const GRADIENT_STYLE: Record<
 };
 
 export default function StudentRecommendPage() {
+  const pathname = usePathname();
   const [score, setScore] = useState<number | null>(null);
   const [results, setResults] = useState<RecommendResult[] | null>(null);
 
@@ -65,6 +72,85 @@ export default function StudentRecommendPage() {
 
   const profile = profileData?.data;
   const effectiveScore = score ?? profile?.totalScore ?? null;
+  const hasPreferences =
+    Boolean(profile?.priorityMode) ||
+    (Array.isArray(profile?.preferredMajors) && profile.preferredMajors.length > 0) ||
+    (Array.isArray(profile?.preferredCities) && profile.preferredCities.length > 0);
+  const readinessRows = [
+    [
+      '基本信息',
+      effectiveScore ? `分数 ${effectiveScore}` : '等待输入分数',
+      Boolean(effectiveScore),
+    ],
+    [
+      '省排名与选科',
+      profile?.provincialRank
+        ? `位次 ${profile.provincialRank.toLocaleString('zh-CN')}`
+        : '待完善档案',
+      Boolean(profile?.provincialRank),
+    ],
+    [
+      '专业与城市偏好',
+      hasPreferences ? '已记录偏好' : '待扩展推荐参数接口',
+      hasPreferences,
+    ],
+  ] as const;
+
+  const rail = (
+    <StudentSummaryRail
+      activePathname={pathname}
+      profile={profile}
+      progress={profile?.progress}
+    />
+  );
+
+  const aside = (
+    <>
+      <StudentWorkspacePanel title="推荐准备度">
+        <div className="space-y-3">
+          {readinessRows.map(([label, meta, done], index) => (
+            <div key={label} className="grid grid-cols-[32px_1fr_auto] items-center gap-3">
+              <span
+                aria-hidden="true"
+                className={`flex h-8 w-8 items-center justify-center rounded-lg font-serif text-sm font-semibold ${
+                  done ? 'bg-safe text-white' : 'bg-accent-fixed text-accent'
+                }`}
+              >
+                {index + 1}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-text">{label}</span>
+                <span className="mt-0.5 block truncate text-xs text-text-muted">{meta}</span>
+              </span>
+              {done ? (
+                <CheckCircleOutlined aria-hidden="true" className="text-safe" />
+              ) : (
+                <RightOutlined aria-hidden="true" className="text-text-faint" />
+              )}
+            </div>
+          ))}
+        </div>
+      </StudentWorkspacePanel>
+
+      <StudentWorkspacePanel title="下一步">
+        <div className="space-y-3">
+          {[
+            ['/student/profile', '完善个人资料'],
+            ['/universities', '浏览院校库'],
+          ].map(([href, label]) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex items-center justify-between rounded-lg px-2 py-2 text-sm font-medium text-text no-underline transition-colors hover:bg-surface-dim"
+            >
+              <span>{label}</span>
+              <RightOutlined aria-hidden="true" className="text-[10px] text-primary" />
+            </Link>
+          ))}
+        </div>
+      </StudentWorkspacePanel>
+    </>
+  );
 
   const recommendMutation = useMutation({
     mutationFn: (inputScore: number) => studentApi.quickRecommend({ score: inputScore }),
@@ -92,28 +178,29 @@ export default function StudentRecommendPage() {
     {
       label: '智能推荐',
       desc: '基于分数快速匹配院校专业',
-      icon: <ThunderboltOutlined />,
+      icon: <ThunderboltOutlined aria-hidden="true" />,
       active: true,
     },
     {
       label: '分专业筛选',
       desc: '围绕一个专业方向深挖',
-      icon: <StarOutlined />,
+      icon: <StarOutlined aria-hidden="true" />,
     },
     {
       label: '城市优先',
       desc: '仅看意向城市院校',
-      icon: <EnvironmentOutlined />,
+      icon: <EnvironmentOutlined aria-hidden="true" />,
     },
     {
       label: '手动组建',
       desc: '从院校库逐一挑选',
-      icon: <FileAddOutlined />,
+      icon: <FileAddOutlined aria-hidden="true" />,
     },
   ];
 
   return (
-    <div className="space-y-5">
+    <StudentWorkspace rail={rail} aside={aside}>
+      <div className="space-y-5">
       <header>
         <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">AI 智能推荐</p>
         <h1 className="font-serif text-[26px] font-semibold leading-tight text-text">
@@ -190,23 +277,26 @@ export default function StudentRecommendPage() {
         </div>
       </section>
 
-      <section>
+      <section className="xl:hidden">
         <h2 className="mb-3 font-serif text-base font-semibold text-text-secondary">推荐流程</h2>
         <div className="space-y-2">
-          {[
-            ['基本信息', effectiveScore ? `分数 ${effectiveScore}` : '等待输入分数', true],
-            ['省排名/选科', profile?.provincialRank ? `位次 ${profile.provincialRank}` : '待完善档案', Boolean(profile?.provincialRank)],
-            ['专业与城市偏好', '待扩展推荐参数接口', false],
-          ].map(([label, meta, done], index) => (
+          {readinessRows.map(([label, meta, done], index) => (
             <div key={label as string} className="grid grid-cols-[32px_1fr_auto] items-center gap-3 rounded-xl bg-surface px-4 py-3 shadow-card">
-              <span className={`flex h-7 w-7 items-center justify-center rounded-full font-serif text-xs font-semibold ${done ? 'bg-safe text-white' : 'bg-accent-fixed text-accent'}`}>
+              <span
+                aria-hidden="true"
+                className={`flex h-7 w-7 items-center justify-center rounded-full font-serif text-xs font-semibold ${done ? 'bg-safe text-white' : 'bg-accent-fixed text-accent'}`}
+              >
                 {index + 1}
               </span>
               <span>
                 <span className="block text-sm font-medium text-text">{label}</span>
                 <span className="mt-0.5 block text-xs text-text-muted">{meta}</span>
               </span>
-              {done ? <CheckCircleOutlined className="text-safe" /> : <RightOutlined className="text-text-faint" />}
+              {done ? (
+                <CheckCircleOutlined aria-hidden="true" className="text-safe" />
+              ) : (
+                <RightOutlined aria-hidden="true" className="text-text-faint" />
+              )}
             </div>
           ))}
         </div>
@@ -265,11 +355,11 @@ export default function StudentRecommendPage() {
                     <span className="text-sm font-medium text-text-secondary">{style.title}</span>
                     <span className="text-xs text-text-faint">({items.length})</span>
                   </div>
-                  <div className="overflow-hidden rounded-2xl bg-surface shadow-card">
+                  <div className="grid gap-4 lg:grid-cols-2">
                     {items.map((item) => (
                       <div
                         key={item.id}
-                        className="grid grid-cols-[1fr_64px] gap-3 border-b border-border-subtle px-4 py-3 last:border-b-0"
+                        className="grid grid-cols-[1fr_64px] gap-3 rounded-2xl bg-surface px-4 py-3 shadow-card"
                       >
                         <div className="min-w-0">
                           <p className="truncate font-serif text-sm font-semibold text-text">{item.universityName}</p>
@@ -307,9 +397,10 @@ export default function StudentRecommendPage() {
       </section>
 
       <Link href="/universities" className="flex items-center justify-center gap-2 rounded-2xl bg-surface px-5 py-4 text-sm font-medium text-primary no-underline shadow-card">
-        <BankOutlined />
+        <BankOutlined aria-hidden="true" />
         去院校库手动查看
       </Link>
-    </div>
+      </div>
+    </StudentWorkspace>
   );
 }
