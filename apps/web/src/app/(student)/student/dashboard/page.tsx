@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Spin } from 'antd';
 import {
@@ -20,6 +21,11 @@ import { studentApi } from '@/services/student-api';
 import { timelineApi } from '@/services/timeline-api';
 import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
+import StudentSummaryRail from '@/components/student/workspace/StudentSummaryRail';
+import {
+  StudentWorkspace,
+  StudentWorkspacePanel,
+} from '@/components/student/workspace/StudentWorkspace';
 import { useAuthStore } from '@/stores/authStore';
 
 const PROGRESS_STEPS = [
@@ -69,6 +75,7 @@ function formatUpdatedAt(value?: string) {
 
 export default function StudentDashboardPage() {
   const { user } = useAuthStore();
+  const pathname = usePathname();
 
   const { data: profileData, isLoading: profileLoading } = useQuery({
     queryKey: ['student-profile'],
@@ -147,8 +154,84 @@ export default function StudentDashboardPage() {
     },
   ];
 
+  const missingRecommendFieldsCount =
+    progressData?.data?.missingFieldsForRecommend?.length;
+
+  const rail = (
+    <StudentSummaryRail
+      activePathname={pathname}
+      profile={profile}
+      progress={progressData?.data}
+      plansCount={plans.length}
+    />
+  );
+
+  const aside = (
+    <>
+      <StudentWorkspacePanel title="消息提醒">
+        {profileLoading ? (
+          <div className="py-5 text-center">
+            <Spin />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <Link
+              href="/student/profile"
+              className="grid grid-cols-[36px_1fr_auto] gap-3 no-underline"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#fee2e2] text-[#991b1b]">
+                <ExclamationCircleOutlined />
+              </span>
+              <span>
+                <span className="block text-sm font-medium text-text">完善个人信息后，推荐会更稳定</span>
+                <span className="mt-1 block text-xs text-text-muted">
+                  {missingRecommendFieldsCount
+                    ? `仍有 ${missingRecommendFieldsCount} 项关键信息待补充`
+                    : '成绩、选科和偏好越完整，方案越贴近真实填报'}
+                </span>
+              </span>
+              <span className="text-xs text-primary">去完善</span>
+            </Link>
+            <div className="grid grid-cols-[36px_1fr_auto] gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#dbeafe] text-[#1e40af]">
+                <BellOutlined />
+              </span>
+              <span>
+                <span className="block text-sm font-medium text-text">{currentYear} 年高考时间线已同步</span>
+                <span className="mt-1 block text-xs text-text-muted">
+                  倒计时、志愿填报节点会跟随后台时间线接口更新
+                </span>
+              </span>
+              <span className="text-xs text-text-muted">自动</span>
+            </div>
+          </div>
+        )}
+      </StudentWorkspacePanel>
+
+      <StudentWorkspacePanel title="下一步">
+        <div className="space-y-3">
+          {[
+            ['/student/profile', '完善个人资料'],
+            ['/student/recommend', '获取 AI 推荐'],
+            ['/student/plans', '查看志愿方案'],
+          ].map(([href, label]) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex items-center justify-between rounded-lg px-2 py-2 text-sm font-medium text-text no-underline transition-colors hover:bg-surface-dim"
+            >
+              <span>{label}</span>
+              <RightOutlined className="text-[10px] text-primary" />
+            </Link>
+          ))}
+        </div>
+      </StudentWorkspacePanel>
+    </>
+  );
+
   return (
-    <div className="space-y-5">
+    <StudentWorkspace rail={rail} aside={aside}>
+      <div className="space-y-5">
       <section className="relative overflow-hidden rounded-2xl bg-[#1e3a5f] px-5 py-6 text-white shadow-[0_18px_45px_rgba(30,58,95,0.24)]">
         <div
           className="absolute inset-0 opacity-25"
@@ -317,7 +400,7 @@ export default function StudentDashboardPage() {
         )}
       </section>
 
-      <section>
+      <section className="xl:hidden">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-serif text-lg font-semibold text-text">消息提醒</h2>
         </div>
@@ -357,7 +440,8 @@ export default function StudentDashboardPage() {
             </>
           )}
         </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </StudentWorkspace>
   );
 }
