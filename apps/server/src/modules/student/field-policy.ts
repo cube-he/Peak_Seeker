@@ -59,6 +59,8 @@ export const STAGE_1_REQUIRED = [
   'realName',
   'phone',
   'gender',
+  'ethnicity',
+  'politicalStatus',
   'examType',
   'examYear',
   'parentPhone',
@@ -125,8 +127,6 @@ export const STAGE_3_FIELDS = [
   'visionRightCorrected',
   'physicalLimits',
   'medicalHistory',
-  'ethnicity',
-  'politicalStatus',
 ] as const;
 
 const _STUDENT_EDITABLE_TUPLE = [

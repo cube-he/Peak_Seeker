@@ -9,6 +9,8 @@ export const STAGE_1_REQUIRED = [
   'realName',
   'phone',
   'gender',
+  'ethnicity',
+  'politicalStatus',
   'examType',
   'parentPhone',
   'formFiller',
@@ -66,8 +68,6 @@ export const STAGE_3_FIELDS = [
   'visionRightCorrected',
   'physicalLimits',
   'medicalHistory',
-  'ethnicity',
-  'politicalStatus',
 ] as const;
 
 /**

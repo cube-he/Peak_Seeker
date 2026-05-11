@@ -103,7 +103,15 @@ export default function StudentStageFormPage() {
       // stage 1 走 9 科语义层：先回填非分数字段，再用 to9Subjects 解构槽位为具体科目
       // nonScoreFields 是 STAGE_1_REQUIRED 中非分数字段的子集；dataVersion 在下方单独设置；
       // 分数字段由 to9Subjects 从槽位字段解码生成，所以不在这里手动复制
-      const nonScoreFields = ['realName', 'phone', 'parentPhone', 'gender', 'formFiller'];
+      const nonScoreFields = [
+        'realName',
+        'phone',
+        'parentPhone',
+        'gender',
+        'ethnicity',
+        'politicalStatus',
+        'formFiller',
+      ];
       for (const f of nonScoreFields) initial[f] = profile[f];
       Object.assign(initial, to9Subjects(profile));
     } else {
@@ -176,6 +184,8 @@ export default function StudentStageFormPage() {
           phone: values.phone,
           parentPhone: values.parentPhone,
           gender: values.gender,
+          ethnicity: values.ethnicity,
+          politicalStatus: values.politicalStatus,
           formFiller: values.formFiller,
           ...translated,
         };
@@ -451,6 +461,53 @@ function FieldGrid({
   return <div className={`grid grid-cols-1 gap-x-4 ${columns}`}>{children}</div>;
 }
 
+function ScoreInput({
+  name,
+  label,
+  max,
+  required,
+  disabled,
+  placeholder,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  max: number;
+  required?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
+  onChange?: (value: number | null) => void;
+}) {
+  return (
+    <div
+      className={`rounded-xl border px-3 py-3 transition-colors ${
+        disabled
+          ? 'border-border-subtle bg-surface-dim/60 opacity-70'
+          : 'border-border-subtle bg-surface hover:border-primary/25'
+      }`}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="font-medium text-text">{label}</span>
+        <span className="text-[11px] text-text-muted">满分 {max}</span>
+      </div>
+      <Form.Item
+        name={name}
+        rules={required ? [{ required: true, message: '必填' }] : undefined}
+        className="mb-0"
+      >
+        <InputNumber
+          min={0}
+          max={max}
+          className="w-full"
+          disabled={disabled}
+          placeholder={placeholder}
+          onChange={onChange}
+        />
+      </Form.Item>
+    </div>
+  );
+}
+
 function Stage1Fields() {
   const form = Form.useFormInstance();
   return (
@@ -459,7 +516,7 @@ function Stage1Fields() {
         title="联系信息"
         description="用于老师与你和家长确认资料，建议填写常用联系方式。"
       >
-        <FieldGrid columns="md:grid-cols-2 xl:grid-cols-3">
+        <FieldGrid columns="md:grid-cols-2">
           <Form.Item name="realName" label="姓名" rules={[{ required: true }]}>
             <Input placeholder="你的真实姓名" />
           </Form.Item>
@@ -474,17 +531,42 @@ function Stage1Fields() {
             <Input placeholder="家长联系电话" />
           </Form.Item>
           <Form.Item name="gender" label="性别" rules={[{ required: true }]}>
-            <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
-              <Radio value="MALE">男</Radio>
-              <Radio value="FEMALE">女</Radio>
-            </Radio.Group>
+            <Radio.Group
+              optionType="button"
+              buttonStyle="solid"
+              className="w-full"
+              options={[
+                { value: 'MALE', label: '男' },
+                { value: 'FEMALE', label: '女' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="ethnicity" label="民族">
+            <Input placeholder="如 汉族" />
+          </Form.Item>
+          <Form.Item name="politicalStatus" label="政治面貌">
+            <Radio.Group
+              optionType="button"
+              buttonStyle="solid"
+              className="w-full"
+              options={[
+                { value: 'PARTY_MEMBER', label: '党员' },
+                { value: 'LEAGUE_MEMBER', label: '团员' },
+                { value: 'MASSES', label: '群众' },
+              ]}
+            />
           </Form.Item>
           <Form.Item name="formFiller" label="填表人" rules={[{ required: true }]}>
-            <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
-              <Radio value="STUDENT">学生本人</Radio>
-              <Radio value="PARENT">家长</Radio>
-              <Radio value="TOGETHER">共同填写</Radio>
-            </Radio.Group>
+            <Radio.Group
+              optionType="button"
+              buttonStyle="solid"
+              className="w-full"
+              options={[
+                { value: 'STUDENT', label: '学生本人' },
+                { value: 'PARENT', label: '家长' },
+                { value: 'TOGETHER', label: '共同填写' },
+              ]}
+            />
           </Form.Item>
         </FieldGrid>
       </FormSection>
@@ -493,110 +575,116 @@ function Stage1Fields() {
         title="高考成绩"
         description="填语数外 + 物理或历史 + 任选 2 门。系统会自动识别科类和选考组合。"
       >
-        <FieldGrid columns="sm:grid-cols-3">
-          <Form.Item name="scoreChinese" label="语文" rules={[{ required: true, message: '必填' }]}>
-            <InputNumber min={0} max={150} className="w-full" />
-          </Form.Item>
-          <Form.Item name="scoreMath" label="数学" rules={[{ required: true, message: '必填' }]}>
-            <InputNumber min={0} max={150} className="w-full" />
-          </Form.Item>
-          <Form.Item name="scoreEnglish" label="英语" rules={[{ required: true, message: '必填' }]}>
-            <InputNumber min={0} max={150} className="w-full" />
-          </Form.Item>
-        </FieldGrid>
+        <div className="space-y-4">
+          <section className="rounded-2xl bg-surface-dim px-4 py-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="m-0 text-sm font-semibold text-text">必填三科</h4>
+              <span className="text-[11px] text-text-muted">语文 / 数学 / 英语</span>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <ScoreInput name="scoreChinese" label="语文" max={150} required />
+              <ScoreInput name="scoreMath" label="数学" max={150} required />
+              <ScoreInput name="scoreEnglish" label="英语" max={150} required />
+            </div>
+          </section>
 
-        <Form.Item
-          noStyle
-          shouldUpdate={(p, c) =>
-            p.scorePhysics !== c.scorePhysics || p.scoreHistory !== c.scoreHistory
-          }
-        >
-          {({ getFieldValue }) => {
-            const hasPhysics = getFieldValue('scorePhysics') != null;
-            const hasHistory = getFieldValue('scoreHistory') != null;
-            return (
-              <FieldGrid columns="sm:grid-cols-2">
-                <Form.Item name="scorePhysics" label="物理">
-                  <InputNumber
-                    min={0}
-                    max={100}
-                    className="w-full"
-                    disabled={hasHistory}
-                    placeholder={hasHistory ? '已选历史' : ''}
-                    onChange={(v) => {
-                      if (v != null) form.setFieldValue('scoreHistory', undefined);
-                    }}
-                  />
-                </Form.Item>
-                <Form.Item name="scoreHistory" label="历史">
-                  <InputNumber
-                    min={0}
-                    max={100}
-                    className="w-full"
-                    disabled={hasPhysics}
-                    placeholder={hasPhysics ? '已选物理' : ''}
-                    onChange={(v) => {
-                      if (v != null) form.setFieldValue('scorePhysics', undefined);
-                    }}
-                  />
-                </Form.Item>
-              </FieldGrid>
-            );
-          }}
-        </Form.Item>
+          <section className="rounded-2xl bg-surface-dim px-4 py-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="m-0 text-sm font-semibold text-text">首选科目</h4>
+              <span className="rounded-full bg-accent-fixed px-2 py-0.5 text-[11px] font-medium text-accent">
+                物理 / 历史二选一
+              </span>
+            </div>
+            <Form.Item
+              noStyle
+              shouldUpdate={(p, c) =>
+                p.scorePhysics !== c.scorePhysics || p.scoreHistory !== c.scoreHistory
+              }
+            >
+              {({ getFieldValue }) => {
+                const hasPhysics = getFieldValue('scorePhysics') != null;
+                const hasHistory = getFieldValue('scoreHistory') != null;
+                return (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <ScoreInput
+                      name="scorePhysics"
+                      label="物理"
+                      max={100}
+                      disabled={hasHistory}
+                      placeholder={hasHistory ? '已选历史' : undefined}
+                      onChange={(v) => {
+                        if (v != null) form.setFieldValue('scoreHistory', undefined);
+                      }}
+                    />
+                    <ScoreInput
+                      name="scoreHistory"
+                      label="历史"
+                      max={100}
+                      disabled={hasPhysics}
+                      placeholder={hasPhysics ? '已选物理' : undefined}
+                      onChange={(v) => {
+                        if (v != null) form.setFieldValue('scorePhysics', undefined);
+                      }}
+                    />
+                  </div>
+                );
+              }}
+            </Form.Item>
+          </section>
 
-        <Form.Item
-          noStyle
-          shouldUpdate={(p, c) =>
-            p.scoreChemistry !== c.scoreChemistry ||
-            p.scoreBiology !== c.scoreBiology ||
-            p.scorePolitics !== c.scorePolitics ||
-            p.scoreGeography !== c.scoreGeography
-          }
-        >
-          {({ getFieldValue }) => {
-            const reKeys = ['scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography'] as const;
-            const filledCount = reKeys.filter((k) => getFieldValue(k) != null).length;
-            const lockOthers = filledCount >= 2;
-            const isFilled = (k: string) => getFieldValue(k) != null;
-            return (
-              <FieldGrid columns="sm:grid-cols-2 xl:grid-cols-4">
-                <Form.Item name="scoreChemistry" label="化学">
-                  <InputNumber
-                    min={0}
-                    max={100}
-                    className="w-full"
-                    disabled={lockOthers && !isFilled('scoreChemistry')}
-                  />
-                </Form.Item>
-                <Form.Item name="scoreBiology" label="生物">
-                  <InputNumber
-                    min={0}
-                    max={100}
-                    className="w-full"
-                    disabled={lockOthers && !isFilled('scoreBiology')}
-                  />
-                </Form.Item>
-                <Form.Item name="scorePolitics" label="政治">
-                  <InputNumber
-                    min={0}
-                    max={100}
-                    className="w-full"
-                    disabled={lockOthers && !isFilled('scorePolitics')}
-                  />
-                </Form.Item>
-                <Form.Item name="scoreGeography" label="地理">
-                  <InputNumber
-                    min={0}
-                    max={100}
-                    className="w-full"
-                    disabled={lockOthers && !isFilled('scoreGeography')}
-                  />
-                </Form.Item>
-              </FieldGrid>
-            );
-          }}
-        </Form.Item>
+          <section className="rounded-2xl bg-surface-dim px-4 py-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="m-0 text-sm font-semibold text-text">再选科目</h4>
+              <span className="rounded-full bg-accent-fixed px-2 py-0.5 text-[11px] font-medium text-accent">
+                化 / 生 / 政 / 地选四选二
+              </span>
+            </div>
+            <Form.Item
+              noStyle
+              shouldUpdate={(p, c) =>
+                p.scoreChemistry !== c.scoreChemistry ||
+                p.scoreBiology !== c.scoreBiology ||
+                p.scorePolitics !== c.scorePolitics ||
+                p.scoreGeography !== c.scoreGeography
+              }
+            >
+              {({ getFieldValue }) => {
+                const reKeys = ['scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography'] as const;
+                const filledCount = reKeys.filter((k) => getFieldValue(k) != null).length;
+                const lockOthers = filledCount >= 2;
+                const isFilled = (k: string) => getFieldValue(k) != null;
+                return (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <ScoreInput
+                      name="scoreChemistry"
+                      label="化学"
+                      max={100}
+                      disabled={lockOthers && !isFilled('scoreChemistry')}
+                    />
+                    <ScoreInput
+                      name="scoreBiology"
+                      label="生物"
+                      max={100}
+                      disabled={lockOthers && !isFilled('scoreBiology')}
+                    />
+                    <ScoreInput
+                      name="scorePolitics"
+                      label="政治"
+                      max={100}
+                      disabled={lockOthers && !isFilled('scorePolitics')}
+                    />
+                    <ScoreInput
+                      name="scoreGeography"
+                      label="地理"
+                      max={100}
+                      disabled={lockOthers && !isFilled('scoreGeography')}
+                    />
+                  </div>
+                );
+              }}
+            </Form.Item>
+          </section>
+        </div>
 
         <Form.Item
           noStyle
@@ -620,12 +708,11 @@ function Stage1Fields() {
             ]) as Subject9Form;
             const total = sum9Subjects(v);
             return (
-              <div className="mt-1 rounded-lg bg-surface-dim px-4 py-3 text-sm text-text">
-                总分（自动累加）：
-                <span className="font-serif text-lg font-semibold tabular-nums text-accent">
-                  {total}
+              <div className="mt-4 flex items-center justify-between rounded-2xl bg-primary-fixed px-4 py-4 text-sm text-text">
+                <span className="font-medium">总分自动累加</span>
+                <span className="font-serif text-2xl font-semibold tabular-nums text-accent">
+                  {total} 分
                 </span>
-                分
               </div>
             );
           }}
@@ -904,18 +991,6 @@ function Stage3Fields() {
             placeholder="如有需注明的既往病史，请填写"
           />
         </Form.Item>
-        <FieldGrid columns="sm:grid-cols-2">
-          <Form.Item name="ethnicity" label="民族">
-            <Input placeholder="如 汉族" />
-          </Form.Item>
-          <Form.Item name="politicalStatus" label="政治面貌">
-            <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
-              <Radio value="PARTY_MEMBER">党员</Radio>
-              <Radio value="LEAGUE_MEMBER">团员</Radio>
-              <Radio value="MASSES">群众</Radio>
-            </Radio.Group>
-          </Form.Item>
-        </FieldGrid>
       </FormSection>
     </div>
   );

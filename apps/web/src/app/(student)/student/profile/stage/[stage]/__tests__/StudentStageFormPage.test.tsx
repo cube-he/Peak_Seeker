@@ -60,6 +60,13 @@ jest.mock('@/services/student-api', () => ({
   },
 }));
 
+jest.mock('@/components/student/HealthCheckboxGroup', () => ({
+  __esModule: true,
+  default: function MockHealthCheckboxGroup() {
+    return <div>体检受限项</div>;
+  },
+}));
+
 describe('StudentStageFormPage', () => {
   beforeEach(() => {
     mockStage = '2';
@@ -88,5 +95,18 @@ describe('StudentStageFormPage', () => {
     );
     expect(screen.getAllByText('阶段 2：完善信息').length).toBeGreaterThan(0);
     expect(screen.getByText('保存当前阶段').closest('button')).toBeInTheDocument();
+  });
+
+  it('places ethnicity and political status in stage 1 instead of stage 3', () => {
+    mockStage = '1';
+    const stage1 = render(<StudentStageFormPage />);
+    expect(screen.getByText('民族')).toBeInTheDocument();
+    expect(screen.getByText('政治面貌')).toBeInTheDocument();
+    stage1.unmount();
+
+    mockStage = '3';
+    render(<StudentStageFormPage />);
+    expect(screen.queryByText('民族')).not.toBeInTheDocument();
+    expect(screen.queryByText('政治面貌')).not.toBeInTheDocument();
   });
 });
