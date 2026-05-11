@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Empty, Spin } from 'antd';
 import {
   FileTextOutlined,
@@ -11,7 +12,13 @@ import {
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { planApi } from '@/services/plan-api';
+import { studentApi } from '@/services/student-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
+import StudentSummaryRail from '@/components/student/workspace/StudentSummaryRail';
+import {
+  StudentWorkspace,
+  StudentWorkspacePanel,
+} from '@/components/student/workspace/StudentWorkspace';
 
 const BATCH_LABELS: Record<string, string> = {
   EARLY: '本科提前批',
@@ -54,13 +61,19 @@ function getPlanClass(status?: string) {
 }
 
 export default function StudentPlansPage() {
+  const pathname = usePathname();
   const [activeFilter, setActiveFilter] = useState('ALL');
   const { data, isLoading } = useQuery({
     queryKey: ['student-plans'],
     queryFn: () => planApi.getMyPlans(),
   });
+  const { data: profileData } = useQuery({
+    queryKey: ['student-my-profile'],
+    queryFn: () => studentApi.getMyProfile(),
+  });
 
   const plans: Plan[] = data?.data || [];
+  const profile = (profileData as any)?.data ?? profileData;
 
   const counts = useMemo(
     () => ({
@@ -80,17 +93,48 @@ export default function StudentPlansPage() {
     return plans.filter((plan) => plan.status === activeFilter);
   }, [activeFilter, plans]);
 
-  return (
-    <div className="space-y-5">
-      <header className="pt-1">
-        <h1 className="font-serif text-2xl font-semibold text-text">我的方案</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          {plans.length} 份方案 · 当前列表由老师生成，学生端可查看与确认
+  const rail = (
+    <StudentSummaryRail
+      activePathname={pathname}
+      profile={profile}
+      progress={profile?.progress}
+      plansCount={plans.length}
+    />
+  );
+
+  const aside = (
+    <>
+      <StudentWorkspacePanel title="方案状态">
+        <p className="m-0 text-sm leading-6 text-text-muted">
+          当前列表由老师生成，学生端可查看、对比并确认方案内容。
         </p>
-      </header>
+      </StudentWorkspacePanel>
+
+      <StudentWorkspacePanel title="能力说明">
+        <div className="flex gap-3 text-sm leading-6 text-text-muted">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-dim text-primary">
+            <FileTextOutlined aria-hidden="true" />
+          </span>
+          <p className="m-0">
+            新建、复制或导出方案需要后端开放学生端方案编辑 API，当前入口保持只读查看。
+          </p>
+        </div>
+      </StudentWorkspacePanel>
+    </>
+  );
+
+  return (
+    <StudentWorkspace rail={rail} aside={aside}>
+      <div className="space-y-5">
+        <header className="pt-1">
+          <h1 className="font-serif text-2xl font-semibold text-text">我的方案</h1>
+          <p className="mt-1 text-sm text-text-muted">
+            {plans.length} 份方案 · 当前列表由老师生成，学生端可查看与确认
+          </p>
+        </header>
 
       <div className="rounded-xl border-l-[3px] border-l-accent bg-accent-fixed px-4 py-3 text-sm leading-6 text-text-secondary">
-        <InfoCircleOutlined className="mr-2 text-accent" />
+        <InfoCircleOutlined aria-hidden="true" className="mr-2 text-accent" />
         方案仅供参考，请与老师充分沟通后确认最终志愿。列表接口暂未返回冲稳保分段，卡片中保留“待同步”提示。
       </div>
 
@@ -134,9 +178,9 @@ export default function StudentPlansPage() {
             <Link
               key={plan.id}
               href={`/student/plans/${plan.id}`}
-              className={`block overflow-hidden rounded-2xl border-l-[3px] bg-surface text-text no-underline shadow-card transition-shadow hover:shadow-card-hover ${getPlanClass(plan.status)}`}
+              className={`block overflow-hidden rounded-2xl border-l-[3px] bg-surface text-text no-underline shadow-card transition-shadow hover:shadow-card-hover lg:rounded-xl ${getPlanClass(plan.status)}`}
             >
-              <div className="flex items-start justify-between gap-4 px-5 py-4">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                 <div className="min-w-0">
                   <h2 className="truncate font-serif text-base font-semibold">
                     <span className="mr-1 font-sans text-sm font-semibold text-accent">V{plan.version || 1}</span>
@@ -161,7 +205,7 @@ export default function StudentPlansPage() {
               <div className="flex items-center justify-between border-t border-border-subtle px-5 py-3 text-xs text-text-muted">
                 <span>{formatUpdatedAt(plan.updatedAt)} 更新</span>
                 <span className="font-medium text-primary">
-                  查看详情 <RightOutlined className="text-[10px]" />
+                  查看详情 <RightOutlined aria-hidden="true" className="text-[10px]" />
                 </span>
               </div>
             </Link>
@@ -174,15 +218,9 @@ export default function StudentPlansPage() {
         className="fixed bottom-24 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full border-0 bg-primary text-lg text-white shadow-[0_8px_24px_rgba(184,134,11,0.35)] lg:hidden"
         title="新建方案待接入"
       >
-        <PlusOutlined />
+        <PlusOutlined aria-hidden="true" />
       </button>
-
-      <div className="hidden rounded-2xl border border-dashed border-border bg-surface px-5 py-4 text-sm text-text-muted lg:flex lg:items-center lg:gap-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-dim text-primary">
-          <FileTextOutlined />
-        </span>
-        新建/复制方案需要后端开放学生端方案编辑接口，当前先保留老师生成方案的查看入口。
       </div>
-    </div>
+    </StudentWorkspace>
   );
 }
