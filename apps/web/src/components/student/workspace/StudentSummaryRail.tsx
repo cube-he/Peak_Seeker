@@ -27,6 +27,10 @@ function formatNumber(value?: number | null) {
   return value.toLocaleString('zh-CN');
 }
 
+function numericValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 function displayName(profile?: Record<string, unknown>) {
   const value = profile?.realName || profile?.username;
   return typeof value === 'string' && value.trim() ? value : '同学';
@@ -76,8 +80,8 @@ export default function StudentSummaryRail({
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
           {[
-            ['总分', formatNumber(profile?.totalScore as number | undefined)],
-            ['省排名', formatNumber(profile?.provincialRank as number | undefined)],
+            ['总分', formatNumber(numericValue(profile?.totalScore))],
+            ['省排名', formatNumber(numericValue(profile?.provincialRank))],
             [
               '完整度',
               progress?.overallCompleteness !== undefined
@@ -86,7 +90,7 @@ export default function StudentSummaryRail({
             ],
             ['方案', plansCount !== undefined ? String(plansCount) : '--'],
           ].map(([label, value]) => (
-            <div key={label} className="rounded-lg bg-white/8 px-3 py-2">
+            <div key={label} className="rounded-lg bg-white/[0.08] px-3 py-2">
               <p className="m-0 font-serif text-lg font-semibold tabular-nums">
                 {value}
               </p>
@@ -96,7 +100,7 @@ export default function StudentSummaryRail({
             </div>
           ))}
         </div>
-        <div className="mt-3 rounded-lg bg-white/8 px-3 py-2 text-xs text-white/65">
+        <div className="mt-3 rounded-lg bg-white/[0.08] px-3 py-2 text-xs text-white/65">
           {recommendable ? '资料已具备推荐条件' : '完善资料后推荐更稳定'}
         </div>
       </section>
@@ -113,7 +117,10 @@ export default function StudentSummaryRail({
                 active ? 'bg-primary-fixed text-primary' : 'hover:bg-surface-dim'
               }`}
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-dim text-sm">
+              <span
+                aria-hidden="true"
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-dim text-sm"
+              >
                 {iconMap[item.key]}
               </span>
               <span className="min-w-0">

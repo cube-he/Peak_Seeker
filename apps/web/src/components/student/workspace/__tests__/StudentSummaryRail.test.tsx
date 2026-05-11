@@ -31,12 +31,12 @@ describe('StudentSummaryRail', () => {
     render(
       <StudentSummaryRail
         activePathname="/student/dashboard"
-        profile={{ username: 'student01' }}
+        profile={{ username: 'student01', totalScore: '644', provincialRank: {} }}
       />,
     );
 
     expect(screen.getByText('student01')).toBeInTheDocument();
-    expect(screen.getAllByText('--').length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByText('--')).toHaveLength(4);
   });
 
   it('marks the active navigation link', () => {
