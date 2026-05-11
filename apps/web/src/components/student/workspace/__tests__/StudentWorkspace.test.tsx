@@ -16,19 +16,28 @@ describe('StudentWorkspace', () => {
       </StudentWorkspace>,
     );
 
-    expect(screen.getByLabelText('学生工作台导航')).toHaveTextContent('Rail content');
+    expect(
+      screen.getByRole('complementary', { name: '学生工作台导航' }),
+    ).toHaveTextContent('Rail content');
     expect(screen.getByRole('main')).toHaveTextContent('Main content');
-    expect(screen.getByLabelText('学生工作台辅助信息')).toHaveTextContent('Aside content');
+    expect(
+      screen.getByRole('complementary', { name: '学生工作台辅助信息' }),
+    ).toHaveTextContent('Aside content');
   });
 
   it('does not render an aside region when aside content is absent', () => {
-    render(
+    const { container } = render(
       <StudentWorkspace rail={<div>Rail content</div>}>
         <div>Main content</div>
       </StudentWorkspace>,
     );
 
-    expect(screen.queryByLabelText('学生工作台辅助信息')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: '学生工作台辅助信息' }),
+    ).not.toBeInTheDocument();
+    expect(container.firstChild).not.toHaveClass(
+      'xl:grid-cols-[250px_minmax(0,1fr)_300px]',
+    );
   });
 
   it('renders a titled workspace panel with optional action', () => {

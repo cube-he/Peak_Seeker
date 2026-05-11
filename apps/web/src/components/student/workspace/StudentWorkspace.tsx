@@ -20,9 +20,13 @@ export function StudentWorkspace({
   children,
   className = '',
 }: StudentWorkspaceProps) {
+  const columnsClass = aside
+    ? 'lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_300px]'
+    : 'lg:grid-cols-[250px_minmax(0,1fr)]';
+
   return (
     <div
-      className={`grid w-full gap-5 lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_300px] ${className}`}
+      className={`grid w-full gap-5 ${columnsClass} ${className}`}
     >
       <aside aria-label="学生工作台导航" className="hidden lg:block">
         {rail}
