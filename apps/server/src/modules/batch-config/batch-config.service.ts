@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface BatchPickerOption {
@@ -32,11 +32,28 @@ export class BatchConfigService {
     return Array.from(map.values()).sort((a, b) => a.order - b.order);
   }
 
-  async listEligibleForStudent(studentId: number) {
+  async listEligibleForStudent(
+    studentId: number,
+    user?: {
+      role: string;
+      studentProfileId?: number | null;
+      teacherProfileId?: number | null;
+      isSupervisor?: boolean;
+    },
+  ) {
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
     });
     if (!student) throw new NotFoundException('学生不存在');
+    if (
+      user &&
+      user.role !== 'ADMIN' &&
+      !user.isSupervisor &&
+      user.studentProfileId !== studentId &&
+      student.teacherId !== user.teacherProfileId
+    ) {
+      throw new ForbiddenException('无权查看该学生可填批次');
+    }
     const examTypeMap: Record<string, string> = {
       PHYSICS: '物理',
       HISTORY: '历史',

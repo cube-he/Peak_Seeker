@@ -36,10 +36,18 @@ export default function MainLayout({ children, maxWidth, noPadding, hideMobileBo
     return pathname.startsWith(href);
   };
 
+  const dashboardHref =
+    user?.role === 'ADMIN'
+      ? '/admin/dashboard'
+      : user?.role === 'TEACHER'
+        ? '/teacher/dashboard'
+        : '/student/dashboard';
+
   const userMenuItems = [
     { key: 'profile', label: <Link href="/profile">个人中心</Link> },
     { key: 'favorites', label: <Link href="/favorites">我的收藏</Link> },
     { key: 'plans', label: <Link href="/plan">我的方案</Link> },
+    { key: 'dashboard', label: <Link href={dashboardHref}>角色工作台</Link> },
     { type: 'divider' as const },
     { key: 'logout', label: '退出登录', onClick: logout },
   ];

@@ -1,5 +1,4 @@
-// plan-candidate.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildHardFilterWhere } from './filters/hard-filter';
 import { GenderRule } from './filters/soft-rules/gender.rule';
@@ -16,22 +15,28 @@ interface GetCandidatesQuery {
   pageSize: number;
   keyword?: string;
   includeSoftFails?: boolean;
-  rankRangeUp?: number;
-  rankRangeDown?: number;
 }
 
 const EXAM_TYPE_TO_SUBJECTS: Record<string, string> = {
-  PHYSICS: '物理', HISTORY: '历史',
-  COMPREHENSIVE_LIBERAL: '文科', COMPREHENSIVE_SCIENCE: '理科',
+  PHYSICS: '物理',
+  HISTORY: '历史',
+  COMPREHENSIVE_LIBERAL: '文科',
+  COMPREHENSIVE_SCIENCE: '理科',
 };
 
 @Injectable()
 export class PlanCandidateService {
   constructor(private prisma: PrismaService) {}
 
-  async getCandidates(planId: number, q: GetCandidatesQuery) {
-    const plan = await this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
+  async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {
+    const plan = await this.prisma.volunteerPlan.findUnique({
+      where: { id: planId },
+      include: { student: true },
+    });
     if (!plan) throw new NotFoundException('方案不存在');
+    if (userId && plan.createdById !== userId && plan.student.userId !== userId) {
+      throw new ForbiddenException('无权查看此方案候选池');
+    }
     if (!plan.batchName) throw new NotFoundException('方案缺少批次信息');
 
     const student = await this.prisma.studentProfile.findUnique({
@@ -42,12 +47,16 @@ export class PlanCandidateService {
 
     const subjects = EXAM_TYPE_TO_SUBJECTS[student.examType ?? 'PHYSICS'] || '物理';
     const where = buildHardFilterWhere({
-      year: plan.year, province: student.province ?? '四川',
-      batchName: plan.batchName, subjects, keyword: q.keyword,
+      year: plan.year,
+      province: student.province ?? '四川',
+      batchName: plan.batchName,
+      subjects,
+      keyword: q.keyword,
     });
 
     const eps = await this.prisma.enrollmentPlan.findMany({
-      where, include: { university: true, major: true },
+      where,
+      include: { university: true, major: true },
       take: 5000,
     });
 
@@ -61,53 +70,72 @@ export class PlanCandidateService {
       new NatureRule(),
     ];
 
-    // Batch-query AdmissionRecord history for all enrollment plans
     const naturalKeys = eps.map((ep) => ({
-      universityId: ep.universityId, subjects: ep.subjects, batch: ep.batch,
-      recruitType: ep.recruitType, groupCode: ep.groupCode,
-      majorCode: ep.majorCode, majorName: ep.majorName,
+      universityId: ep.universityId,
+      subjects: ep.subjects,
+      batch: ep.batch,
+      recruitType: ep.recruitType,
+      groupCode: ep.groupCode,
+      majorCode: ep.majorCode,
+      majorName: ep.majorName,
     }));
-    const adRecords = await this.prisma.admissionRecord.findMany({
-      where: { OR: naturalKeys.map((k) => ({ ...k, year: { in: [2024, 2025] } })) },
-    });
+
+    const adRecords = naturalKeys.length
+      ? await this.prisma.admissionRecord.findMany({
+          where: { OR: naturalKeys.map((k) => ({ ...k, year: { in: [2024, 2025] } })) },
+        })
+      : [];
     const adIndex = new Map<string, any>();
     for (const ar of adRecords) {
       const key = `${ar.universityId}|${ar.subjects}|${ar.batch}|${ar.recruitType}|${ar.groupCode}|${ar.majorCode}|${ar.majorName}|${ar.year}`;
       adIndex.set(key, ar);
     }
-    function getHist(ep: any) {
+
+    const getHist = (ep: any) => {
       const k25 = `${ep.universityId}|${ep.subjects}|${ep.batch}|${ep.recruitType}|${ep.groupCode}|${ep.majorCode}|${ep.majorName}|2025`;
       const k24 = `${ep.universityId}|${ep.subjects}|${ep.batch}|${ep.recruitType}|${ep.groupCode}|${ep.majorCode}|${ep.majorName}|2024`;
-      const r25 = adIndex.get(k25), r24 = adIndex.get(k24);
+      const r25 = adIndex.get(k25);
+      const r24 = adIndex.get(k24);
       return {
-        score25Group: r25?.groupMinScore ?? null, rank25Group: r25?.groupMinRank ?? null,
-        score25Major: r25?.majorMinScore ?? null, rank25Major: r25?.majorMinRank ?? null,
-        score24Major: r24?.majorMinScore ?? null, rank24Major: r24?.majorMinRank ?? null,
+        score25Group: r25?.groupMinScore ?? null,
+        rank25Group: r25?.groupMinRank ?? null,
+        score25Major: r25?.majorMinScore ?? null,
+        rank25Major: r25?.majorMinRank ?? null,
+        score24Major: r24?.majorMinScore ?? null,
+        rank24Major: r24?.majorMinRank ?? null,
       };
-    }
+    };
 
     const studentRank = student.provincialRank ?? 999999;
-
     const enriched = eps.map((ep) => {
       const reasons: SoftFailReason[] = [];
-      for (const r of rules) {
-        const res = r.check(student as any, ep as any);
+      for (const rule of rules) {
+        const res = rule.check(student as any, ep as any);
         if (!res.pass && res.reason) reasons.push(res.reason);
       }
-      const matchStatus = reasons.length === 0 ? 'PASS' : 'SOFT_FAIL';
       const history = getHist(ep);
       const historyMin = history.rank25Group ?? history.rank25Major ?? null;
       const suggestedGradient = calcGradient(studentRank, historyMin);
       const rankDiffRatio = historyMin ? studentRank / historyMin : null;
+
       return {
         enrollmentPlanId: ep.id,
-        universityId: ep.universityId, universityName: ep.university.name,
-        groupCode: ep.groupCode, groupName: ep.groupName,
-        majorId: ep.majorId, majorName: ep.majorName, majorCode: ep.majorCode,
-        recruitType: ep.recruitType, planCount: ep.planCount, tuition: ep.tuition,
+        universityId: ep.universityId,
+        universityName: ep.university.name,
+        groupCode: ep.groupCode,
+        groupName: ep.groupName,
+        majorId: ep.majorId,
+        majorName: ep.majorName,
+        majorCode: ep.majorCode,
+        recruitType: ep.recruitType,
+        planCount: ep.planCount,
+        tuition: ep.tuition,
         subjectRequirements: ep.subjectRequirements,
-        history, rankDiffRatio, suggestedGradient,
-        matchStatus, failReasons: reasons,
+        history,
+        rankDiffRatio,
+        suggestedGradient,
+        matchStatus: reasons.length === 0 ? 'PASS' : 'SOFT_FAIL',
+        failReasons: reasons,
       };
     });
 
@@ -118,18 +146,22 @@ export class PlanCandidateService {
 
     visible.sort((a, b) => {
       if (a.matchStatus !== b.matchStatus) return a.matchStatus === 'PASS' ? -1 : 1;
-      const af = a.failReasons.length, bf = b.failReasons.length;
-      if (af !== bf) return af - bf;
+      if (a.failReasons.length !== b.failReasons.length) {
+        return a.failReasons.length - b.failReasons.length;
+      }
       const ar = a.rankDiffRatio ?? 999;
       const br = b.rankDiffRatio ?? 999;
       return Math.abs(ar - 1) - Math.abs(br - 1);
     });
 
-    const start = (q.page - 1) * q.pageSize;
+    const page = q.page ?? 1;
+    const pageSize = q.pageSize ?? 20;
+    const start = (page - 1) * pageSize;
     return {
       total: visible.length,
-      page: q.page, pageSize: q.pageSize,
-      items: visible.slice(start, start + q.pageSize),
+      page,
+      pageSize,
+      items: visible.slice(start, start + pageSize),
     };
   }
 }

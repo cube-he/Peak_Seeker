@@ -90,13 +90,49 @@ export class StudentController {
     return (profile as { progress: unknown }).progress;
   }
 
+  @Post('me/submit-intake')
+  @ApiOperation({ summary: '学生提交资料给老师确认' })
+  async submitMyIntake(@CurrentUser() user: JwtPayloadUser) {
+    if (user.role !== 'STUDENT') {
+      throw new ForbiddenException('仅学生角色可提交自己的资料');
+    }
+    return this.studentService.submitMyIntake(user.id);
+  }
+
   // ── 老师/管理员端点 ───────────────────────────────────
 
   @Get(':id')
   @ApiOperation({ summary: '获取学生详情' })
   @CheckPolicies((ability) => ability.can('read', 'StudentProfile'))
-  async findById(@Param('id', ParseIntPipe) id: number) {
-    return this.studentService.findById(id);
+  async findById(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    const profile = await this.studentService.findById(id);
+    if (
+      user.role !== 'ADMIN' &&
+      user.studentProfileId !== id &&
+      profile.teacherId !== user.teacherProfileId
+    ) {
+      throw new ForbiddenException('无权查看该学生资料');
+    }
+    return profile;
+  }
+
+  @Post(':id/intake-review')
+  @ApiOperation({ summary: '老师确认或退回学生资料' })
+  @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
+  async reviewIntake(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { action: 'VERIFY' | 'REQUEST_CHANGE'; comment?: string },
+  ) {
+    return this.studentService.reviewIntake(id, {
+      teacherProfileId: user.role === 'ADMIN' ? undefined : user.teacherProfileId,
+      reviewerUserId: user.id,
+      action: body.action,
+      comment: body.comment,
+    });
   }
 
   @Put(':id/profile')

@@ -58,7 +58,6 @@ describeIfDb('Auth (e2e)', () => {
         .send({
           username,
           password: 'Test123!',
-          role: 'STUDENT',
         })
         .expect(201);
 
@@ -69,35 +68,16 @@ describeIfDb('Auth (e2e)', () => {
       expect(res.body.user.studentProfile).toBeDefined();
     });
 
-    it('should register a TEACHER and return tokens', async () => {
+    it('should reject client-supplied elevated roles during public registration', async () => {
       const username = uniqueUsername();
-      const res = await request(app.getHttpServer())
-        .post('/api/v1/auth/register')
-        .send({
-          username,
-          password: 'Test123!',
-          role: 'TEACHER',
-        })
-        .expect(201);
-
-      expect(res.body.user.role).toBe('TEACHER');
-      expect(res.body.user.teacherProfile).toBeDefined();
-    });
-
-    it('should register an ADMIN without profile', async () => {
-      const username = uniqueUsername();
-      const res = await request(app.getHttpServer())
+      await request(app.getHttpServer())
         .post('/api/v1/auth/register')
         .send({
           username,
           password: 'Test123!',
           role: 'ADMIN',
         })
-        .expect(201);
-
-      expect(res.body.user.role).toBe('ADMIN');
-      expect(res.body.user.teacherProfile).toBeNull();
-      expect(res.body.user.studentProfile).toBeNull();
+        .expect(400);
     });
 
     it('should reject duplicate username', async () => {
@@ -120,7 +100,7 @@ describeIfDb('Auth (e2e)', () => {
       // Register first
       await request(app.getHttpServer())
         .post('/api/v1/auth/register')
-        .send({ username, password: 'Test123!', role: 'TEACHER' });
+        .send({ username, password: 'Test123!' });
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
@@ -129,8 +109,8 @@ describeIfDb('Auth (e2e)', () => {
 
       expect(res.body.accessToken).toBeDefined();
       expect(res.body.refreshToken).toBeDefined();
-      expect(res.body.user.role).toBe('TEACHER');
-      expect(res.body.user.teacherProfile).toBeDefined();
+      expect(res.body.user.role).toBe('STUDENT');
+      expect(res.body.user.studentProfile).toBeDefined();
     });
 
     it('should reject invalid credentials', async () => {

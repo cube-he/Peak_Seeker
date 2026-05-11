@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
   Res,
@@ -43,6 +44,18 @@ export class PlanController {
     return this.planService.findAll(req.user.id);
   }
 
+  @Get('mine')
+  @ApiOperation({ summary: '学生端获取自己的方案列表' })
+  async findMine(@Request() req: any) {
+    return this.planService.findMine(req.user);
+  }
+
+  @Get('teacher')
+  @ApiOperation({ summary: '教师端获取方案列表' })
+  async findTeacherPlans(@Request() req: any, @Query() query: Record<string, string>) {
+    return this.planService.findTeacherPlans(req.user, query);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: '获取方案详情' })
   @ApiParam({ name: 'id', type: Number })
@@ -53,8 +66,8 @@ export class PlanController {
   @Get(':id/full')
   @ApiOperation({ summary: '获取方案详情（含 planItems）' })
   @ApiParam({ name: 'id', type: Number })
-  async findFull(@Param('id', ParseIntPipe) id: number) {
-    return this.planService.findByIdWithItems(id);
+  async findFull(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.planService.findByIdWithItems(id, req.user.id);
   }
 
   @Get(':id/version-tree')
@@ -116,6 +129,37 @@ export class PlanController {
     @Request() req: any,
   ) {
     return this.planService.finalize(id, req.user.id);
+  }
+
+  @Post(':id/student-confirm')
+  @ApiOperation({ summary: '学生确认主管已通过的方案' })
+  @ApiParam({ name: 'id', type: Number })
+  async studentConfirm(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
+    return this.planService.studentConfirm(id, req.user.id);
+  }
+
+  @Post(':id/student-request-change')
+  @ApiOperation({ summary: '学生退回方案并提交修改意见' })
+  @ApiParam({ name: 'id', type: Number })
+  async studentRequestChange(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+    @Body() body: { comment?: string },
+  ) {
+    return this.planService.studentRequestChange(
+      id,
+      req.user.id,
+      body.comment?.trim() || '学生请求修改方案',
+    );
+  }
+
+  @Post(':id/confirm')
+  @ApiOperation({ summary: '学生确认方案（兼容旧前端）' })
+  async confirmAlias(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.planService.studentConfirm(id, req.user.id);
   }
 
   @Post(':id/derive-version')

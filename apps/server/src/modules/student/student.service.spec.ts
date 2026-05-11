@@ -351,6 +351,72 @@ describe('StudentService', () => {
 
   // ── updateMyProfile (2026-05-06 redesign) ───────────────
 
+  describe('intake workflow', () => {
+    it('submitMyIntake marks a complete student intake as SUBMITTED', async () => {
+      (service as any).progressService.compute.mockReturnValue({
+        studentSelfCompleteness: 100,
+        teacherDataCompleteness: 0,
+        stageProgress: {
+          stage1: { filled: 16, total: 16, completed: true },
+          stage2: { filled: 0, total: 15, completed: false },
+          stage3: { filled: 0, total: 26, completed: false },
+        },
+        overallCompleteness: 60,
+        isRecommendable: false,
+        missingFieldsForRecommend: [],
+      });
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        intakeStatus: 'DRAFT',
+        user: { id: 100, realName: '小王', phone: '13800000000', gender: 'MALE' },
+      });
+      prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'SUBMITTED' });
+
+      const result = await (service as any).submitMyIntake(100);
+
+      expect(result).toHaveProperty('intakeStatus', 'SUBMITTED');
+      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({
+            intakeStatus: 'SUBMITTED',
+            intakeSubmittedAt: expect.any(Date),
+            intakeReviewComment: null,
+          }),
+        }),
+      );
+    });
+
+    it('reviewIntake verifies an assigned student for plan creation', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1,
+        teacherId: 5,
+        intakeStatus: 'SUBMITTED',
+      });
+      prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'VERIFIED' });
+
+      const result = await (service as any).reviewIntake(1, {
+        teacherProfileId: 5,
+        reviewerUserId: 20,
+        action: 'VERIFY',
+        comment: '资料已核验',
+      });
+
+      expect(result).toHaveProperty('intakeStatus', 'VERIFIED');
+      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({
+            intakeStatus: 'VERIFIED',
+            intakeReviewedBy: 20,
+            intakeReviewComment: '资料已核验',
+          }),
+        }),
+      );
+    });
+  });
+
   describe('updateMyProfile (2026-05-06 redesign)', () => {
     it('accepts province/city/county and writes hukouUpdatedBy=student', async () => {
       const profileId = 100;

@@ -1,5 +1,5 @@
 // plan-candidate.controller.ts
-import { Controller, Get, Param, Query, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, ParseIntPipe, UseGuards, Req } from '@nestjs/common';
 import { PlanCandidateService } from './plan-candidate.service';
 import { GetCandidatesQueryDto } from './dto/get-candidates-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -10,7 +10,11 @@ export class PlanCandidateController {
   constructor(private service: PlanCandidateService) {}
 
   @Get(':planId/candidates')
-  getCandidates(@Param('planId', ParseIntPipe) planId: number, @Query() q: GetCandidatesQueryDto) {
-    return this.service.getCandidates(planId, q);
+  getCandidates(
+    @Param('planId', ParseIntPipe) planId: number,
+    @Query() q: GetCandidatesQueryDto,
+    @Req() req: any,
+  ) {
+    return this.service.getCandidates(planId, q, req.user.id);
   }
 }

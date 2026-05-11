@@ -8,10 +8,8 @@ import {
   AppstoreOutlined,
   TeamOutlined,
   FileTextOutlined,
-  AuditOutlined,
   BankOutlined,
   ReadOutlined,
-  SettingOutlined,
   QuestionCircleOutlined,
   LogoutOutlined,
   UserOutlined,
@@ -26,7 +24,6 @@ const mainNavItems = [
   { href: '/teacher/dashboard', icon: <AppstoreOutlined />, label: '看板' },
   { href: '/teacher/students', icon: <TeamOutlined />, label: '学生管理' },
   { href: '/teacher/plans', icon: <FileTextOutlined />, label: '方案管理' },
-  { href: '/teacher/reviews', icon: <AuditOutlined />, label: '审核中心' },
 ];
 
 const browseNavItems = [
@@ -34,9 +31,7 @@ const browseNavItems = [
   { href: '/majors', icon: <ReadOutlined />, label: '专业库' },
 ];
 
-const bottomNavItems = [
-  { href: '/teacher/settings', icon: <SettingOutlined />, label: '设置' },
-];
+const bottomNavItems = [] as Array<(typeof mainNavItems)[number]>;
 
 interface TeacherLayoutProps {
   children: React.ReactNode;
@@ -50,7 +45,7 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
   const userMenuItems = [
-    { key: 'profile', label: <Link href="/teacher/settings">个人设置</Link> },
+    { key: 'profile', label: <Link href="/profile">个人中心</Link> },
     { type: 'divider' as const },
     { key: 'logout', label: '退出登录', onClick: logout },
   ];

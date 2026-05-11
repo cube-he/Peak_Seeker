@@ -418,6 +418,80 @@ export class StudentService {
    * - 接受 STUDENT_NEWLY_WRITABLE 9 个字段，写入 hukou/bonus/examLocation provenance
    * - 委托 updateProfile 持久化（含乐观锁）
    */
+  async submitMyIntake(userId: number) {
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            realName: true,
+            phone: true,
+            gender: true,
+            ethnicity: true,
+          },
+        },
+      },
+    });
+    if (!profile) {
+      throw new NotFoundException('学生档案不存在');
+    }
+
+    const progress = this.progressService.compute({
+      ...profile,
+      realName: profile.user.realName,
+      phone: profile.user.phone,
+      gender: profile.user.gender,
+      ethnicity: profile.user.ethnicity,
+    });
+    if (!progress.stageProgress.stage1.completed) {
+      throw new ConflictException('核心资料未填写完整，暂不能提交给老师确认');
+    }
+
+    return this.prisma.studentProfile.update({
+      where: { id: profile.id },
+      data: {
+        intakeStatus: 'SUBMITTED',
+        intakeSubmittedAt: new Date(),
+        intakeReviewedAt: null,
+        intakeReviewedBy: null,
+        intakeReviewComment: null,
+      },
+    });
+  }
+
+  async reviewIntake(
+    studentId: number,
+    opts: {
+      teacherProfileId?: number;
+      reviewerUserId: number;
+      action: 'VERIFY' | 'REQUEST_CHANGE';
+      comment?: string;
+    },
+  ) {
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+    });
+    if (!profile) {
+      throw new NotFoundException('学生不存在');
+    }
+    if (opts.teacherProfileId && profile.teacherId !== opts.teacherProfileId) {
+      throw new ForbiddenException('无权审核不属于自己的学生资料');
+    }
+
+    const nextStatus = opts.action === 'VERIFY' ? 'VERIFIED' : 'NEEDS_CHANGES';
+    return this.prisma.studentProfile.update({
+      where: { id: studentId },
+      data: {
+        intakeStatus: nextStatus,
+        intakeReviewedAt: new Date(),
+        intakeReviewedBy: opts.reviewerUserId,
+        intakeReviewComment: opts.comment ?? null,
+      },
+    });
+  }
+
   async updateMyProfile(userId: number, dto: UpdateStudentProfileDto) {
     for (const f of TEACHER_ONLY_FIELDS) {
       if ((dto as Record<string, any>)[f] !== undefined) {

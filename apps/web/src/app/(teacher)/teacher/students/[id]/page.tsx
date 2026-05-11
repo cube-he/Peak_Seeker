@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Alert, Button, Card, Checkbox, Collapse, Form, Input, InputNumber, Radio, Select, Spin, Tag, message } from 'antd';
+import { Alert, Button, Card, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, Tag, message } from 'antd';
 import {
   ArrowLeftOutlined,
   DownloadOutlined,
@@ -48,6 +48,35 @@ export default function StudentDetailPage() {
     },
   });
 
+  const reviewIntakeMutation = useMutation({
+    mutationFn: (data: { action: 'VERIFY' | 'REQUEST_CHANGE'; comment?: string }) =>
+      studentApi.reviewIntake(studentId, data),
+    onSuccess: () => {
+      message.success('资料状态已更新');
+      queryClient.invalidateQueries({ queryKey: ['student-detail', studentId] });
+    },
+    onError: (error: any) => {
+      message.error(error?.response?.data?.message ?? '资料审核失败');
+    },
+  });
+
+  const onRequestIntakeChange = () => {
+    let comment = '';
+    Modal.confirm({
+      title: '退回学生资料',
+      content: (
+        <Input.TextArea
+          rows={4}
+          placeholder="说明需要学生补充或修改的资料"
+          onChange={(event) => { comment = event.target.value; }}
+        />
+      ),
+      okText: '退回',
+      cancelText: '取消',
+      onOk: () => reviewIntakeMutation.mutate({ action: 'REQUEST_CHANGE', comment }),
+    });
+  };
+
   const onExportIntake = async () => {
     try {
       const blob = await studentApi.exportIntake(studentId);
@@ -89,6 +118,9 @@ export default function StudentDetailPage() {
           <h1 className="font-serif text-3xl font-semibold text-text">{studentName}</h1>
           <div className="mt-2 flex items-center gap-2">
             <Tag color={student.status === 'FINALIZED' ? 'green' : 'blue'}>{student.status || 'ACTIVE'}</Tag>
+            <Tag color={student.intakeStatus === 'VERIFIED' ? 'green' : student.intakeStatus === 'SUBMITTED' ? 'orange' : 'default'}>
+              资料：{student.intakeStatus || 'DRAFT'}
+            </Tag>
             <span className="text-sm text-text-muted">{student.highSchool || '学校待补充'}</span>
           </div>
         </div>
@@ -96,12 +128,26 @@ export default function StudentDetailPage() {
           <Button icon={<DownloadOutlined />} onClick={onExportIntake}>
             导出登记表
           </Button>
+          {student.intakeStatus !== 'VERIFIED' ? (
+            <>
+              <Button onClick={onRequestIntakeChange} loading={reviewIntakeMutation.isPending}>
+                退回资料
+              </Button>
+              <Button
+                type="primary"
+                onClick={() => reviewIntakeMutation.mutate({ action: 'VERIFY', comment: '资料已核验' })}
+                loading={reviewIntakeMutation.isPending}
+              >
+                确认资料
+              </Button>
+            </>
+          ) : null}
           <Link href={`/teacher/plans/generate/${studentId}`}>
             <Button
               icon={<FileTextOutlined />}
               type="primary"
-              disabled={progress && !progress.isRecommendable}
-              title={progress && !progress.isRecommendable ? '档案未达到可推荐阈值，请先补全关键字段' : ''}
+              disabled={(progress && !progress.isRecommendable) || student.intakeStatus !== 'VERIFIED'}
+              title={student.intakeStatus !== 'VERIFIED' ? '需先确认学生资料' : progress && !progress.isRecommendable ? '档案未达到可推荐阈值，请先补全关键字段' : ''}
               className="border-0"
             >
               生成方案

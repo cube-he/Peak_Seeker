@@ -15,6 +15,7 @@ import { RecommendModule } from './modules/recommend/recommend.module';
 import { FavoriteModule } from './modules/favorite/favorite.module';
 import { HistoryModule } from './modules/history/history.module';
 import { DataImportModule } from './modules/data-import/data-import.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { AiConfigModule } from './modules/ai-config/ai-config.module';
 import { CaslModule } from './modules/casl';
 import { AuditModule } from './modules/audit/audit.module';
@@ -74,6 +75,7 @@ import { PlanCandidateModule } from './modules/plan-candidate/plan-candidate.mod
     FavoriteModule,
     HistoryModule,
     DataImportModule,
+    AdminModule,
     AiConfigModule,
     HealthRestrictionModule,
     EligibleRegionModule,

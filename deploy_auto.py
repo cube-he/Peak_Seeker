@@ -36,6 +36,7 @@ UPLOAD_MAP = {
     'server_dist': {
         'local': os.path.join(LOCAL_SERVER, 'dist'),
         'remote': 'apps/server/dist',
+        'clean_first': True,
     },
     # Prisma schema + migrations
     'prisma': {
@@ -308,7 +309,8 @@ def deploy(ssh, run_enriched_import=False):
 
     # 7. 重启服务
     print('\n[7/7] 重启服务...')
-    run_remote(ssh, f'cd {REMOTE_PATH} && pm2 restart ecosystem.config.js 2>&1 || pm2 start ecosystem.config.js 2>&1')
+    run_remote(ssh, 'pm2 delete vh-server vh-web vh-ocr 2>/dev/null || true')
+    run_remote(ssh, f'cd {REMOTE_PATH} && pm2 start ecosystem.config.js 2>&1')
     run_remote(ssh, 'pm2 list 2>&1 | head -20')
 
     print('\n[OK] 部署完成')

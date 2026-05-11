@@ -5,9 +5,13 @@ import { Tag } from 'antd';
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   DRAFT: { label: '草稿', color: 'default' },
   PENDING_REVIEW: { label: '待审核', color: 'orange' },
+  REVIEWING: { label: '审核中', color: 'gold' },
   APPROVED: { label: '已通过', color: 'blue' },
+  STUDENT_CONFIRMED: { label: '学生已确认', color: 'cyan' },
   FINALIZED: { label: '已定稿', color: 'green' },
-  REJECTED: { label: '已退回', color: 'red' },
+  REJECTED: { label: '已驳回', color: 'red' },
+  PUBLISHED: { label: '已发布', color: 'purple' },
+  OUTDATED: { label: '已过期', color: 'default' },
   ARCHIVED: { label: '已归档', color: 'default' },
 };
 

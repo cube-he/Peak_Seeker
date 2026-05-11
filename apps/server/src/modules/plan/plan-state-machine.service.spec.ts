@@ -36,8 +36,20 @@ describe('PlanStateMachineService', () => {
     expect(sm.transition('REVIEWING', 'COMMENT')).toBe('REVIEWING');
   });
 
-  it('APPROVED -> finalize -> FINALIZED', () => {
-    expect(sm.transition('APPROVED', 'FINALIZE')).toBe('FINALIZED');
+  it('APPROVED -> student-confirm -> STUDENT_CONFIRMED', () => {
+    expect(sm.transition('APPROVED', 'STUDENT_CONFIRM' as any)).toBe('STUDENT_CONFIRMED');
+  });
+
+  it('APPROVED -> student-request-change -> DRAFT', () => {
+    expect(sm.transition('APPROVED', 'STUDENT_REQUEST_CHANGE' as any)).toBe('DRAFT');
+  });
+
+  it('STUDENT_CONFIRMED -> finalize -> FINALIZED', () => {
+    expect(sm.transition('STUDENT_CONFIRMED' as any, 'FINALIZE')).toBe('FINALIZED');
+  });
+
+  it('APPROVED -> finalize requires student confirmation', () => {
+    expect(() => sm.transition('APPROVED', 'FINALIZE')).toThrow(/不允许/);
   });
 
   it('DRAFT -> finalize 抛错', () => {

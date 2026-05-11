@@ -8,6 +8,7 @@ import sys
 
 HOST = '132.232.245.53'
 USER = 'ubuntu'
+REMOTE_PATH = '/home/ubuntu/apps/volunteer-helper'
 SSH_KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cube.pem')
 
 
@@ -36,21 +37,27 @@ def main():
 
     # Check ports
     print('\n[Port Check]')
-    print(f'  Port 3000 (web):    {run(ssh, "ss -tlnp | grep :3000 | head -1") or "NOT LISTENING"}')
-    print(f'  Port 3001 (server): {run(ssh, "ss -tlnp | grep :3001 | head -1") or "NOT LISTENING"}')
+    print(f'  Port 3004 (web):    {run(ssh, "ss -tlnp | grep :3004 | head -1") or "NOT LISTENING"}')
+    print(f'  Port 3003 (server): {run(ssh, "ss -tlnp | grep :3003 | head -1") or "NOT LISTENING"}')
+    print(f'  Port 8100 (OCR):    {run(ssh, "ss -tlnp | grep :8100 | head -1") or "NOT LISTENING"}')
 
     # Check Nginx
     print('\n[Nginx]')
     print(f'  Config test: {run(ssh, "sudo nginx -t 2>&1 | tail -1")}')
-    print(f'  volunteer.teach-helper.cn: {run(ssh, "grep -l volunteer /etc/nginx/sites-enabled/* 2>/dev/null || echo NOT CONFIGURED")}')
+    nginx_site = run(
+        ssh,
+        'grep -l "127.0.0.1:3004" /etc/nginx/sites-enabled/* 2>/dev/null || echo NOT CONFIGURED',
+    )
+    print(f'  volunteer-helper site: {nginx_site}')
 
     # Disk usage
     print('\n[Disk Usage]')
-    print(f'  {run(ssh, "du -sh /home/hcz/apps/volunteer-helper 2>/dev/null || echo NOT DEPLOYED")}')
+    print(f'  {run(ssh, f"du -sh {REMOTE_PATH} 2>/dev/null || echo NOT DEPLOYED")}')
 
     # Health check
     print('\n[Health Check]')
-    print(f'  API: {run(ssh, "curl -s -o /dev/null -w %{http_code} http://127.0.0.1:3001/api/v1/health 2>/dev/null || echo UNREACHABLE")}')
+    print(f'  API: {run(ssh, "curl -s -o /dev/null -w %{http_code} http://127.0.0.1:3003/api/v1/health 2>/dev/null || echo UNREACHABLE")}')
+    print(f'  Web: {run(ssh, "curl -s -o /dev/null -w %{http_code} http://127.0.0.1:3004 2>/dev/null || echo UNREACHABLE")}')
 
     ssh.close()
     print('\n=== Done ===')

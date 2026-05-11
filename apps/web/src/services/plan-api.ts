@@ -8,6 +8,19 @@ export interface GeneratePlanParams {
   examSource?: string;
 }
 
+export interface CreatePlanForStudentParams {
+  batchConfigId: number;
+  name?: string;
+  notes?: string;
+}
+
+export interface CandidateListParams {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  includeSoftFails?: boolean;
+}
+
 export interface TeacherPlanListParams {
   search?: string;
   batch?: string;
@@ -20,15 +33,43 @@ export interface TeacherPlanListParams {
 export const planApi = {
   // Teacher endpoints
   getTeacherPlans(params?: TeacherPlanListParams): Promise<any> {
-    return api.get('/plans/teacher', { params }) as any;
+    return api.get('/plans/teacher', {
+      params: {
+        search: params?.search?.trim() || undefined,
+        batch: params?.batch || undefined,
+        status: params?.status || undefined,
+        studentId: params?.studentId || undefined,
+        page: params?.page,
+        pageSize: params?.pageSize,
+      },
+    }) as any;
   },
 
   generate(studentId: string, params: GeneratePlanParams): Promise<any> {
     return api.post(`/plans/generate/${studentId}`, params) as any;
   },
 
+  createForStudent(studentId: string, data: CreatePlanForStudentParams): Promise<any> {
+    return api.post(`/students/${studentId}/plans`, data) as any;
+  },
+
+  getCandidates(planId: string | number, params?: CandidateListParams): Promise<any> {
+    return api.get(`/plans/${planId}/candidates`, {
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 30,
+        keyword: params?.keyword?.trim() || undefined,
+        includeSoftFails: params?.includeSoftFails,
+      },
+    }) as any;
+  },
+
   getById(id: string): Promise<any> {
     return api.get(`/plans/${id}`) as any;
+  },
+
+  addItem(planId: string | number, data: Record<string, unknown>): Promise<any> {
+    return api.post(`/plans/${planId}/items`, data) as any;
   },
 
   updatePlan(id: string, data: Record<string, unknown>): Promise<any> {
@@ -40,11 +81,19 @@ export const planApi = {
   },
 
   submitForReview(id: string): Promise<any> {
-    return api.post(`/plans/${id}/submit`) as any;
+    return api.post(`/plans/${id}/submit-review`) as any;
   },
 
-  approvePlan(id: string): Promise<any> {
-    return api.post(`/plans/${id}/approve`) as any;
+  startReview(id: string): Promise<any> {
+    return api.post(`/plans/${id}/start-review`) as any;
+  },
+
+  reviewPlan(id: string, data: { action: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGE' | 'COMMENT'; comment?: string; itemAnnotations?: Array<{ sequence: number; annotation: string }> }): Promise<any> {
+    return api.post(`/plans/${id}/review`, data) as any;
+  },
+
+  approvePlan(id: string, comment?: string): Promise<any> {
+    return api.post(`/plans/${id}/review`, { action: 'APPROVE', comment }) as any;
   },
 
   finalizePlan(id: string): Promise<any> {
@@ -52,7 +101,7 @@ export const planApi = {
   },
 
   exportPlan(id: string): Promise<any> {
-    return api.get(`/plans/${id}/export`, { responseType: 'blob' }) as any;
+    return api.get(`/plans/${id}/export.pdf`, { responseType: 'blob' }) as any;
   },
 
   // Student endpoints
@@ -61,6 +110,10 @@ export const planApi = {
   },
 
   confirmPlan(id: string): Promise<any> {
-    return api.post(`/plans/${id}/confirm`) as any;
+    return api.post(`/plans/${id}/student-confirm`) as any;
+  },
+
+  requestChange(id: string, comment: string): Promise<any> {
+    return api.post(`/plans/${id}/student-request-change`, { comment }) as any;
   },
 };

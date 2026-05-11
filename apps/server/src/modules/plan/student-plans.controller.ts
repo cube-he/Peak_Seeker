@@ -19,6 +19,7 @@ export class StudentPlansController {
 
   @Get()
   list(
+    @Req() req: any,
     @Param('studentId', ParseIntPipe) studentId: number,
     @Query('batchConfigId') batchConfigId?: string,
     @Query('latest') latest?: string,
@@ -26,6 +27,6 @@ export class StudentPlansController {
     return this.service.listForStudent(studentId, {
       batchConfigId: batchConfigId ? parseInt(batchConfigId, 10) : undefined,
       latestOnly: latest === 'true',
-    });
+    }, req.user);
   }
 }

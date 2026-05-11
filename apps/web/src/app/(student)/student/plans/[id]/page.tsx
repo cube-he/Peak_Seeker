@@ -3,153 +3,139 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Alert, Button, Empty, Spin, Tag, message } from 'antd';
+import { Alert, Button, Card, Empty, Input, Modal, Space, Spin, Table, Tag, message } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { ArrowLeftOutlined, CheckCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { planApi } from '@/services/plan-api';
-import PlanItemCard from '@/components/plan/PlanItemCard';
+import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
 
-const GRADIENT_TIERS = [
-  { key: 'rush-high', label: '冲一冲（高）', color: '#c53030' },
-  { key: 'rush-low', label: '冲一冲（低）', color: '#e07050' },
-  { key: 'rush', label: '冲一冲', color: '#c53030' },
-  { key: 'stable-high', label: '稳一稳（高）', color: '#2c5282' },
-  { key: 'stable-low', label: '稳一稳（低）', color: '#4a90d9' },
-  { key: 'stable', label: '稳一稳', color: '#2c5282' },
-  { key: 'safe-high', label: '保一保（高）', color: '#276749' },
-  { key: 'safe-low', label: '保一保（低）', color: '#48bb78' },
-  { key: 'safe', label: '保一保', color: '#276749' },
-];
-
-const BATCH_LABELS: Record<string, string> = {
-  EARLY: '本科提前批',
-  BATCH_1: '本科一批',
-  BATCH_2: '本科二批',
-  JUNIOR_COLLEGE: '专科批',
+const GRADIENT_LABEL: Record<string, string> = {
+  CHONG: '冲',
+  WEN: '稳',
+  BAO: '保',
 };
 
-interface PlanItem {
-  id: number;
-  order: number;
-  universityName: string;
-  majorName: string;
-  admissionProbability?: number;
-  gradient: string;
-  historicalMinScore?: number;
-  historicalMinRank?: number;
-  notes?: string;
-  explanation?: string;
+function unwrap<T>(value: any): T {
+  return (value?.data ?? value) as T;
 }
 
 export default function StudentPlanDetailPage() {
-  const params = useParams();
-  const planId = params.id as string;
-  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const params = useParams<{ id: string }>();
+  const planId = params.id;
+  const queryClient = useQueryClient();
+  const [changeComment, setChangeComment] = useState('');
 
-  const { data: planData, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['plan-detail', planId],
     queryFn: () => planApi.getById(planId),
   });
+  const plan = unwrap<Record<string, any>>(data);
+  const items = plan?.items ?? [];
 
-  const plan = planData?.data;
-  const items: PlanItem[] = plan?.items || [];
-
-  const groupedItems = GRADIENT_TIERS.map((tier) => ({
-    ...tier,
-    items: items.filter((item) => item.gradient === tier.key),
-  })).filter((group) => group.items.length > 0);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
 
   const confirmMutation = useMutation({
     mutationFn: () => planApi.confirmPlan(planId),
-    onSuccess: () => message.success('已确认方案'),
-    onError: () => message.error('确认失败'),
+    onSuccess: () => { void message.success('已确认方案'); refresh(); },
+    onError: (error: any) => message.error(error?.response?.data?.message ?? '确认失败'),
   });
 
-  const toggleExpand = (itemId: number) => {
-    setExpandedItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
+  const requestChangeMutation = useMutation({
+    mutationFn: () => planApi.requestChange(planId, changeComment),
+    onSuccess: () => {
+      setChangeComment('');
+      void message.success('修改意见已提交');
+      refresh();
+    },
+    onError: (error: any) => message.error(error?.response?.data?.message ?? '提交失败'),
+  });
+
+  const openChangeModal = () => {
+    Modal.confirm({
+      title: '提交修改意见',
+      content: (
+        <Input.TextArea
+          rows={4}
+          placeholder="请写明希望老师修改的地方"
+          defaultValue={changeComment}
+          onChange={(e) => setChangeComment(e.target.value)}
+        />
+      ),
+      okText: '提交',
+      cancelText: '取消',
+      onOk: () => requestChangeMutation.mutate(),
     });
   };
 
+  const columns: ColumnsType<any> = [
+    { title: '序号', dataIndex: 'order', width: 70 },
+    { title: '院校', dataIndex: 'universityName' },
+    { title: '专业', dataIndex: 'majorName' },
+    { title: '梯度', dataIndex: 'gradient', width: 80, render: (v) => <Tag>{GRADIENT_LABEL[v] || v}</Tag> },
+    { title: '历史位次', dataIndex: 'historicalMinRank', width: 120, render: (v) => v ?? '-' },
+  ];
+
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-32">
-        <Spin size="large" />
-      </div>
-    );
+    return <div className="py-32 text-center"><Spin size="large" /></div>;
+  }
+
+  if (!plan) {
+    return <Empty description="方案不存在或无权访问" />;
   }
 
   return (
     <div className="space-y-5">
-      <Link href="/student/plans" className="inline-flex items-center gap-2 text-sm text-text-tertiary no-underline hover:text-primary">
-        <ArrowLeftOutlined /> 返回方案列表
+      <Link href="/student/plans" className="inline-flex items-center gap-2 text-sm text-text-tertiary no-underline">
+        <ArrowLeftOutlined /> 返回我的方案
       </Link>
 
-      <section className="rounded-2xl bg-[#1e3a5f] px-5 py-5 text-white shadow-card">
+      <Card className="rounded-2xl bg-[#1e3a5f] text-white shadow-card">
         <p className="text-[11px] uppercase tracking-[2px] text-accent-light">Plan Detail</p>
-        <h1 className="mt-2 font-serif text-2xl font-semibold">方案详情</h1>
+        <h1 className="mt-2 font-serif text-2xl font-semibold">{plan.name || '志愿方案'}</h1>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Tag color={plan?.examSource === 'GAOKAO' ? 'green' : 'default'}>
-            {plan?.examSource === 'GAOKAO' ? '高考正式' : '模拟预案'}
-          </Tag>
-          <span className="text-sm text-white/70">{BATCH_LABELS[plan?.batch] || plan?.batch || '未知批次'}</span>
-          <span className="text-sm text-white/50">v{plan?.version || 1}</span>
+          <PlanStatusBadge status={plan.status} />
+          <span className="text-sm text-white/70">{plan.batch || '未知批次'}</span>
+          <span className="text-sm text-white/50">v{plan.version || 1}</span>
         </div>
-      </section>
+      </Card>
 
       <Alert
         type="warning"
-        message="本方案仅供参考，最终志愿填报请以你与老师的沟通为准。"
-        description="方案不构成任何招生承诺。"
         showIcon
+        message="本方案仅供参考，最终志愿填报请以你与老师充分沟通后的结果为准。"
+        description="方案不构成任何招生承诺。"
       />
 
-      {groupedItems.length === 0 ? (
-        <div className="rounded-2xl bg-surface py-12 shadow-card">
-          <Empty description="方案中暂无志愿项目" />
-        </div>
-      ) : (
-        groupedItems.map((group) => (
-          <section key={group.key} id={`gradient-${group.key}`} className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: group.color }} />
-              <h2 className="text-sm font-medium text-text-secondary">{group.label}</h2>
-              <span className="text-xs text-text-faint">({group.items.length})</span>
+      {plan.status === 'APPROVED' ? (
+        <Card className="rounded-2xl shadow-card">
+          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
+              <h2 className="font-serif text-lg font-semibold text-text">主管已审核通过</h2>
+              <p className="mt-1 text-sm text-text-muted">确认后，出方案老师可以进行最终定稿；如有问题，可退回修改。</p>
             </div>
-            <div className="space-y-2">
-              {group.items.map((item) => (
-                <PlanItemCard
-                  key={item.id}
-                  item={item}
-                  gradientColor={group.color}
-                  expanded={expandedItems.has(item.id)}
-                  onToggleExpand={() => toggleExpand(item.id)}
-                  readOnly
-                />
-              ))}
-            </div>
-          </section>
-        ))
-      )}
+            <Space wrap>
+              <Button icon={<QuestionCircleOutlined />} onClick={openChangeModal} loading={requestChangeMutation.isPending}>
+                退回修改
+              </Button>
+              <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => confirmMutation.mutate()} loading={confirmMutation.isPending}>
+                确认方案
+              </Button>
+            </Space>
+          </div>
+        </Card>
+      ) : null}
 
-      <div className="flex gap-3 border-t border-border-subtle pt-4">
-        <Button
-          type="primary"
-          icon={<CheckCircleOutlined />}
-          size="large"
-          onClick={() => confirmMutation.mutate()}
-          loading={confirmMutation.isPending}
-          className="flex-1 border-0"
-        >
-          确认方案
-        </Button>
-        <Button icon={<QuestionCircleOutlined />} size="large" className="flex-1" disabled title="提问功能待接入">
-          向老师提问
-        </Button>
-      </div>
+      {plan.status === 'STUDENT_CONFIRMED' ? (
+        <Alert type="success" showIcon message="你已确认方案，等待老师定稿。" />
+      ) : null}
+      {plan.status === 'FINALIZED' ? (
+        <Alert type="success" showIcon message="方案已定稿。" />
+      ) : null}
+
+      <Card title="志愿明细" className="rounded-2xl shadow-card">
+        <Table rowKey="id" columns={columns} dataSource={items} pagination={false} />
+      </Card>
     </div>
   );
 }

@@ -43,6 +43,7 @@ enum PlanStatus {
   PENDING_REVIEW
   REVIEWING
   APPROVED
+  STUDENT_CONFIRMED
   REJECTED
   FINALIZED
   PUBLISHED
@@ -62,6 +63,13 @@ enum StudentStatus {
   GRADUATED
   DROPPED
   SUSPENDED
+}
+
+enum StudentIntakeStatus {
+  DRAFT
+  SUBMITTED
+  NEEDS_CHANGES
+  VERIFIED
 }
 
 // 避免与 BatchConfig/ScoreSegment 的 examType String 冲突
@@ -137,6 +145,7 @@ enum Cleanliness {
 enum ReviewerRole {
   TEACHER
   SUPERVISOR
+  STUDENT
 }
 
 enum ReviewAction {
@@ -144,6 +153,8 @@ enum ReviewAction {
   REJECT
   REQUEST_CHANGE
   COMMENT
+  STUDENT_CONFIRM
+  STUDENT_REQUEST_CHANGE
 }
 
 enum RecommendType {
@@ -598,7 +609,12 @@ model StudentProfile {
   county            String?       @db.VarChar(100)
   highSchool        String?       @map("high_school") @db.VarChar(200)
   classInfo         String?       @map("class_info") @db.VarChar(50)
-  status            StudentStatus @default(ACTIVE)
+  status            StudentStatus       @default(ACTIVE)
+  intakeStatus      StudentIntakeStatus @default(DRAFT) @map("intake_status")
+  intakeSubmittedAt DateTime?           @map("intake_submitted_at")
+  intakeReviewedAt  DateTime?           @map("intake_reviewed_at")
+  intakeReviewedBy  Int?                @map("intake_reviewed_by")
+  intakeReviewComment String?           @map("intake_review_comment") @db.Text
   idNumberEncrypted String?       @map("id_number_encrypted") @db.VarChar(500)
   parentPhone       String?       @map("parent_phone") @db.VarChar(20)
   isRural           Boolean       @default(false) @map("is_rural")
@@ -720,6 +736,7 @@ model StudentProfile {
   @@index([province])
   @@index([examYear])
   @@index([status])
+  @@index([intakeStatus])
   @@index([examType, totalScore])
   @@index([serviceYear])
   @@map("student_profiles")
@@ -802,6 +819,9 @@ model VolunteerPlan {
   isFinal     Boolean   @default(false) @map("is_final")
   finalizedAt DateTime? @map("finalized_at")
   finalizedBy Int?      @map("finalized_by")
+  studentConfirmedAt DateTime? @map("student_confirmed_at")
+  studentChangeRequestedAt DateTime? @map("student_change_requested_at")
+  studentChangeRequest String? @map("student_change_request") @db.Text
   exportCount Int       @default(0) @map("export_count")
   dataVersion Int       @default(0) @map("data_version")
 
@@ -904,6 +924,10 @@ model PlanItem {
   originalItemId     Int?    @map("original_item_id")
 
   // 综合评分
+  overrideSoftFail   Boolean @default(false) @map("override_soft_fail")
+  softFailReasons    Json?   @map("soft_fail_reasons")
+  overrideReason     String? @map("override_reason") @db.VarChar(500)
+
   compositeScore Decimal? @map("composite_score") @db.Decimal(6, 2)
   scoreBreakdown Json?    @map("score_breakdown")
 

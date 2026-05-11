@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Alert, Spin } from 'antd';
+import { Alert, Button, Spin, message } from 'antd';
 import {
   ArrowRightOutlined,
   BankOutlined,
@@ -17,7 +17,7 @@ import {
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
 import CompactProgress from '@/components/student/CompactProgress';
 import SaveStatusBar from '@/components/student/SaveStatusBar';
@@ -121,9 +121,20 @@ function stagePercent(stage?: { filled: number; total: number }) {
 }
 
 export default function StudentProfilePage() {
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ['student-my-profile'],
     queryFn: () => studentApi.getMyProfile(),
+  });
+  const submitIntakeMutation = useMutation({
+    mutationFn: () => studentApi.submitMyIntake(),
+    onSuccess: () => {
+      void message.success('资料已提交给老师确认');
+      queryClient.invalidateQueries({ queryKey: ['student-my-profile'] });
+    },
+    onError: (e: any) => {
+      void message.error(e?.response?.data?.message ?? '提交失败，请先补全核心资料');
+    },
   });
 
   if (isLoading) {
@@ -146,6 +157,8 @@ export default function StudentProfilePage() {
   const initial = (profile.realName || profile.username || '同').charAt(0);
   const bars = scoreRows(profile);
   const stages = progress.stageProgress ?? {};
+  const intakeStatus = profile.intakeStatus ?? 'DRAFT';
+  const canSubmitIntake = progress.stageProgress?.stage1?.completed && !['SUBMITTED', 'VERIFIED'].includes(intakeStatus);
 
   return (
     <div className="mx-auto max-w-[520px] pb-20">
@@ -228,6 +241,31 @@ export default function StudentProfilePage() {
           total={64}
           missing={progress.missingFieldsForRecommend ?? []}
         />
+      </section>
+
+      <section className="mt-5 rounded-xl bg-surface px-4 py-4 shadow-card">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="m-0 font-serif text-base font-semibold text-text">资料确认状态</h2>
+            <p className="m-0 mt-1 text-xs text-text-muted">
+              {intakeStatus === 'VERIFIED'
+                ? '老师已确认，可以进入方案生成'
+                : intakeStatus === 'SUBMITTED'
+                  ? '已提交，等待老师确认'
+                  : intakeStatus === 'NEEDS_CHANGES'
+                    ? profile.intakeReviewComment || '老师退回，请按意见补充'
+                    : '核心资料完成后提交给老师确认'}
+            </p>
+          </div>
+          <Button
+            type="primary"
+            disabled={!canSubmitIntake}
+            loading={submitIntakeMutation.isPending}
+            onClick={() => submitIntakeMutation.mutate()}
+          >
+            {intakeStatus === 'NEEDS_CHANGES' ? '重新提交' : '提交资料'}
+          </Button>
+        </div>
       </section>
 
       <SectionHeader title="基本信息" actionHref="/student/profile/stage/1" actionText="编辑" />

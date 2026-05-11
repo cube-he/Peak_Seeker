@@ -41,16 +41,9 @@ export class AuthService {
     // 加密密码
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
-    const role = (dto.role as Role) || Role.STUDENT;
-
-    // Build profile creation based on role
-    const profileData: Record<string, any> = {};
-    if (role === Role.TEACHER) {
-      profileData.teacherProfile = { create: {} };
-    } else if (role === Role.STUDENT) {
-      profileData.studentProfile = { create: { province: dto.province || '四川' } };
-    }
-    // ADMIN gets no profile
+    // Public registration must never trust a client-supplied role.
+    // Staff/admin accounts are created through protected admin tooling.
+    const role = Role.STUDENT;
 
     // 创建用户 with profile via Prisma directly (UserService.create doesn't support nested profile creation)
     const user = await this.prisma.user.create({
@@ -62,7 +55,7 @@ export class AuthService {
         realName: dto.realName,
         province: dto.province,
         role,
-        ...profileData,
+        studentProfile: { create: { province: dto.province || '四川' } },
       },
       include: {
         teacherProfile: true,

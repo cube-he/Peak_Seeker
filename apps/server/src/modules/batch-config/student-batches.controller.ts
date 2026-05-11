@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BatchConfigService } from './batch-config.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -12,7 +12,7 @@ export class StudentBatchesController {
 
   @Get('eligible-batches')
   @ApiOperation({ summary: '该学生可填报批次列表' })
-  list(@Param('studentId', ParseIntPipe) studentId: number) {
-    return this.service.listEligibleForStudent(studentId);
+  list(@Param('studentId', ParseIntPipe) studentId: number, @Req() req: any) {
+    return this.service.listEligibleForStudent(studentId, req.user);
   }
 }

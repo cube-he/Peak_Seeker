@@ -38,6 +38,17 @@ describe('PlanItemService.add', () => {
     await expect(service.add(1, { enrollmentPlanId: 100 } as any)).rejects.toThrow(ConflictException);
   });
 
+  it('rejects a soft-failed candidate unless the teacher confirms override', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 1, status: 'DRAFT', batchConfigId: 5, year: 2026, studentId: 10 });
+
+    await expect(
+      service.add(1, {
+        enrollmentPlanId: 100,
+        softFailReasons: [{ rule: 'tuition', note: '瀛﹁垂瓒呴绠?' }],
+      } as any),
+    ).rejects.toThrow(ConflictException);
+  });
+
   it('正常加入：sequence 自动 = count + 1，gradient 自动算', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 1, status: 'DRAFT', batchConfigId: 5, year: 2026, studentId: 10 });
     prisma.batchConfig.findUnique.mockResolvedValue({ id: 5, maxGroupCount: 45 });
@@ -54,8 +65,15 @@ describe('PlanItemService.add', () => {
     });
     prisma.planItem.create.mockImplementation((args: any) => Promise.resolve({ id: 999, ...args.data }));
 
-    const result = await service.add(1, { enrollmentPlanId: 100 } as any);
+    const result = await service.add(1, {
+      enrollmentPlanId: 100,
+      softFailReasons: [{ rule: 'tuition', note: '瀛﹁垂瓒呴绠?' }],
+      softFailOverrideConfirmed: true,
+      overrideReason: 'teacher confirmed with student',
+    } as any);
     expect(result.sequence).toBe(3);
     expect(result.gradient).toBe('CHONG'); // 8000/10000=0.8
+    expect(result.overrideSoftFail).toBe(true);
+    expect(result.softFailReasons).toEqual([{ rule: 'tuition', note: '瀛﹁垂瓒呴绠?' }]);
   });
 });

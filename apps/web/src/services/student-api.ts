@@ -128,6 +128,15 @@ export interface StudentListParams {
   pageSize?: number;
 }
 
+export interface EligibleBatch {
+  batchConfigId: number;
+  batchName: string;
+  maxGroupCount: number;
+  maxMajorPerGroup: number;
+  volunteerMode: string;
+  admissionOrder: number;
+}
+
 /**
  * 双轨完整度响应（与后端 ProgressService.compute 输出对齐）
  */
@@ -147,7 +156,13 @@ export interface ProfileProgress {
 export const studentApi = {
   // Teacher endpoints — manage students
   getList(params?: StudentListParams): Promise<any> {
-    return api.get('/students', { params }) as any;
+    const query = {
+      keyword: params?.search?.trim() || undefined,
+      status: params?.status || undefined,
+      page: params?.page,
+      pageSize: params?.pageSize,
+    };
+    return api.get('/students', { params: query }) as any;
   },
 
   getById(id: string): Promise<any> {
@@ -160,6 +175,10 @@ export const studentApi = {
 
   update(id: string, data: UpdateStudentDto): Promise<any> {
     return api.put(`/students/${id}`, data) as any;
+  },
+
+  reviewIntake(id: string, data: { action: 'VERIFY' | 'REQUEST_CHANGE'; comment?: string }): Promise<any> {
+    return api.post(`/students/${id}/intake-review`, data) as any;
   },
 
   delete(id: string): Promise<any> {
@@ -180,12 +199,20 @@ export const studentApi = {
     return api.get('/students/me/progress') as any;
   },
 
+  submitMyIntake(): Promise<any> {
+    return api.post('/students/me/submit-intake') as any;
+  },
+
   // ── Teacher: export intake form ──
 
   exportIntake(id: string): Promise<Blob> {
     return api.get(`/students/${id}/export-intake`, {
       responseType: 'blob',
     }) as any;
+  },
+
+  getEligibleBatches(id: string): Promise<EligibleBatch[]> {
+    return api.get(`/students/${id}/eligible-batches`) as any;
   },
 
   // Light recommendation for student self-service
