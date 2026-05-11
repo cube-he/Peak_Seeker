@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
-  Card,
   Form,
   Input,
   InputNumber,
@@ -15,7 +15,11 @@ import {
   Alert,
   message,
 } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
+import {
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type UpdateStudentDto } from '@/services/student-api';
 import {
@@ -32,6 +36,33 @@ import {
   from9Subjects,
   validate6Subjects,
 } from '@/components/student/stage1-score-mapping';
+import StudentSummaryRail from '@/components/student/workspace/StudentSummaryRail';
+import {
+  StudentWorkspace,
+  StudentWorkspacePanel,
+} from '@/components/student/workspace/StudentWorkspace';
+
+type StageKey = '1' | '2' | '3';
+
+interface StageProgress {
+  filled?: number;
+  total?: number;
+  completed?: boolean;
+}
+
+interface ProfileProgress {
+  overallCompleteness?: number;
+  isRecommendable?: boolean;
+  stageProgress?: Record<string, StageProgress>;
+}
+
+const STAGE_KEYS: StageKey[] = ['1', '2', '3'];
+
+const STAGE_SUMMARIES: Record<StageKey, string> = {
+  '1': '身份、电话、成绩与选科',
+  '2': '身体条件、地域偏好与专业方向',
+  '3': '排除项、经济条件、兴趣性格',
+};
 
 const STAGE_FIELD_MAP: Record<string, readonly string[]> = {
   '1': STAGE_1_REQUIRED,
@@ -48,6 +79,7 @@ const STAGE_FIELD_MAP: Record<string, readonly string[]> = {
  */
 export default function StudentStageFormPage() {
   const params = useParams<{ stage: string }>();
+  const pathname = usePathname();
   const router = useRouter();
   const stage = String(params.stage);
   const fields = STAGE_FIELD_MAP[stage];
@@ -154,450 +186,737 @@ export default function StudentStageFormPage() {
     });
   };
 
+  const activeStage = stage as StageKey;
+  const progress = profile?.progress as ProfileProgress | undefined;
+  const currentProgress = getStageProgress(progress, activeStage);
+  const currentPercent = stagePercent(currentProgress);
+  const rail = (
+    <StudentSummaryRail
+      activePathname={pathname}
+      profile={profile}
+      progress={progress}
+    />
+  );
+  const aside = (
+    <>
+      <StudentWorkspacePanel title="当前阶段">
+        <div className="flex items-end gap-2">
+          <span className="font-serif text-4xl font-semibold tabular-nums text-accent">
+            {currentPercent}
+          </span>
+          <span className="pb-1 text-sm text-text-muted">%</span>
+        </div>
+        <p className="m-0 mt-2 text-xs leading-5 text-text-muted">
+          已填写 {currentProgress?.filled ?? 0}/{currentProgress?.total ?? 0} 项。
+          {currentProgress?.completed ? ' 当前阶段已完成。' : ' 保存后完整度会同步刷新。'}
+        </p>
+      </StudentWorkspacePanel>
+
+      <StudentWorkspacePanel title="三阶段进度">
+        <StageProgressList activeStage={activeStage} progress={progress} />
+      </StudentWorkspacePanel>
+    </>
+  );
+
   return (
-    <div className="space-y-4 pb-20">
-      <Button
-        type="link"
-        icon={<ArrowLeftOutlined />}
-        onClick={() => router.push('/student/profile')}
-        className="px-0"
-      >
-        返回档案首页
-      </Button>
+    <StudentWorkspace rail={rail} aside={aside}>
+      <div className="space-y-5 pb-20 lg:pb-0">
+        <Button
+          type="link"
+          icon={<ArrowLeftOutlined />}
+          onClick={() => router.push('/student/profile')}
+          className="h-auto px-0 text-text-muted"
+        >
+          返回档案首页
+        </Button>
 
-      <Card>
-        <h1 className="mb-1 font-serif text-xl font-semibold text-text">
-          阶段 {stage}：{labels.title}
-        </h1>
-        <p className="mb-4 text-xs text-text-secondary">{labels.subtitle}</p>
-
-        <Form form={form} layout="vertical" requiredMark="optional">
-          <Form.Item name="dataVersion" hidden>
-            <Input />
-          </Form.Item>
-
-          {stage === '1' && <Stage1Fields />}
-          {stage === '2' && <Stage2Fields />}
-          {stage === '3' && <Stage3Fields />}
-
-          <div className="mt-4 flex justify-end border-t border-border-subtle pt-4">
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              onClick={onSave}
-              loading={saveMutation.isPending}
-              size="large"
-            >
-              保存
-            </Button>
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-[#15212e] px-5 py-5 text-white shadow-glow-primary sm:px-6">
+          <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <p className="m-0 text-[11px] font-medium uppercase tracking-[1.8px] text-white/50">
+                Student Profile
+              </p>
+              <h1 className="m-0 mt-2 font-serif text-2xl font-semibold leading-tight">
+                档案编辑工作台
+              </h1>
+              <p className="m-0 mt-2 max-w-2xl text-sm leading-6 text-white/70">
+                三个阶段放在同一套编辑流程里查看和切换；当前页面只保存阶段 {stage} 的字段，避免误改其他阶段。
+              </p>
+            </div>
+            <div className="rounded-xl bg-white/[0.08] px-4 py-3">
+              <p className="m-0 text-[11px] text-white/50">当前阶段</p>
+              <p className="m-0 mt-1 font-serif text-lg font-semibold">
+                阶段 {stage}：{labels.title}
+              </p>
+            </div>
           </div>
-        </Form>
-      </Card>
+        </section>
+
+        <StageSwitcher activeStage={activeStage} progress={progress} />
+
+        <StudentWorkspacePanel
+          title={`阶段 ${stage}：${labels.title}`}
+          action={
+            <span className="rounded-md bg-accent-fixed px-2 py-1 text-[11px] font-medium text-accent">
+              {labels.badge}
+            </span>
+          }
+        >
+          <p className="m-0 mb-5 text-xs leading-5 text-text-secondary">
+            {labels.subtitle}
+          </p>
+
+          <Form form={form} layout="vertical" requiredMark={false}>
+            <Form.Item name="dataVersion" hidden>
+              <Input />
+            </Form.Item>
+
+            {stage === '1' && <Stage1Fields />}
+            {stage === '2' && <Stage2Fields />}
+            {stage === '3' && <Stage3Fields />}
+
+            <div className="mt-6 flex flex-col-reverse gap-3 border-t border-border-subtle pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="m-0 text-xs leading-5 text-text-faint">
+                保存只会提交当前阶段字段，其他阶段内容保持不变。
+              </p>
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                onClick={onSave}
+                loading={saveMutation.isPending}
+                size="large"
+              >
+                保存当前阶段
+              </Button>
+            </div>
+          </Form>
+        </StudentWorkspacePanel>
+      </div>
+    </StudentWorkspace>
+  );
+}
+
+function stageHref(stage: StageKey) {
+  return `/student/profile/stage/${stage}`;
+}
+
+function getStageProgress(progress: ProfileProgress | undefined, stage: StageKey) {
+  return progress?.stageProgress?.[`stage${stage}`];
+}
+
+function stagePercent(stage?: StageProgress) {
+  if (!stage?.total) return 0;
+  return Math.round(((stage.filled ?? 0) / stage.total) * 100);
+}
+
+function StageSwitcher({
+  activeStage,
+  progress,
+}: {
+  activeStage: StageKey;
+  progress?: ProfileProgress;
+}) {
+  return (
+    <nav
+      aria-label="档案填写阶段"
+      className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-1 2xl:grid-cols-3"
+    >
+      {STAGE_KEYS.map((stage) => {
+        const labels = STAGE_LABELS[stage];
+        const stageProgress = getStageProgress(progress, stage);
+        const percent = stagePercent(stageProgress);
+        const active = stage === activeStage;
+        return (
+          <Link
+            key={stage}
+            href={stageHref(stage)}
+            aria-current={active ? 'page' : undefined}
+            className={`group rounded-xl border px-4 py-3 text-text no-underline transition-colors ${
+              active
+                ? 'border-primary/30 bg-primary-fixed shadow-card'
+                : 'border-border-subtle bg-surface hover:border-primary/20 hover:bg-surface-dim'
+            }`}
+          >
+            <span className="flex items-center justify-between gap-3">
+              <span className="flex min-w-0 items-center gap-3">
+                <span
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] font-serif text-base font-semibold ${
+                    stageProgress?.completed
+                      ? 'bg-primary text-white'
+                      : active
+                        ? 'bg-primary text-white'
+                        : 'bg-accent-fixed text-accent'
+                  }`}
+                >
+                  {stageProgress?.completed ? (
+                    <CheckCircleOutlined className="text-sm" />
+                  ) : (
+                    stage
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-serif text-[15px] font-semibold">
+                    {labels.title}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-text-muted">
+                    {STAGE_SUMMARIES[stage]}
+                  </span>
+                </span>
+              </span>
+              <span className="shrink-0 text-right">
+                <span className="block font-serif text-base font-semibold tabular-nums text-accent">
+                  {percent}%
+                </span>
+                <span className="text-[10px] text-text-faint">{labels.badge}</span>
+              </span>
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function StageProgressList({
+  activeStage,
+  progress,
+}: {
+  activeStage: StageKey;
+  progress?: ProfileProgress;
+}) {
+  return (
+    <div className="space-y-3">
+      {STAGE_KEYS.map((stage) => {
+        const labels = STAGE_LABELS[stage];
+        const stageProgress = getStageProgress(progress, stage);
+        const percent = stagePercent(stageProgress);
+        return (
+          <div key={stage}>
+            <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+              <span
+                className={`font-medium ${
+                  stage === activeStage ? 'text-primary' : 'text-text'
+                }`}
+              >
+                阶段 {stage} · {labels.title}
+              </span>
+              <span className="tabular-nums text-text-muted">{percent}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-dim">
+              <div
+                className="h-full rounded-full bg-accent"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
+}
+
+function FormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
+      <div className="mb-4">
+        <h3 className="m-0 font-serif text-base font-semibold text-text">
+          {title}
+        </h3>
+        {description ? (
+          <p className="m-0 mt-1 text-xs leading-5 text-text-muted">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function FieldGrid({
+  children,
+  columns = 'md:grid-cols-2',
+}: {
+  children: React.ReactNode;
+  columns?: string;
+}) {
+  return <div className={`grid grid-cols-1 gap-x-4 ${columns}`}>{children}</div>;
 }
 
 function Stage1Fields() {
   const form = Form.useFormInstance();
   return (
-    <>
-      <Form.Item name="realName" label="姓名" rules={[{ required: true }]}>
-        <Input placeholder="你的真实姓名" />
-      </Form.Item>
-      <Form.Item name="phone" label="手机号" rules={[{ required: true }]}>
-        <Input placeholder="11 位手机号" />
-      </Form.Item>
-      <Form.Item
-        name="parentPhone"
-        label="家长手机号"
-        rules={[{ required: true }]}
+    <div className="space-y-6">
+      <FormSection
+        title="联系信息"
+        description="用于老师与你和家长确认资料，建议填写常用联系方式。"
       >
-        <Input placeholder="家长联系电话" />
-      </Form.Item>
-      <Form.Item name="gender" label="性别" rules={[{ required: true }]}>
-        <Radio.Group>
-          <Radio value="MALE">男</Radio>
-          <Radio value="FEMALE">女</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item name="formFiller" label="填表人" rules={[{ required: true }]}>
-        <Radio.Group>
-          <Radio value="STUDENT">学生本人</Radio>
-          <Radio value="PARENT">家长</Radio>
-          <Radio value="TOGETHER">共同填写</Radio>
-        </Radio.Group>
-      </Form.Item>
+        <FieldGrid columns="md:grid-cols-2 xl:grid-cols-3">
+          <Form.Item name="realName" label="姓名" rules={[{ required: true }]}>
+            <Input placeholder="你的真实姓名" />
+          </Form.Item>
+          <Form.Item name="phone" label="手机号" rules={[{ required: true }]}>
+            <Input placeholder="11 位手机号" />
+          </Form.Item>
+          <Form.Item
+            name="parentPhone"
+            label="家长手机号"
+            rules={[{ required: true }]}
+          >
+            <Input placeholder="家长联系电话" />
+          </Form.Item>
+          <Form.Item name="gender" label="性别" rules={[{ required: true }]}>
+            <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
+              <Radio value="MALE">男</Radio>
+              <Radio value="FEMALE">女</Radio>
+            </Radio.Group>
+          </Form.Item>
+          <Form.Item name="formFiller" label="填表人" rules={[{ required: true }]}>
+            <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
+              <Radio value="STUDENT">学生本人</Radio>
+              <Radio value="PARENT">家长</Radio>
+              <Radio value="TOGETHER">共同填写</Radio>
+            </Radio.Group>
+          </Form.Item>
+        </FieldGrid>
+      </FormSection>
 
-      {/* ─── 高考成绩：9 科分数驱动选科 ─── */}
-      <div className="mt-6 mb-2 text-sm font-semibold text-text">高考成绩</div>
-      <p className="mb-3 text-xs text-text-secondary">
-        填语数外 + 物理或历史 + 任选 2 门（化/生/政/地）。系统会自动识别你的科类和选考组合。
-      </p>
+      <FormSection
+        title="高考成绩"
+        description="填语数外 + 物理或历史 + 任选 2 门。系统会自动识别科类和选考组合。"
+      >
+        <FieldGrid columns="sm:grid-cols-3">
+          <Form.Item name="scoreChinese" label="语文" rules={[{ required: true, message: '必填' }]}>
+            <InputNumber min={0} max={150} className="w-full" />
+          </Form.Item>
+          <Form.Item name="scoreMath" label="数学" rules={[{ required: true, message: '必填' }]}>
+            <InputNumber min={0} max={150} className="w-full" />
+          </Form.Item>
+          <Form.Item name="scoreEnglish" label="英语" rules={[{ required: true, message: '必填' }]}>
+            <InputNumber min={0} max={150} className="w-full" />
+          </Form.Item>
+        </FieldGrid>
 
-      <div className="grid grid-cols-3 gap-4">
-        <Form.Item name="scoreChinese" label="语文" rules={[{ required: true, message: '必填' }]}>
-          <InputNumber min={0} max={150} className="w-full" />
+        <Form.Item
+          noStyle
+          shouldUpdate={(p, c) =>
+            p.scorePhysics !== c.scorePhysics || p.scoreHistory !== c.scoreHistory
+          }
+        >
+          {({ getFieldValue }) => {
+            const hasPhysics = getFieldValue('scorePhysics') != null;
+            const hasHistory = getFieldValue('scoreHistory') != null;
+            return (
+              <FieldGrid columns="sm:grid-cols-2">
+                <Form.Item name="scorePhysics" label="物理">
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    className="w-full"
+                    disabled={hasHistory}
+                    placeholder={hasHistory ? '已选历史' : ''}
+                    onChange={(v) => {
+                      if (v != null) form.setFieldValue('scoreHistory', undefined);
+                    }}
+                  />
+                </Form.Item>
+                <Form.Item name="scoreHistory" label="历史">
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    className="w-full"
+                    disabled={hasPhysics}
+                    placeholder={hasPhysics ? '已选物理' : ''}
+                    onChange={(v) => {
+                      if (v != null) form.setFieldValue('scorePhysics', undefined);
+                    }}
+                  />
+                </Form.Item>
+              </FieldGrid>
+            );
+          }}
         </Form.Item>
-        <Form.Item name="scoreMath" label="数学" rules={[{ required: true, message: '必填' }]}>
-          <InputNumber min={0} max={150} className="w-full" />
+
+        <Form.Item
+          noStyle
+          shouldUpdate={(p, c) =>
+            p.scoreChemistry !== c.scoreChemistry ||
+            p.scoreBiology !== c.scoreBiology ||
+            p.scorePolitics !== c.scorePolitics ||
+            p.scoreGeography !== c.scoreGeography
+          }
+        >
+          {({ getFieldValue }) => {
+            const reKeys = ['scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography'] as const;
+            const filledCount = reKeys.filter((k) => getFieldValue(k) != null).length;
+            const lockOthers = filledCount >= 2;
+            const isFilled = (k: string) => getFieldValue(k) != null;
+            return (
+              <FieldGrid columns="sm:grid-cols-2 xl:grid-cols-4">
+                <Form.Item name="scoreChemistry" label="化学">
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    className="w-full"
+                    disabled={lockOthers && !isFilled('scoreChemistry')}
+                  />
+                </Form.Item>
+                <Form.Item name="scoreBiology" label="生物">
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    className="w-full"
+                    disabled={lockOthers && !isFilled('scoreBiology')}
+                  />
+                </Form.Item>
+                <Form.Item name="scorePolitics" label="政治">
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    className="w-full"
+                    disabled={lockOthers && !isFilled('scorePolitics')}
+                  />
+                </Form.Item>
+                <Form.Item name="scoreGeography" label="地理">
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    className="w-full"
+                    disabled={lockOthers && !isFilled('scoreGeography')}
+                  />
+                </Form.Item>
+              </FieldGrid>
+            );
+          }}
         </Form.Item>
-        <Form.Item name="scoreEnglish" label="英语" rules={[{ required: true, message: '必填' }]}>
-          <InputNumber min={0} max={150} className="w-full" />
+
+        <Form.Item
+          noStyle
+          shouldUpdate={(p, c) =>
+            p.scoreChinese !== c.scoreChinese ||
+            p.scoreMath !== c.scoreMath ||
+            p.scoreEnglish !== c.scoreEnglish ||
+            p.scorePhysics !== c.scorePhysics ||
+            p.scoreHistory !== c.scoreHistory ||
+            p.scoreChemistry !== c.scoreChemistry ||
+            p.scoreBiology !== c.scoreBiology ||
+            p.scorePolitics !== c.scorePolitics ||
+            p.scoreGeography !== c.scoreGeography
+          }
+        >
+          {({ getFieldsValue }) => {
+            const v = getFieldsValue([
+              'scoreChinese', 'scoreMath', 'scoreEnglish',
+              'scorePhysics', 'scoreHistory',
+              'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
+            ]) as Subject9Form;
+            const total = sum9Subjects(v);
+            return (
+              <div className="mt-1 rounded-lg bg-surface-dim px-4 py-3 text-sm text-text">
+                总分（自动累加）：
+                <span className="font-serif text-lg font-semibold tabular-nums text-accent">
+                  {total}
+                </span>
+                分
+              </div>
+            );
+          }}
         </Form.Item>
-      </div>
 
-      {/* 物理/历史 互斥锁死 */}
-      <Form.Item
-        noStyle
-        shouldUpdate={(p, c) =>
-          p.scorePhysics !== c.scorePhysics || p.scoreHistory !== c.scoreHistory
-        }
-      >
-        {({ getFieldValue }) => {
-          const hasPhysics = getFieldValue('scorePhysics') != null;
-          const hasHistory = getFieldValue('scoreHistory') != null;
-          return (
-            <div className="grid grid-cols-2 gap-4">
-              <Form.Item name="scorePhysics" label="物理">
-                <InputNumber
-                  min={0}
-                  max={100}
-                  className="w-full"
-                  disabled={hasHistory}
-                  placeholder={hasHistory ? '已选历史' : ''}
-                  onChange={(v) => {
-                    if (v != null) form.setFieldValue('scoreHistory', undefined);
-                  }}
-                />
-              </Form.Item>
-              <Form.Item name="scoreHistory" label="历史">
-                <InputNumber
-                  min={0}
-                  max={100}
-                  className="w-full"
-                  disabled={hasPhysics}
-                  placeholder={hasPhysics ? '已选物理' : ''}
-                  onChange={(v) => {
-                    if (v != null) form.setFieldValue('scorePhysics', undefined);
-                  }}
-                />
-              </Form.Item>
-            </div>
-          );
-        }}
-      </Form.Item>
-
-      {/* 化生政地：最多 2 个有值，第 3 个 disabled */}
-      <Form.Item
-        noStyle
-        shouldUpdate={(p, c) =>
-          p.scoreChemistry !== c.scoreChemistry ||
-          p.scoreBiology !== c.scoreBiology ||
-          p.scorePolitics !== c.scorePolitics ||
-          p.scoreGeography !== c.scoreGeography
-        }
-      >
-        {({ getFieldValue }) => {
-          const reKeys = ['scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography'] as const;
-          const filledCount = reKeys.filter((k) => getFieldValue(k) != null).length;
-          const lockOthers = filledCount >= 2;
-          const isFilled = (k: string) => getFieldValue(k) != null;
-          return (
-            <div className="grid grid-cols-4 gap-4">
-              <Form.Item name="scoreChemistry" label="化学">
-                <InputNumber
-                  min={0}
-                  max={100}
-                  className="w-full"
-                  disabled={lockOthers && !isFilled('scoreChemistry')}
-                />
-              </Form.Item>
-              <Form.Item name="scoreBiology" label="生物">
-                <InputNumber
-                  min={0}
-                  max={100}
-                  className="w-full"
-                  disabled={lockOthers && !isFilled('scoreBiology')}
-                />
-              </Form.Item>
-              <Form.Item name="scorePolitics" label="政治">
-                <InputNumber
-                  min={0}
-                  max={100}
-                  className="w-full"
-                  disabled={lockOthers && !isFilled('scorePolitics')}
-                />
-              </Form.Item>
-              <Form.Item name="scoreGeography" label="地理">
-                <InputNumber
-                  min={0}
-                  max={100}
-                  className="w-full"
-                  disabled={lockOthers && !isFilled('scoreGeography')}
-                />
-              </Form.Item>
-            </div>
-          );
-        }}
-      </Form.Item>
-
-      {/* 总分自动累加显示 */}
-      <Form.Item
-        noStyle
-        shouldUpdate={(p, c) =>
-          p.scoreChinese !== c.scoreChinese ||
-          p.scoreMath !== c.scoreMath ||
-          p.scoreEnglish !== c.scoreEnglish ||
-          p.scorePhysics !== c.scorePhysics ||
-          p.scoreHistory !== c.scoreHistory ||
-          p.scoreChemistry !== c.scoreChemistry ||
-          p.scoreBiology !== c.scoreBiology ||
-          p.scorePolitics !== c.scorePolitics ||
-          p.scoreGeography !== c.scoreGeography
-        }
-      >
-        {({ getFieldsValue }) => {
-          const v = getFieldsValue([
-            'scoreChinese', 'scoreMath', 'scoreEnglish',
-            'scorePhysics', 'scoreHistory',
-            'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
-          ]) as Subject9Form;
-          const total = sum9Subjects(v);
-          return (
-            <div className="mt-2 mb-2 rounded-md bg-surface-2 px-4 py-3 text-base">
-              总分（自动累加）：<span className="font-semibold">{total}</span> 分
-            </div>
-          );
-        }}
-      </Form.Item>
-
-      <p className="text-xs text-text-faint">
-        提示：填好成绩后，系统会自动用一分一段表算出全省位次（位次仅老师可看；如有政策加分，老师录入后参与位次计算）。
-      </p>
-    </>
+        <p className="m-0 mt-3 text-xs leading-5 text-text-faint">
+          提示：填好成绩后，系统会自动用一分一段表算出全省位次（位次仅老师可看；如有政策加分，老师录入后参与位次计算）。
+        </p>
+      </FormSection>
+    </div>
   );
 }
 
 function Stage2Fields() {
   return (
-    <>
-      <div className="grid grid-cols-2 gap-4">
-        <Form.Item name="height" label="身高 (cm)">
-          <InputNumber min={100} max={250} className="w-full" />
+    <div className="space-y-6">
+      <FormSection
+        title="身体条件"
+        description="部分院校和专业会参考体检限制，尽量按体检表填写。"
+      >
+        <FieldGrid columns="sm:grid-cols-2 xl:grid-cols-4">
+          <Form.Item name="height" label="身高 (cm)">
+            <InputNumber min={100} max={250} className="w-full" />
+          </Form.Item>
+          <Form.Item name="weight" label="体重 (kg)">
+            <InputNumber min={20} max={200} className="w-full" />
+          </Form.Item>
+          <Form.Item name="visionLeft" label="左眼裸眼视力">
+            <InputNumber min={1} max={5.3} step={0.1} className="w-full" />
+          </Form.Item>
+          <Form.Item name="visionRight" label="右眼裸眼视力">
+            <InputNumber min={1} max={5.3} step={0.1} className="w-full" />
+          </Form.Item>
+        </FieldGrid>
+        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+          <Form.Item name="colorBlind" valuePropName="checked">
+            <Checkbox>色盲</Checkbox>
+          </Form.Item>
+          <Form.Item name="colorWeak" valuePropName="checked">
+            <Checkbox>色弱</Checkbox>
+          </Form.Item>
+        </div>
+      </FormSection>
+
+      <FormSection
+        title="地域与院校偏好"
+        description="把最确定的方向写在前面，老师生成方案时会优先参考。"
+      >
+        <FieldGrid columns="lg:grid-cols-2">
+          <Form.Item name="preferredProvinces" label="意向省份">
+            <Select
+              mode="multiple"
+              placeholder="选择意向省份"
+              allowClear
+              options={[
+                { value: '四川', label: '四川' },
+                { value: '北京', label: '北京' },
+                { value: '上海', label: '上海' },
+                { value: '广东', label: '广东' },
+                { value: '浙江', label: '浙江' },
+                { value: '江苏', label: '江苏' },
+                { value: '湖北', label: '湖北' },
+                { value: '陕西', label: '陕西' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="preferredCities" label="意向城市">
+            <Select mode="tags" placeholder="输入意向城市" allowClear />
+          </Form.Item>
+          <Form.Item name="preferredUniversities" label="意向院校">
+            <Select mode="tags" placeholder="输入意向院校" allowClear />
+          </Form.Item>
+          <Form.Item name="preferredBatches" label="意向批次">
+            <Select
+              mode="multiple"
+              placeholder="选择意向批次"
+              allowClear
+              options={[
+                { value: 'EARLY_BATCH', label: '提前批' },
+                { value: 'FIRST_BATCH', label: '本科批' },
+                { value: 'SECOND_BATCH', label: '专科批' },
+                { value: 'SPECIAL_BATCH', label: '专项计划' },
+              ]}
+            />
+          </Form.Item>
+        </FieldGrid>
+      </FormSection>
+
+      <FormSection
+        title="专业与升学规划"
+        description="专业方向、升学路径和优先级会影响冲稳保排序。"
+      >
+        <FieldGrid columns="lg:grid-cols-2">
+          <Form.Item name="preferredMajors" label="意向专业">
+            <Select mode="tags" placeholder="输入意向专业" allowClear />
+          </Form.Item>
+          <Form.Item name="preferredMajorCategories" label="意向专业大类">
+            <Select
+              mode="multiple"
+              placeholder="选择"
+              allowClear
+              options={[
+                { value: '工学', label: '工学' },
+                { value: '理学', label: '理学' },
+                { value: '医学', label: '医学' },
+                { value: '经济学', label: '经济学' },
+                { value: '管理学', label: '管理学' },
+                { value: '法学', label: '法学' },
+                { value: '文学', label: '文学' },
+                { value: '教育学', label: '教育学' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="careerPlan" label="升学规划">
+            <Select
+              placeholder="选择"
+              allowClear
+              options={[
+                { value: 'POSTGRADUATE', label: '考研深造' },
+                { value: 'EMPLOYMENT', label: '本科就业' },
+                { value: 'ABROAD', label: '出国留学' },
+                { value: 'PUBLIC_SERVANT', label: '公务员/事业编' },
+                { value: 'UNDECIDED', label: '未定' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="priorityMode" label="院校 / 专业优先">
+            <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
+              <Radio value="UNIVERSITY_FIRST">院校优先</Radio>
+              <Radio value="MAJOR_FIRST">专业优先</Radio>
+              <Radio value="BALANCED">兼顾</Radio>
+            </Radio.Group>
+          </Form.Item>
+        </FieldGrid>
+        <Form.Item name="careerDirection" label="职业方向">
+          <Input.TextArea rows={2} placeholder="未来想从事什么方向的工作？" />
         </Form.Item>
-        <Form.Item name="weight" label="体重 (kg)">
-          <InputNumber min={20} max={200} className="w-full" />
-        </Form.Item>
-        <Form.Item name="visionLeft" label="左眼裸眼视力">
-          <InputNumber min={1} max={5.3} step={0.1} className="w-full" />
-        </Form.Item>
-        <Form.Item name="visionRight" label="右眼裸眼视力">
-          <InputNumber min={1} max={5.3} step={0.1} className="w-full" />
-        </Form.Item>
-      </div>
-      <Form.Item name="colorBlind" valuePropName="checked">
-        <Checkbox>色盲</Checkbox>
-      </Form.Item>
-      <Form.Item name="colorWeak" valuePropName="checked">
-        <Checkbox>色弱</Checkbox>
-      </Form.Item>
-      <Form.Item name="preferredProvinces" label="意向省份">
-        <Select
-          mode="multiple"
-          placeholder="选择意向省份"
-          allowClear
-          options={[
-            { value: '四川', label: '四川' },
-            { value: '北京', label: '北京' },
-            { value: '上海', label: '上海' },
-            { value: '广东', label: '广东' },
-            { value: '浙江', label: '浙江' },
-            { value: '江苏', label: '江苏' },
-            { value: '湖北', label: '湖北' },
-            { value: '陕西', label: '陕西' },
-          ]}
-        />
-      </Form.Item>
-      <Form.Item name="preferredCities" label="意向城市">
-        <Select mode="tags" placeholder="输入意向城市" allowClear />
-      </Form.Item>
-      <Form.Item name="preferredMajors" label="意向专业">
-        <Select mode="tags" placeholder="输入意向专业" allowClear />
-      </Form.Item>
-      <Form.Item name="preferredUniversities" label="意向院校">
-        <Select mode="tags" placeholder="输入意向院校" allowClear />
-      </Form.Item>
-      <Form.Item name="preferredMajorCategories" label="意向专业大类">
-        <Select
-          mode="multiple"
-          placeholder="选择"
-          allowClear
-          options={[
-            { value: '工学', label: '工学' },
-            { value: '理学', label: '理学' },
-            { value: '医学', label: '医学' },
-            { value: '经济学', label: '经济学' },
-            { value: '管理学', label: '管理学' },
-            { value: '法学', label: '法学' },
-            { value: '文学', label: '文学' },
-            { value: '教育学', label: '教育学' },
-          ]}
-        />
-      </Form.Item>
-      <Form.Item name="priorityMode" label="院校 / 专业优先">
-        <Radio.Group>
-          <Radio value="UNIVERSITY_FIRST">院校优先</Radio>
-          <Radio value="MAJOR_FIRST">专业优先</Radio>
-          <Radio value="BALANCED">兼顾</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item name="careerPlan" label="升学规划">
-        <Select
-          placeholder="选择"
-          allowClear
-          options={[
-            { value: 'POSTGRADUATE', label: '考研深造' },
-            { value: 'EMPLOYMENT', label: '本科就业' },
-            { value: 'ABROAD', label: '出国留学' },
-            { value: 'PUBLIC_SERVANT', label: '公务员/事业编' },
-            { value: 'UNDECIDED', label: '未定' },
-          ]}
-        />
-      </Form.Item>
-      <Form.Item name="careerDirection" label="职业方向">
-        <Input.TextArea rows={2} placeholder="未来想从事什么方向的工作？" />
-      </Form.Item>
-      <Form.Item name="preferredBatches" label="意向批次">
-        <Select
-          mode="multiple"
-          placeholder="选择意向批次"
-          allowClear
-          options={[
-            { value: 'EARLY_BATCH', label: '提前批' },
-            { value: 'FIRST_BATCH', label: '本科批' },
-            { value: 'SECOND_BATCH', label: '专科批' },
-            { value: 'SPECIAL_BATCH', label: '专项计划' },
-          ]}
-        />
-      </Form.Item>
-    </>
+      </FormSection>
+    </div>
   );
 }
 
 function Stage3Fields() {
   return (
-    <>
-      <Form.Item name="remoteAreaAcceptance" label="是否接受偏远地区">
-        <Radio.Group>
-          <Radio value="ABSOLUTELY_NO">绝对不接受</Radio>
-          <Radio value="BACKUP_ONLY">仅保底院校可接受</Radio>
-          <Radio value="FAMOUS_OK">名校可接受</Radio>
-          <Radio value="GOOD_MAJOR_OK">好专业可接受</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item name="coldMajorAcceptance" label="是否接受冷门专业">
-        <Radio.Group>
-          <Radio value="ABSOLUTELY_NO">绝对不接受</Radio>
-          <Radio value="FAMOUS_OK">名校可接受</Radio>
-          <Radio value="DEVELOPED_AREA_OK">发达地区可接受</Radio>
-          <Radio value="GOOD_PROSPECT_OK">前景好可接受</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item name="stayPreference" label="在省内/外读书偏好">
-        <Radio.Group>
-          <Radio value="LOCAL_ONLY">仅省内</Radio>
-          <Radio value="PREFER_LOCAL">偏好省内</Radio>
-          <Radio value="NO_PREFERENCE">无所谓</Radio>
-          <Radio value="PREFER_OUTSIDE">偏好省外</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item name="excludedProvinces" label="不接受的省份">
-        <Select mode="tags" placeholder="输入" allowClear />
-      </Form.Item>
-      <Form.Item name="excludedCities" label="不接受的城市">
-        <Select mode="tags" placeholder="输入" allowClear />
-      </Form.Item>
-      <Form.Item name="excludedUniversities" label="不接受的院校">
-        <Select mode="tags" placeholder="输入" allowClear />
-      </Form.Item>
-      <Form.Item name="excludedMajors" label="不接受的专业">
-        <Select mode="tags" placeholder="输入" allowClear />
-      </Form.Item>
-      <Form.Item name="preferredTags" label="偏好标签">
-        <Select mode="tags" placeholder="如「就业好」「学风好」" allowClear />
-      </Form.Item>
-      <Form.Item name="interests" label="兴趣爱好">
-        <Select mode="tags" placeholder="输入" allowClear />
-      </Form.Item>
-      <Form.Item name="personalityType" label="性格类型">
-        <Input placeholder="如 INTJ / 内向 / 善于沟通" />
-      </Form.Item>
-      <Form.Item name="selfDescription" label="自我描述">
-        <Input.TextArea rows={3} placeholder="任何想让老师知道的信息" />
-      </Form.Item>
-      <Form.Item name="militaryInterest" valuePropName="checked">
-        <Checkbox>对军校/军事专业感兴趣</Checkbox>
-      </Form.Item>
-      <Form.Item name="teacherInterest" valuePropName="checked">
-        <Checkbox>对师范专业感兴趣</Checkbox>
-      </Form.Item>
-      <Form.Item name="tuitionBudget" label="学费预算">
-        <Radio.Group>
-          <Radio value="LOW">经济敏感（≤6000/年）</Radio>
-          <Radio value="MEDIUM">适中（6000-15000/年）</Radio>
-          <Radio value="HIGH">不限（含中外合作）</Radio>
-          <Radio value="UNLIMITED">无上限</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item name="acceptSinoForeign" valuePropName="checked">
-        <Checkbox>接受中外合作办学</Checkbox>
-      </Form.Item>
-      <Form.Item name="acceptPrivate" label="是否接受民办">
-        <Radio.Group>
-          <Radio value="STRICT">不接受</Radio>
-          <Radio value="MODERATE">部分接受</Radio>
-          <Radio value="RELAXED">接受</Radio>
-          <Radio value="UNDECIDED">未定</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item name="acceptCooperation" label="是否接受合作办学">
-        <Radio.Group>
-          <Radio value="STRICT">不接受</Radio>
-          <Radio value="MODERATE">部分接受</Radio>
-          <Radio value="RELAXED">接受</Radio>
-          <Radio value="UNDECIDED">未定</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item name="otherRequirements" label="其他要求">
-        <Input.TextArea rows={2} placeholder="任何其他特殊要求" />
-      </Form.Item>
-      <div className="grid grid-cols-2 gap-4">
-        <Form.Item name="visionLeftCorrected" label="左眼矫正视力">
-          <InputNumber min={1} max={5.3} step={0.1} className="w-full" />
+    <div className="space-y-6">
+      <FormSection
+        title="录取边界"
+        description="把不能接受的地区、院校和专业提前写清楚，减少后续反复沟通。"
+      >
+        <Form.Item name="remoteAreaAcceptance" label="是否接受偏远地区">
+          <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
+            <Radio value="ABSOLUTELY_NO">绝对不接受</Radio>
+            <Radio value="BACKUP_ONLY">仅保底院校可接受</Radio>
+            <Radio value="FAMOUS_OK">名校可接受</Radio>
+            <Radio value="GOOD_MAJOR_OK">好专业可接受</Radio>
+          </Radio.Group>
         </Form.Item>
-        <Form.Item name="visionRightCorrected" label="右眼矫正视力">
-          <InputNumber min={1} max={5.3} step={0.1} className="w-full" />
+        <Form.Item name="coldMajorAcceptance" label="是否接受冷门专业">
+          <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
+            <Radio value="ABSOLUTELY_NO">绝对不接受</Radio>
+            <Radio value="FAMOUS_OK">名校可接受</Radio>
+            <Radio value="DEVELOPED_AREA_OK">发达地区可接受</Radio>
+            <Radio value="GOOD_PROSPECT_OK">前景好可接受</Radio>
+          </Radio.Group>
         </Form.Item>
-      </div>
-      <Form.Item name="physicalLimits" label="体检受限项">
-        <HealthCheckboxGroup />
-      </Form.Item>
-      <Form.Item name="medicalHistory" label="既往病史 / 特殊情况">
-        <Input.TextArea
-          rows={2}
-          placeholder="如有需注明的既往病史，请填写"
-        />
-      </Form.Item>
-      <Form.Item name="ethnicity" label="民族">
-        <Input placeholder="如 汉族" />
-      </Form.Item>
-      <Form.Item name="politicalStatus" label="政治面貌">
-        <Radio.Group>
-          <Radio value="PARTY_MEMBER">党员</Radio>
-          <Radio value="LEAGUE_MEMBER">团员</Radio>
-          <Radio value="MASSES">群众</Radio>
-        </Radio.Group>
-      </Form.Item>
-    </>
+        <Form.Item name="stayPreference" label="在省内/外读书偏好">
+          <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
+            <Radio value="LOCAL_ONLY">仅省内</Radio>
+            <Radio value="PREFER_LOCAL">偏好省内</Radio>
+            <Radio value="NO_PREFERENCE">无所谓</Radio>
+            <Radio value="PREFER_OUTSIDE">偏好省外</Radio>
+          </Radio.Group>
+        </Form.Item>
+        <FieldGrid columns="lg:grid-cols-2">
+          <Form.Item name="excludedProvinces" label="不接受的省份">
+            <Select mode="tags" placeholder="输入" allowClear />
+          </Form.Item>
+          <Form.Item name="excludedCities" label="不接受的城市">
+            <Select mode="tags" placeholder="输入" allowClear />
+          </Form.Item>
+          <Form.Item name="excludedUniversities" label="不接受的院校">
+            <Select mode="tags" placeholder="输入" allowClear />
+          </Form.Item>
+          <Form.Item name="excludedMajors" label="不接受的专业">
+            <Select mode="tags" placeholder="输入" allowClear />
+          </Form.Item>
+        </FieldGrid>
+      </FormSection>
+
+      <FormSection
+        title="兴趣性格与方向"
+        description="这些信息会帮助老师解释推荐逻辑，也能用于专业筛选。"
+      >
+        <FieldGrid columns="lg:grid-cols-2">
+          <Form.Item name="preferredTags" label="偏好标签">
+            <Select mode="tags" placeholder="如「就业好」「学风好」" allowClear />
+          </Form.Item>
+          <Form.Item name="interests" label="兴趣爱好">
+            <Select mode="tags" placeholder="输入" allowClear />
+          </Form.Item>
+          <Form.Item name="personalityType" label="性格类型">
+            <Input placeholder="如 INTJ / 内向 / 善于沟通" />
+          </Form.Item>
+        </FieldGrid>
+        <Form.Item name="selfDescription" label="自我描述">
+          <Input.TextArea rows={3} placeholder="任何想让老师知道的信息" />
+        </Form.Item>
+        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+          <Form.Item name="militaryInterest" valuePropName="checked">
+            <Checkbox>对军校/军事专业感兴趣</Checkbox>
+          </Form.Item>
+          <Form.Item name="teacherInterest" valuePropName="checked">
+            <Checkbox>对师范专业感兴趣</Checkbox>
+          </Form.Item>
+        </div>
+      </FormSection>
+
+      <FormSection
+        title="经济条件与办学类型"
+        description="提前明确预算边界，方案会更贴近家庭实际选择。"
+      >
+        <Form.Item name="tuitionBudget" label="学费预算">
+          <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
+            <Radio value="LOW">经济敏感（≤6000/年）</Radio>
+            <Radio value="MEDIUM">适中（6000-15000/年）</Radio>
+            <Radio value="HIGH">不限（含中外合作）</Radio>
+            <Radio value="UNLIMITED">无上限</Radio>
+          </Radio.Group>
+        </Form.Item>
+        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+          <Form.Item name="acceptSinoForeign" valuePropName="checked">
+            <Checkbox>接受中外合作办学</Checkbox>
+          </Form.Item>
+        </div>
+        <FieldGrid columns="lg:grid-cols-2">
+          <Form.Item name="acceptPrivate" label="是否接受民办">
+            <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
+              <Radio value="STRICT">不接受</Radio>
+              <Radio value="MODERATE">部分接受</Radio>
+              <Radio value="RELAXED">接受</Radio>
+              <Radio value="UNDECIDED">未定</Radio>
+            </Radio.Group>
+          </Form.Item>
+          <Form.Item name="acceptCooperation" label="是否接受合作办学">
+            <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
+              <Radio value="STRICT">不接受</Radio>
+              <Radio value="MODERATE">部分接受</Radio>
+              <Radio value="RELAXED">接受</Radio>
+              <Radio value="UNDECIDED">未定</Radio>
+            </Radio.Group>
+          </Form.Item>
+        </FieldGrid>
+        <Form.Item name="otherRequirements" label="其他要求">
+          <Input.TextArea rows={2} placeholder="任何其他特殊要求" />
+        </Form.Item>
+      </FormSection>
+
+      <FormSection
+        title="体检与身份补充"
+        description="这些字段主要用于特殊专业限制和政策审核。"
+      >
+        <FieldGrid columns="sm:grid-cols-2">
+          <Form.Item name="visionLeftCorrected" label="左眼矫正视力">
+            <InputNumber min={1} max={5.3} step={0.1} className="w-full" />
+          </Form.Item>
+          <Form.Item name="visionRightCorrected" label="右眼矫正视力">
+            <InputNumber min={1} max={5.3} step={0.1} className="w-full" />
+          </Form.Item>
+        </FieldGrid>
+        <Form.Item name="physicalLimits" label="体检受限项">
+          <HealthCheckboxGroup />
+        </Form.Item>
+        <Form.Item name="medicalHistory" label="既往病史 / 特殊情况">
+          <Input.TextArea
+            rows={2}
+            placeholder="如有需注明的既往病史，请填写"
+          />
+        </Form.Item>
+        <FieldGrid columns="sm:grid-cols-2">
+          <Form.Item name="ethnicity" label="民族">
+            <Input placeholder="如 汉族" />
+          </Form.Item>
+          <Form.Item name="politicalStatus" label="政治面貌">
+            <Radio.Group className="flex flex-wrap gap-x-4 gap-y-2">
+              <Radio value="PARTY_MEMBER">党员</Radio>
+              <Radio value="LEAGUE_MEMBER">团员</Radio>
+              <Radio value="MASSES">群众</Radio>
+            </Radio.Group>
+          </Form.Item>
+        </FieldGrid>
+      </FormSection>
+    </div>
   );
 }
