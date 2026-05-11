@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Alert, Button, Spin, message } from 'antd';
 import {
   ArrowRightOutlined,
@@ -21,6 +22,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
 import CompactProgress from '@/components/student/CompactProgress';
 import SaveStatusBar from '@/components/student/SaveStatusBar';
+import StudentSummaryRail from '@/components/student/workspace/StudentSummaryRail';
+import {
+  StudentWorkspace,
+  StudentWorkspacePanel,
+} from '@/components/student/workspace/StudentWorkspace';
 
 const EXAM_TYPE_LABELS: Record<string, string> = {
   PHYSICS: '物理类',
@@ -121,6 +127,7 @@ function stagePercent(stage?: { filled: number; total: number }) {
 }
 
 export default function StudentProfilePage() {
+  const pathname = usePathname();
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ['student-my-profile'],
@@ -159,10 +166,87 @@ export default function StudentProfilePage() {
   const stages = progress.stageProgress ?? {};
   const intakeStatus = profile.intakeStatus ?? 'DRAFT';
   const canSubmitIntake = progress.stageProgress?.stage1?.completed && !['SUBMITTED', 'VERIFIED'].includes(intakeStatus);
+  const intakeStatusMessage =
+    intakeStatus === 'VERIFIED'
+      ? '老师已确认，可以进入方案生成'
+      : intakeStatus === 'SUBMITTED'
+        ? '已提交，等待老师确认'
+        : intakeStatus === 'NEEDS_CHANGES'
+          ? profile.intakeReviewComment || '老师退回，请按意见补充'
+          : '核心资料完成后提交给老师确认';
+  const submitButtonText = intakeStatus === 'NEEDS_CHANGES' ? '重新提交' : '提交资料';
+  const rail = <StudentSummaryRail activePathname={pathname} profile={profile} progress={progress} />;
+  const renderStageLinks = (compact = false) => (
+    <div className="space-y-2.5">
+      <StageLink
+        href="/student/profile/stage/1"
+        badge="1"
+        title="核心信息"
+        subtitle="身份、电话、成绩与选科"
+        percent={stagePercent(stages.stage1)}
+        complete={stages.stage1?.completed}
+        compact={compact}
+      />
+      <StageLink
+        href="/student/profile/stage/2"
+        badge="2"
+        title="完善信息"
+        subtitle="身体条件、地域偏好与专业方向"
+        percent={stagePercent(stages.stage2)}
+        complete={stages.stage2?.completed}
+        compact={compact}
+      />
+      <StageLink
+        href="/student/profile/stage/3"
+        badge="3"
+        title="高级信息"
+        subtitle="排除项、经济条件、兴趣性格"
+        percent={stagePercent(stages.stage3)}
+        complete={stages.stage3?.completed}
+        compact={compact}
+      />
+    </div>
+  );
+  const aside = (
+    <>
+      <StudentWorkspacePanel
+        title="推荐资料完整度"
+        action={
+          <Link href="/student/profile/stage/1" className="text-xs font-medium text-primary no-underline">
+            继续完善
+          </Link>
+        }
+      >
+        <CompactProgress
+          percent={progress.overallCompleteness}
+          filled={filled}
+          total={64}
+          missing={progress.missingFieldsForRecommend ?? []}
+        />
+      </StudentWorkspacePanel>
+
+      <StudentWorkspacePanel title="资料确认状态">
+        <p className="m-0 text-xs leading-5 text-text-muted">{intakeStatusMessage}</p>
+        <Button
+          block
+          className="mt-3"
+          type="primary"
+          disabled={!canSubmitIntake}
+          loading={submitIntakeMutation.isPending}
+          onClick={() => submitIntakeMutation.mutate()}
+        >
+          {submitButtonText}
+        </Button>
+      </StudentWorkspacePanel>
+
+      <StudentWorkspacePanel title="档案填写">{renderStageLinks(true)}</StudentWorkspacePanel>
+    </>
+  );
 
   return (
-    <div className="mx-auto max-w-[520px] pb-20">
-      <SaveStatusBar />
+    <StudentWorkspace rail={rail} aside={aside}>
+      <div className="space-y-5 pb-20 lg:pb-0">
+        <SaveStatusBar />
 
       <section className="relative -mx-4 -mt-4 overflow-hidden bg-gradient-to-br from-primary to-[#15212e] px-[18px] pb-[60px] pt-[18px] text-white sm:rounded-b-2xl">
         <div
@@ -228,7 +312,7 @@ export default function StudentProfilePage() {
         ))}
       </section>
 
-      <section className="mt-5 rounded-xl bg-surface px-4 py-4 shadow-card">
+      <section className="rounded-xl bg-surface px-4 py-4 shadow-card xl:hidden">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="m-0 font-serif text-base font-semibold text-text">推荐资料完整度</h2>
           <Link href="/student/profile/stage/1" className="text-xs font-medium text-primary no-underline">
@@ -243,19 +327,11 @@ export default function StudentProfilePage() {
         />
       </section>
 
-      <section className="mt-5 rounded-xl bg-surface px-4 py-4 shadow-card">
+      <section className="rounded-xl bg-surface px-4 py-4 shadow-card xl:hidden">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="m-0 font-serif text-base font-semibold text-text">资料确认状态</h2>
-            <p className="m-0 mt-1 text-xs text-text-muted">
-              {intakeStatus === 'VERIFIED'
-                ? '老师已确认，可以进入方案生成'
-                : intakeStatus === 'SUBMITTED'
-                  ? '已提交，等待老师确认'
-                  : intakeStatus === 'NEEDS_CHANGES'
-                    ? profile.intakeReviewComment || '老师退回，请按意见补充'
-                    : '核心资料完成后提交给老师确认'}
-            </p>
+            <p className="m-0 mt-1 text-xs text-text-muted">{intakeStatusMessage}</p>
           </div>
           <Button
             type="primary"
@@ -263,12 +339,14 @@ export default function StudentProfilePage() {
             loading={submitIntakeMutation.isPending}
             onClick={() => submitIntakeMutation.mutate()}
           >
-            {intakeStatus === 'NEEDS_CHANGES' ? '重新提交' : '提交资料'}
+            {submitButtonText}
           </Button>
         </div>
       </section>
 
-      <SectionHeader title="基本信息" actionHref="/student/profile/stage/1" actionText="编辑" />
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div>
+          <SectionHeader title="基本信息" actionHref="/student/profile/stage/1" actionText="编辑" />
       <InfoCard>
         <InfoRow icon={<UserOutlined />} label="姓名" value={display(profile.realName)} editable />
         <InfoRow icon={<PhoneOutlined />} label="手机号" value={formatPhone(profile.phone)} muted={!profile.phone} editable />
@@ -276,10 +354,12 @@ export default function StudentProfilePage() {
         <InfoRow icon={<EnvironmentOutlined />} label="所在地" value={formatLocation(profile)} />
         <InfoRow icon={<BankOutlined />} label="所在学校" value={display(profile.highSchool)} />
         <InfoRow icon={<FileTextOutlined />} label="考试类型" value={formatExam(profile)} editable />
-      </InfoCard>
+          </InfoCard>
+        </div>
 
-      <SectionHeader title="选考科目" actionHref="/student/profile/stage/1" actionText="修改" />
-      <InfoCard>
+        <div>
+          <SectionHeader title="选考科目" actionHref="/student/profile/stage/1" actionText="修改" />
+          <InfoCard>
         <div className="px-4 py-3.5">
           <div className="mb-2 text-[11px] text-text-secondary">选科组合 · 当前成绩结构</div>
           <div className="flex flex-wrap gap-1.5">
@@ -293,10 +373,12 @@ export default function StudentProfilePage() {
             ))}
           </div>
         </div>
-      </InfoCard>
+          </InfoCard>
+        </div>
 
-      <SectionHeader title="成绩结构" actionHref="/student/profile/stage/1" actionText="查看详情" />
-      <section className="rounded-xl bg-surface px-4 py-4 shadow-card">
+        <div>
+          <SectionHeader title="成绩结构" actionHref="/student/profile/stage/1" actionText="查看详情" />
+          <section className="rounded-xl bg-surface px-4 py-4 shadow-card">
         <div className="grid h-20 grid-cols-6 items-end gap-1.5">
           {bars.map((bar, index) => (
             <div key={`${bar.label}-${index}`} className="flex h-full flex-col items-center justify-end gap-1">
@@ -317,43 +399,24 @@ export default function StudentProfilePage() {
             <span key={`${bar.label}-${index}`}>{bar.label}</span>
           ))}
         </div>
-      </section>
+          </section>
+        </div>
 
-      <SectionHeader title="意向偏好" actionHref="/student/profile/stage/2" actionText="编辑" />
-      <InfoCard>
+        <div>
+          <SectionHeader title="意向偏好" actionHref="/student/profile/stage/2" actionText="编辑" />
+          <InfoCard>
         <InfoRow label="意向城市" value={formatList(profile.preferredCities)} editable />
         <InfoRow label="意向院校" value={formatList(profile.preferredUniversities)} editable />
         <InfoRow label="意向专业" value={formatList(profile.preferredMajors)} editable />
         <InfoRow label="优先模式" value={profile.priorityMode ? PRIORITY_LABELS[profile.priorityMode] ?? profile.priorityMode : '待补充'} editable />
         <InfoRow label="学费预算" value={profile.tuitionBudget ? TUITION_LABELS[profile.tuitionBudget] ?? profile.tuitionBudget : '待补充'} editable />
-      </InfoCard>
+          </InfoCard>
+        </div>
+      </div>
 
-      <SectionHeader title="档案填写" />
-      <div className="space-y-2.5">
-        <StageLink
-          href="/student/profile/stage/1"
-          badge="1"
-          title="核心信息"
-          subtitle="身份、电话、成绩与选科"
-          percent={stagePercent(stages.stage1)}
-          complete={stages.stage1?.completed}
-        />
-        <StageLink
-          href="/student/profile/stage/2"
-          badge="2"
-          title="完善信息"
-          subtitle="身体条件、地域偏好与专业方向"
-          percent={stagePercent(stages.stage2)}
-          complete={stages.stage2?.completed}
-        />
-        <StageLink
-          href="/student/profile/stage/3"
-          badge="3"
-          title="高级信息"
-          subtitle="排除项、经济条件、兴趣性格"
-          percent={stagePercent(stages.stage3)}
-          complete={stages.stage3?.completed}
-        />
+      <div className="xl:hidden">
+        <SectionHeader title="档案填写" />
+        {renderStageLinks()}
       </div>
 
       <SectionHeader title="账户与设置" />
@@ -366,7 +429,8 @@ export default function StudentProfilePage() {
       </InfoCard>
 
       <div className="mt-5 text-center text-[11px] text-text-faint">智愿家 · 2026 高考志愿填报助手</div>
-    </div>
+      </div>
+    </StudentWorkspace>
   );
 }
 
@@ -433,6 +497,7 @@ function StageLink({
   subtitle,
   percent,
   complete,
+  compact,
 }: {
   href: string;
   badge: string;
@@ -440,9 +505,15 @@ function StageLink({
   subtitle: string;
   percent: number;
   complete?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <Link href={href} className="grid grid-cols-[40px_1fr_auto] items-center gap-3 rounded-xl bg-surface px-4 py-3 text-text no-underline shadow-card">
+    <Link
+      href={href}
+      className={`grid grid-cols-[40px_1fr_auto] items-center gap-3 rounded-xl px-4 py-3 text-text no-underline ${
+        compact ? 'bg-surface-dim shadow-none' : 'bg-surface shadow-card'
+      }`}
+    >
       <span
         className={`flex h-10 w-10 items-center justify-center rounded-[10px] font-serif text-lg font-semibold ${
           complete ? 'bg-primary text-white' : 'bg-accent-fixed text-accent'
