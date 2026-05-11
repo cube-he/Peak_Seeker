@@ -96,3 +96,8 @@ data/_pipeline/
 
 # Git worktrees (isolated workspaces for feature work)
 .worktrees/
+.claude/worktrees/
+
+# Local scratch artifacts
+.clone/
+$null
