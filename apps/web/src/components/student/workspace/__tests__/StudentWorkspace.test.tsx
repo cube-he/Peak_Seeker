@@ -19,7 +19,7 @@ describe('StudentWorkspace', () => {
     expect(
       screen.getByRole('complementary', { name: '学生工作台导航' }),
     ).toHaveTextContent('Rail content');
-    expect(screen.getByRole('main')).toHaveTextContent('Main content');
+    expect(screen.getByTestId('student-workspace-main')).toHaveTextContent('Main content');
     expect(
       screen.getByRole('complementary', { name: '学生工作台辅助信息' }),
     ).toHaveTextContent('Aside content');

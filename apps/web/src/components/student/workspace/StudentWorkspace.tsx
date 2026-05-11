@@ -31,9 +31,9 @@ export function StudentWorkspace({
       <aside aria-label="学生工作台导航" className="hidden lg:block">
         {rail}
       </aside>
-      <main className="min-w-0" role="main">
+      <div className="min-w-0" data-testid="student-workspace-main">
         {children}
-      </main>
+      </div>
       {aside ? (
         <aside aria-label="学生工作台辅助信息" className="hidden xl:block">
           <div className="sticky top-20 space-y-4">{aside}</div>
