@@ -189,19 +189,30 @@ describe('StudentWorkspace', () => {
       </StudentWorkspace>,
     );
 
-    expect(screen.getByLabelText('学生工作台导航')).toHaveTextContent('Rail content');
-    expect(screen.getByRole('main')).toHaveTextContent('Main content');
-    expect(screen.getByLabelText('学生工作台辅助信息')).toHaveTextContent('Aside content');
+    expect(
+      screen.getByRole('complementary', { name: '学生工作台导航' }),
+    ).toHaveTextContent('Rail content');
+    expect(screen.getByTestId('student-workspace-main')).toHaveTextContent(
+      'Main content',
+    );
+    expect(
+      screen.getByRole('complementary', { name: '学生工作台辅助信息' }),
+    ).toHaveTextContent('Aside content');
   });
 
   it('does not render an aside region when aside content is absent', () => {
-    render(
+    const { container } = render(
       <StudentWorkspace rail={<div>Rail content</div>}>
         <div>Main content</div>
       </StudentWorkspace>,
     );
 
-    expect(screen.queryByLabelText('学生工作台辅助信息')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: '学生工作台辅助信息' }),
+    ).not.toBeInTheDocument();
+    expect(container.firstChild).not.toHaveClass(
+      'xl:grid-cols-[250px_minmax(0,1fr)_300px]',
+    );
   });
 
   it('renders a titled workspace panel with optional action', () => {
@@ -263,14 +274,16 @@ export function StudentWorkspace({
 }: StudentWorkspaceProps) {
   return (
     <div
-      className={`grid w-full gap-5 lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_300px] ${className}`}
+      className={`grid w-full gap-5 lg:grid-cols-[250px_minmax(0,1fr)] ${
+        aside ? 'xl:grid-cols-[250px_minmax(0,1fr)_300px]' : ''
+      } ${className}`}
     >
       <aside aria-label="学生工作台导航" className="hidden lg:block">
         {rail}
       </aside>
-      <main className="min-w-0" role="main">
+      <div className="min-w-0" data-testid="student-workspace-main">
         {children}
-      </main>
+      </div>
       {aside ? (
         <aside aria-label="学生工作台辅助信息" className="hidden xl:block">
           <div className="sticky top-20 space-y-4">{aside}</div>
