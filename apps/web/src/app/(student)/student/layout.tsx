@@ -107,6 +107,7 @@ export default function StudentLayout({ children }: StudentLayoutProps) {
               <Link
                 key={item.key}
                 href={item.href}
+                aria-current={active ? 'page' : undefined}
                 className={`no-underline flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-lg transition-colors duration-200 ${
                   active
                     ? 'text-primary'
