@@ -179,8 +179,11 @@ export default function StudentDashboardPage() {
               href="/student/profile"
               className="grid grid-cols-[36px_1fr_auto] gap-3 no-underline"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#fee2e2] text-[#991b1b]">
-                <ExclamationCircleOutlined />
+              <span
+                aria-hidden="true"
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#fee2e2] text-[#991b1b]"
+              >
+                <ExclamationCircleOutlined aria-hidden="true" />
               </span>
               <span>
                 <span className="block text-sm font-medium text-text">完善个人信息后，推荐会更稳定</span>
@@ -193,8 +196,11 @@ export default function StudentDashboardPage() {
               <span className="text-xs text-primary">去完善</span>
             </Link>
             <div className="grid grid-cols-[36px_1fr_auto] gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#dbeafe] text-[#1e40af]">
-                <BellOutlined />
+              <span
+                aria-hidden="true"
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#dbeafe] text-[#1e40af]"
+              >
+                <BellOutlined aria-hidden="true" />
               </span>
               <span>
                 <span className="block text-sm font-medium text-text">{currentYear} 年高考时间线已同步</span>
@@ -221,7 +227,7 @@ export default function StudentDashboardPage() {
               className="flex items-center justify-between rounded-lg px-2 py-2 text-sm font-medium text-text no-underline transition-colors hover:bg-surface-dim"
             >
               <span>{label}</span>
-              <RightOutlined className="text-[10px] text-primary" />
+              <RightOutlined aria-hidden="true" className="text-[10px] text-primary" />
             </Link>
           ))}
         </div>
