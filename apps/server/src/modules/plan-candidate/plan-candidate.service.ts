@@ -189,6 +189,12 @@ function supplementaryRateOf(group: any) {
   return rate > 1 ? rate / 100 : rate;
 }
 
+function supplementaryForGroupRisk(supplementary: any) {
+  // SupplementarySummary is currently aggregated by university + batch. Treating
+  // it as group-level availability would make every group in that batch look safer.
+  return supplementary?.scope === 'GROUP' ? supplementary : null;
+}
+
 function universityTagScore(group: any) {
   return (
     (group.university?.is985 ? 100 : 0) +
@@ -582,6 +588,7 @@ export class PlanCandidateService {
       if (!summary) continue;
       result.set(groupKey, {
         sourceYear: summary.year,
+        scope: 'UNIVERSITY_BATCH',
         batch: summary.batch,
         totalRounds: summary.totalRounds,
         totalPlanCount: summary.totalPlanCount,
@@ -1050,6 +1057,7 @@ export class PlanCandidateService {
       const previousPlanCount = this.planCountForGroup(previousByGroup.get(groupKey) ?? []);
       const selectionCompetition = this.estimateSelectionCompetition(rows, first.subjects ?? subjects);
       const supplementary = supplementaryByGroup.get(groupKey) ?? null;
+      const riskSupplementary = supplementaryForGroupRisk(supplementary);
 
       const majors = rows.map((ep) => {
         const currentRecord = adIndex.get(recordKeyOf({ ...ep, year: source.sourceYear }));
@@ -1068,7 +1076,7 @@ export class PlanCandidateService {
           selectionCompetitionCount: selectionCompetition.eligibleCount,
           subjectCompetitionCount: selectionCompetition.subjectCount,
           selectionDataConfidence: selectionCompetition.sourceType === 'PUBLIC_ESTIMATE' ? 'PUBLIC_ESTIMATE' : 'MISSING',
-          supplementary,
+          supplementary: riskSupplementary,
         });
         return {
           enrollmentPlanId: ep.id,
@@ -1143,7 +1151,7 @@ export class PlanCandidateService {
         selectionCompetitionCount: selectionCompetition.eligibleCount,
         subjectCompetitionCount: selectionCompetition.subjectCount,
         selectionDataConfidence: selectionCompetition.sourceType === 'PUBLIC_ESTIMATE' ? 'PUBLIC_ESTIMATE' : 'MISSING',
-        supplementary,
+        supplementary: riskSupplementary,
       });
       return {
         groupKey,

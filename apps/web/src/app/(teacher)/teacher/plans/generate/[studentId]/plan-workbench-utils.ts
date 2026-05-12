@@ -37,6 +37,7 @@ export interface CandidateGroupScoreLike {
 export interface CandidateGroupSupplementaryLike {
   supplementary?: {
     sourceYear?: number | null;
+    scope?: 'UNIVERSITY_BATCH' | 'GROUP' | string | null;
     totalRounds?: number | null;
     totalPlanCount?: number | null;
     supplementaryRate?: number | null;
@@ -132,6 +133,17 @@ export function formatGroupScoreLine(group: CandidateGroupScoreLike) {
   return `${label} ${parts.join(' / ')}`;
 }
 
+export function formatRankGap(
+  studentRank?: number | null,
+  adjustedRank?: number | null,
+): { text: string; tone: 'ahead' | 'behind' | 'flat' } {
+  if (!studentRank || !adjustedRank) return { text: '暂无位次差', tone: 'flat' };
+  const gap = adjustedRank - studentRank;
+  if (gap > 0) return { text: `领先 ${gap.toLocaleString()} 名`, tone: 'ahead' };
+  if (gap < 0) return { text: `落后 ${Math.abs(gap).toLocaleString()} 名`, tone: 'behind' };
+  return { text: '位次持平', tone: 'flat' };
+}
+
 export function hasSupplementaryData(group: CandidateGroupSupplementaryLike) {
   const detail = group.supplementary;
   return Boolean((detail?.totalPlanCount ?? 0) > 0 || (detail?.totalRounds ?? 0) > 0);
@@ -143,7 +155,8 @@ export function formatSupplementary(group: CandidateGroupSupplementaryLike) {
   const rate = detail?.supplementaryRate == null
     ? ''
     : `，征集率 ${(detail.supplementaryRate > 1 ? detail.supplementaryRate : detail.supplementaryRate * 100).toFixed(1)}%`;
-  return `${detail?.sourceYear ?? ''} 征集 ${detail?.totalPlanCount ?? '-'} 人，${detail?.totalRounds ?? '-'} 轮${rate}`;
+  const label = detail?.scope === 'UNIVERSITY_BATCH' ? '院校批次征集' : '征集';
+  return `${detail?.sourceYear ?? ''} ${label} ${detail?.totalPlanCount ?? '-'} 人，${detail?.totalRounds ?? '-'} 轮${rate}`;
 }
 
 export function isCandidateGroupAlreadyAdded(

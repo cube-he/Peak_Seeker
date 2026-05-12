@@ -455,6 +455,67 @@ describe('PlanCandidateService', () => {
     expect(result.has('7|G7|Batch A|General|Physics')).toBe(false);
   });
 
+  it('does not let university-batch supplementary summaries loosen group risk', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 10000,
+      preferredMajors: [], preferredMajorCategories: [], excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 1 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 800, universityId: 8, majorId: 81, university: { id: 8, name: 'Scoped University', code: 'S' },
+          major: { id: 81, name: 'Scoped Major', code: '0808', category: 'Engineering' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '0808', majorName: 'Scoped Major', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G8', groupName: null, groupPlanCount: 10, subjectRequirements: '',
+          planCount: 10, disciplineEval: '', isNationalFeature: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          universityId: 8, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+          groupCode: 'G8', groupPlanCount: 10, planCount: 10,
+        },
+      ]);
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      {
+        universityId: 8, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G8', majorCode: '0808', majorName: 'Scoped Major', year: 2025,
+        groupMinRank: 10000, groupMinScore: 600, groupAdmissionCount: 10,
+        majorMinRank: 10000, majorMinScore: 600, majorAdmissionCount: 10,
+      },
+    ]);
+    prisma.supplementarySummary.findMany.mockResolvedValue([
+      {
+        universityId: 8,
+        batch: 'Batch A',
+        year: 2025,
+        totalRounds: 3,
+        totalPlanCount: 28,
+        supplementaryRate: 933.33,
+      },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    const group = result.groups[0];
+    expect(group.supplementary).toEqual(expect.objectContaining({
+      scope: 'UNIVERSITY_BATCH',
+      totalPlanCount: 28,
+    }));
+    expect(group.dynamicGradient.adjustedMinRank).toBe(10000);
+    expect(group.dynamicGradient.reasons).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('supplementary'),
+    ]));
+  });
+
   it('sorts candidate groups by supplementary rate when requested', () => {
     const groups = [
       {
@@ -517,7 +578,7 @@ describe('PlanCandidateService', () => {
     ]);
   });
 
-  it('adds dynamic gradient details from competition, selection pool, and supplementary vacancies', async () => {
+  it('adds dynamic gradient details from competition and selection pool while exposing supplementary summaries', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
     });
@@ -574,16 +635,19 @@ describe('PlanCandidateService', () => {
     const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
 
     const group = result.groups[0];
-    expect(group.suggestedGradient).toBe('WEN');
+    expect(group.suggestedGradient).toBe('CHONG');
     expect(group.dynamicGradient.adjustedMinRank).toBeGreaterThan(10000);
     expect(group.dynamicGradient.reasons).toEqual(expect.arrayContaining([
       expect.stringContaining('plan increased'),
       expect.stringContaining('competition pool decreased'),
-      expect.stringContaining('supplementary vacancies'),
+    ]));
+    expect(group.dynamicGradient.reasons).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('supplementary'),
     ]));
     expect(group.competition.currentCount).toBe(190000);
     expect(group.competition.previousCount).toBe(210000);
     expect(group.selectionCompetition.eligibleCount).toBe(308010);
     expect(group.supplementary.totalPlanCount).toBe(8);
+    expect(group.supplementary.scope).toBe('UNIVERSITY_BATCH');
   });
 });

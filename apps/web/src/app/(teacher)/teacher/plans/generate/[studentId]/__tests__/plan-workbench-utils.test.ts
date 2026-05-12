@@ -3,6 +3,7 @@ import {
   formatCandidateGroup,
   formatGroupPlanChange,
   formatGroupScoreLine,
+  formatRankGap,
   formatSupplementary,
   getPlanItemsForWorkbench,
   getLatestPlansByBatch,
@@ -70,6 +71,13 @@ describe('plan workbench helpers', () => {
     expect(formatGroupScoreLine({ groupMinScore: null, groupMinRank: null, scoreSource: 'NONE' })).toBe('暂无分数线');
   });
 
+  it('formats student rank gap against adjusted rank', () => {
+    expect(formatRankGap(4120, 4360)).toEqual({ text: '领先 240 名', tone: 'ahead' });
+    expect(formatRankGap(4120, 1930)).toEqual({ text: '落后 2,190 名', tone: 'behind' });
+    expect(formatRankGap(4120, 4120)).toEqual({ text: '位次持平', tone: 'flat' });
+    expect(formatRankGap(null, 4360)).toEqual({ text: '暂无位次差', tone: 'flat' });
+  });
+
   it('formats supplementary collection status even when no data is imported yet', () => {
     expect(hasSupplementaryData({ supplementary: null })).toBe(false);
     expect(formatSupplementary({ supplementary: null })).toBe('征集暂无/未导入');
@@ -84,6 +92,18 @@ describe('plan workbench helpers', () => {
     };
     expect(hasSupplementaryData(group)).toBe(true);
     expect(formatSupplementary(group)).toBe('2025 征集 8 人，2 轮，征集率 18.0%');
+  });
+
+  it('labels university-batch supplementary data so it is not mistaken for group-level data', () => {
+    expect(formatSupplementary({
+      supplementary: {
+        sourceYear: 2025,
+        scope: 'UNIVERSITY_BATCH',
+        totalPlanCount: 28,
+        totalRounds: 3,
+        supplementaryRate: 933.33,
+      },
+    })).toBe('2025 院校批次征集 28 人，3 轮，征集率 933.3%');
   });
 
   it('detects candidate groups that are already in the current plan', () => {
