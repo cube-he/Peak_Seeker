@@ -47,6 +47,7 @@ import {
   sortPlansForWorkbench,
   type WorkbenchPlan,
 } from './plan-workbench-utils';
+import styles from './candidate-pool-polished.module.css';
 
 type Gradient = 'CHONG' | 'WEN' | 'BAO';
 type DynamicGradientTier =
@@ -250,6 +251,10 @@ function unwrap<T>(value: any): T {
   return (value?.data ?? value) as T;
 }
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
 function formatValue(value?: number | string | null, suffix = '') {
   if (value === null || value === undefined || value === '') return '-';
   return `${typeof value === 'number' ? value.toLocaleString() : value}${suffix}`;
@@ -269,6 +274,24 @@ function renderTags(values?: string[] | null, color: string = 'default') {
 
 function gradientTier(item: { suggestedGradient?: Gradient; dynamicGradient?: DynamicGradientDetail | null }): DynamicGradientTier {
   return item.dynamicGradient?.tier ?? item.suggestedGradient ?? 'WEN';
+}
+
+function gradientTone(tier: DynamicGradientTier) {
+  if (tier === 'JI_CHONG' || tier === 'CHONG' || tier === 'XIAO_CHONG') return 'rush';
+  if (tier === 'BAO' || tier === 'QIANG_BAO' || tier === 'DIBAO') return 'safe';
+  return 'stable';
+}
+
+function tagClass(tone: 'rush' | 'stable' | 'safe' | 'muted' | 'warn' | 'extreme') {
+  const toneClass = {
+    rush: styles.tagRush,
+    stable: styles.tagStable,
+    safe: styles.tagSafe,
+    muted: styles.tagMuted,
+    warn: styles.tagWarn,
+    extreme: styles.tagExtreme,
+  }[tone];
+  return cx(styles.tag, toneClass);
 }
 
 function formatDynamicRank(detail?: DynamicGradientDetail | null) {
@@ -313,12 +336,6 @@ function getAnchorMajor(group: CandidateGroup) {
 
 function getAdjustedRank(group: CandidateGroup, major?: CandidateMajor | null) {
   return major?.dynamicGradient?.adjustedMinRank ?? group.dynamicGradient?.adjustedMinRank ?? group.predictedMinRank?.point ?? null;
-}
-
-function getRiskToneClass(tone: 'ahead' | 'behind' | 'flat') {
-  if (tone === 'ahead') return 'border-safe/30 bg-safe-fixed text-safe';
-  if (tone === 'behind') return 'border-rush/30 bg-rush-fixed text-rush';
-  return 'border-border-subtle bg-surface-dim text-text-tertiary';
 }
 
 function getAddActionLabel(group: CandidateGroup, major?: CandidateMajor, added?: boolean) {
@@ -378,19 +395,19 @@ function riskReviewItems(group: CandidateGroup, major: CandidateMajor | undefine
 
 function MetricTile({ label, value, note }: { label: string; value: ReactNode; note?: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-md border border-border-subtle bg-surface-dim px-3 py-2">
-      <div className="text-xs text-text-faint">{label}</div>
-      <div className="mt-1 break-words text-sm font-semibold leading-snug text-text">{value}</div>
-      {note ? <div className="mt-1 line-clamp-2 text-xs text-text-tertiary">{note}</div> : null}
+    <div className={styles.signal}>
+      <div className={styles.label}>{label}</div>
+      <div className={styles.value}>{value}</div>
+      {note ? <div className={styles.sub}>{note}</div> : null}
     </div>
   );
 }
 
 function EvidenceItem({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="min-w-0 border-t border-border-subtle pt-2 text-sm">
-      <div className="text-xs text-text-faint">{label}</div>
-      <div className="mt-1 line-clamp-2 text-text-secondary">{children}</div>
+    <div className={styles.evidenceItem}>
+      <b>{label}</b>
+      <span>{children}</span>
     </div>
   );
 }
@@ -404,9 +421,9 @@ function UniversityBadges({ group }: { group: CandidateGroup }) {
   ].filter(Boolean);
   if (!tags.length) return null;
   return (
-    <Space size={4} wrap>
-      {tags.map((tag) => <Tag key={String(tag)} className="m-0">{tag}</Tag>)}
-    </Space>
+    <>
+      {tags.map((tag) => <span key={String(tag)} className={tagClass('muted')}>{tag}</span>)}
+    </>
   );
 }
 
@@ -694,148 +711,133 @@ export default function GeneratePlanPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <Link href={`/teacher/students/${studentId}`} className="inline-flex items-center gap-2 text-sm text-text-tertiary no-underline">
+    <div className={styles.page}>
+      <Link href={`/teacher/students/${studentId}`} className={styles.backLink}>
         <ArrowLeftOutlined /> 返回学生详情
       </Link>
 
-      <section className="rounded-lg bg-surface p-5 shadow-card">
-        <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-          <Descriptions title="生成方案工作台" size="small" column={{ xs: 1, sm: 2, lg: 4 }}>
-            <Descriptions.Item label="学生">{student?.user?.realName || student?.realName || student?.user?.username}</Descriptions.Item>
-            <Descriptions.Item label="总分">{student?.totalScore ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label={isUsingScoreBasedRank ? '档案位次' : '位次'}>
-              <Space size={6} wrap>
-                <span>{student?.provincialRank ?? '-'}</span>
-                {isUsingScoreBasedRank && candidateGroups?.scoreBasedRank ? (
-                  <Tag color="warning" className="m-0">排序用 {candidateGroups.scoreBasedRank.toLocaleString()}</Tag>
-                ) : null}
-              </Space>
-            </Descriptions.Item>
-            <Descriptions.Item label="资料状态">{student?.intakeStatus || 'DRAFT'}</Descriptions.Item>
-          </Descriptions>
-          <Space wrap>
+      <section className={styles.compactHeader}>
+        <div className={styles.studentIdentity}>
+          <div className={styles.studentTop}>
+            <div>
+              <h1>生成方案工作台</h1>
+              <p>学生：{student?.user?.realName || student?.realName || student?.user?.username || '-'} · 当前方案按后端候选池实时计算</p>
+            </div>
+            <div className={styles.headerActions}>
             <Select
               placeholder="选择批次"
               value={batchConfigId}
               loading={batchLoading}
               options={batchOptions}
               onChange={setBatchConfigId}
-              className="min-w-[280px]"
+              className="min-w-[260px]"
             />
-            <Button
-              type="primary"
-              icon={<FileTextOutlined />}
+            <button
+              type="button"
+              className={cx(styles.btn, styles.btnSmall, styles.btnPrimary)}
               disabled={!batchConfigId || student?.intakeStatus !== 'VERIFIED'}
-              loading={createMutation.isPending}
               onClick={openOrCreatePlan}
             >
+              <FileTextOutlined />
               {selectedBatchPlan ? '打开已有方案' : '创建方案草稿'}
-            </Button>
+            </button>
             {planId ? (
               <>
-                <Button onClick={() => router.push(`/teacher/plans/${planId}`)}>查看详情</Button>
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
+                <button type="button" className={cx(styles.btn, styles.btnSmall)} onClick={() => router.push(`/teacher/plans/${planId}`)}>查看详情</button>
+                <button
+                  type="button"
+                  className={cx(styles.btn, styles.btnSmall, styles.btnPrimary)}
                   disabled={plan?.status !== 'DRAFT' || !planItems.length}
-                  loading={submitMutation.isPending}
                   onClick={() => submitMutation.mutate()}
                 >
+                  <SendOutlined />
                   提交审核
-                </Button>
+                </button>
               </>
             ) : null}
-          </Space>
+            </div>
+          </div>
+          <div className={styles.studentStrip}>
+            <div className={styles.studentChip}><span>Score</span><strong>{student?.totalScore ?? '-'}</strong></div>
+            <div className={styles.studentChip}><span>{isUsingScoreBasedRank ? 'Profile Rank' : 'Rank'}</span><strong>{formatRankValue(student?.provincialRank)}</strong></div>
+            <div className={styles.studentChip}><span>Status</span><strong>{student?.intakeStatus || 'DRAFT'}</strong></div>
+            {isUsingScoreBasedRank && candidateGroups?.scoreBasedRank ? (
+              <div className={styles.studentChip}><span>Sort Rank</span><strong>{formatRankValue(candidateGroups.scoreBasedRank)}</strong></div>
+            ) : null}
+          </div>
+          <div className={styles.noteRow}>
+            <span className={styles.collectionNote}>已有方案</span>
+            {existingPlansLoading ? <span className={styles.collectionNote}>加载中...</span> : null}
+            {existingPlans.length ? existingPlans.map((existingPlan) => {
+              const batchName = existingPlan.batchName ?? existingPlan.batch ?? `批次 ${existingPlan.batchConfigId ?? existingPlan.id}`;
+              return (
+                <button
+                  key={existingPlan.id}
+                  type="button"
+                  className={cx(styles.btn, styles.btnSmall, existingPlan.id === planId && styles.btnPrimary)}
+                  onClick={() => openPlan(existingPlan)}
+                >
+                  {batchName} · V{existingPlan.versionNo ?? 1} · {existingPlan.status ?? 'DRAFT'}
+                </button>
+              );
+            }) : <span className={styles.collectionNote}>暂无已创建方案</span>}
+          </div>
         </div>
         {student?.intakeStatus !== 'VERIFIED' ? (
           <Alert className="mt-4" type="warning" showIcon message="学生资料尚未确认，需要先在学生详情页完成资料审核。" />
         ) : null}
-        <div className="mt-4 border-t border-border-subtle pt-4">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-sm font-medium text-text">已有方案</span>
-            {existingPlansLoading ? <span className="text-xs text-text-tertiary">加载中...</span> : null}
-          </div>
-          {existingPlans.length ? (
-            <Space wrap>
-              {existingPlans.map((existingPlan) => {
-                const batchName = existingPlan.batchName ?? existingPlan.batch ?? `批次 ${existingPlan.batchConfigId ?? existingPlan.id}`;
-                return (
-                  <Button
-                    key={existingPlan.id}
-                    type={existingPlan.id === planId ? 'primary' : 'default'}
-                    onClick={() => openPlan(existingPlan)}
-                  >
-                    {batchName} · V{existingPlan.versionNo ?? 1} · {existingPlan.status ?? 'DRAFT'}
-                  </Button>
-                );
-              })}
-            </Space>
-          ) : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已创建方案" />
-          )}
-        </div>
       </section>
 
       {planId ? (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <section className="min-w-0 rounded-lg border border-border bg-surface-high shadow-card">
-            <div className="border-b border-border-subtle px-4 py-4">
-              <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-end">
-                <div>
-                  <h2 className="m-0 text-lg font-semibold text-text">院校专业组候选池</h2>
-                  <p className="m-0 mt-1 text-sm text-text-tertiary">
-                    按后端候选结果展示专业组，排序参考位次、专业匹配、计划变化、竞争池、选科池和征集口径。
-                  </p>
-                </div>
-                <Space wrap>
-                  <Input.Search
-                    placeholder="院校/专业/专业组"
-                    allowClear
-                    value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
-                    onSearch={setKeyword}
-                    className="w-[240px]"
-                  />
-                  <Select
-                    value={candidateSort}
-                    onChange={(value: CandidateGroupSort) => setCandidateSort(value)}
-                    options={CANDIDATE_SORT_OPTIONS}
-                    className="w-[170px]"
-                  />
-                  <Select
-                    value={includeSoftFails ? 'all' : 'pass'}
-                    onChange={(value) => setIncludeSoftFails(value === 'all')}
-                    options={[
-                      { label: '显示风险项', value: 'all' },
-                      { label: '仅可选项', value: 'pass' },
-                    ]}
-                    className="w-[130px]"
-                  />
-                </Space>
-              </div>
+        <>
+        <div className={styles.summaryStrip}>
+          <div className={styles.summaryCard}><div className={styles.label}>候选总量</div><div className={styles.value}>{candidateGroups?.total ?? 0}</div><div className={styles.hint}>专业组候选</div></div>
+          <div className={styles.summaryCard}><div className={styles.label}>排序位次</div><div className={styles.value}>{formatRankValue(studentRankForDecision)}</div><div className={styles.hint}>{isUsingScoreBasedRank ? '一分一段估算' : '档案位次'}</div></div>
+          <div className={styles.summaryCard}><div className={styles.label}>方案年份</div><div className={styles.value}>{candidateGroups?.planYear ?? '-'}</div><div className={styles.hint}>招生计划口径</div></div>
+          <div className={styles.summaryCard}><div className={styles.label}>当前方案</div><div className={styles.value}>{planItems.length}</div><div className={styles.hint}>已加入志愿项</div></div>
+        </div>
 
-              <div className="mt-4 grid overflow-hidden rounded-md border border-border-subtle bg-surface-dim text-sm md:grid-cols-4">
-                <div className="px-3 py-2">
-                  <div className="text-xs text-text-faint">候选总量</div>
-                  <div className="mt-1 font-semibold text-text">{candidateGroups?.total ?? 0} 个专业组</div>
-                </div>
-                <div className="border-t border-border-subtle px-3 py-2 md:border-l md:border-t-0">
-                  <div className="text-xs text-text-faint">排序位次</div>
-                  <div className="mt-1 font-semibold text-text">{formatRankValue(studentRankForDecision)}</div>
-                </div>
-                <div className="border-t border-border-subtle px-3 py-2 md:border-l md:border-t-0">
-                  <div className="text-xs text-text-faint">方案年份</div>
-                  <div className="mt-1 font-semibold text-text">{candidateGroups?.planYear ?? '-'}</div>
-                </div>
-                <div className="border-t border-border-subtle px-3 py-2 md:border-l md:border-t-0">
-                  <div className="text-xs text-text-faint">当前方案</div>
-                  <div className="mt-1 font-semibold text-text">{planItems.length} 个志愿项</div>
-                </div>
+        <div className={styles.workbench}>
+          <section className={styles.panel}>
+            <div className={styles.panelHead}>
+              <div className={styles.panelTitle}>
+                <h2>院校专业组候选池</h2>
+                <p>按后端候选结果展示专业组，排序参考位次、专业匹配、计划变化、竞争池、选科池和征集口径。</p>
               </div>
             </div>
-
-            <div className="space-y-4 px-4 py-4">
+            <div className={styles.toolbar}>
+              <Input.Search
+                placeholder="院校/专业/专业组"
+                allowClear
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                onSearch={setKeyword}
+              />
+              <div className={styles.filterRow}>
+                <Select
+                  value={candidateSort}
+                  onChange={(value: CandidateGroupSort) => setCandidateSort(value)}
+                  options={CANDIDATE_SORT_OPTIONS}
+                  className="w-[170px]"
+                />
+                <Select
+                  value={includeSoftFails ? 'all' : 'pass'}
+                  onChange={(value) => setIncludeSoftFails(value === 'all')}
+                  options={[
+                    { label: '显示风险项', value: 'all' },
+                    { label: '仅可选项', value: 'pass' },
+                  ]}
+                  className="w-[130px]"
+                />
+              </div>
+            </div>
+            <div className={styles.candidateView}>
+              <div className={styles.densityNote}>
+                <div>
+                  当前展示 <strong>{groups.length}</strong> 个候选，按 <strong>{CANDIDATE_SORT_OPTIONS.find((item) => item.value === candidateSort)?.label}</strong> 排序
+                </div>
+                <span>{includeSoftFails ? '包含风险项' : '仅显示可选项'}</span>
+              </div>
               {isUsingFallbackYear ? (
                 <Alert
                   type="info"
@@ -860,7 +862,7 @@ export default function GeneratePlanPage() {
                 </div>
               ) : groups.length ? (
                 <>
-                  <div className="space-y-3">
+                  <div className={styles.cardList}>
                     {groups.map((group) => {
                       const expanded = expandedGroupKeys.includes(group.groupKey);
                       const planChange = formatGroupPlanChange(group);
@@ -874,88 +876,98 @@ export default function GeneratePlanPage() {
                         ...(anchor?.matchReasons ?? []),
                       ].filter(Boolean);
                       return (
-                        <div key={group.groupKey} className="rounded-lg border border-border bg-surface-high px-4 py-3 shadow-card transition hover:border-ring">
-                          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                            <button type="button" className="min-w-0 text-left" onClick={() => toggleGroup(group.groupKey)}>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-base font-semibold text-text">{group.universityName}</span>
-                                <Tag color={GRADIENT_COLOR[gradientTier(group)]} className="m-0">{GRADIENT_LABEL[gradientTier(group)]}</Tag>
-                                {added ? <Tag color="processing" className="m-0">已在方案</Tag> : null}
-                                {group.softFailCount > 0 ? <Tag color="warning" icon={<WarningOutlined />} className="m-0">{group.softFailCount} 个风险专业</Tag> : null}
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-text-tertiary">
-                                <span>{formatCandidateGroup(group)}</span>
-                                {group.university?.province || group.university?.city ? <span>{group.university?.province}{group.university?.city ? ` · ${group.university.city}` : ''}</span> : null}
+                        <article key={group.groupKey} className={styles.candidateCard}>
+                          <div className={styles.candidateTop}>
+                            <span className={styles.crest}>{group.universityName?.slice(0, 1) || '校'}</span>
+                            <button type="button" className="min-w-0 border-0 bg-transparent p-0 text-left" onClick={() => toggleGroup(group.groupKey)}>
+                              <div className={styles.nameLine}>
+                                <h3>{group.universityName}</h3>
+                                <span className={tagClass(gradientTone(gradientTier(group)))}>{GRADIENT_LABEL[gradientTier(group)]}</span>
+                                {added ? <span className={tagClass('muted')}>已加入</span> : null}
+                                {group.softFailCount > 0 ? <span className={tagClass('warn')}>{group.softFailCount} 个风险专业</span> : null}
                                 <UniversityBadges group={group} />
                               </div>
+                              <div className={styles.subLine}>
+                                {group.university?.province || group.university?.city ? <span>{group.university?.province}{group.university?.city ? ` · ${group.university.city}` : ''}</span> : null}
+                                <span className={styles.dot}>·</span>
+                                <span>{formatCandidateGroup(group)}</span>
+                              </div>
                             </button>
-                            <Space wrap className="xl:justify-end">
-                              <Button size="small" onClick={() => anchor && setActiveDetail({ group, major: anchor })}>详情复核</Button>
-                              <Button
-                                size="small"
-                                icon={<DownOutlined rotate={expanded ? 180 : 0} />}
+                            <div className={styles.cardActions}>
+                              <button type="button" className={cx(styles.btn, styles.btnSmall)} onClick={() => anchor && setActiveDetail({ group, major: anchor })}>详情</button>
+                              <button
+                                type="button"
+                                className={cx(styles.btn, styles.btnSmall)}
                                 onClick={() => toggleGroup(group.groupKey)}
                               >
-                                {expanded ? '收起专业' : `展开 ${group.majors.length} 个专业`}
-                              </Button>
+                                专业 <DownOutlined rotate={expanded ? 180 : 0} />
+                              </button>
                               {anchor ? (
-                                <Button
-                                  size="small"
-                                  type="primary"
-                                  icon={<PlusOutlined />}
+                                <button
+                                  type="button"
+                                  className={cx(styles.btn, styles.btnSmall, !added && styles.btnPrimary)}
                                   disabled={added}
-                                  loading={addMutation.isPending}
                                   onClick={() => addCandidateGroup(group, anchor)}
                                 >
+                                  <PlusOutlined />
                                   {getAddActionLabel(group, anchor, added)}
-                                </Button>
+                                </button>
                               ) : null}
-                            </Space>
+                            </div>
                           </div>
 
-                          <div className={`mt-3 rounded-md border px-3 py-2 ${getRiskToneClass(rankGap.tone)}`}>
-                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                              <div className="font-semibold">
-                                {GRADIENT_LABEL[gradientTier(group)]} · {rankGap.text}
-                              </div>
-                              <div className="text-sm">
-                                修正位次 {formatRankValue(adjustedRank)}，排序位次 {formatRankValue(studentRankForDecision)}
-                              </div>
+                          <div className={styles.rankSummary}>
+                            <div className={styles.grade}>
+                              <span className={tagClass(gradientTone(gradientTier(group)))}>梯度：{GRADIENT_LABEL[gradientTier(group)]}</span>
+                              <span className={styles.collectionNote}>{formatSupplementary(group)}</span>
                             </div>
-                            {group.dynamicGradient?.reasons?.length ? (
-                              <div className="mt-1 text-sm">{group.dynamicGradient.reasons.join('；')}</div>
+                            <div className={styles.diff}>
+                              与学生位次差 <strong>{rankGap.text}</strong>
+                              <br />
+                              学生 {formatRankValue(studentRankForDecision)} / 修正 {formatRankValue(adjustedRank)}
+                            </div>
+                          </div>
+
+                          <div className={styles.signalGrid}>
+                            <MetricTile label="组最低" value={formatScoreRankValue(group.groupMinScore, group.groupMinRank)} note={formatGroupScoreLine(group)} />
+                            <MetricTile label="修正位次" value={formatRankValue(adjustedRank)} note={formatDynamicRank(group.dynamicGradient)} />
+                            <MetricTile label="招生计划" value={planChange.text} note={planChange.tone === 'down' ? '缩招需复核' : '按后端年份口径'} />
+                            <MetricTile label="专业" value={`${group.majorCount} 个 / ${group.selectableMajorCount} 可选`} note={anchor?.majorName ?? '-'} />
+                          </div>
+
+                          <div className={styles.dataEvidence}>
+                            <div className={styles.evidenceTitle}>数据依据</div>
+                            <div className={styles.evidenceGrid}>
+                              <EvidenceItem label="位次依据">
+                                排序位次 {formatRankValue(studentRankForDecision)}，修正位次 {formatRankValue(adjustedRank)}，{rankGap.text}。
+                              </EvidenceItem>
+                              <EvidenceItem label="计划变化">{planChange.text}</EvidenceItem>
+                              <EvidenceItem label="竞争变化">{formatCompetition(group)}；{formatSelectionCompetition(group)}</EvidenceItem>
+                              <EvidenceItem label="风险提示">
+                                {group.dynamicGradient?.reasons?.length
+                                  ? group.dynamicGradient.reasons.slice(0, 2).join('；')
+                                  : evidence.length ? evidence.slice(0, 2).join('；') : '按专业匹配排序'}
+                              </EvidenceItem>
+                            </div>
+                            {group.supplementary?.scope === 'UNIVERSITY_BATCH' ? (
+                              <div className={styles.noteRow}>
+                                <span className={styles.compareNote}>院校批次征集仅参考，不直接降低专业组风险</span>
+                              </div>
                             ) : null}
                           </div>
 
-                          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                            <MetricTile label="组最低分 / 位次" value={formatScoreRankValue(group.groupMinScore, group.groupMinRank)} note={formatGroupScoreLine(group)} />
-                            <MetricTile label="招生计划变化" value={planChange.text} note={planChange.tone === 'down' ? '缩招需复核' : '按后端年份口径'} />
-                            <MetricTile label="专业数 / 可选数" value={`${group.majorCount} 个 / ${group.selectableMajorCount} 个`} note={group.softFailCount ? `${group.softFailCount} 个软性风险` : '无软性风险命中'} />
-                            <MetricTile label="锚定专业" value={anchor?.majorName ?? '-'} note={anchor ? formatScoreRankValue(anchor.majorMinScore, anchor.majorMinRank) : '-'} />
-                          </div>
-
-                          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                            <EvidenceItem label="匹配依据">{evidence.length ? evidence.slice(0, 2).join('；') : '按专业匹配排序'}</EvidenceItem>
-                            <EvidenceItem label="竞争池">{formatCompetition(group)}</EvidenceItem>
-                            <EvidenceItem label="选科池">{formatSelectionCompetition(group)}</EvidenceItem>
-                            <EvidenceItem label="征集口径">{formatSupplementary(group)}</EvidenceItem>
-                          </div>
-
-                          <div className="mt-3 overflow-hidden rounded-md border border-border-subtle">
+                          <div className={styles.majorList}>
                             {previewMajors.map((major) => (
-                              <div key={major.enrollmentPlanId} className="grid gap-2 border-t border-border-subtle bg-surface-high px-3 py-2 text-sm first:border-t-0 md:grid-cols-[minmax(0,1.6fr)_150px_90px_120px_92px] md:items-center">
-                                <button type="button" className="min-w-0 text-left text-primary hover:text-primary-light" onClick={() => setActiveDetail({ group, major })}>
-                                  <span className="block truncate font-medium">{major.majorName}</span>
-                                  {major.isRecommendedAnchor ? <Tag color="gold" className="ml-2">锚定</Tag> : null}
-                                </button>
-                                <span className="text-text-secondary">{formatScoreRankValue(major.majorMinScore, major.majorMinRank)}</span>
-                                <span className="text-text-secondary">招 {major.planCount ?? '-'} 人</span>
+                              <div key={major.enrollmentPlanId} className={styles.majorRow}>
+                                <strong>{major.majorName}</strong>
+                                <span className={styles.num}>{formatScoreRankValue(major.majorMinScore, major.majorMinRank)}</span>
+                                <span>计划 {major.planCount ?? '-'}</span>
+                                <span>{major.standardDuration || major.duration || '-'}</span>
                                 <span>
-                                  {major.matchStatus === 'SOFT_FAIL'
-                                    ? <Tag color="warning" icon={<WarningOutlined />} className="m-0">风险</Tag>
-                                    : <Tag color="success" className="m-0">可选</Tag>}
+                                  <span className={major.matchStatus === 'SOFT_FAIL' ? tagClass('warn') : tagClass(gradientTone(gradientTier(major)))}>
+                                    {major.matchStatus === 'SOFT_FAIL' ? '风险' : GRADIENT_LABEL[gradientTier(major)]}
+                                  </span>
                                 </span>
-                                <Button size="small" onClick={() => setActiveDetail({ group, major })}>专业详情</Button>
                               </div>
                             ))}
                           </div>
@@ -972,7 +984,7 @@ export default function GeneratePlanPage() {
                               />
                             </div>
                           ) : null}
-                        </div>
+                        </article>
                       );
                     })}
                   </div>
@@ -996,58 +1008,50 @@ export default function GeneratePlanPage() {
             </div>
           </section>
 
-          <aside className="rounded-lg border border-border bg-surface-high p-4 shadow-card xl:sticky xl:top-20 xl:self-start">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="m-0 text-base font-semibold text-text">当前方案</h2>
+          <aside className={styles.rail}>
+            <div className={styles.railCard}>
+              <h3>当前方案健康度</h3>
               {planFetching ? <Spin size="small" /> : null}
-            </div>
-            <div className="mb-4 grid overflow-hidden rounded-md border border-border-subtle bg-surface-dim text-sm">
-              <div className="grid grid-cols-3">
-                <div className="px-3 py-2">
-                  <div className="text-xs text-text-faint">已选</div>
-                  <div className="mt-1 font-semibold text-text">{planItems.length}</div>
-                </div>
-                <div className="border-l border-border-subtle px-3 py-2">
-                  <div className="text-xs text-text-faint">风险覆盖</div>
-                  <div className="mt-1 font-semibold text-text">{planItems.filter((item: any) => item.overrideSoftFail).length}</div>
-                </div>
-                <div className="border-l border-border-subtle px-3 py-2">
-                  <div className="text-xs text-text-faint">状态</div>
-                  <div className="mt-1 truncate font-semibold text-text">{plan?.status ?? '-'}</div>
-                </div>
+              <div className={styles.healthGrid}>
+                <div className={styles.healthStat}><span>已选</span><strong>{planItems.length}</strong></div>
+                <div className={styles.healthStat}><span>风险</span><strong>{planItems.filter((item: any) => item.overrideSoftFail).length}</strong></div>
+                <div className={styles.healthStat}><span>状态</span><strong>{plan?.status ?? '-'}</strong></div>
+              </div>
+              <div className={styles.dist}><span /><span /><span /></div>
+              <div className={styles.distLabels}><span>冲类</span><span>稳类</span><span>保类</span></div>
+              <div className={styles.gapList}>
+                <div><span>候选池</span><b>{candidateGroups?.total ?? 0} 个专业组</b></div>
+                <div><span>排序位次</span><b>{formatRankValue(studentRankForDecision)}</b></div>
+                <div><span>资料状态</span><b>{student?.intakeStatus || 'DRAFT'}</b></div>
               </div>
             </div>
+
+            <div className={styles.railCard}>
+              <h3>已选专业组</h3>
             {planItems.length ? (
-              <div className="space-y-2">
+              <div className={styles.selectedList}>
                 {planItems.map((item: any) => (
-                  <div key={item.id} className="rounded-md border border-border-subtle bg-surface-high px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium">{item.order ?? item.sequence}. {item.universityName}</div>
-                        <div className="mt-1 text-xs text-text-muted">
+                  <div key={item.id} className={styles.selectedItem}>
+                    <div className={styles.selectedTop}>
+                      <div>
+                        <div className={styles.selectedName}>{item.order ?? item.sequence}. {item.universityName}</div>
+                        <div className={styles.selectedMeta}>
                           {item.groupCode ? `专业组 ${item.groupCode} · ` : ''}{item.majorName}
+                          {' · '}
+                          {item.rank25Group ?? item.rank25Major ? `${(item.rank25Group ?? item.rank25Major).toLocaleString()} 位` : '位次 -'}
                         </div>
                       </div>
-                      <Space size={4}>
-                        <Tag color={GRADIENT_COLOR[item.gradient as Gradient] || 'default'} className="m-0">
-                          {GRADIENT_LABEL[item.gradient as Gradient] || item.gradient}
-                        </Tag>
-                        {plan?.status === 'DRAFT' ? (
-                          <Button
-                            danger
-                            size="small"
-                            icon={<DeleteOutlined />}
-                            loading={removeMutation.isPending}
-                            onClick={() => removeMutation.mutate(item.id)}
-                          />
-                        ) : null}
-                      </Space>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1 text-xs text-text-tertiary">
-                      <span>{item.score25Group ?? item.score25Major ?? '-'} 分</span>
-                      <span>/</span>
-                      <span>{item.rank25Group ?? item.rank25Major ? (item.rank25Group ?? item.rank25Major).toLocaleString() : '-'} 位</span>
-                      {item.overrideSoftFail ? <Tag color="orange" className="m-0">覆盖风险</Tag> : null}
+                      {plan?.status === 'DRAFT' ? (
+                        <button
+                          type="button"
+                          className={cx(styles.btn, styles.btnSmall)}
+                          disabled={removeMutation.isPending}
+                          onClick={() => removeMutation.mutate(item.id)}
+                          aria-label="移除"
+                        >
+                          <DeleteOutlined />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -1055,33 +1059,45 @@ export default function GeneratePlanPage() {
             ) : (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧专业组加入志愿项" />
             )}
-            <Button
-              className="mt-4 w-full"
-              type="primary"
-              icon={<CheckOutlined />}
-              disabled={plan?.status !== 'DRAFT' || !planItems.length}
-              loading={submitMutation.isPending}
-              onClick={() => submitMutation.mutate()}
-            >
-              提交主管审核
-            </Button>
+            </div>
+
+            <div className={styles.railCard}>
+              <h3>下一步建议</h3>
+              <div className={styles.suggestion}>
+                <span className={styles.suggestionMark}>i</span>
+                <ol className={styles.nextSteps}>
+                  <li>优先补足稳 / 稳保，要求学生位次覆盖修正位次。</li>
+                  <li>极冲只做备选，不占正式推荐名额。</li>
+                  <li>软性风险专业先复核限制，再加入方案。</li>
+                </ol>
+              </div>
+              <button
+                type="button"
+                className={cx(styles.btn, styles.btnPrimary)}
+                disabled={plan?.status !== 'DRAFT' || !planItems.length || submitMutation.isPending}
+                onClick={() => submitMutation.mutate()}
+              >
+                <CheckOutlined />
+                提交主管审核
+              </button>
+            </div>
           </aside>
         </div>
+        </>
       ) : null}
 
       <Drawer
         width={880}
+        rootClassName={styles.drawerRoot}
         title={activeDetail ? (
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span>{activeDetail.group.universityName}</span>
-              <Tag color={GRADIENT_COLOR[gradientTier(activeDetail.group)]} className="m-0">
-                {GRADIENT_LABEL[gradientTier(activeDetail.group)]}
-              </Tag>
-              {isCandidateGroupAlreadyAdded(activeDetail.group, planItems) ? <Tag color="processing" className="m-0">已在方案</Tag> : null}
+            <div className={styles.drawerTitle}>
+              <h2>{activeDetail.group.universityName}</h2>
+              <span className={tagClass(gradientTone(gradientTier(activeDetail.group)))}>{GRADIENT_LABEL[gradientTier(activeDetail.group)]}</span>
+              {isCandidateGroupAlreadyAdded(activeDetail.group, planItems) ? <span className={tagClass('muted')}>已在方案</span> : null}
             </div>
-            <div className="mt-1 text-sm font-normal text-text-tertiary">
-              {formatCandidateGroup(activeDetail.group)}
+            <div className={styles.drawerMeta}>
+              <span>{formatCandidateGroup(activeDetail.group)}</span>
               {activeDetail.group.subjects ? ` · ${activeDetail.group.subjects}` : ''}
               {activeDetail.group.university?.city ? ` · ${activeDetail.group.university.city}` : ''}
             </div>
@@ -1090,50 +1106,51 @@ export default function GeneratePlanPage() {
         open={!!activeDetail}
         onClose={() => setActiveDetail(null)}
         extra={activeDetail ? (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
+          <button
+            type="button"
+            className={cx(styles.btn, styles.btnSmall, styles.btnPrimary)}
             disabled={isCandidateGroupAlreadyAdded(activeDetail.group, planItems)}
-            loading={addMutation.isPending}
             onClick={() => addCandidateGroup(activeDetail.group, activeDetail.major)}
           >
+            <PlusOutlined />
             {getAddActionLabel(activeDetail.group, activeDetail.major, isCandidateGroupAlreadyAdded(activeDetail.group, planItems))}
-          </Button>
+          </button>
         ) : null}
         footer={activeDetail ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-sm text-text-tertiary">复核位次、招生计划和软性限制后再加入方案。</span>
-            <Space>
-              <Button onClick={() => setActiveDetail(null)}>关闭</Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
+            <div className={styles.footActions}>
+              <button type="button" className={styles.btn} onClick={() => setActiveDetail(null)}>关闭</button>
+              <button
+                type="button"
+                className={cx(styles.btn, styles.btnPrimary)}
                 disabled={isCandidateGroupAlreadyAdded(activeDetail.group, planItems)}
-                loading={addMutation.isPending}
                 onClick={() => addCandidateGroup(activeDetail.group, activeDetail.major)}
               >
+                <PlusOutlined />
                 {getAddActionLabel(activeDetail.group, activeDetail.major, isCandidateGroupAlreadyAdded(activeDetail.group, planItems))}
-              </Button>
-            </Space>
+              </button>
+            </div>
           </div>
         ) : null}
       >
         {activeDetail ? (
-          <div className="space-y-5">
-            <section className="rounded-lg border border-border bg-surface-high p-4">
-              <div className="grid gap-3 md:grid-cols-3">
-                <MetricTile label="锚定专业" value={activeDetail.major.majorName} note={activeDetail.major.majorCode || activeDetail.major.majorCategory || '-'} />
-                <MetricTile label="学生分 / 排序位次" value={`${formatScoreValue(studentScoreForDecision)} / ${formatRankValue(studentRankForDecision)}`} note={isUsingScoreBasedRank ? '已按一分一段估算位次排序' : '使用档案位次'} />
-                <MetricTile label="组最低分 / 位次" value={formatScoreRankValue(activeDetail.group.groupMinScore, activeDetail.group.groupMinRank)} note={formatGroupScoreLine(activeDetail.group)} />
-                <MetricTile label="专业最低分 / 位次" value={formatScoreRankValue(activeDetail.major.majorMinScore, activeDetail.major.majorMinRank)} note={`录取 ${formatValue(activeDetail.major.majorAdmissionCount, '人')}`} />
-                <MetricTile label="修正位次" value={formatRankValue(getAdjustedRank(activeDetail.group, activeDetail.major))} note={formatDynamicRank(activeDetail.major.dynamicGradient ?? activeDetail.group.dynamicGradient)} />
-                <MetricTile label="当前判断" value={getDecisionText(activeDetail.group, activeDetail.major, studentRankForDecision)} />
+          <div>
+            <section className={styles.decisionSummary}>
+              <div className={styles.decisionGrid}>
+                <div className={styles.decisionCell}><div className={styles.label}>Anchor</div><div className={styles.value}>{activeDetail.major.majorName}</div></div>
+                <div className={styles.decisionCell}><div className={styles.label}>Student Rank</div><div className={styles.value}><span className={styles.rank}>{formatRankValue(studentRankForDecision)}</span><span className={styles.score}>{formatScoreValue(studentScoreForDecision)}</span></div></div>
+                <div className={styles.decisionCell}><div className={styles.label}>Group Min</div><div className={styles.value}><span className={styles.rank}>{formatRankValue(activeDetail.group.groupMinRank)}</span><span className={styles.score}>{formatScoreValue(activeDetail.group.groupMinScore)}</span></div></div>
+                <div className={styles.decisionCell}><div className={styles.label}>Major Min</div><div className={styles.value}><span className={styles.rank}>{formatRankValue(activeDetail.major.majorMinRank)}</span><span className={styles.score}>{formatScoreValue(activeDetail.major.majorMinScore)}</span></div></div>
+                <div className={styles.decisionCell}><div className={styles.label}>Adjusted Rank</div><div className={styles.value}><span className={styles.rank}>{formatRankValue(getAdjustedRank(activeDetail.group, activeDetail.major))}</span><span className={styles.score}>dynamicGradient.adjustedMinRank</span></div></div>
+                <div className={styles.decisionCell}><div className={styles.label}>Judgement</div><div className={styles.value}>{getDecisionText(activeDetail.group, activeDetail.major, studentRankForDecision)}</div></div>
               </div>
             </section>
 
-            <section>
-              <h3 className="m-0 mb-3 text-base font-semibold">专业列表</h3>
+            <section className={styles.drawerSection}>
+              <h3>专业列表</h3>
               <Table
+                className={styles.drawerTable}
                 rowKey="enrollmentPlanId"
                 size="small"
                 columns={majorColumns(activeDetail.group)}
@@ -1143,29 +1160,30 @@ export default function GeneratePlanPage() {
               />
             </section>
 
-            <section>
-              <h3 className="m-0 mb-3 text-base font-semibold">风险复核</h3>
-              <div className="grid gap-2 md:grid-cols-2">
+            <section className={styles.drawerSection}>
+              <h3>风险复核</h3>
+              <div className={styles.riskReview}>
                 {riskReviewItems(activeDetail.group, activeDetail.major, studentRankForDecision).map((item) => (
                   <div
                     key={item.title}
-                    className={[
-                      'rounded-md border px-3 py-2 text-sm',
-                      item.tone === 'danger' ? 'border-rush/30 bg-rush-fixed text-rush' : '',
-                      item.tone === 'warn' ? 'border-accent/30 bg-accent-fixed text-text-secondary' : '',
-                      item.tone === 'ok' ? 'border-safe/30 bg-safe-fixed text-safe' : '',
-                    ].join(' ')}
+                    className={cx(
+                      styles.riskItem,
+                      item.tone === 'danger' && styles.riskDanger,
+                      item.tone === 'warn' && styles.riskWarn,
+                      item.tone === 'ok' && styles.riskOk,
+                    )}
                   >
-                    <div className="font-semibold">{item.title}</div>
-                    <div className="mt-1 leading-relaxed">{item.content}</div>
+                    <b>{item.title}</b>
+                    <div>{item.content}</div>
                   </div>
                 ))}
               </div>
             </section>
 
-            <section>
-              <h3 className="m-0 mb-3 text-base font-semibold">历史数据</h3>
+            <section className={styles.drawerSection}>
+              <h3>历史数据</h3>
               <Table
+                className={styles.drawerTable}
                 size="small"
                 pagination={false}
                 rowKey="year"
@@ -1201,8 +1219,8 @@ export default function GeneratePlanPage() {
               ) : null}
             </section>
 
-            <section>
-              <h3 className="m-0 mb-3 text-base font-semibold">专业画像</h3>
+            <section className={styles.drawerSection}>
+              <h3>专业画像</h3>
               <Descriptions bordered size="small" column={2}>
                 <Descriptions.Item label="专业代码">{activeDetail.major.majorCode || '-'}</Descriptions.Item>
                 <Descriptions.Item label="门类">{activeDetail.major.majorCategory || '-'}</Descriptions.Item>

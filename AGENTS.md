@@ -48,3 +48,45 @@ admission, ai, ai-config, auth, data-import, favorite, history, major, plan, rec
 - 数据库迁移文件生成后不要手动编辑
 - OCR 服务使用 Python venv，与 Node 项目独立
 - TypeScript 严格模式开启（noUnusedLocals, noUnusedParameters）
+
+
+## 2026-05-12 部署事故复盘：前端构建环境变量遗漏
+
+本次事故症状：
+
+- `/universities` 加载不出数据，登录失败。
+- 院校详情页地图显示“地图加载失败，请刷新重试”。
+
+根因：
+
+- 部署时使用了本地干净 worktree 构建前端，但 `apps/web/.env.production.local` 被 `.gitignore` 排除，没有进入临时构建目录。
+- Next.js 的 `NEXT_PUBLIC_*` 变量是在构建期写入浏览器 bundle 的；构建时变量缺失，线上包就带着错误配置发布。
+- API 默认值一度回退到 `http://localhost:3001/api/v1`，用户浏览器会请求自己电脑的 localhost。
+- 高德地图缺少 `NEXT_PUBLIC_AMAP_JS_KEY` 和 `NEXT_PUBLIC_AMAP_JS_SECURITY`，地图加载器直接进入失败态。
+
+硬规则：
+
+- 部署和最终验证必须以服务器环境为准。不要再把本地构建、本地临时 worktree、本地验证当作上线依据。
+- 涉及部署的 `install`、`build`、`migrate`、`restart`、线上 smoke check 一律通过 SSH 在服务器执行；本地只允许代码编辑和必要的代码阅读，不能作为部署验证证据。
+- 发布流程必须在服务器上执行：拉取指定 commit/branch、安装依赖、构建、迁移、重启 PM2、健康检查。
+- 前端生产构建前必须在服务器确认这些变量存在：`NEXT_PUBLIC_API_URL=/api/v1`、`NEXT_PUBLIC_AMAP_JS_KEY`、`NEXT_PUBLIC_AMAP_JS_SECURITY`。缺任意一个，停止部署。
+- 前端上线后必须在服务器检查真实产物：`.next` 中不能包含 `localhost:3001`；依赖高德地图的页面必须能在真实浏览器或等效线上 smoke check 中加载出 `.amap-container`，且不能出现“地图加载失败”。
+- 验证必须覆盖：`pm2 list` 服务 online、`/api/v1/health`、受影响页面 HTTP 200、受影响接口 HTTP 200、浏览器端关键 DOM/错误文案检查。
+- `.env.production.local` 不能再被假设为“本地有就等于线上有”。部署脚本或服务器环境必须显式保证生产变量。
+
+<claude-mem-context>
+# Memory Context
+
+# claude-mem status
+
+This project has no memory yet. The current session will seed it; subsequent sessions will receive auto-injected context for relevant past work.
+
+Memory injection starts on your second session in a project.
+
+`/learn-codebase` is available if the user wants to front-load the entire repo into memory in a single pass (~5 minutes on a typical repo, optional). Otherwise memory builds passively as work happens.
+
+Live activity: http://localhost:37777
+How it works: `/how-it-works`
+
+This message disappears once the first observation lands.
+</claude-mem-context>
