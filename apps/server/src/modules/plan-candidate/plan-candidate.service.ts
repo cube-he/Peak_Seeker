@@ -24,6 +24,17 @@ interface EnrollmentPlanSourceInput {
   subjects: string;
 }
 
+function uniqueValues<T extends string | number>(values: Array<T | null | undefined>): T[] {
+  return Array.from(new Set(values.filter((value): value is T => value !== null && value !== undefined)));
+}
+
+function addInFilter(where: Record<string, unknown>, field: string, values: Array<string | number | null | undefined>) {
+  const compact = uniqueValues(values);
+  if (compact.length > 0) {
+    where[field] = { in: compact };
+  }
+}
+
 const EXAM_TYPE_TO_SUBJECTS: Record<string, string> = {
   PHYSICS: '物理',
   HISTORY: '历史',
@@ -58,6 +69,22 @@ export class PlanCandidateService {
     };
   }
 
+  private buildAdmissionRecordWhere(eps: any[], province: string) {
+    const where: Record<string, unknown> = {
+      year: { in: [2024, 2025] },
+      province,
+    };
+
+    addInFilter(where, 'subjects', eps.map((ep) => ep.subjects));
+    addInFilter(where, 'batch', eps.map((ep) => ep.batch));
+    addInFilter(where, 'recruitType', eps.map((ep) => ep.recruitType));
+    addInFilter(where, 'universityId', eps.map((ep) => ep.universityId));
+    addInFilter(where, 'groupCode', eps.map((ep) => ep.groupCode));
+    addInFilter(where, 'majorCode', eps.map((ep) => ep.majorCode));
+
+    return where;
+  }
+
   async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {
     const plan = await this.prisma.volunteerPlan.findUnique({
       where: { id: planId },
@@ -90,11 +117,14 @@ export class PlanCandidateService {
       subjects,
       keyword: q.keyword,
     });
+    const page = q.page ?? 1;
+    const pageSize = q.pageSize ?? 20;
+    const enrollmentPlanTake = Math.min(Math.max(page * pageSize * 5, 200), 1000);
 
     const eps = await this.prisma.enrollmentPlan.findMany({
       where,
       include: { university: true, major: true },
-      take: 5000,
+      take: enrollmentPlanTake,
     });
 
     const restrictions = await this.prisma.healthRestriction.findMany();
@@ -107,19 +137,9 @@ export class PlanCandidateService {
       new NatureRule(),
     ];
 
-    const naturalKeys = eps.map((ep) => ({
-      universityId: ep.universityId,
-      subjects: ep.subjects,
-      batch: ep.batch,
-      recruitType: ep.recruitType,
-      groupCode: ep.groupCode,
-      majorCode: ep.majorCode,
-      majorName: ep.majorName,
-    }));
-
-    const adRecords = naturalKeys.length
+    const adRecords = eps.length
       ? await this.prisma.admissionRecord.findMany({
-          where: { OR: naturalKeys.map((k) => ({ ...k, year: { in: [2024, 2025] } })) },
+          where: this.buildAdmissionRecordWhere(eps, province),
         })
       : [];
     const adIndex = new Map<string, any>();
@@ -191,8 +211,6 @@ export class PlanCandidateService {
       return Math.abs(ar - 1) - Math.abs(br - 1);
     });
 
-    const page = q.page ?? 1;
-    const pageSize = q.pageSize ?? 20;
     const start = (page - 1) * pageSize;
     return {
       total: visible.length,

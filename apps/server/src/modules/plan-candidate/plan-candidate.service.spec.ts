@@ -61,6 +61,62 @@ describe('PlanCandidateService', () => {
     expect(r.items).toHaveLength(1);
   });
 
+  it('使用紧凑条件查询历史记录，避免为大量候选生成巨大 OR', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: '本科批B段', batchConfigId: 22, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: '四川', examType: 'PHYSICS', provincialRank: 30000,
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: '男', ethnicity: '汉族' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 18886 } }]);
+    prisma.enrollmentPlan.findMany.mockResolvedValue([
+      { id: 300, universityId: 3, majorId: 3, university: { name: 'C' }, major: { name: 'M3', code: '0806', notes: '' },
+        recruitType: '普通类', isSinoForeign: false, planNotes: '', tuition: 5000,
+        majorCode: '0806', subjects: '物理', batch: '本科批B段', groupCode: 'G3', majorName: 'M3' },
+      { id: 301, universityId: 4, majorId: 4, university: { name: 'D' }, major: { name: 'M4', code: '0807', notes: '' },
+        recruitType: '普通类', isSinoForeign: false, planNotes: '', tuition: 5200,
+        majorCode: '0807', subjects: '物理', batch: '本科批B段', groupCode: 'G4', majorName: 'M4' },
+    ]);
+    prisma.admissionRecord.findMany.mockResolvedValue([]);
+
+    await service.getCandidates(1, { page: 1, pageSize: 60, includeSoftFails: true });
+
+    const where = prisma.admissionRecord.findMany.mock.calls[0][0].where;
+    expect(where.OR).toBeUndefined();
+    expect(where).toEqual(
+      expect.objectContaining({
+        year: { in: [2024, 2025] },
+        subjects: { in: ['物理'] },
+        batch: { in: ['本科批B段'] },
+        recruitType: { in: ['普通类'] },
+        universityId: { in: [3, 4] },
+        groupCode: { in: ['G3', 'G4'] },
+        majorCode: { in: ['0806', '0807'] },
+      }),
+    );
+  });
+
+  it('按页面大小限制招生计划预取量', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: '本科批B段', batchConfigId: 22, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: '四川', examType: 'PHYSICS', provincialRank: 30000,
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: '男', ethnicity: '汉族' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 18886 } }]);
+    prisma.enrollmentPlan.findMany.mockResolvedValue([]);
+
+    await service.getCandidates(1, { page: 1, pageSize: 60, includeSoftFails: true });
+
+    expect(prisma.enrollmentPlan.findMany.mock.calls[0][0].take).toBe(300);
+  });
+
   it('PASS 排在 SOFT_FAIL 前', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: '本科批A段', batchConfigId: 5,
