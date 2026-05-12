@@ -12,7 +12,7 @@ describe('PlanItemService.add', () => {
   beforeEach(async () => {
     prisma = {
       volunteerPlan: { findUnique: jest.fn() },
-      planItem: { count: jest.fn(), create: jest.fn() },
+      planItem: { count: jest.fn(), create: jest.fn(), findFirst: jest.fn() },
       enrollmentPlan: { findUnique: jest.fn() },
       admissionRecord: { findFirst: jest.fn() },
       batchConfig: { findUnique: jest.fn() },
@@ -72,8 +72,30 @@ describe('PlanItemService.add', () => {
       overrideReason: 'teacher confirmed with student',
     } as any);
     expect(result.sequence).toBe(3);
-    expect(result.gradient).toBe('CHONG'); // 8000/10000=0.8
+    expect(result.gradient).toBe('BAO'); // 10000/8000=1.25
     expect(result.overrideSoftFail).toBe(true);
     expect(result.softFailReasons).toEqual([{ rule: 'tuition', note: '瀛﹁垂瓒呴绠?' }]);
+  });
+
+  it('rejects adding another major from the same university group to one plan', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 1, status: 'DRAFT', batchConfigId: 5, year: 2026, studentId: 10 });
+    prisma.batchConfig.findUnique.mockResolvedValue({ id: 5, maxGroupCount: 45 });
+    prisma.planItem.count.mockResolvedValue(2);
+    prisma.enrollmentPlan.findUnique.mockResolvedValue({
+      id: 101, universityId: 11, majorId: 23, university: { name: 'U', code: 'UC' }, major: { name: 'M2' },
+      groupCode: 'G', groupName: 'GN', majorCode: 'MC2', majorName: 'M2',
+      groupMajors: 'Major A,Major B', subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+      planCount: 5, tuition: 5000, subjectRequirements: null,
+    });
+    prisma.planItem.findFirst.mockResolvedValue({
+      id: 300,
+      planId: 1,
+      universityId: 11,
+      groupCode: 'G',
+      majorName: 'M1',
+    });
+
+    await expect(service.add(1, { enrollmentPlanId: 101 } as any)).rejects.toThrow(ConflictException);
+    expect(prisma.planItem.create).not.toHaveBeenCalled();
   });
 });

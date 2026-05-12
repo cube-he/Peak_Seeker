@@ -20,6 +20,39 @@ export interface CandidateGroupLike {
   recruitType?: string | null;
 }
 
+export interface CandidateGroupMetricLike {
+  currentPlanCount?: number | null;
+  previousPlanCount?: number | null;
+  planCountChange?: number | null;
+  currentPlanYear?: number | null;
+  previousPlanYear?: number | null;
+}
+
+export interface CandidateGroupScoreLike {
+  groupMinScore?: number | null;
+  groupMinRank?: number | null;
+  scoreSource?: 'GROUP' | 'FILING' | 'MAJOR' | 'NONE' | string | null;
+}
+
+export interface CandidateGroupSupplementaryLike {
+  supplementary?: {
+    sourceYear?: number | null;
+    totalRounds?: number | null;
+    totalPlanCount?: number | null;
+    supplementaryRate?: number | null;
+  } | null;
+}
+
+export interface CandidateGroupIdentityLike {
+  universityId?: number | null;
+  groupCode?: string | null;
+}
+
+export interface WorkbenchPlanDetailLike {
+  planItems?: CandidateGroupIdentityLike[] | null;
+  items?: CandidateGroupIdentityLike[] | null;
+}
+
 export function getLatestPlansByBatch<T extends WorkbenchPlan>(plans: T[]): T[] {
   const byBatch = new Map<string, T>();
 
@@ -63,4 +96,68 @@ export function formatCandidateGroup(candidate: CandidateGroupLike) {
   if (candidate.groupName?.trim()) parts.push(candidate.groupName.trim());
   if (candidate.recruitType?.trim()) parts.push(candidate.recruitType.trim());
   return parts.join(' · ');
+}
+
+export function formatGroupPlanChange(group: CandidateGroupMetricLike): { text: string; tone: 'up' | 'down' | 'flat' } {
+  const currentYear = group.currentPlanYear ?? '当前';
+  const previousYear = group.previousPlanYear ?? '去年';
+  const currentCount = group.currentPlanCount;
+
+  if (currentCount == null) {
+    return { text: `${currentYear} 招生人数暂无`, tone: 'flat' };
+  }
+
+  if (group.previousPlanCount == null || group.planCountChange == null) {
+    return { text: `${currentYear} 招生 ${currentCount} 人，暂无 ${previousYear} 对比`, tone: 'flat' };
+  }
+
+  const change = group.planCountChange;
+  const tone = change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+  const signed = change > 0 ? `+${change}` : String(change);
+  return { text: `${currentYear} 招生 ${currentCount} 人，较 ${previousYear} ${signed}`, tone };
+}
+
+export function formatGroupScoreLine(group: CandidateGroupScoreLike) {
+  if (group.groupMinScore == null && group.groupMinRank == null) return '暂无分数线';
+  const sourceLabel: Record<string, string> = {
+    GROUP: '专业组线',
+    FILING: '投档线',
+    MAJOR: '组内专业线',
+    NONE: '分数线',
+  };
+  const label = sourceLabel[group.scoreSource || 'NONE'] ?? '分数线';
+  const parts = [];
+  if (group.groupMinScore != null) parts.push(`${group.groupMinScore} 分`);
+  if (group.groupMinRank != null) parts.push(`${group.groupMinRank.toLocaleString()} 位`);
+  return `${label} ${parts.join(' / ')}`;
+}
+
+export function hasSupplementaryData(group: CandidateGroupSupplementaryLike) {
+  const detail = group.supplementary;
+  return Boolean((detail?.totalPlanCount ?? 0) > 0 || (detail?.totalRounds ?? 0) > 0);
+}
+
+export function formatSupplementary(group: CandidateGroupSupplementaryLike) {
+  const detail = group.supplementary;
+  if (!hasSupplementaryData(group)) return '征集暂无/未导入';
+  const rate = detail?.supplementaryRate == null
+    ? ''
+    : `，征集率 ${(detail.supplementaryRate > 1 ? detail.supplementaryRate : detail.supplementaryRate * 100).toFixed(1)}%`;
+  return `${detail?.sourceYear ?? ''} 征集 ${detail?.totalPlanCount ?? '-'} 人，${detail?.totalRounds ?? '-'} 轮${rate}`;
+}
+
+export function isCandidateGroupAlreadyAdded(
+  group: CandidateGroupIdentityLike,
+  planItems: CandidateGroupIdentityLike[] | undefined,
+) {
+  if (!group.universityId || !planItems?.length) return false;
+  return planItems.some(
+    (item) => item.universityId === group.universityId && (item.groupCode || '') === (group.groupCode || ''),
+  );
+}
+
+export function getPlanItemsForWorkbench(plan?: WorkbenchPlanDetailLike | null) {
+  if (Array.isArray(plan?.planItems)) return plan.planItems;
+  if (Array.isArray(plan?.items)) return plan.items;
+  return [];
 }

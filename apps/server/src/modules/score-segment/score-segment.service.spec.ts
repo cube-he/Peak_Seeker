@@ -44,6 +44,12 @@ describe('ScoreSegmentService', () => {
       expect(result.rank).toBe(1);
     });
 
+    it('throws when the requested year has no score segment data instead of returning rank 1', async () => {
+      prisma.scoreSegment.findFirst.mockResolvedValue(null);
+
+      await expect(service.scoreToRank(2026, '鐗╃悊' as any, 479)).rejects.toThrow('2026');
+    });
+
     it('分数 < 0 → 抛 BadRequestException', async () => {
       await expect(service.scoreToRank(2025, '物理', -1)).rejects.toThrow('分数需在 0..750');
     });

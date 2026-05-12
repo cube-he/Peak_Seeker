@@ -37,6 +37,9 @@ export class ScoreSegmentService {
     if (score < 0 || score > 750) throw new BadRequestException('分数需在 0..750');
 
     const totalCount = await this.getTotalCount(year, examType);
+    if (totalCount <= 0) {
+      throw new BadRequestException(`${year} ${examType} score segment data not found`);
+    }
 
     const row = await this.prisma.scoreSegment.findFirst({
       where: { year, province: this.PROVINCE, examType, score: { lte: score } },

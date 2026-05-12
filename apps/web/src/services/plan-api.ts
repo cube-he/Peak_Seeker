@@ -21,6 +21,20 @@ export interface CandidateListParams {
   includeSoftFails?: boolean;
 }
 
+export type CandidateGroupSort =
+  | 'MAJOR_MATCH'
+  | 'RANK_FIT'
+  | 'MAJOR_MIN_SCORE_DESC'
+  | 'UNIVERSITY_RANK'
+  | 'MAJOR_STRENGTH'
+  | 'PLAN_COUNT_DESC'
+  | 'SUPPLEMENTARY_RATE_DESC'
+  | 'SAFETY_DESC';
+
+export interface CandidateGroupListParams extends CandidateListParams {
+  sort?: CandidateGroupSort;
+}
+
 export interface TeacherPlanListParams {
   search?: string;
   batch?: string;
@@ -74,6 +88,18 @@ export const planApi = {
         pageSize: params?.pageSize ?? 30,
         keyword: params?.keyword?.trim() || undefined,
         includeSoftFails: params?.includeSoftFails,
+      },
+    }) as any;
+  },
+
+  getCandidateGroups(planId: string | number, params?: CandidateGroupListParams): Promise<any> {
+    return api.get(`/plans/${planId}/candidate-groups`, {
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 20,
+        keyword: params?.keyword?.trim() || undefined,
+        includeSoftFails: params?.includeSoftFails,
+        sort: params?.sort ?? 'MAJOR_MATCH',
       },
     }) as any;
   },

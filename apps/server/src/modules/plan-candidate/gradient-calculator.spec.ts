@@ -1,40 +1,122 @@
 // gradient-calculator.spec.ts
-import { calcGradient } from './gradient-calculator';
+import { calcDynamicGradient, calcGradient } from './gradient-calculator';
 
 describe('calcGradient', () => {
-  it('返回 CHONG 当学生位次显著优于历史最低位次', () => {
-    expect(calcGradient(8000, 10000)).toBe('CHONG'); // 8000/10000=0.8 < 0.9
+  it('returns CHONG when the historical admission rank is much better than the student rank', () => {
+    expect(calcGradient(156000, 45000)).toBe('CHONG');
   });
 
-  it('返回 WEN 当位次接近历史最低位次', () => {
-    expect(calcGradient(10000, 10000)).toBe('WEN'); // ratio=1.0
-    expect(calcGradient(9500, 10000)).toBe('WEN');  // 0.95
-    expect(calcGradient(10500, 10000)).toBe('WEN'); // 1.05
+  it('returns WEN when the ranks are close', () => {
+    expect(calcGradient(10000, 10000)).toBe('WEN');
+    expect(calcGradient(10000, 9500)).toBe('WEN');
+    expect(calcGradient(10000, 10500)).toBe('WEN');
   });
 
-  it('返回 BAO 当位次明显低于历史最低位次', () => {
-    expect(calcGradient(15000, 10000)).toBe('BAO'); // 1.5 > 1.1
+  it('returns BAO when the student rank is much better than the historical admission rank', () => {
+    expect(calcGradient(8000, 12000)).toBe('BAO');
   });
 
-  it('边界 0.9：恰好等于阈值返回 WEN', () => {
-    expect(calcGradient(9000, 10000)).toBe('WEN');
+  it('keeps threshold boundaries in the stable band', () => {
+    expect(calcGradient(10000, 9000)).toBe('WEN');
+    expect(calcGradient(10000, 11000)).toBe('WEN');
   });
 
-  it('边界 1.1：恰好等于阈值返回 WEN', () => {
-    expect(calcGradient(11000, 10000)).toBe('WEN');
-  });
-
-  it('historyMinRank 缺失（null/undefined）返回 BAO', () => {
+  it('returns BAO when historical rank is missing', () => {
     expect(calcGradient(10000, null)).toBe('BAO');
     expect(calcGradient(10000, undefined as any)).toBe('BAO');
-  });
-
-  it('historyMinRank 为 0 返回 BAO（避免除零）', () => {
     expect(calcGradient(10000, 0)).toBe('BAO');
   });
 
-  it('支持自定义阈值', () => {
-    expect(calcGradient(8400, 10000, { chong: 0.85, bao: 1.05 })).toBe('CHONG'); // 0.84 < 0.85
-    expect(calcGradient(10600, 10000, { chong: 0.85, bao: 1.05 })).toBe('BAO'); // 1.06 > 1.05
+  it('supports custom thresholds', () => {
+    expect(calcGradient(10000, 8400, { chong: 0.85, bao: 1.05 })).toBe('CHONG');
+    expect(calcGradient(10000, 10600, { chong: 0.85, bao: 1.05 })).toBe('BAO');
+  });
+});
+
+describe('calcDynamicGradient', () => {
+  it('splits dynamic risk into detailed tiers while preserving broad gradient groups', () => {
+    const cases = [
+      { historyMinRank: 7600, tier: 'JI_CHONG', gradient: 'CHONG' },
+      { historyMinRank: 8500, tier: 'CHONG', gradient: 'CHONG' },
+      { historyMinRank: 9300, tier: 'XIAO_CHONG', gradient: 'CHONG' },
+      { historyMinRank: 10200, tier: 'WEN', gradient: 'WEN' },
+      { historyMinRank: 10900, tier: 'WEN_BAO', gradient: 'WEN' },
+      { historyMinRank: 11600, tier: 'BAO', gradient: 'BAO' },
+      { historyMinRank: 12800, tier: 'QIANG_BAO', gradient: 'BAO' },
+      { historyMinRank: 14000, tier: 'DIBAO', gradient: 'BAO' },
+    ] as const;
+
+    for (const item of cases) {
+      const result = calcDynamicGradient({
+        studentRank: 10000,
+        historyMinRank: item.historyMinRank,
+      });
+      expect(result.tier).toBe(item.tier);
+      expect(result.gradient).toBe(item.gradient);
+    }
+  });
+
+  it('loosens the expected rank when plan supply grows and the batch competition pool shrinks', () => {
+    const result = calcDynamicGradient({
+      studentRank: 11200,
+      historyMinRank: 10000,
+      currentPlanCount: 36,
+      previousPlanCount: 30,
+      currentCompetitionCount: 190000,
+      previousCompetitionCount: 210000,
+    });
+
+    expect(result.adjustedMinRank).toBeGreaterThan(10000);
+    expect(result.gradient).toBe('WEN');
+    expect(result.tier).toBe('WEN');
+    expect(result.reasons).toEqual(expect.arrayContaining([
+      expect.stringContaining('plan increased'),
+      expect.stringContaining('competition pool decreased'),
+    ]));
+  });
+
+  it('tightens the expected rank and downgrades safety when plan supply drops sharply', () => {
+    const result = calcDynamicGradient({
+      studentRank: 9000,
+      historyMinRank: 12000,
+      currentPlanCount: 18,
+      previousPlanCount: 30,
+    });
+
+    expect(result.adjustedMinRank).toBeLessThan(12000);
+    expect(result.tier).toBe('WEN_BAO');
+    expect(result.gradient).toBe('WEN');
+    expect(result.reasons).toEqual(expect.arrayContaining([
+      expect.stringContaining('plan decreased sharply'),
+      expect.stringContaining('risk level downgraded'),
+    ]));
+  });
+
+  it('uses supplementary vacancies as an accessibility signal', () => {
+    const result = calcDynamicGradient({
+      studentRank: 11300,
+      historyMinRank: 10000,
+      supplementary: {
+        totalPlanCount: 8,
+        totalRounds: 2,
+        supplementaryRate: 0.18,
+      },
+    });
+
+    expect(result.adjustedMinRank).toBeGreaterThan(10000);
+    expect(result.gradient).toBe('WEN');
+    expect(result.reasons).toEqual(expect.arrayContaining([
+      expect.stringContaining('supplementary vacancies'),
+    ]));
+  });
+
+  it('keeps BAO compatibility while exposing a DIBAO tier for very strong safety margins', () => {
+    const result = calcDynamicGradient({
+      studentRank: 7000,
+      historyMinRank: 12000,
+    });
+
+    expect(result.gradient).toBe('BAO');
+    expect(result.tier).toBe('DIBAO');
   });
 });

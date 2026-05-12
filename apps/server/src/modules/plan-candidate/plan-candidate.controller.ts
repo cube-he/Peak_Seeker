@@ -17,4 +17,13 @@ export class PlanCandidateController {
   ) {
     return this.service.getCandidates(planId, q, req.user.id);
   }
+
+  @Get(':planId/candidate-groups')
+  getCandidateGroups(
+    @Param('planId', ParseIntPipe) planId: number,
+    @Query() q: GetCandidatesQueryDto,
+    @Req() req: any,
+  ) {
+    return this.service.getCandidateGroups(planId, q, req.user.id);
+  }
 }

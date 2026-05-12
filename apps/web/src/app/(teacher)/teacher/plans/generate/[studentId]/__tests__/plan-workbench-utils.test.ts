@@ -1,7 +1,13 @@
 import {
   findPlanForBatch,
   formatCandidateGroup,
+  formatGroupPlanChange,
+  formatGroupScoreLine,
+  formatSupplementary,
+  getPlanItemsForWorkbench,
   getLatestPlansByBatch,
+  hasSupplementaryData,
+  isCandidateGroupAlreadyAdded,
   sortPlansForWorkbench,
 } from '../plan-workbench-utils';
 
@@ -45,5 +51,59 @@ describe('plan workbench helpers', () => {
     expect(formatCandidateGroup({ groupCode: '102', groupName: '物理+不限', recruitType: '普通类本科' })).toBe(
       '专业组 102 · 物理+不限 · 普通类本科',
     );
+  });
+
+  it('formats professional group plan-count changes by source year', () => {
+    expect(formatGroupPlanChange({ currentPlanCount: 30, previousPlanCount: 24, planCountChange: 6, currentPlanYear: 2025, previousPlanYear: 2024 })).toEqual({
+      text: '2025 招生 30 人，较 2024 +6',
+      tone: 'up',
+    });
+    expect(formatGroupPlanChange({ currentPlanCount: 10, previousPlanCount: null, planCountChange: null, currentPlanYear: 2025, previousPlanYear: 2024 })).toEqual({
+      text: '2025 招生 10 人，暂无 2024 对比',
+      tone: 'flat',
+    });
+  });
+
+  it('formats score line with fallback source labels', () => {
+    expect(formatGroupScoreLine({ groupMinScore: 610, groupMinRank: 10000, scoreSource: 'GROUP' })).toBe('专业组线 610 分 / 10,000 位');
+    expect(formatGroupScoreLine({ groupMinScore: 605, groupMinRank: null, scoreSource: 'MAJOR' })).toBe('组内专业线 605 分');
+    expect(formatGroupScoreLine({ groupMinScore: null, groupMinRank: null, scoreSource: 'NONE' })).toBe('暂无分数线');
+  });
+
+  it('formats supplementary collection status even when no data is imported yet', () => {
+    expect(hasSupplementaryData({ supplementary: null })).toBe(false);
+    expect(formatSupplementary({ supplementary: null })).toBe('征集暂无/未导入');
+
+    const group = {
+      supplementary: {
+        sourceYear: 2025,
+        totalPlanCount: 8,
+        totalRounds: 2,
+        supplementaryRate: 0.18,
+      },
+    };
+    expect(hasSupplementaryData(group)).toBe(true);
+    expect(formatSupplementary(group)).toBe('2025 征集 8 人，2 轮，征集率 18.0%');
+  });
+
+  it('detects candidate groups that are already in the current plan', () => {
+    const planItems = [
+      { universityId: 11, groupCode: 'G1' },
+      { universityId: 12, groupCode: 'G2' },
+    ];
+    expect(isCandidateGroupAlreadyAdded({ universityId: 11, groupCode: 'G1' }, planItems)).toBe(true);
+    expect(isCandidateGroupAlreadyAdded({ universityId: 11, groupCode: 'G3' }, planItems)).toBe(false);
+  });
+
+  it('uses full planItems for workbench duplicate detection when both item shapes exist', () => {
+    const plan = {
+      items: [{ id: 1, groupCode: '104', universityName: 'Jilin University' }],
+      planItems: [{ id: 8, universityId: 8971, groupCode: '104', universityName: 'Jilin University' }],
+    };
+
+    const items = getPlanItemsForWorkbench(plan);
+
+    expect(items).toBe(plan.planItems);
+    expect(isCandidateGroupAlreadyAdded({ universityId: 8971, groupCode: '104' }, items)).toBe(true);
   });
 });
