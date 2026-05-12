@@ -30,6 +30,11 @@ export interface TeacherPlanListParams {
   pageSize?: number;
 }
 
+export interface StudentPlanListParams {
+  batchConfigId?: number;
+  latest?: boolean;
+}
+
 export const planApi = {
   // Teacher endpoints
   getTeacherPlans(params?: TeacherPlanListParams): Promise<any> {
@@ -51,6 +56,15 @@ export const planApi = {
 
   createForStudent(studentId: string, data: CreatePlanForStudentParams): Promise<any> {
     return api.post(`/students/${studentId}/plans`, data) as any;
+  },
+
+  listForStudent(studentId: string, params?: StudentPlanListParams): Promise<any> {
+    return api.get(`/students/${studentId}/plans`, {
+      params: {
+        batchConfigId: params?.batchConfigId,
+        latest: params?.latest,
+      },
+    }) as any;
   },
 
   getCandidates(planId: string | number, params?: CandidateListParams): Promise<any> {

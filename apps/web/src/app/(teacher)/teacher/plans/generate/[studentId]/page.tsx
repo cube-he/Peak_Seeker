@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Alert, Button, Card, Descriptions, Empty, Input, Modal, Select, Space, Spin, Table, Tag, message } from 'antd';
@@ -9,13 +9,22 @@ import { ArrowLeftOutlined, CheckOutlined, DeleteOutlined, FileTextOutlined, Plu
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type EligibleBatch } from '@/services/student-api';
 import { planApi } from '@/services/plan-api';
+import {
+  findPlanForBatch,
+  formatCandidateGroup,
+  getLatestPlansByBatch,
+  sortPlansForWorkbench,
+  type WorkbenchPlan,
+} from './plan-workbench-utils';
 
 interface Candidate {
   enrollmentPlanId: number;
   universityName: string;
   groupCode?: string;
-  groupName?: string;
+  groupName?: string | null;
+  majorCode?: string;
   majorName: string;
+  recruitType?: string;
   suggestedGradient: 'CHONG' | 'WEN' | 'BAO';
   matchStatus: 'PASS' | 'SOFT_FAIL';
   failReasons: Array<{ rule: string; note: string; severity?: string }>;
@@ -68,6 +77,15 @@ export default function GeneratePlanPage() {
     queryFn: () => studentApi.getEligibleBatches(studentId),
   });
   const batches = unwrap<EligibleBatch[]>(batchData) ?? [];
+  const { data: existingPlanData, isLoading: existingPlansLoading } = useQuery({
+    queryKey: ['student-plans-latest', studentId],
+    queryFn: () => planApi.listForStudent(studentId, { latest: true }),
+  });
+  const existingPlanRows = unwrap<WorkbenchPlan[]>(existingPlanData) ?? [];
+  const existingPlans = useMemo(
+    () => sortPlansForWorkbench(getLatestPlansByBatch(existingPlanRows), batches),
+    [existingPlanRows, batches],
+  );
 
   const { data: planData, isFetching: planFetching } = useQuery({
     queryKey: ['plan-detail', planId],
@@ -83,12 +101,26 @@ export default function GeneratePlanPage() {
   });
   const candidates = unwrap<CandidateListResult>(candidateData);
   const isUsingFallbackYear = Boolean(candidates?.isFallbackYear && candidates.sourceYear && candidates.planYear);
+  const selectedBatchPlan = useMemo(
+    () => findPlanForBatch(existingPlans, batchConfigId),
+    [existingPlans, batchConfigId],
+  );
+
+  useEffect(() => {
+    if (!planId && existingPlans.length > 0) {
+      const firstPlan = existingPlans[0];
+      setPlanId(firstPlan.id);
+      setBatchConfigId(firstPlan.batchConfigId ?? undefined);
+    }
+  }, [existingPlans, planId]);
 
   const createMutation = useMutation({
     mutationFn: () => planApi.createForStudent(studentId, { batchConfigId: batchConfigId! }),
     onSuccess: (res) => {
       const created = unwrap<Record<string, any>>(res);
       setPlanId(created.id);
+      setBatchConfigId(created.batchConfigId ?? batchConfigId);
+      queryClient.invalidateQueries({ queryKey: ['student-plans-latest', studentId] });
       void message.success('方案草稿已就绪');
     },
     onError: (error: any) => {
@@ -137,9 +169,29 @@ export default function GeneratePlanPage() {
   });
 
   const batchOptions = useMemo(
-    () => batches.map((b) => ({ label: `${b.batchName}（${b.maxGroupCount}组）`, value: b.batchConfigId })),
-    [batches],
+    () =>
+      batches.map((b) => {
+        const existingPlan = findPlanForBatch(existingPlans, b.batchConfigId);
+        const suffix = existingPlan ? ` · 已有V${existingPlan.versionNo ?? 1}` : '';
+        return { label: `${b.batchName}（${b.maxGroupCount}组）${suffix}`, value: b.batchConfigId };
+      }),
+    [batches, existingPlans],
   );
+
+  const openPlan = (nextPlan: WorkbenchPlan) => {
+    setPlanId(nextPlan.id);
+    setBatchConfigId(nextPlan.batchConfigId ?? undefined);
+  };
+
+  const openOrCreatePlan = () => {
+    if (!batchConfigId) return;
+    if (selectedBatchPlan) {
+      openPlan(selectedBatchPlan);
+      void message.success('已打开已有方案');
+      return;
+    }
+    createMutation.mutate();
+  };
 
   const addCandidate = (candidate: Candidate) => {
     if (candidate.matchStatus === 'SOFT_FAIL') {
@@ -157,12 +209,15 @@ export default function GeneratePlanPage() {
 
   const columns: ColumnsType<Candidate> = [
     {
-      title: '院校 / 专业',
+      title: '院校专业组 / 专业',
       key: 'name',
       render: (_, c) => (
         <div className={c.matchStatus === 'SOFT_FAIL' ? 'text-text-muted' : 'text-text'}>
           <div className="font-medium">{c.universityName}</div>
-          <div className="text-xs">{c.groupCode || '-'} {c.groupName || ''} / {c.majorName}</div>
+          <div className="mt-1 text-xs text-text-muted">{formatCandidateGroup(c)}</div>
+          <div className="mt-1 text-xs">
+            {c.majorCode ? `${c.majorCode} ` : ''}{c.majorName}
+          </div>
         </div>
       ),
     },
@@ -216,28 +271,26 @@ export default function GeneratePlanPage() {
             <Descriptions.Item label="位次">{student?.provincialRank ?? '-'}</Descriptions.Item>
             <Descriptions.Item label="资料状态">{student?.intakeStatus || 'DRAFT'}</Descriptions.Item>
           </Descriptions>
-          {!planId ? (
-            <Space wrap>
-              <Select
-                placeholder="选择批次"
-                value={batchConfigId}
-                loading={batchLoading}
-                options={batchOptions}
-                onChange={setBatchConfigId}
-                className="min-w-[260px]"
-              />
-              <Button
-                type="primary"
-                icon={<FileTextOutlined />}
-                disabled={!batchConfigId || student?.intakeStatus !== 'VERIFIED'}
-                loading={createMutation.isPending}
-                onClick={() => createMutation.mutate()}
-              >
-                创建方案草稿
-              </Button>
-            </Space>
-          ) : (
-            <Space wrap>
+          <Space wrap>
+            <Select
+              placeholder="选择批次"
+              value={batchConfigId}
+              loading={batchLoading}
+              options={batchOptions}
+              onChange={setBatchConfigId}
+              className="min-w-[280px]"
+            />
+            <Button
+              type="primary"
+              icon={<FileTextOutlined />}
+              disabled={!batchConfigId || student?.intakeStatus !== 'VERIFIED'}
+              loading={createMutation.isPending}
+              onClick={openOrCreatePlan}
+            >
+              {selectedBatchPlan ? '打开已有方案' : '创建方案草稿'}
+            </Button>
+            {planId ? (
+              <>
               <Button onClick={() => router.push(`/teacher/plans/${planId}`)}>查看详情</Button>
               <Button
                 type="primary"
@@ -248,12 +301,37 @@ export default function GeneratePlanPage() {
               >
                 提交审核
               </Button>
-            </Space>
-          )}
+              </>
+            ) : null}
+          </Space>
         </div>
         {student?.intakeStatus !== 'VERIFIED' ? (
           <Alert className="mt-4" type="warning" showIcon message="学生资料尚未确认，需先在学生详情页完成资料审核。" />
         ) : null}
+        <div className="mt-4 border-t border-border-subtle pt-4">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-text">已有方案</span>
+            {existingPlansLoading ? <span className="text-xs text-text-tertiary">加载中...</span> : null}
+          </div>
+          {existingPlans.length ? (
+            <Space wrap>
+              {existingPlans.map((existingPlan) => {
+                const batchName = existingPlan.batchName ?? existingPlan.batch ?? `批次 ${existingPlan.batchConfigId ?? existingPlan.id}`;
+                return (
+                  <Button
+                    key={existingPlan.id}
+                    type={existingPlan.id === planId ? 'primary' : 'default'}
+                    onClick={() => openPlan(existingPlan)}
+                  >
+                    {batchName} · V{existingPlan.versionNo ?? 1} · {existingPlan.status ?? 'DRAFT'}
+                  </Button>
+                );
+              })}
+            </Space>
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已创建方案" />
+          )}
+        </div>
       </Card>
 
       {planId ? (
@@ -321,7 +399,9 @@ export default function GeneratePlanPage() {
                         ) : null}
                       </Space>
                     </div>
-                    <div className="mt-1 text-xs text-text-muted">{item.majorName}</div>
+                    <div className="mt-1 text-xs text-text-muted">
+                      {item.groupCode ? `专业组 ${item.groupCode} · ` : ''}{item.majorName}
+                    </div>
                     {item.overrideSoftFail ? <Tag className="mt-2" color="orange">已覆盖灰色限制</Tag> : null}
                   </div>
                 ))}
