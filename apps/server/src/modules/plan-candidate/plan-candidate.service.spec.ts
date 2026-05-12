@@ -11,7 +11,10 @@ describe('PlanCandidateService', () => {
     prisma = {
       volunteerPlan: { findUnique: jest.fn() },
       studentProfile: { findUnique: jest.fn() },
-      enrollmentPlan: { findMany: jest.fn() },
+      enrollmentPlan: {
+        findMany: jest.fn(),
+        groupBy: jest.fn().mockResolvedValue([{ year: 2026, _count: { _all: 1 } }]),
+      },
       admissionRecord: { findMany: jest.fn() },
       healthRestriction: { findMany: jest.fn().mockResolvedValue([]) },
     };
@@ -19,6 +22,43 @@ describe('PlanCandidateService', () => {
       providers: [PlanCandidateService, { provide: PrismaService, useValue: prisma }],
     }).compile();
     service = mod.get(PlanCandidateService);
+  });
+
+  it('方案年份没有招生计划时回退到同批次最新可用年份', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: '本科批B段', batchConfigId: 22, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: '四川', examType: 'PHYSICS', provincialRank: 30000,
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: '男', ethnicity: '汉族' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 18886 } }]);
+    prisma.enrollmentPlan.findMany.mockResolvedValue([
+      { id: 300, universityId: 3, majorId: 3, university: { name: 'C' }, major: { name: 'M3', code: '0806', notes: '' },
+        recruitType: '普通类', isSinoForeign: false, planNotes: '', tuition: 5000,
+        majorCode: '0806', subjects: '物理', batch: '本科批B段', groupCode: 'G3', majorName: 'M3' },
+    ]);
+    prisma.admissionRecord.findMany.mockResolvedValue([]);
+
+    const r: any = await service.getCandidates(1, { page: 1, pageSize: 10, includeSoftFails: true });
+
+    expect(prisma.enrollmentPlan.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          year: 2025,
+          province: '四川',
+          batch: '本科批B段',
+          subjects: '物理',
+        }),
+      }),
+    );
+    expect(r.planYear).toBe(2026);
+    expect(r.sourceYear).toBe(2025);
+    expect(r.sourceBatchName).toBe('本科批B段');
+    expect(r.isFallbackYear).toBe(true);
+    expect(r.items).toHaveLength(1);
   });
 
   it('PASS 排在 SOFT_FAIL 前', async () => {

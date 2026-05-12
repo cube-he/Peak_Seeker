@@ -24,6 +24,15 @@ interface Candidate {
   planCount?: number | null;
 }
 
+interface CandidateListResult {
+  items: Candidate[];
+  total: number;
+  planYear?: number;
+  sourceYear?: number;
+  sourceBatchName?: string;
+  isFallbackYear?: boolean;
+}
+
 const GRADIENT_LABEL: Record<string, string> = {
   CHONG: '冲',
   WEN: '稳',
@@ -72,7 +81,8 @@ export default function GeneratePlanPage() {
     queryFn: () => planApi.getCandidates(planId!, { page: 1, pageSize: 60, keyword, includeSoftFails }),
     enabled: !!planId,
   });
-  const candidates = unwrap<{ items: Candidate[]; total: number }>(candidateData);
+  const candidates = unwrap<CandidateListResult>(candidateData);
+  const isUsingFallbackYear = Boolean(candidates?.isFallbackYear && candidates.sourceYear && candidates.planYear);
 
   const createMutation = useMutation({
     mutationFn: () => planApi.createForStudent(studentId, { batchConfigId: batchConfigId! }),
@@ -266,6 +276,14 @@ export default function GeneratePlanPage() {
             }
             className="rounded-2xl shadow-card"
           >
+            {isUsingFallbackYear ? (
+              <Alert
+                className="mb-4"
+                type="info"
+                showIcon
+                message={`当前候选池参考 ${candidates.sourceYear} 年招生计划，方案年份仍为 ${candidates.planYear}。`}
+              />
+            ) : null}
             <Table
               rowKey="enrollmentPlanId"
               columns={columns}
