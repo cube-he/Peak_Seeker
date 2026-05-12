@@ -21,6 +21,14 @@ import type { ExamType } from '../score-segment/exam-type.helper';
 
 const USER_LEVEL_FIELD_SET = new Set<string>(USER_LEVEL_FIELDS);
 
+export interface RankCheck {
+  calculatedRank: number | null;
+  currentRank: number | null;
+  isMismatch: boolean;
+  difference: number | null;
+  source: 'score-segment' | 'missing-input' | 'unavailable';
+}
+
 @Injectable()
 export class StudentService {
   constructor(
@@ -51,7 +59,7 @@ export class StudentService {
     examYear: number | null | undefined,
     totalScore: number | null | undefined,
   ): Promise<number | null> {
-    if (!totalScore || !examType || !examYear) return null;
+    if (totalScore == null || !examType || !examYear) return null;
     const mapped = this.mapExamTypeForRank(examType);
     if (!mapped) return null;
     try {
@@ -61,6 +69,50 @@ export class StudentService {
       // 一分一段表缺数据 / 分数越界等：静默失败，留位次为空
       return null;
     }
+  }
+
+  private makeRankCheck(
+    currentRank: number | null | undefined,
+    calculatedRank: number | null,
+    source: RankCheck['source'],
+  ): RankCheck {
+    const normalizedCurrent = currentRank ?? null;
+    const difference =
+      normalizedCurrent != null && calculatedRank != null
+        ? normalizedCurrent - calculatedRank
+        : null;
+
+    return {
+      calculatedRank,
+      currentRank: normalizedCurrent,
+      isMismatch: difference != null && difference !== 0,
+      difference,
+      source,
+    };
+  }
+
+  private async computeRankCheck(profile: {
+    examType?: string | null;
+    examYear?: number | null;
+    totalScore?: number | null;
+    provincialRank?: number | null;
+  }): Promise<RankCheck> {
+    const currentRank = profile.provincialRank ?? null;
+    if (profile.totalScore == null || !profile.examType || !profile.examYear) {
+      return this.makeRankCheck(currentRank, null, 'missing-input');
+    }
+
+    const calculatedRank = await this.tryComputeRank(
+      profile.examType,
+      profile.examYear,
+      profile.totalScore,
+    );
+
+    return this.makeRankCheck(
+      currentRank,
+      calculatedRank,
+      calculatedRank == null ? 'unavailable' : 'score-segment',
+    );
   }
 
   /**
@@ -239,7 +291,9 @@ export class StudentService {
       ethnicity: profile.user?.ethnicity,
     });
 
-    return { ...profile, progress };
+    const rankCheck = await this.computeRankCheck(profile);
+
+    return { ...profile, progress, rankCheck };
   }
 
   /**
@@ -336,11 +390,13 @@ export class StudentService {
     // 都用最新组合查一分一段表。学生本人不能在 dto 里直接写 provincialRank（被 STUDENT
     // updateMyProfile 的字段白名单挡住），但这里是统一的写入路径，老师改也会触发。
     const rankUpdate: { provincialRank?: number | null } = {};
+    let rankCheck = await this.computeRankCheck(merged);
     const scoreOrTypeChanged =
       updateData.totalScore !== undefined ||
       updateData.examType !== undefined ||
       updateData.examYear !== undefined;
-    if (scoreOrTypeChanged) {
+    const rankSubmitted = updateData.provincialRank !== undefined;
+    if (scoreOrTypeChanged && !rankSubmitted) {
       const computed = await this.tryComputeRank(
         merged.examType,
         merged.examYear,
@@ -350,6 +406,7 @@ export class StudentService {
       // 选项 a：若需要"分数缺失即清空位次"，可改为 rankUpdate.provincialRank = computed;
       if (computed !== null) {
         rankUpdate.provincialRank = computed;
+        rankCheck = this.makeRankCheck(rankUpdate.provincialRank, computed, 'score-segment');
       }
     }
 
@@ -382,7 +439,7 @@ export class StudentService {
       },
     });
 
-    return { ...updated, infoCompleteness: completeness };
+    return { ...updated, infoCompleteness: completeness, rankCheck };
   }
 
   /**

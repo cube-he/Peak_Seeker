@@ -16,6 +16,7 @@ jest.mock('bcrypt', () => ({
 
 describe('StudentService', () => {
   let service: StudentService;
+  let scoreSegmentService: { scoreToRank: jest.Mock };
   let prisma: {
     user: {
       findUnique: jest.Mock;
@@ -49,6 +50,12 @@ describe('StudentService', () => {
       },
     };
 
+    scoreSegmentService = {
+      scoreToRank: jest.fn().mockResolvedValue({
+        year: 2026, examType: '物理', score: 600, rank: 28500, percentile: 0.04,
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         StudentService,
@@ -72,11 +79,7 @@ describe('StudentService', () => {
         },
         {
           provide: require('../score-segment/score-segment.service').ScoreSegmentService,
-          useValue: {
-            scoreToRank: jest.fn().mockResolvedValue({
-              year: 2026, examType: '物理', score: 600, rank: 28500, percentile: 0.04,
-            }),
-          },
+          useValue: scoreSegmentService,
         },
       ],
     }).compile();
@@ -254,6 +257,41 @@ describe('StudentService', () => {
     });
   });
 
+  describe('rankCheck', () => {
+    it('computes system rank on detail load even when provincialRank is already filled', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        dataVersion: 1,
+        status: StudentStatus.ACTIVE,
+        examYear: 2026,
+        examType: 'PHYSICS',
+        totalScore: 600,
+        provincialRank: 1,
+        user: {
+          id: 99,
+          username: 'student01',
+          realName: '测试学生',
+          phone: '13800000000',
+          gender: 'MALE',
+          ethnicity: '汉族',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+        teacher: null,
+      });
+
+      const result = await service.findById(10) as any;
+
+      expect(scoreSegmentService.scoreToRank).toHaveBeenCalledWith(2026, '物理', 600);
+      expect(result.rankCheck).toEqual(
+        expect.objectContaining({
+          calculatedRank: 28500,
+          currentRank: 1,
+          isMismatch: true,
+        }),
+      );
+    });
+  });
+
   // ── updateProfile ───────────────────────────────────────
 
   describe('updateProfile', () => {
@@ -338,6 +376,46 @@ describe('StudentService', () => {
             totalScore: 750,
             dataVersion: { increment: 1 },
           }),
+        }),
+      );
+    });
+
+    it('preserves teacher-entered provincialRank and returns mismatch when system rank differs', async () => {
+      const current = {
+        id: 10,
+        dataVersion: 1,
+        status: StudentStatus.ACTIVE,
+        examYear: 2026,
+        examType: 'PHYSICS',
+        totalScore: 600,
+        provincialRank: 28500,
+        user: {
+          realName: '测试学生',
+          phone: '13800000000',
+          gender: 'MALE',
+          ethnicity: '汉族',
+        },
+      };
+      prisma.studentProfile.findUnique.mockResolvedValue(current);
+      prisma.studentProfile.update.mockResolvedValue({
+        ...current,
+        provincialRank: 1,
+        dataVersion: 2,
+      });
+
+      const result = await service.updateProfile(10, {
+        dataVersion: 1,
+        provincialRank: 1,
+      } as any) as any;
+
+      expect(scoreSegmentService.scoreToRank).toHaveBeenCalledWith(2026, '物理', 600);
+      const call = prisma.studentProfile.update.mock.calls[0][0] as any;
+      expect(call.data.provincialRank).toBe(1);
+      expect(result.rankCheck).toEqual(
+        expect.objectContaining({
+          calculatedRank: 28500,
+          currentRank: 1,
+          isMismatch: true,
         }),
       );
     });

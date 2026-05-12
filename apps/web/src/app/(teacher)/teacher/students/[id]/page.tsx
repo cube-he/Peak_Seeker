@@ -11,9 +11,101 @@ import {
   SaveOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { studentApi, type UpdateStudentDto } from '@/services/student-api';
+import { studentApi, type BonusItem, type UpdateStudentDto } from '@/services/student-api';
 import ProgressBar from '@/components/student/ProgressBar';
 import BonusCalcCard from '@/components/policy/BonusCalcCard';
+import { useProvinceOptions } from '@/components/student/picker/options/useProvinceOptions';
+import { useCityOptions } from '@/components/student/picker/options/useCityOptions';
+import { useUniversityOptions } from '@/components/student/picker/options/useUniversityOptions';
+import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
+
+type SelectOption = { label: string; value: string };
+
+interface RankCheck {
+  calculatedRank: number | null;
+  currentRank: number | null;
+  isMismatch: boolean;
+  difference: number | null;
+  source: 'score-segment' | 'missing-input' | 'unavailable';
+}
+
+const BONUS_ITEM_OPTIONS: Array<SelectOption & { bonusValue: number }> = [
+  { label: '自主就业退役士兵 +10', value: 'VETERAN_SELF_EMPLOYED', bonusValue: 10 },
+  { label: '服役二等功/战区授荣退役军人 +20', value: 'VETERAN_MERIT_LEVEL_2_PLUS', bonusValue: 20 },
+  { label: '归侨 +5', value: 'OVERSEAS_RETURNED', bonusValue: 5 },
+  { label: '归侨子女/华侨子女 +5', value: 'OVERSEAS_CHILD', bonusValue: 5 },
+  { label: '台湾省籍/台湾户籍 +5', value: 'TAIWAN_REGISTRY', bonusValue: 5 },
+  { label: '烈士子女 +20', value: 'MARTYR_CHILD', bonusValue: 20 },
+  { label: '三州十七县两区少数民族 +20', value: 'ETHNIC_AREA_MINORITY', bonusValue: 20 },
+  { label: '三州十七县两区汉族 +10', value: 'ETHNIC_AREA_HAN', bonusValue: 10 },
+  { label: '退役/现役军人优先录取', value: 'PRIORITY_RETIRED_OFFICER', bonusValue: 0 },
+  { label: '残疾人民警察优先录取', value: 'PRIORITY_DISABLED_POLICE', bonusValue: 0 },
+  { label: '5A 级青年志愿者优先录取', value: 'PRIORITY_5A_VOLUNTEER', bonusValue: 0 },
+  { label: '公安英模/因公牺牲伤残民警子女优先录取', value: 'PRIORITY_POLICE_HERO_CHILD', bonusValue: 0 },
+  { label: '见义勇为人员子女优先录取', value: 'PRIORITY_RIGHTEOUS_CHILD', bonusValue: 0 },
+  { label: '军人子女优先录取', value: 'PRIORITY_MILITARY_CHILD', bonusValue: 0 },
+  { label: '消防救援人员子女优先录取', value: 'PRIORITY_FIREFIGHTER_CHILD', bonusValue: 0 },
+  { label: '司法行政人民警察子女优先录取', value: 'PRIORITY_JUDICIAL_POLICE_CHILD', bonusValue: 0 },
+];
+
+function toSelectValues(items?: BonusItem[] | string[]): string[] {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => (typeof item === 'string' ? item : item?.type))
+    .filter((type): type is string => !!type);
+}
+
+function toBonusItems(types?: string[]): BonusItem[] {
+  if (!Array.isArray(types)) return [];
+  return types.map((type) => {
+    const option = BONUS_ITEM_OPTIONS.find((item) => item.value === type);
+    return {
+      type,
+      value: option?.bonusValue ?? 0,
+      source: option?.label,
+    };
+  });
+}
+
+function pickerSelectProps(options: SelectOption[]) {
+  return {
+    mode: 'multiple' as const,
+    allowClear: true,
+    showSearch: true,
+    optionFilterProp: 'label',
+    options,
+    style: { width: '100%' },
+  };
+}
+
+function formatRank(rank: number | null | undefined) {
+  return rank == null ? '-' : rank.toLocaleString('zh-CN');
+}
+
+function RankCheckExtra({ rankCheck }: { rankCheck?: RankCheck }) {
+  if (!rankCheck || rankCheck.source === 'missing-input') {
+    return <span>可由后端按一分一段自动计算，也可由老师校正。</span>;
+  }
+
+  if (rankCheck.source === 'unavailable' || rankCheck.calculatedRank == null) {
+    return <span className="text-amber-600">未查到对应一分一段数据，请人工核对位次。</span>;
+  }
+
+  if (rankCheck.isMismatch && rankCheck.currentRank != null) {
+    return (
+      <span className="font-medium text-red-600">
+        系统一分一段：{formatRank(rankCheck.calculatedRank)} 位；当前填写：{formatRank(rankCheck.currentRank)} 位；
+        相差 {formatRank(Math.abs(rankCheck.difference ?? 0))} 位，请核对。
+      </span>
+    );
+  }
+
+  return (
+    <span className="text-text-tertiary">
+      系统一分一段：{formatRank(rankCheck.calculatedRank)} 位，当前填写与系统计算一致。
+    </span>
+  );
+}
 
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -184,6 +276,7 @@ export default function StudentDetailPage() {
           initialValues={{
             ...student,
             ...student.user,
+            provincialRank: student.provincialRank ?? student.rankCheck?.calculatedRank ?? undefined,
           }}
           requiredMark="optional"
         >
@@ -200,7 +293,7 @@ export default function StudentDetailPage() {
                 ),
                 children: <HouseholdFields />,
               },
-              { key: 'exam', label: '考试成绩', children: <ExamFields /> },
+              { key: 'exam', label: '考试成绩', children: <ExamFields rankCheck={student.rankCheck} /> },
               {
                 key: 'bonus',
                 label: (
@@ -313,7 +406,7 @@ function HouseholdFields() {
   );
 }
 
-function ExamFields() {
+function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
   return (
     <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -353,7 +446,7 @@ function ExamFields() {
         <Form.Item name="totalScore" label="总分">
           <InputNumber min={0} max={750} style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item name="provincialRank" label="全省位次" extra="可由后端按一分一段自动计算，也可由老师校正。">
+        <Form.Item name="provincialRank" label="全省位次" extra={<RankCheckExtra rankCheck={rankCheck} />}>
           <InputNumber min={1} style={{ width: '100%' }} />
         </Form.Item>
       </div>
@@ -379,8 +472,20 @@ function BonusFields() {
           <Radio value="UNKNOWN">不清楚</Radio>
         </Radio.Group>
       </Form.Item>
-      <Form.Item name="bonusItems" label="加分细则">
-        <Select mode="tags" placeholder="回车添加，例如 少数民族 +5" />
+      <Form.Item
+        name="bonusItems"
+        label="加分细则"
+        getValueProps={(items) => ({ value: toSelectValues(items) })}
+        normalize={(types) => toBonusItems(types)}
+      >
+        <Select
+          mode="multiple"
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          options={BONUS_ITEM_OPTIONS}
+          placeholder="选择加分或优先录取项"
+        />
       </Form.Item>
     </>
   );
@@ -404,6 +509,11 @@ function HealthFields() {
 }
 
 function PreferenceFields() {
+  const { data: provinceOptions } = useProvinceOptions();
+  const { data: cityOptions } = useCityOptions();
+  const { data: universityOptions, isLoading: isUniversityLoading } = useUniversityOptions();
+  const { data: majorOptions, isLoading: isMajorLoading } = useMajorOptions();
+
   return (
     <>
       <Form.Item name="priorityMode" label="优先模式">
@@ -415,12 +525,24 @@ function PreferenceFields() {
         </Radio.Group>
       </Form.Item>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Form.Item name="preferredProvinces" label="意向省份"><Select mode="tags" allowClear /></Form.Item>
-        <Form.Item name="preferredCities" label="意向城市"><Select mode="tags" allowClear /></Form.Item>
-        <Form.Item name="preferredMajors" label="意向专业"><Select mode="tags" allowClear /></Form.Item>
-        <Form.Item name="preferredUniversities" label="意向院校"><Select mode="tags" allowClear /></Form.Item>
-        <Form.Item name="excludedUniversities" label="排除院校"><Select mode="tags" allowClear /></Form.Item>
-        <Form.Item name="excludedMajors" label="排除专业"><Select mode="tags" allowClear /></Form.Item>
+        <Form.Item name="preferredProvinces" label="意向省份">
+          <Select {...pickerSelectProps(provinceOptions)} placeholder="选择省份" />
+        </Form.Item>
+        <Form.Item name="preferredCities" label="意向城市">
+          <Select {...pickerSelectProps(cityOptions)} placeholder="选择城市" />
+        </Form.Item>
+        <Form.Item name="preferredMajors" label="意向专业">
+          <Select {...pickerSelectProps(majorOptions)} loading={isMajorLoading} placeholder="搜索专业" />
+        </Form.Item>
+        <Form.Item name="preferredUniversities" label="意向院校">
+          <Select {...pickerSelectProps(universityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
+        </Form.Item>
+        <Form.Item name="excludedUniversities" label="排除院校">
+          <Select {...pickerSelectProps(universityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
+        </Form.Item>
+        <Form.Item name="excludedMajors" label="排除专业">
+          <Select {...pickerSelectProps(majorOptions)} loading={isMajorLoading} placeholder="搜索专业" />
+        </Form.Item>
       </div>
       <Form.Item name="careerDirection" label="职业方向"><Input.TextArea rows={2} /></Form.Item>
       <Form.Item name="otherRequirements" label="其他要求"><Input.TextArea rows={2} /></Form.Item>
