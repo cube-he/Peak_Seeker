@@ -16,6 +16,7 @@ import {
   SettingOutlined,
   TeamOutlined,
   UserOutlined,
+  UserSwitchOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import BrandLogo from '@/components/layout/BrandLogo';
@@ -23,6 +24,7 @@ import BrandLogo from '@/components/layout/BrandLogo';
 const mainNavItems = [
   { href: '/admin/dashboard', icon: <AppstoreOutlined />, label: '总览' },
   { href: '/admin/users', icon: <TeamOutlined />, label: '用户管理' },
+  { href: '/admin/students', icon: <UserSwitchOutlined />, label: '学生归属' },
   { href: '/admin/data/import', icon: <DatabaseOutlined />, label: '数据导入' },
   { href: '/admin/config', icon: <SettingOutlined />, label: '系统配置' },
   { href: '/admin/algorithm-config', icon: <SettingOutlined />, label: '算法配置' },

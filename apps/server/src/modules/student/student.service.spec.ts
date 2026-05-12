@@ -21,6 +21,9 @@ describe('StudentService', () => {
       findUnique: jest.Mock;
       create: jest.Mock;
     };
+    teacherProfile: {
+      findUnique: jest.Mock;
+    };
     studentProfile: {
       findUnique: jest.Mock;
       findMany: jest.Mock;
@@ -34,6 +37,9 @@ describe('StudentService', () => {
       user: {
         findUnique: jest.fn(),
         create: jest.fn(),
+      },
+      teacherProfile: {
+        findUnique: jest.fn(),
       },
       studentProfile: {
         findUnique: jest.fn(),
@@ -188,6 +194,64 @@ describe('StudentService', () => {
         }),
       );
     });
+
+    it('lets admin callers filter unassigned students', async () => {
+      prisma.studentProfile.findMany.mockResolvedValue([]);
+      prisma.studentProfile.count.mockResolvedValue(0);
+
+      await service.findByTeacher(undefined, {
+        assignmentStatus: 'UNASSIGNED',
+        page: 1,
+        pageSize: 20,
+      } as any);
+
+      expect(prisma.studentProfile.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ teacherId: null }),
+        }),
+      );
+      expect(prisma.studentProfile.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({ teacherId: null }),
+      });
+    });
+
+    it('lets admin callers filter students by assigned teacher', async () => {
+      prisma.studentProfile.findMany.mockResolvedValue([]);
+      prisma.studentProfile.count.mockResolvedValue(0);
+
+      await service.findByTeacher(undefined, {
+        teacherProfileId: 10,
+        page: 1,
+        pageSize: 20,
+      } as any);
+
+      expect(prisma.studentProfile.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ teacherId: 10 }),
+          include: expect.objectContaining({
+            teacher: expect.any(Object),
+          }),
+        }),
+      );
+    });
+
+    it('keeps teacher callers scoped to their own students even with admin filters', async () => {
+      prisma.studentProfile.findMany.mockResolvedValue([]);
+      prisma.studentProfile.count.mockResolvedValue(0);
+
+      await service.findByTeacher(5, {
+        assignmentStatus: 'UNASSIGNED',
+        teacherProfileId: 10,
+        page: 1,
+        pageSize: 20,
+      } as any);
+
+      expect(prisma.studentProfile.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ teacherId: 5 }),
+        }),
+      );
+    });
   });
 
   // ── updateProfile ───────────────────────────────────────
@@ -330,6 +394,54 @@ describe('StudentService', () => {
       expect(call.data.phone).toBeUndefined();
       expect(call.data.gender).toBeUndefined();
       expect(call.data.ethnicity).toBeUndefined();
+    });
+  });
+
+  describe('assignTeacher', () => {
+    it('assigns a student to an existing teacher profile', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({ id: 1 });
+      prisma.teacherProfile.findUnique.mockResolvedValue({ id: 10 });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 1,
+        teacherId: 10,
+      });
+
+      await service.assignTeacher(1, 10);
+
+      expect(prisma.teacherProfile.findUnique).toHaveBeenCalledWith({
+        where: { id: 10 },
+      });
+      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: { teacherId: 10 },
+        }),
+      );
+    });
+
+    it('can clear the assigned teacher', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 10 });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 1,
+        teacherId: null,
+      });
+
+      await service.assignTeacher(1, null as any);
+
+      expect(prisma.teacherProfile.findUnique).not.toHaveBeenCalled();
+      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: { teacherId: null },
+        }),
+      );
+    });
+
+    it('rejects assignment to a missing teacher profile', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({ id: 1 });
+      prisma.teacherProfile.findUnique.mockResolvedValue(null);
+
+      await expect(service.assignTeacher(1, 99)).rejects.toThrow(NotFoundException);
     });
   });
 

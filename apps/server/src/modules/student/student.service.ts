@@ -111,12 +111,25 @@ export class StudentService {
     teacherProfileId: number | undefined,
     query: QueryStudentDto,
   ) {
-    const { status, keyword, page = 1, pageSize = 20 } = query;
+    const {
+      status,
+      keyword,
+      page = 1,
+      pageSize = 20,
+      assignmentStatus,
+      teacherProfileId: assignedTeacherProfileId,
+    } = query;
 
     const where: Prisma.StudentProfileWhereInput = {};
 
     if (teacherProfileId !== undefined) {
       where.teacherId = teacherProfileId;
+    } else if (assignedTeacherProfileId) {
+      where.teacherId = assignedTeacherProfileId;
+    } else if (assignmentStatus === 'UNASSIGNED') {
+      where.teacherId = null;
+    } else if (assignmentStatus === 'ASSIGNED') {
+      where.teacherId = { not: null };
     }
 
     if (status) {
@@ -145,6 +158,17 @@ export class StudentService {
               gender: true,
               ethnicity: true,
               createdAt: true,
+            },
+          },
+          teacher: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  realName: true,
+                },
+              },
             },
           },
         },
@@ -364,13 +388,23 @@ export class StudentService {
   /**
    * Reassign a student to a different teacher.
    */
-  async assignTeacher(studentId: number, teacherProfileId: number) {
+  async assignTeacher(studentId: number, teacherProfileId: number | null) {
     const profile = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
     });
 
     if (!profile) {
       throw new NotFoundException('学生不存在');
+    }
+
+    if (teacherProfileId !== null) {
+      const teacher = await this.prisma.teacherProfile.findUnique({
+        where: { id: teacherProfileId },
+      });
+
+      if (!teacher) {
+        throw new NotFoundException('教师不存在');
+      }
     }
 
     return this.prisma.studentProfile.update({
