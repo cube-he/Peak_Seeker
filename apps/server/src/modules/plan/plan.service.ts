@@ -274,6 +274,12 @@ export class PlanService {
     });
     if (!batchConfig) throw new NotFoundException('批次配置不存在');
 
+    const existingPlan = await this.prisma.volunteerPlan.findFirst({
+      where: { studentId, batchConfigId: batchConfig.id },
+      orderBy: { versionNo: 'desc' },
+    });
+    if (existingPlan) return existingPlan;
+
     const name = dto.name ?? `${student.user.realName ?? student.user.username}-${batchConfig.batch}-初版`;
     return this.prisma.volunteerPlan.create({
       data: {
