@@ -219,7 +219,43 @@ def build_project(skip_tests=False):
     if not run_local('pnpm build:web'):
         return False
 
+    if not validate_build_artifacts():
+        return False
+
     print('\n[OK] 构建完成')
+    return True
+
+
+def validate_build_artifacts():
+    """部署前校验关键构建产物，避免上传半成品 .next/dist。"""
+    print('\n=== 构建产物校验 ===')
+
+    checks = [
+        (os.path.join(LOCAL_SERVER, 'dist', 'main.js'), '后端 dist/main.js'),
+        (os.path.join(LOCAL_WEB, '.next', 'BUILD_ID'), '前端 .next/BUILD_ID'),
+        (os.path.join(LOCAL_WEB, '.next', 'server'), '前端 .next/server'),
+        (os.path.join(LOCAL_WEB, '.next', 'static'), '前端 .next/static'),
+    ]
+
+    ok = True
+    for path, label in checks:
+        if os.path.exists(path):
+            safe_print(f'  [OK] {label}')
+        else:
+            safe_print(f'  [FAIL] 缺少 {label}: {path}')
+            ok = False
+
+    if not ok:
+        safe_print('  请停止可能占用 apps/web/.next 的 dev server，清理 .next 后重新构建。')
+        return False
+
+    build_id_path = os.path.join(LOCAL_WEB, '.next', 'BUILD_ID')
+    try:
+        with open(build_id_path, 'r', encoding='utf-8') as f:
+            safe_print(f'  前端 BUILD_ID: {f.read().strip()}')
+    except OSError:
+        return False
+
     return True
 
 
@@ -377,6 +413,10 @@ def main():
     if not args.skip_build and not args.setup:
         if not build_project(skip_tests=args.skip_tests):
             print('\n[FAIL] 构建失败')
+            sys.exit(1)
+    elif args.skip_build and not args.setup:
+        if not validate_build_artifacts():
+            print('\n[FAIL] 构建产物不完整，已停止部署')
             sys.exit(1)
 
     # 部署
