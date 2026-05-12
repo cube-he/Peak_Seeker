@@ -15,6 +15,7 @@ describe('PlanService workflow gates', () => {
       batchConfig: { findUnique: jest.fn() },
       volunteerPlan: {
         create: jest.fn(),
+        findFirst: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
@@ -46,6 +47,39 @@ describe('PlanService workflow gates', () => {
     await expect(
       service.createForStudent(20, 10, { batchConfigId: 1 } as any),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('createForStudent reuses an existing plan for the same student and batch', async () => {
+    const existingPlan = {
+      id: 5,
+      studentId: 10,
+      batchConfigId: 22,
+      versionNo: 1,
+      status: 'DRAFT',
+    };
+    prisma.teacherProfile.findUnique.mockResolvedValue({ id: 5, userId: 20 });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10,
+      teacherId: 5,
+      intakeStatus: 'VERIFIED',
+      user: { realName: '小王', username: 'student' },
+    });
+    prisma.batchConfig.findUnique.mockResolvedValue({
+      id: 22,
+      year: 2026,
+      province: '四川',
+      batch: '本科批B段',
+    });
+    prisma.volunteerPlan.findFirst.mockResolvedValue(existingPlan);
+
+    const result = await service.createForStudent(20, 10, { batchConfigId: 22 } as any);
+
+    expect(result).toBe(existingPlan);
+    expect(prisma.volunteerPlan.findFirst).toHaveBeenCalledWith({
+      where: { studentId: 10, batchConfigId: 22 },
+      orderBy: { versionNo: 'desc' },
+    });
+    expect(prisma.volunteerPlan.create).not.toHaveBeenCalled();
   });
 
   it('studentConfirm moves an approved plan to STUDENT_CONFIRMED', async () => {

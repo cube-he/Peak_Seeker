@@ -89,7 +89,7 @@ export default function GeneratePlanPage() {
     onSuccess: (res) => {
       const created = unwrap<Record<string, any>>(res);
       setPlanId(created.id);
-      void message.success('方案草稿已创建');
+      void message.success('方案草稿已就绪');
     },
     onError: (error: any) => {
       void message.error(error?.response?.data?.message ?? '创建方案失败');
