@@ -46,6 +46,8 @@ import {
   StudentWorkspace,
   StudentWorkspacePanel,
 } from '@/components/student/workspace/StudentWorkspace';
+import { useUniversityOptions } from '@/components/student/picker/options/useUniversityOptions';
+import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
 
 type StageKey = '1' | '2' | '3';
 
@@ -770,6 +772,10 @@ function Stage1Fields() {
 }
 
 function Stage2Fields() {
+  const { data: universityOptions, isLoading: isLoadingUniversities } =
+    useUniversityOptions();
+  const { data: majorOptions, isLoading: isLoadingMajors } = useMajorOptions();
+
   return (
     <div className="space-y-6">
       <FormSection
@@ -826,7 +832,16 @@ function Stage2Fields() {
             />
           </Form.Item>
           <Form.Item name="preferredUniversities" label="意向院校">
-            <Select mode="tags" placeholder="输入意向院校" allowClear />
+            <Select
+              mode="multiple"
+              placeholder="选择意向院校"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={universityOptions}
+              loading={isLoadingUniversities}
+              notFoundContent={isLoadingUniversities ? '加载中...' : '暂无匹配院校'}
+            />
           </Form.Item>
           <Form.Item name="preferredBatches" label="意向批次">
             <Select
@@ -850,7 +865,16 @@ function Stage2Fields() {
       >
         <FieldGrid columns="lg:grid-cols-2">
           <Form.Item name="preferredMajors" label="意向专业">
-            <Select mode="tags" placeholder="输入意向专业" allowClear />
+            <Select
+              mode="multiple"
+              placeholder="选择意向专业"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={majorOptions}
+              loading={isLoadingMajors}
+              notFoundContent={isLoadingMajors ? '加载中...' : '暂无匹配专业'}
+            />
           </Form.Item>
           <Form.Item name="preferredMajorCategories" label="意向专业大类">
             <Select
@@ -899,6 +923,10 @@ function Stage2Fields() {
 }
 
 function Stage3Fields() {
+  const { data: universityOptions, isLoading: isLoadingUniversities } =
+    useUniversityOptions();
+  const { data: majorOptions, isLoading: isLoadingMajors } = useMajorOptions();
+
   return (
     <div className="space-y-6">
       <FormSection
@@ -951,10 +979,28 @@ function Stage3Fields() {
             />
           </Form.Item>
           <Form.Item name="excludedUniversities" label="不接受的院校">
-            <Select mode="tags" placeholder="输入" allowClear />
+            <Select
+              mode="multiple"
+              placeholder="选择不接受的院校"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={universityOptions}
+              loading={isLoadingUniversities}
+              notFoundContent={isLoadingUniversities ? '加载中...' : '暂无匹配院校'}
+            />
           </Form.Item>
           <Form.Item name="excludedMajors" label="不接受的专业">
-            <Select mode="tags" placeholder="输入" allowClear />
+            <Select
+              mode="multiple"
+              placeholder="选择不接受的专业"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={majorOptions}
+              loading={isLoadingMajors}
+              notFoundContent={isLoadingMajors ? '加载中...' : '暂无匹配专业'}
+            />
           </Form.Item>
         </FieldGrid>
       </FormSection>

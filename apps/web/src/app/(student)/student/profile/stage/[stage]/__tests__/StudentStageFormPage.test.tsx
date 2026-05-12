@@ -67,6 +67,20 @@ jest.mock('@/components/student/HealthCheckboxGroup', () => ({
   },
 }));
 
+jest.mock('@/components/student/picker/options/useUniversityOptions', () => ({
+  useUniversityOptions: () => ({
+    data: [{ label: '四川大学', value: '四川大学' }],
+    isLoading: false,
+  }),
+}));
+
+jest.mock('@/components/student/picker/options/useMajorOptions', () => ({
+  useMajorOptions: () => ({
+    data: [{ label: '计算机科学与技术', value: '计算机科学与技术' }],
+    isLoading: false,
+  }),
+}));
+
 describe('StudentStageFormPage', () => {
   beforeEach(() => {
     mockStage = '2';
@@ -109,5 +123,14 @@ describe('StudentStageFormPage', () => {
     render(<StudentStageFormPage />);
     expect(screen.queryByText('民族')).not.toBeInTheDocument();
     expect(screen.queryByText('政治面貌')).not.toBeInTheDocument();
+  });
+  it('uses picker-backed selects for preferred universities and majors', () => {
+    mockStage = '2';
+    render(<StudentStageFormPage />);
+
+    expect(screen.getByText('意向院校')).toBeInTheDocument();
+    expect(screen.getByText('选择意向院校')).toBeInTheDocument();
+    expect(screen.getByText('意向专业')).toBeInTheDocument();
+    expect(screen.getByText('选择意向专业')).toBeInTheDocument();
   });
 });
