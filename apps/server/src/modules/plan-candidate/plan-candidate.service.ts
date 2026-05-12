@@ -17,6 +17,13 @@ interface GetCandidatesQuery {
   includeSoftFails?: boolean;
 }
 
+interface EnrollmentPlanSourceInput {
+  planYear: number;
+  province: string;
+  batchName: string;
+  subjects: string;
+}
+
 const EXAM_TYPE_TO_SUBJECTS: Record<string, string> = {
   PHYSICS: '物理',
   HISTORY: '历史',
@@ -27,6 +34,29 @@ const EXAM_TYPE_TO_SUBJECTS: Record<string, string> = {
 @Injectable()
 export class PlanCandidateService {
   constructor(private prisma: PrismaService) {}
+
+  private async resolveEnrollmentPlanSource(input: EnrollmentPlanSourceInput) {
+    const rows = await this.prisma.enrollmentPlan.groupBy({
+      by: ['year'],
+      where: {
+        province: input.province,
+        batch: input.batchName,
+        subjects: input.subjects,
+        year: { lte: input.planYear },
+      },
+      _count: { _all: true },
+      orderBy: { year: 'desc' },
+      take: 1,
+    });
+    const sourceYear = rows[0]?.year ?? input.planYear;
+
+    return {
+      planYear: input.planYear,
+      sourceYear,
+      sourceBatchName: input.batchName,
+      isFallbackYear: sourceYear !== input.planYear,
+    };
+  }
 
   async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {
     const plan = await this.prisma.volunteerPlan.findUnique({
@@ -45,10 +75,17 @@ export class PlanCandidateService {
     });
     if (!student) throw new NotFoundException('学生不存在');
 
+    const province = student.province ?? '四川';
     const subjects = EXAM_TYPE_TO_SUBJECTS[student.examType ?? 'PHYSICS'] || '物理';
+    const source = await this.resolveEnrollmentPlanSource({
+      planYear: plan.year,
+      province,
+      batchName: plan.batchName,
+      subjects,
+    });
     const where = buildHardFilterWhere({
-      year: plan.year,
-      province: student.province ?? '四川',
+      year: source.sourceYear,
+      province,
       batchName: plan.batchName,
       subjects,
       keyword: q.keyword,
@@ -161,6 +198,10 @@ export class PlanCandidateService {
       total: visible.length,
       page,
       pageSize,
+      planYear: source.planYear,
+      sourceYear: source.sourceYear,
+      sourceBatchName: source.sourceBatchName,
+      isFallbackYear: source.isFallbackYear,
       items: visible.slice(start, start + pageSize),
     };
   }
