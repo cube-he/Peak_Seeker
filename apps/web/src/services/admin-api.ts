@@ -7,6 +7,15 @@ export interface UserListParams {
   pageSize?: number;
 }
 
+export interface AdminStudentListParams {
+  search?: string;
+  status?: string;
+  assignmentStatus?: 'ALL' | 'ASSIGNED' | 'UNASSIGNED';
+  teacherProfileId?: number;
+  page?: number;
+  pageSize?: number;
+}
+
 export const adminApi = {
   // Dashboard
   getDashboardStats(): Promise<any> {
@@ -32,6 +41,28 @@ export const adminApi = {
 
   updatePermissions(id: number, permissions: Record<string, boolean>): Promise<any> {
     return api.put(`/admin/users/${id}/permissions`, { permissions }) as any;
+  },
+
+  // Student assignment
+  getStudents(params?: AdminStudentListParams): Promise<any> {
+    return api.get('/students', {
+      params: {
+        keyword: params?.search?.trim() || undefined,
+        status: params?.status || undefined,
+        assignmentStatus: params?.assignmentStatus || undefined,
+        teacherProfileId: params?.teacherProfileId,
+        page: params?.page,
+        pageSize: params?.pageSize,
+      },
+    }) as any;
+  },
+
+  getTeachers(): Promise<any> {
+    return api.get('/teachers') as any;
+  },
+
+  assignStudentTeacher(studentProfileId: number, teacherProfileId: number | null): Promise<any> {
+    return api.put(`/students/${studentProfileId}/assign`, { teacherProfileId }) as any;
   },
 
   // Config

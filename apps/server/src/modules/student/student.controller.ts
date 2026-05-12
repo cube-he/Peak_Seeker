@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  BadRequestException,
   Body,
   Param,
   Query,
@@ -13,6 +14,8 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { IsInt, IsOptional, Min } from 'class-validator';
 import { StudentService } from './student.service';
 import { IntakeExportService } from './intake-export.service';
 import { CreateStudentDto } from './dto/create-student.dto';
@@ -22,6 +25,14 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PoliciesGuard, CheckPolicies } from '../casl';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
 import { JwtPayloadUser } from '../casl/types';
+
+class AssignStudentTeacherDto {
+  @IsOptional()
+  @Transform(({ value }) => (value === null ? null : Number(value)))
+  @IsInt()
+  @Min(1)
+  teacherProfileId?: number | null;
+}
 
 @ApiTags('学生管理')
 @Controller('students')
@@ -150,9 +161,13 @@ export class StudentController {
   @CheckPolicies((ability) => ability.can('manage', 'StudentProfile'))
   async assignTeacher(
     @Param('id', ParseIntPipe) id: number,
-    @Body('teacherProfileId', ParseIntPipe) teacherProfileId: number,
+    @Body() body: AssignStudentTeacherDto,
   ) {
-    return this.studentService.assignTeacher(id, teacherProfileId);
+    if (!Object.prototype.hasOwnProperty.call(body, 'teacherProfileId')) {
+      throw new BadRequestException('teacherProfileId is required; use null to clear assignment');
+    }
+
+    return this.studentService.assignTeacher(id, body.teacherProfileId ?? null);
   }
 
   @Get(':id/export-intake')

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, IsEnum, Min } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsEnum, IsIn, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { StudentStatus } from '@prisma/client';
@@ -13,6 +13,22 @@ export class QueryStudentDto {
   @IsOptional()
   @IsString()
   keyword?: string;
+
+  @ApiPropertyOptional({
+    description: '学生老师归属筛选',
+    enum: ['ALL', 'ASSIGNED', 'UNASSIGNED'],
+    default: 'ALL',
+  })
+  @IsOptional()
+  @IsIn(['ALL', 'ASSIGNED', 'UNASSIGNED'])
+  assignmentStatus?: 'ALL' | 'ASSIGNED' | 'UNASSIGNED';
+
+  @ApiPropertyOptional({ description: '按老师档案 ID 筛选' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  teacherProfileId?: number;
 
   @ApiPropertyOptional({ description: '页码', default: 1 })
   @IsOptional()
