@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Alert, Button, Card, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, Tag, message } from 'antd';
+import { Alert, Button, Card, Cascader, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, Tag, message } from 'antd';
 import {
   ArrowLeftOutlined,
   DownloadOutlined,
   FileTextOutlined,
   LockOutlined,
   SaveOutlined,
+  SwapOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type BonusItem, type UpdateStudentDto } from '@/services/student-api';
@@ -18,6 +19,7 @@ import { useProvinceOptions } from '@/components/student/picker/options/useProvi
 import { useCityOptions } from '@/components/student/picker/options/useCityOptions';
 import { useUniversityOptions } from '@/components/student/picker/options/useUniversityOptions';
 import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
+import { getRegionCascaderOptions, type CascaderOption } from '@/data/student-options';
 
 type SelectOption = { label: string; value: string };
 
@@ -379,30 +381,98 @@ function BasicFields() {
 }
 
 function HouseholdFields() {
+  const form = Form.useFormInstance();
+  const regionOptions = getRegionCascaderOptions();
+
+  const copyHukouToExamLocation = () => {
+    form.setFieldsValue({
+      examLocationProvince: form.getFieldValue('province') ?? null,
+      examLocationCity: form.getFieldValue('city') ?? null,
+      examLocationCounty: form.getFieldValue('county') ?? null,
+    });
+  };
+
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <Form.Item name="province" label="户籍省">
-        <Input placeholder="四川" />
-      </Form.Item>
-      <Form.Item name="city" label="户籍市">
-        <Input />
-      </Form.Item>
-      <Form.Item name="county" label="户籍县/区">
-        <Input />
-      </Form.Item>
-      <Form.Item name="isRural" valuePropName="checked">
-        <Checkbox>农村户籍</Checkbox>
-      </Form.Item>
-      <Form.Item name="examLocationProvince" label="高考所在省">
-        <Input placeholder="四川" />
-      </Form.Item>
-      <Form.Item name="examLocationCity" label="高考所在市">
-        <Input />
-      </Form.Item>
-      <Form.Item name="examLocationCounty" label="高考所在县/区">
-        <Input />
-      </Form.Item>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_160px] lg:items-start">
+        <RegionCascaderField
+          label="户籍所在地"
+          fieldKeys={['province', 'city', 'county']}
+          options={regionOptions}
+          placeholder="选择户籍省 / 市 / 县区"
+        />
+        <Form.Item name="isRural" valuePropName="checked" className="lg:pt-[30px]">
+          <Checkbox>农村户籍</Checkbox>
+        </Form.Item>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_160px] lg:items-start">
+        <RegionCascaderField
+          label="高考报名地"
+          fieldKeys={['examLocationProvince', 'examLocationCity', 'examLocationCounty']}
+          options={regionOptions}
+          placeholder="选择报名省 / 市 / 县区"
+        />
+        <Button icon={<SwapOutlined />} onClick={copyHukouToExamLocation} className="lg:mt-[30px]">
+          同户籍所在地
+        </Button>
+      </div>
     </div>
+  );
+}
+
+function RegionCascaderField({
+  label,
+  fieldKeys,
+  options,
+  placeholder,
+}: {
+  label: string;
+  fieldKeys: [string, string, string];
+  options: CascaderOption[];
+  placeholder: string;
+}) {
+  const form = Form.useFormInstance();
+  const province = Form.useWatch(fieldKeys[0], form);
+  const city = Form.useWatch(fieldKeys[1], form);
+  const county = Form.useWatch(fieldKeys[2], form);
+  const value = [province, city, county].filter(Boolean) as string[];
+
+  const handleChange = (values?: (string | number)[]) => {
+    const [nextProvince, nextCity, nextCounty] = values ?? [];
+    form.setFieldsValue({
+      [fieldKeys[0]]: nextProvince ? String(nextProvince) : null,
+      [fieldKeys[1]]: nextCity ? String(nextCity) : null,
+      [fieldKeys[2]]: nextCounty ? String(nextCounty) : null,
+    });
+  };
+
+  return (
+    <>
+      <Form.Item name={fieldKeys[0]} hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name={fieldKeys[1]} hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name={fieldKeys[2]} hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item label={label}>
+        <Cascader
+          aria-label={label}
+          value={value.length > 0 ? value : undefined}
+          onChange={handleChange}
+          options={options}
+          placeholder={placeholder}
+          changeOnSelect
+          showSearch={{
+            filter: (input, path) => path.some((option) => String(option.label).includes(input)),
+          }}
+          style={{ width: '100%' }}
+        />
+      </Form.Item>
+    </>
   );
 }
 

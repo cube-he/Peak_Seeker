@@ -52,6 +52,12 @@ jest.mock('@tanstack/react-query', () => ({
       intakeStatus: 'DRAFT',
       examYear: 2026,
       examType: 'PHYSICS',
+      province: '四川',
+      city: '成都市',
+      county: '锦江区',
+      examLocationProvince: null,
+      examLocationCity: null,
+      examLocationCounty: null,
       totalScore: 600,
       provincialRank: 1,
       rankCheck: {
@@ -142,6 +148,34 @@ describe('StudentDetailPage', () => {
     expect(
       screen.getByText((text) => text.includes('28,500') && text.includes('1')),
     ).toBeInTheDocument();
+  });
+
+  it('uses region cascaders and can copy hukou location to exam registration location', async () => {
+    const user = userEvent.setup();
+    render(<StudentDetailPage />);
+
+    await user.click(screen.getByText('户籍与高考所在地'));
+
+    expect(screen.getAllByLabelText('户籍所在地').length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('高考报名地').length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText('户籍省')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('高考所在省')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /同户籍所在地/ }));
+    await user.click(screen.getByRole('button', { name: /保存/ }));
+
+    await waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          province: '四川',
+          city: '成都市',
+          county: '锦江区',
+          examLocationProvince: '四川',
+          examLocationCity: '成都市',
+          examLocationCounty: '锦江区',
+        }),
+      );
+    });
   });
 });
 

@@ -86,14 +86,25 @@ export const BONUS_POLICY_OPTIONS: SingleOption[] = [
 
 let cached: CascaderOption[] | null = null;
 
+function normalizeProvinceName(name: string): string {
+  return name
+    .replace('特别行政区', '')
+    .replace('维吾尔自治区', '')
+    .replace('壮族自治区', '')
+    .replace('回族自治区', '')
+    .replace('自治区', '')
+    .replace(/[省市]$/, '');
+}
+
 export function getRegionCascaderOptions(): CascaderOption[] {
   if (cached) return cached;
   const provinces = RAW['86'] ?? {};
   cached = Object.entries(provinces).map(([provCode, provName]) => {
     const cities = RAW[provCode] ?? {};
+    const normalizedProvinceName = normalizeProvinceName(provName);
     return {
-      value: provName,
-      label: provName,
+      value: normalizedProvinceName,
+      label: normalizedProvinceName,
       children: Object.entries(cities).map(([cityCode, cityName]) => {
         const counties = RAW[cityCode] ?? {};
         const childArr = Object.entries(counties).map(([, countyName]) => ({
