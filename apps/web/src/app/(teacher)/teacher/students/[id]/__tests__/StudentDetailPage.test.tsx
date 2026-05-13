@@ -5,6 +5,41 @@ import StudentDetailPage from '../page';
 
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockBaseStudentData = {
+  id: 1,
+  realName: '测试学生',
+  dataVersion: 1,
+  status: 'ACTIVE',
+  intakeStatus: 'DRAFT',
+  examYear: 2026,
+  examType: 'PHYSICS',
+  province: '四川',
+  city: '成都市',
+  county: '锦江区',
+  examLocationProvince: null,
+  examLocationCity: null,
+  examLocationCounty: null,
+  totalScore: 600,
+  provincialRank: 1,
+  rankCheck: {
+    calculatedRank: 28500,
+    currentRank: 1,
+    isMismatch: true,
+    difference: -28499,
+    requestedYear: 2026,
+    sourceYear: 2026,
+    isEstimated: false,
+    source: 'score-segment',
+  },
+  progress: {
+    studentSelfCompleteness: 80,
+    teacherDataCompleteness: 70,
+    overallCompleteness: 75,
+    isRecommendable: true,
+    missingFieldsForRecommend: [],
+  },
+};
+let mockStudentData = mockBaseStudentData;
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -44,37 +79,7 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@tanstack/react-query', () => ({
   useQuery: () => ({
-    data: {
-      id: 1,
-      realName: '测试学生',
-      dataVersion: 1,
-      status: 'ACTIVE',
-      intakeStatus: 'DRAFT',
-      examYear: 2026,
-      examType: 'PHYSICS',
-      province: '四川',
-      city: '成都市',
-      county: '锦江区',
-      examLocationProvince: null,
-      examLocationCity: null,
-      examLocationCounty: null,
-      totalScore: 600,
-      provincialRank: 1,
-      rankCheck: {
-        calculatedRank: 28500,
-        currentRank: 1,
-        isMismatch: true,
-        difference: -28499,
-        source: 'score-segment',
-      },
-      progress: {
-        studentSelfCompleteness: 80,
-        teacherDataCompleteness: 70,
-        overallCompleteness: 75,
-        isRecommendable: true,
-        missingFieldsForRecommend: [],
-      },
-    },
+    data: mockStudentData,
     isLoading: false,
   }),
   useMutation: () => ({ mutate: mockMutate, isPending: false }),
@@ -120,6 +125,11 @@ describe('StudentDetailPage', () => {
   beforeEach(() => {
     mockMutate.mockClear();
     mockInvalidateQueries.mockClear();
+    mockStudentData = {
+      ...mockBaseStudentData,
+      rankCheck: { ...mockBaseStudentData.rankCheck },
+      progress: { ...mockBaseStudentData.progress },
+    };
   });
 
   it('shows concrete options for preference and bonus selects', async () => {
@@ -147,6 +157,29 @@ describe('StudentDetailPage', () => {
 
     expect(
       screen.getByText((text) => text.includes('28,500') && text.includes('1')),
+    ).toBeInTheDocument();
+  });
+
+  it('labels temporary 2025 score segment data used for 2026 rank checks', () => {
+    mockStudentData = {
+      ...mockBaseStudentData,
+      totalScore: 479,
+      rankCheck: {
+        calculatedRank: 156000,
+        currentRank: 1,
+        isMismatch: true,
+        difference: -155999,
+        requestedYear: 2026,
+        sourceYear: 2025,
+        isEstimated: true,
+        source: 'score-segment',
+      },
+    };
+
+    render(<StudentDetailPage />);
+
+    expect(
+      screen.getByText((text) => text.includes('按 2025 一分一段估算') && text.includes('156,000')),
     ).toBeInTheDocument();
   });
 

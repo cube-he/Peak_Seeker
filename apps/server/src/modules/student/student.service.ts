@@ -20,13 +20,23 @@ import { ScoreSegmentService } from '../score-segment/score-segment.service';
 import type { ExamType } from '../score-segment/exam-type.helper';
 
 const USER_LEVEL_FIELD_SET = new Set<string>(USER_LEVEL_FIELDS);
+const TEMPORARY_RANK_FALLBACK_YEAR = 2025;
 
 export interface RankCheck {
   calculatedRank: number | null;
   currentRank: number | null;
   isMismatch: boolean;
   difference: number | null;
+  requestedYear: number | null;
+  sourceYear: number | null;
+  isEstimated: boolean;
   source: 'score-segment' | 'missing-input' | 'unavailable';
+}
+
+interface RankComputation {
+  rank: number;
+  requestedYear: number;
+  sourceYear: number;
 }
 
 @Injectable()
@@ -52,19 +62,41 @@ export class StudentService {
 
   /**
    * 学生改了总分/科类时，用 score-segment 自动算位次写回 provincialRank。
-   * 查不到（数据缺失/科类不支持）→ 返回 null（由调用方决定是否清空 provincialRank）。
+   * 2026 一分一段未发布前，先尝试 2026，缺表时临时用 2025 作为校验来源。
    */
   private async tryComputeRank(
     examType: string | null | undefined,
     examYear: number | null | undefined,
     totalScore: number | null | undefined,
-  ): Promise<number | null> {
+  ): Promise<RankComputation | null> {
     if (totalScore == null || !examType || !examYear) return null;
     const mapped = this.mapExamTypeForRank(examType);
     if (!mapped) return null;
+
+    const primary = await this.tryComputeRankForYear(examYear, mapped, totalScore, examYear);
+    if (primary) return primary;
+
+    if (examYear === 2026) {
+      return this.tryComputeRankForYear(
+        TEMPORARY_RANK_FALLBACK_YEAR,
+        mapped,
+        totalScore,
+        examYear,
+      );
+    }
+
+    return null;
+  }
+
+  private async tryComputeRankForYear(
+    sourceYear: number,
+    examType: ExamType,
+    totalScore: number,
+    requestedYear: number,
+  ): Promise<RankComputation | null> {
     try {
-      const r = await this.scoreSegmentService.scoreToRank(examYear, mapped, totalScore);
-      return r.rank;
+      const r = await this.scoreSegmentService.scoreToRank(sourceYear, examType, totalScore);
+      return { rank: r.rank, requestedYear, sourceYear: r.year };
     } catch {
       // 一分一段表缺数据 / 分数越界等：静默失败，留位次为空
       return null;
@@ -75,6 +107,8 @@ export class StudentService {
     currentRank: number | null | undefined,
     calculatedRank: number | null,
     source: RankCheck['source'],
+    requestedYear: number | null = null,
+    sourceYear: number | null = null,
   ): RankCheck {
     const normalizedCurrent = currentRank ?? null;
     const difference =
@@ -87,6 +121,9 @@ export class StudentService {
       currentRank: normalizedCurrent,
       isMismatch: difference != null && difference !== 0,
       difference,
+      requestedYear,
+      sourceYear,
+      isEstimated: source === 'score-segment' && requestedYear != null && sourceYear != null && requestedYear !== sourceYear,
       source,
     };
   }
@@ -99,10 +136,10 @@ export class StudentService {
   }): Promise<RankCheck> {
     const currentRank = profile.provincialRank ?? null;
     if (profile.totalScore == null || !profile.examType || !profile.examYear) {
-      return this.makeRankCheck(currentRank, null, 'missing-input');
+      return this.makeRankCheck(currentRank, null, 'missing-input', profile.examYear ?? null);
     }
 
-    const calculatedRank = await this.tryComputeRank(
+    const rankComputation = await this.tryComputeRank(
       profile.examType,
       profile.examYear,
       profile.totalScore,
@@ -110,8 +147,10 @@ export class StudentService {
 
     return this.makeRankCheck(
       currentRank,
-      calculatedRank,
-      calculatedRank == null ? 'unavailable' : 'score-segment',
+      rankComputation?.rank ?? null,
+      rankComputation == null ? 'unavailable' : 'score-segment',
+      profile.examYear,
+      rankComputation?.sourceYear ?? null,
     );
   }
 
@@ -405,8 +444,14 @@ export class StudentService {
       // 查到 → 写回；查不到 → 不动 provincialRank（保留老师可能已手填的值）。
       // 选项 a：若需要"分数缺失即清空位次"，可改为 rankUpdate.provincialRank = computed;
       if (computed !== null) {
-        rankUpdate.provincialRank = computed;
-        rankCheck = this.makeRankCheck(rankUpdate.provincialRank, computed, 'score-segment');
+        rankUpdate.provincialRank = computed.rank;
+        rankCheck = this.makeRankCheck(
+          rankUpdate.provincialRank,
+          computed.rank,
+          'score-segment',
+          computed.requestedYear,
+          computed.sourceYear,
+        );
       }
     }
 

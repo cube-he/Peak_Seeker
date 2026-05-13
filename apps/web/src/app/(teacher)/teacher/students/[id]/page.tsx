@@ -28,6 +28,9 @@ interface RankCheck {
   currentRank: number | null;
   isMismatch: boolean;
   difference: number | null;
+  requestedYear?: number | null;
+  sourceYear?: number | null;
+  isEstimated?: boolean;
   source: 'score-segment' | 'missing-input' | 'unavailable';
 }
 
@@ -90,13 +93,25 @@ function RankCheckExtra({ rankCheck }: { rankCheck?: RankCheck }) {
   }
 
   if (rankCheck.source === 'unavailable' || rankCheck.calculatedRank == null) {
-    return <span className="text-amber-600">未查到对应一分一段数据，请人工核对位次。</span>;
+    if (rankCheck.currentRank != null) {
+      return <span className="text-amber-600">当前位次已保存；对应年份一分一段暂不可用，系统暂不能自动校验。</span>;
+    }
+    return <span className="text-amber-600">对应年份一分一段暂不可用，请先手动填写位次。</span>;
   }
+
+  const sourceLabel =
+    rankCheck.isEstimated && rankCheck.sourceYear
+      ? `按 ${rankCheck.sourceYear} 一分一段估算`
+      : '系统一分一段';
+  const estimateNote =
+    rankCheck.isEstimated && rankCheck.requestedYear && rankCheck.sourceYear
+      ? `（${rankCheck.requestedYear} 数据未出，暂用于校验）`
+      : '';
 
   if (rankCheck.isMismatch && rankCheck.currentRank != null) {
     return (
       <span className="font-medium text-red-600">
-        系统一分一段：{formatRank(rankCheck.calculatedRank)} 位；当前填写：{formatRank(rankCheck.currentRank)} 位；
+        {sourceLabel}：{formatRank(rankCheck.calculatedRank)} 位{estimateNote}；当前填写：{formatRank(rankCheck.currentRank)} 位；
         相差 {formatRank(Math.abs(rankCheck.difference ?? 0))} 位，请核对。
       </span>
     );
@@ -104,7 +119,7 @@ function RankCheckExtra({ rankCheck }: { rankCheck?: RankCheck }) {
 
   return (
     <span className="text-text-tertiary">
-      系统一分一段：{formatRank(rankCheck.calculatedRank)} 位，当前填写与系统计算一致。
+      {sourceLabel}：{formatRank(rankCheck.calculatedRank)} 位{estimateNote}，当前填写与系统计算一致。
     </span>
   );
 }

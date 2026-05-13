@@ -290,6 +290,50 @@ describe('StudentService', () => {
         }),
       );
     });
+
+    it('uses 2025 score segment data as the temporary source for 2026 rank checks', async () => {
+      scoreSegmentService.scoreToRank.mockImplementation(async (year: number) => {
+        if (year === 2026) {
+          throw new Error('2026 score segment data not found');
+        }
+        return { year: 2025, examType: '物理', score: 479, rank: 156000, percentile: 0.55 };
+      });
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        dataVersion: 1,
+        status: StudentStatus.ACTIVE,
+        examYear: 2026,
+        examType: 'PHYSICS',
+        totalScore: 479,
+        provincialRank: 1,
+        user: {
+          id: 99,
+          username: 'student01',
+          realName: '测试学生',
+          phone: '13800000000',
+          gender: 'MALE',
+          ethnicity: '汉族',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+        teacher: null,
+      });
+
+      const result = await service.findById(10) as any;
+
+      expect(scoreSegmentService.scoreToRank).toHaveBeenNthCalledWith(1, 2026, '物理', 479);
+      expect(scoreSegmentService.scoreToRank).toHaveBeenNthCalledWith(2, 2025, '物理', 479);
+      expect(result.rankCheck).toEqual(
+        expect.objectContaining({
+          calculatedRank: 156000,
+          currentRank: 1,
+          isMismatch: true,
+          requestedYear: 2026,
+          sourceYear: 2025,
+          isEstimated: true,
+          source: 'score-segment',
+        }),
+      );
+    });
   });
 
   // ── updateProfile ───────────────────────────────────────
