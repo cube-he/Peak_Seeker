@@ -174,7 +174,7 @@ export const studentApi = {
   },
 
   update(id: string, data: UpdateStudentDto): Promise<any> {
-    return api.put(`/students/${id}`, data) as any;
+    return api.put(`/students/${id}/profile`, data) as any;
   },
 
   reviewIntake(id: string, data: { action: 'VERIFY' | 'REQUEST_CHANGE'; comment?: string }): Promise<any> {
