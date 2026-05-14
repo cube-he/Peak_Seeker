@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Alert, Button, Card, Descriptions, Empty, Input, Modal, Space, Spin, Table, Tag, Timeline, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { ArrowLeftOutlined, CheckCircleOutlined, EditOutlined, ExportOutlined, FileDoneOutlined, PlayCircleOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, CheckCircleOutlined, DeleteOutlined, EditOutlined, ExportOutlined, FileDoneOutlined, PlayCircleOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
@@ -79,6 +79,16 @@ export default function PlanDetailPage() {
     onError: () => message.error('导出失败'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => planApi.deletePlan(planId),
+    onSuccess: () => {
+      void message.success('方案已删除');
+      void queryClient.invalidateQueries({ queryKey: ['teacher-plans'] });
+      router.push('/teacher/plans');
+    },
+    onError: (error: any) => message.error(error?.response?.data?.message ?? '删除失败'),
+  });
+
   const updateMajorSelectionMutation = useMutation({
     mutationFn: ({
       itemId,
@@ -114,6 +124,17 @@ export default function PlanDetailPage() {
       okText: '提交',
       cancelText: '取消',
       onOk: () => reviewMutation.mutate(action),
+    });
+  };
+
+  const confirmDeletePlan = () => {
+    Modal.confirm({
+      title: '删除草稿方案',
+      content: `确认删除 ${plan?.studentName || '当前学生'} 的草稿方案？此操作不可恢复。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => deleteMutation.mutateAsync(),
     });
   };
 
@@ -158,6 +179,11 @@ export default function PlanDetailPage() {
             {plan.status === 'DRAFT' ? (
               <Button icon={<EditOutlined />} onClick={() => router.push(`/teacher/plans/generate/${plan.studentId}?planId=${plan.id}`)}>
                 继续编辑
+              </Button>
+            ) : null}
+            {plan.status === 'DRAFT' ? (
+              <Button danger icon={<DeleteOutlined />} loading={deleteMutation.isPending} onClick={confirmDeletePlan}>
+                删除草稿
               </Button>
             ) : null}
             <Button icon={<ExportOutlined />} loading={exportMutation.isPending} onClick={() => exportMutation.mutate()}>

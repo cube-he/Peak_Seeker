@@ -120,6 +120,10 @@ export const planApi = {
     return api.put(`/plans/${id}`, data) as any;
   },
 
+  deletePlan(id: string | number): Promise<any> {
+    return api.delete(`/plans/${id}`) as any;
+  },
+
   deleteItem(planId: string, itemId: number): Promise<any> {
     return api.delete(`/plans/${planId}/items/${itemId}`) as any;
   },

@@ -130,7 +130,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <button className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-0 bg-surface-dim text-text-tertiary transition-colors hover:text-primary">
                 <BellOutlined className="text-base" />
               </button>
-              <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+              <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
                 <Space className="cursor-pointer">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[13px] font-medium text-white">
                     {user?.username?.charAt(0) || <UserOutlined />}

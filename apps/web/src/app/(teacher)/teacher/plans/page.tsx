@@ -2,15 +2,16 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Button, Card, Empty, Input, Segmented, Select, Spin, Table, Tag } from 'antd';
+import { Button, Card, Empty, Input, Modal, Segmented, Select, Space, Spin, Table, Tag, message } from 'antd';
 import {
   AppstoreOutlined,
+  DeleteOutlined,
   EyeOutlined,
   PlusOutlined,
   SearchOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
@@ -61,6 +62,7 @@ export default function TeacherPlansPage() {
   const [search, setSearch] = useState('');
   const [batchFilter, setBatchFilter] = useState<string | undefined>();
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['teacher-plans', search, batchFilter, statusFilter],
@@ -79,6 +81,26 @@ export default function TeacherPlansPage() {
     }),
     [plans],
   );
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => planApi.deletePlan(id),
+    onSuccess: () => {
+      void message.success('方案已删除');
+      void queryClient.invalidateQueries({ queryKey: ['teacher-plans'] });
+    },
+    onError: (error: any) => message.error(error?.response?.data?.message ?? '删除失败'),
+  });
+
+  const confirmDeletePlan = (plan: Plan) => {
+    Modal.confirm({
+      title: '删除草稿方案',
+      content: `确认删除 ${plan.studentName} 的 ${getBatchLabel(plan.batch)} v${plan.version} 草稿方案？此操作不可恢复。`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => deleteMutation.mutateAsync(plan.id),
+    });
+  };
 
   const columns: ColumnsType<Plan> = [
     {
@@ -137,13 +159,27 @@ export default function TeacherPlansPage() {
     {
       title: '操作',
       key: 'actions',
-      width: 110,
+      width: 170,
       render: (_, record) => (
-        <Link href={`/teacher/plans/${record.id}`}>
-          <Button type="text" size="small" icon={<EyeOutlined />}>
-            查看
-          </Button>
-        </Link>
+        <Space size={4}>
+          <Link href={`/teacher/plans/${record.id}`}>
+            <Button type="text" size="small" icon={<EyeOutlined />}>
+              查看
+            </Button>
+          </Link>
+          {record.status === 'DRAFT' ? (
+            <Button
+              danger
+              type="text"
+              size="small"
+              icon={<DeleteOutlined />}
+              loading={deleteMutation.isPending && deleteMutation.variables === record.id}
+              onClick={() => confirmDeletePlan(record)}
+            >
+              删除
+            </Button>
+          ) : null}
+        </Space>
       ),
     },
   ];
@@ -238,33 +274,55 @@ export default function TeacherPlansPage() {
             </div>
           ) : (
             plans.map((plan) => (
-              <Link key={plan.id} href={`/teacher/plans/${plan.id}`} className="no-underline">
-                <Card hoverable size="small" className="h-full border-l-[3px] border-l-accent" bodyStyle={{ padding: '16px' }}>
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-text">{plan.studentName}</p>
-                      <p className="mt-1 text-xs text-text-muted">
-                        {getBatchLabel(plan.batch)} · v{plan.version}
-                      </p>
-                    </div>
-                    <PlanStatusBadge status={plan.status} />
+              <Card
+                key={plan.id}
+                hoverable
+                size="small"
+                className="h-full border-l-[3px] border-l-accent"
+                bodyStyle={{ padding: '16px' }}
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-text">{plan.studentName}</p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {getBatchLabel(plan.batch)} · v{plan.version}
+                    </p>
                   </div>
-                  <div className="grid grid-cols-3 rounded-xl bg-bg py-3 text-center">
-                    <div className="border-r border-border-subtle px-2">
-                      <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">志愿</p>
-                      <p className="font-serif text-lg font-semibold text-text">{plan.itemCount}</p>
-                    </div>
-                    <div className="border-r border-border-subtle px-2">
-                      <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">来源</p>
-                      <p className="text-xs text-text-secondary">{plan.examSource === 'GAOKAO' ? '高考' : '模拟'}</p>
-                    </div>
-                    <div className="px-2">
-                      <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">更新</p>
-                      <p className="text-xs text-text-secondary">{formatDate(plan.updatedAt)}</p>
-                    </div>
+                  <PlanStatusBadge status={plan.status} />
+                </div>
+                <div className="grid grid-cols-3 rounded-xl bg-bg py-3 text-center">
+                  <div className="border-r border-border-subtle px-2">
+                    <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">志愿</p>
+                    <p className="font-serif text-lg font-semibold text-text">{plan.itemCount}</p>
                   </div>
-                </Card>
-              </Link>
+                  <div className="border-r border-border-subtle px-2">
+                    <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">来源</p>
+                    <p className="text-xs text-text-secondary">{plan.examSource === 'GAOKAO' ? '高考' : '模拟'}</p>
+                  </div>
+                  <div className="px-2">
+                    <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">更新</p>
+                    <p className="text-xs text-text-secondary">{formatDate(plan.updatedAt)}</p>
+                  </div>
+                </div>
+                <Space className="mt-4" size={8}>
+                  <Link href={`/teacher/plans/${plan.id}`}>
+                    <Button size="small" icon={<EyeOutlined />}>
+                      查看
+                    </Button>
+                  </Link>
+                  {plan.status === 'DRAFT' ? (
+                    <Button
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      loading={deleteMutation.isPending && deleteMutation.variables === plan.id}
+                      onClick={() => confirmDeletePlan(plan)}
+                    >
+                      删除草稿
+                    </Button>
+                  ) : null}
+                </Space>
+              </Card>
             ))
           )}
         </div>

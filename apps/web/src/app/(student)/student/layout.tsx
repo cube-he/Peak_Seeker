@@ -81,7 +81,7 @@ export default function StudentLayout({ children }: StudentLayoutProps) {
             <button className="w-8 h-8 bg-surface-dim rounded-full flex items-center justify-center text-text-tertiary border-0 cursor-pointer hover:text-primary transition-colors">
               <BellOutlined className="text-base" />
             </button>
-            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
               <Space className="cursor-pointer">
                 <span className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white text-[13px] font-medium">
                   {user?.realName?.charAt(0) || user?.username?.charAt(0) || <UserOutlined />}
