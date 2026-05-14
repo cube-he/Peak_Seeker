@@ -33,6 +33,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type EligibleBatch } from '@/services/student-api';
 import { planApi, type CandidateGroupSort } from '@/services/plan-api';
+import PlanMajorSelectionEditor from '../../components/PlanMajorSelectionEditor';
 import {
   findPlanForBatch,
   formatCandidateGroup,
@@ -40,11 +41,13 @@ import {
   formatGroupScoreLine,
   formatRankGap,
   formatSupplementary,
+  getMajorGroupSelectionPayload,
   getLatestPlansByBatch,
   getPlanItemsForWorkbench,
   hasSupplementaryData,
   isCandidateGroupAlreadyAdded,
   sortPlansForWorkbench,
+  type SelectedPlanMajorPayload,
   type WorkbenchPlan,
 } from './plan-workbench-utils';
 import styles from './candidate-pool-polished.module.css';
@@ -60,6 +63,8 @@ type DynamicGradientTier =
   | 'QIANG_BAO'
   | 'DIBAO';
 type MatchStatus = 'PASS' | 'SOFT_FAIL';
+type MajorDisplaySection = 'RECOMMENDED' | 'BACKUP' | 'RISK';
+type RankRiskEligibility = 'FORMAL' | 'OBSERVE_ONLY' | 'REJECTED' | 'INSUFFICIENT_DATA';
 
 interface DynamicGradientDetail {
   gradient: Gradient;
@@ -100,6 +105,19 @@ interface FailReason {
   rule: string;
   note: string;
   severity?: string;
+}
+
+interface RankStrategyDetail {
+  sourceAdmissionYear?: number | null;
+  rankSourceYear?: number | string | null;
+  candidateRank?: number | null;
+  requiredEasierDelta?: number | null;
+  rushFormalLimit?: number | null;
+  rushObserveLimit?: number | null;
+  safeNormalMargin?: number | null;
+  safeStrongMargin?: number | null;
+  eligibility?: RankRiskEligibility;
+  reason?: string | null;
 }
 
 interface CandidateMajor {
@@ -144,7 +162,16 @@ interface CandidateMajor {
   suggestedGradient: Gradient;
   matchStatus: MatchStatus;
   failReasons: FailReason[];
+  displaySection?: MajorDisplaySection;
+  displayReason?: string | null;
+  rankStrategy?: RankStrategyDetail | null;
   isRecommendedAnchor?: boolean;
+}
+
+interface CandidateMajorSections {
+  recommended: CandidateMajor[];
+  backup: CandidateMajor[];
+  risk: CandidateMajor[];
 }
 
 interface CandidateGroup {
@@ -198,6 +225,7 @@ interface CandidateGroup {
   majorStrengthScore?: number | null;
   recommendedAnchorEnrollmentPlanId?: number | null;
   majors: CandidateMajor[];
+  majorSections?: CandidateMajorSections | null;
 }
 
 interface CandidateGroupListResult {
@@ -234,6 +262,12 @@ const GRADIENT_COLOR: Record<DynamicGradientTier, string> = {
   BAO: 'green',
   QIANG_BAO: 'cyan',
   DIBAO: 'lime',
+};
+
+const MAJOR_SECTION_LABEL: Record<MajorDisplaySection, string> = {
+  RECOMMENDED: '推荐填写',
+  BACKUP: '可备选',
+  RISK: '风险/不建议',
 };
 
 const CANDIDATE_SORT_OPTIONS: Array<{ label: string; value: CandidateGroupSort }> = [
@@ -331,7 +365,69 @@ function formatTuition(value?: number | null) {
 }
 
 function getAnchorMajor(group: CandidateGroup) {
-  return group.majors.find((major) => major.enrollmentPlanId === group.recommendedAnchorEnrollmentPlanId) ?? group.majors[0];
+  const sections = getMajorSections(group);
+  return group.majors.find((major) => major.enrollmentPlanId === group.recommendedAnchorEnrollmentPlanId) ??
+    sections.recommended[0] ??
+    group.majors[0];
+}
+
+function getMajorSections(group: CandidateGroup): CandidateMajorSections {
+  return group.majorSections ?? {
+    recommended: group.majors ?? [],
+    backup: [],
+    risk: [],
+  };
+}
+
+function majorSectionTone(section: MajorDisplaySection, major: CandidateMajor) {
+  if (section === 'RISK') return 'warn';
+  if (section === 'BACKUP') return 'muted';
+  return major.matchStatus === 'SOFT_FAIL' ? 'warn' : gradientTone(gradientTier(major));
+}
+
+function CandidateMajorSection({
+  title,
+  section,
+  majors,
+}: {
+  title: string;
+  section: MajorDisplaySection;
+  majors: CandidateMajor[];
+}) {
+  if (!majors.length) return null;
+  return (
+    <div className={styles.majorSection}>
+      <div className={styles.majorSectionHead}>
+        <span>{title}</span>
+        <em>{majors.length}</em>
+      </div>
+      <div className={styles.majorSectionRows}>
+        {majors.map((major) => (
+          <div
+            key={major.enrollmentPlanId}
+            className={cx(
+              styles.majorRow,
+              section === 'BACKUP' && styles.majorRowBackup,
+              section === 'RISK' && styles.majorRowRisk,
+            )}
+          >
+            <span className={styles.majorNameCell}>
+              <strong>{major.majorName}</strong>
+              {major.displayReason ? <small>{major.displayReason}</small> : null}
+            </span>
+            <span className={styles.num}>{formatScoreRankValue(major.majorMinScore, major.majorMinRank)}</span>
+            <span>计划 {major.planCount ?? '-'}</span>
+            <span>{major.standardDuration || major.duration || '-'}</span>
+            <span>
+              <span className={tagClass(majorSectionTone(section, major))}>
+                {section === 'RISK' ? MAJOR_SECTION_LABEL.RISK : section === 'BACKUP' ? MAJOR_SECTION_LABEL.BACKUP : GRADIENT_LABEL[gradientTier(major)]}
+              </span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function getAdjustedRank(group: CandidateGroup, major?: CandidateMajor | null) {
@@ -342,7 +438,14 @@ function getAddActionLabel(group: CandidateGroup, major?: CandidateMajor, added?
   if (added) return '已在方案';
   if (!major) return '暂无可加入专业';
   if (major.matchStatus === 'SOFT_FAIL' || group.softFailCount > 0) return '确认风险后加入';
-  return '加入推荐专业';
+  return '加入并补满专业';
+}
+
+function selectedMajorSectionLabel(section?: string | null) {
+  if (section === 'RECOMMENDED' || section === 'BACKUP' || section === 'RISK') {
+    return MAJOR_SECTION_LABEL[section];
+  }
+  return '专业';
 }
 
 function getDecisionText(group: CandidateGroup, major: CandidateMajor | undefined, studentRank?: number | null) {
@@ -535,19 +638,36 @@ export default function GeneratePlanPage() {
   });
 
   const addMutation = useMutation({
-    mutationFn: ({ group, major }: { group: CandidateGroup; major: CandidateMajor }) =>
+    mutationFn: ({
+      group,
+      major,
+      selectedMajors,
+      candidateMajorRanking,
+      softFailReasons,
+    }: {
+      group: CandidateGroup;
+      major: CandidateMajor;
+      selectedMajors: SelectedPlanMajorPayload[];
+      candidateMajorRanking: SelectedPlanMajorPayload[];
+      softFailReasons: FailReason[];
+    }) =>
       planApi.addItem(planId!, {
         enrollmentPlanId: major.enrollmentPlanId,
         gradient: major.suggestedGradient ?? group.suggestedGradient,
+        acceptAdjust: true,
+        selectedMajors,
+        candidateMajorRanking,
         selectionReason: [
           `锚定专业：${major.majorName}`,
+          `建议专业顺序：${selectedMajors.map((item) => item.majorName).join('、')}`,
+          '服从调剂：是',
           ...(group.dynamicGradient?.reasons ?? []),
           ...(group.matchReasons ?? []),
           ...(major.matchReasons ?? []),
         ].filter(Boolean).join('；'),
-        softFailReasons: major.failReasons,
-        softFailOverrideConfirmed: major.matchStatus === 'SOFT_FAIL' ? true : undefined,
-        overrideReason: major.matchStatus === 'SOFT_FAIL' ? '老师确认后覆盖软限制加入' : undefined,
+        softFailReasons,
+        softFailOverrideConfirmed: softFailReasons.length > 0 ? true : undefined,
+        overrideReason: softFailReasons.length > 0 ? '已在加入专业组弹窗确认服从调剂和风险专业' : undefined,
       }),
     onSuccess: () => {
       void message.success('已加入当前方案');
@@ -577,6 +697,30 @@ export default function GeneratePlanPage() {
     },
     onError: (error: any) => {
       void message.error(error?.response?.data?.message ?? '移出失败');
+    },
+  });
+
+  const updateMajorSelectionMutation = useMutation({
+    mutationFn: ({
+      itemId,
+      selectedMajors,
+      candidateMajorRanking,
+    }: {
+      itemId: number;
+      selectedMajors: SelectedPlanMajorPayload[];
+      candidateMajorRanking: SelectedPlanMajorPayload[];
+    }) => planApi.updateItem(String(planId), itemId, {
+      selectedMajors,
+      candidateMajorRanking,
+    }),
+    onSuccess: () => {
+      const wasPendingReview = plan?.status === 'PENDING_REVIEW';
+      void message.success(wasPendingReview ? '已保存，方案已退回草稿，请重新提交' : '专业选择已保存');
+      queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+      queryClient.invalidateQueries({ queryKey: ['student-plans-latest', studentId] });
+    },
+    onError: (error: any) => {
+      void message.error(error?.response?.data?.message ?? '专业选择保存失败');
     },
   });
 
@@ -616,17 +760,53 @@ export default function GeneratePlanPage() {
       void message.warning('该专业组已经在当前方案中');
       return;
     }
-    if (major.matchStatus === 'SOFT_FAIL') {
-      Modal.confirm({
-        title: '确认加入存在风险的专业组？',
-        content: major.failReasons.map((r) => r.note).join('；') || '该专业存在软限制风险。',
-        okText: '确认加入',
-        cancelText: '取消',
-        onOk: () => addMutation.mutate({ group, major }),
-      });
+    const selection = getMajorGroupSelectionPayload(group, {
+      preferredMajors: student?.preferredMajors ?? [],
+      preferredMajorCategories: student?.preferredMajorCategories ?? [],
+    });
+    const anchorMajor = group.majors.find((item) => item.enrollmentPlanId === selection.selectedMajors[0]?.enrollmentPlanId) ?? major;
+    if (!selection.selectedMajors.length) {
+      void message.warning('该专业组暂无可带入专业');
       return;
     }
-    addMutation.mutate({ group, major });
+    const selectedIds = new Set(selection.selectedMajors.map((item) => item.enrollmentPlanId));
+    const softFailReasons = group.majors
+      .filter((item) => selectedIds.has(item.enrollmentPlanId))
+      .flatMap((item) => item.failReasons ?? []);
+
+    Modal.confirm({
+      title: '确认加入专业组',
+      content: (
+        <div className="space-y-3">
+          <Alert
+            type="info"
+            showIcon
+            message="将按服从调剂口径补满专业"
+            description="系统只新增一条院校专业组志愿，并保存下面的专业填写顺序。"
+          />
+          <div className="space-y-2">
+            {selection.selectedMajors.map((item) => (
+              <div key={item.enrollmentPlanId} className="flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-sm">
+                <span className="min-w-0 truncate">{item.order}. {item.majorName}</span>
+                <Tag color={item.displaySection === 'RISK' ? 'warning' : item.displaySection === 'BACKUP' ? 'default' : 'success'}>
+                  {selectedMajorSectionLabel(item.displaySection)}
+                </Tag>
+              </div>
+            ))}
+          </div>
+          <div className="text-xs text-text-tertiary">服从调剂：是。少于等于 6 个专业时全部带入，超过 6 个时优先学生意向专业。</div>
+        </div>
+      ),
+      okText: '确认加入',
+      cancelText: '取消',
+      onOk: () => addMutation.mutate({
+        group,
+        major: anchorMajor,
+        selectedMajors: selection.selectedMajors,
+        candidateMajorRanking: selection.candidateMajorRanking,
+        softFailReasons,
+      }),
+    });
   };
 
   const majorColumns = (group: CandidateGroup): ColumnsType<CandidateMajor> => [
@@ -642,6 +822,8 @@ export default function GeneratePlanPage() {
           <span className="font-medium">{major.majorName}</span>
           {major.majorCode ? <span className="ml-2 font-mono text-xs text-text-tertiary">{major.majorCode}</span> : null}
           {major.isRecommendedAnchor ? <Tag color="gold" className="ml-2">推荐锚定</Tag> : null}
+          {major.displaySection ? <Tag color={major.displaySection === 'RISK' ? 'warning' : major.displaySection === 'BACKUP' ? 'default' : 'success'} className="ml-2">{MAJOR_SECTION_LABEL[major.displaySection]}</Tag> : null}
+          {major.displayReason ? <div className="mt-1 text-xs text-text-tertiary">{major.displayReason}</div> : null}
         </button>
       ),
     },
@@ -870,7 +1052,9 @@ export default function GeneratePlanPage() {
                       const anchor = getAnchorMajor(group);
                       const adjustedRank = getAdjustedRank(group, anchor);
                       const rankGap = formatRankGap(studentRankForDecision, adjustedRank);
-                      const previewMajors = group.majors.slice(0, expanded ? Math.min(group.majors.length, 6) : 3);
+                      const majorSections = getMajorSections(group);
+                      const previewMajors = (majorSections.recommended.length ? majorSections.recommended : group.majors)
+                        .slice(0, expanded ? Math.min(majorSections.recommended.length || group.majors.length, 6) : 3);
                       const evidence = [
                         ...(group.matchReasons ?? []),
                         ...(anchor?.matchReasons ?? []),
@@ -957,19 +1141,25 @@ export default function GeneratePlanPage() {
                           </div>
 
                           <div className={styles.majorList}>
-                            {previewMajors.map((major) => (
-                              <div key={major.enrollmentPlanId} className={styles.majorRow}>
-                                <strong>{major.majorName}</strong>
-                                <span className={styles.num}>{formatScoreRankValue(major.majorMinScore, major.majorMinRank)}</span>
-                                <span>计划 {major.planCount ?? '-'}</span>
-                                <span>{major.standardDuration || major.duration || '-'}</span>
-                                <span>
-                                  <span className={major.matchStatus === 'SOFT_FAIL' ? tagClass('warn') : tagClass(gradientTone(gradientTier(major)))}>
-                                    {major.matchStatus === 'SOFT_FAIL' ? '风险' : GRADIENT_LABEL[gradientTier(major)]}
-                                  </span>
-                                </span>
-                              </div>
-                            ))}
+                            <CandidateMajorSection
+                              title={MAJOR_SECTION_LABEL.RECOMMENDED}
+                              section="RECOMMENDED"
+                              majors={previewMajors}
+                            />
+                            {expanded ? (
+                              <>
+                                <CandidateMajorSection
+                                  title={MAJOR_SECTION_LABEL.BACKUP}
+                                  section="BACKUP"
+                                  majors={majorSections.backup}
+                                />
+                                <CandidateMajorSection
+                                  title={MAJOR_SECTION_LABEL.RISK}
+                                  section="RISK"
+                                  majors={majorSections.risk}
+                                />
+                              </>
+                            ) : null}
                           </div>
 
                           {expanded ? (
@@ -1036,7 +1226,7 @@ export default function GeneratePlanPage() {
                       <div>
                         <div className={styles.selectedName}>{item.order ?? item.sequence}. {item.universityName}</div>
                         <div className={styles.selectedMeta}>
-                          {item.groupCode ? `专业组 ${item.groupCode} · ` : ''}{item.majorName}
+                          {item.groupCode ? `专业组 ${item.groupCode} · ` : ''}{item.recommendedOrder ?? item.majorName}
                           {' · '}
                           {item.rank25Group ?? item.rank25Major ? `${(item.rank25Group ?? item.rank25Major).toLocaleString()} 位` : '位次 -'}
                         </div>
@@ -1053,6 +1243,19 @@ export default function GeneratePlanPage() {
                         </button>
                       ) : null}
                     </div>
+                    <details className={styles.selectedMajorsPanel}>
+                      <summary>展开组内专业</summary>
+                      <PlanMajorSelectionEditor
+                        item={item}
+                        status={plan?.status}
+                        editable={plan?.status === 'DRAFT' || plan?.status === 'PENDING_REVIEW'}
+                        saving={updateMajorSelectionMutation.isPending}
+                        onSave={(payload) => updateMajorSelectionMutation.mutate({
+                          itemId: item.id,
+                          ...payload,
+                        })}
+                      />
+                    </details>
                   </div>
                 ))}
               </div>

@@ -15,3 +15,5 @@ export { SmartReplacerService } from './smart-replacer.service';
 export { ExportFormatterService } from './export-formatter.service';
 export { PlanGeneratorService } from './plan-generator.service';
 export { RegionFilterService } from './region-filter.service';
+export { AdmissionVolatilityService } from './admission-volatility.service';
+export { RankStrategyService } from './rank-strategy.service';

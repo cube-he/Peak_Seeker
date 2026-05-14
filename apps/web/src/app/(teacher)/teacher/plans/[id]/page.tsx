@@ -9,6 +9,7 @@ import { ArrowLeftOutlined, CheckCircleOutlined, EditOutlined, ExportOutlined, F
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
+import PlanMajorSelectionEditor from '../components/PlanMajorSelectionEditor';
 
 const GRADIENT_LABEL: Record<string, string> = {
   CHONG: '冲',
@@ -78,6 +79,27 @@ export default function PlanDetailPage() {
     onError: () => message.error('导出失败'),
   });
 
+  const updateMajorSelectionMutation = useMutation({
+    mutationFn: ({
+      itemId,
+      selectedMajors,
+      candidateMajorRanking,
+    }: {
+      itemId: number;
+      selectedMajors: unknown[];
+      candidateMajorRanking: unknown[];
+    }) => planApi.updateItem(planId, itemId, {
+      selectedMajors,
+      candidateMajorRanking,
+    }),
+    onSuccess: () => {
+      const wasPendingReview = plan?.status === 'PENDING_REVIEW';
+      void message.success(wasPendingReview ? '已保存，方案已退回草稿，请重新提交' : '专业选择已保存');
+      refresh();
+    },
+    onError: (error: any) => message.error(error?.response?.data?.message ?? '专业选择保存失败'),
+  });
+
   const confirmReview = (action: 'APPROVE' | 'REQUEST_CHANGE' | 'REJECT', title: string) => {
     Modal.confirm({
       title,
@@ -98,7 +120,7 @@ export default function PlanDetailPage() {
   const columns: ColumnsType<any> = [
     { title: '序号', dataIndex: 'order', width: 70 },
     { title: '院校', dataIndex: 'universityName' },
-    { title: '专业', dataIndex: 'majorName' },
+    { title: '专业', render: (_, item) => item.recommendedOrder ?? item.majorName },
     { title: '梯度', dataIndex: 'gradient', width: 80, render: (v) => <Tag>{GRADIENT_LABEL[v] || v}</Tag> },
     { title: '历史位次', dataIndex: 'historicalMinRank', width: 120, render: (v) => v ?? '-' },
     {
@@ -184,7 +206,27 @@ export default function PlanDetailPage() {
       ) : null}
 
       <Card title="志愿明细" className="rounded-2xl shadow-card">
-        <Table rowKey="id" columns={columns} dataSource={items} pagination={false} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={items}
+          pagination={false}
+          expandable={{
+            expandedRowRender: (item) => (
+              <PlanMajorSelectionEditor
+                item={item}
+                status={plan.status}
+                editable={plan.status === 'DRAFT' || plan.status === 'PENDING_REVIEW'}
+                saving={updateMajorSelectionMutation.isPending}
+                onSave={(payload) => updateMajorSelectionMutation.mutate({
+                  itemId: item.id,
+                  ...payload,
+                })}
+              />
+            ),
+            rowExpandable: (item) => Boolean(item.fullMajorRanking || item.selectedMajors?.length || item.recommendedOrder),
+          }}
+        />
       </Card>
 
       <Card title="审核与确认记录" className="rounded-2xl shadow-card">

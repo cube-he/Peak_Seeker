@@ -146,6 +146,16 @@ export class StudentController {
     });
   }
 
+  @Put(':id')
+  @ApiOperation({ summary: 'Update student profile through legacy route' })
+  @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
+  async updateProfileLegacy(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateStudentProfileDto,
+  ) {
+    return this.updateProfile(id, dto);
+  }
+
   @Put(':id/profile')
   @ApiOperation({ summary: '更新学生档案' })
   @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))

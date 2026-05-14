@@ -49,6 +49,60 @@ export interface CandidateGroupIdentityLike {
   groupCode?: string | null;
 }
 
+export interface CandidateMajorForSelection {
+  enrollmentPlanId: number;
+  majorId: number;
+  majorName: string;
+  majorCode?: string | null;
+  majorCategory?: string | null;
+  displaySection?: 'RECOMMENDED' | 'BACKUP' | 'RISK' | string | null;
+  displayReason?: string | null;
+  majorMinScore?: number | null;
+  majorMinRank?: number | null;
+  planCount?: number | null;
+}
+
+export interface CandidateGroupMajorSelectionLike {
+  majors?: CandidateMajorForSelection[] | null;
+  majorSections?: {
+    recommended?: CandidateMajorForSelection[] | null;
+    backup?: CandidateMajorForSelection[] | null;
+    risk?: CandidateMajorForSelection[] | null;
+  } | null;
+}
+
+export interface MajorSelectionPreferences {
+  preferredMajors?: string[] | null;
+  preferredMajorCategories?: string[] | null;
+}
+
+export interface SelectedPlanMajorPayload {
+  order: number;
+  enrollmentPlanId: number;
+  majorId: number;
+  majorName: string;
+  majorCode?: string | null;
+  displaySection?: string | null;
+  displayReason?: string | null;
+  majorMinScore?: number | null;
+  majorMinRank?: number | null;
+  planCount?: number | null;
+}
+
+export interface PlanMajorRankingLike {
+  selectedMajors?: SelectedPlanMajorPayload[] | null;
+  candidateMajorRanking?: SelectedPlanMajorPayload[] | null;
+}
+
+export interface PlanItemMajorSelectionLike {
+  selectedMajors?: SelectedPlanMajorPayload[] | null;
+  fullMajorRanking?: PlanMajorRankingLike | null;
+}
+
+export interface PlanMajorSelectionRow extends SelectedPlanMajorPayload {
+  isSelected: boolean;
+}
+
 export interface WorkbenchPlanDetailLike {
   planItems?: CandidateGroupIdentityLike[] | null;
   items?: CandidateGroupIdentityLike[] | null;
@@ -173,4 +227,127 @@ export function getPlanItemsForWorkbench(plan?: WorkbenchPlanDetailLike | null) 
   if (Array.isArray(plan?.planItems)) return plan.planItems;
   if (Array.isArray(plan?.items)) return plan.items;
   return [];
+}
+
+function uniqueMajors(majors: CandidateMajorForSelection[]) {
+  const seen = new Set<number>();
+  return majors.filter((major) => {
+    if (seen.has(major.enrollmentPlanId)) return false;
+    seen.add(major.enrollmentPlanId);
+    return true;
+  });
+}
+
+function orderedMajors(group: CandidateGroupMajorSelectionLike) {
+  if (group.majors?.length) return uniqueMajors(group.majors);
+  return uniqueMajors([
+    ...(group.majorSections?.recommended ?? []),
+    ...(group.majorSections?.backup ?? []),
+    ...(group.majorSections?.risk ?? []),
+  ]);
+}
+
+function toSelectedMajor(major: CandidateMajorForSelection, order: number): SelectedPlanMajorPayload {
+  return {
+    order,
+    enrollmentPlanId: major.enrollmentPlanId,
+    majorId: major.majorId,
+    majorName: major.majorName,
+    majorCode: major.majorCode ?? null,
+    displaySection: major.displaySection ?? null,
+    displayReason: major.displayReason ?? null,
+    majorMinScore: major.majorMinScore ?? null,
+    majorMinRank: major.majorMinRank ?? null,
+    planCount: major.planCount ?? null,
+  };
+}
+
+function normalizeSelectedMajors(majors: SelectedPlanMajorPayload[]) {
+  return majors.map((major, index) => ({ ...major, order: index + 1 }));
+}
+
+export function getPlanItemMajorSelection(item: PlanItemMajorSelectionLike) {
+  const ranking = item.fullMajorRanking ?? null;
+  const selectedMajors = normalizeSelectedMajors([
+    ...(ranking?.selectedMajors ?? item.selectedMajors ?? []),
+  ]);
+  const candidateMajorRanking = normalizeSelectedMajors([
+    ...(ranking?.candidateMajorRanking ?? []),
+  ]);
+  const selectedIds = new Set(selectedMajors.map((major) => major.enrollmentPlanId));
+  const rows: PlanMajorSelectionRow[] = [
+    ...selectedMajors.map((major) => ({ ...major, isSelected: true })),
+    ...candidateMajorRanking
+      .filter((major) => !selectedIds.has(major.enrollmentPlanId))
+      .map((major) => ({ ...major, isSelected: false })),
+  ];
+
+  return {
+    canEdit: candidateMajorRanking.length > 0 && selectedMajors.length > 0,
+    selectedMajors,
+    candidateMajorRanking,
+    rows,
+  };
+}
+
+export function togglePlanMajorSelection(
+  selectedMajors: SelectedPlanMajorPayload[],
+  major: SelectedPlanMajorPayload,
+  selected: boolean,
+) {
+  const exists = selectedMajors.some((item) => item.enrollmentPlanId === major.enrollmentPlanId);
+  if (selected) {
+    if (exists || selectedMajors.length >= 6) return normalizeSelectedMajors([...selectedMajors]);
+    return normalizeSelectedMajors([...selectedMajors, major]);
+  }
+  return normalizeSelectedMajors(
+    selectedMajors.filter((item) => item.enrollmentPlanId !== major.enrollmentPlanId),
+  );
+}
+
+export function movePlanMajorSelection(
+  selectedMajors: SelectedPlanMajorPayload[],
+  enrollmentPlanId: number,
+  direction: 'up' | 'down',
+) {
+  const next = [...selectedMajors];
+  const index = next.findIndex((major) => major.enrollmentPlanId === enrollmentPlanId);
+  const target = direction === 'up' ? index - 1 : index + 1;
+  if (index < 0 || target < 0 || target >= next.length) {
+    return normalizeSelectedMajors(next);
+  }
+  [next[index], next[target]] = [next[target], next[index]];
+  return normalizeSelectedMajors(next);
+}
+
+function preferenceTier(major: CandidateMajorForSelection, preferences: MajorSelectionPreferences) {
+  const preferredMajors = preferences.preferredMajors ?? [];
+  const preferredCategories = preferences.preferredMajorCategories ?? [];
+  const isRisk = major.displaySection === 'RISK';
+  if (!isRisk && preferredMajors.includes(major.majorName)) return 0;
+  if (!isRisk && major.majorCategory && preferredCategories.includes(major.majorCategory)) return 1;
+  if (!isRisk && major.displaySection === 'RECOMMENDED') return 2;
+  if (!isRisk && major.displaySection === 'BACKUP') return 3;
+  return 4;
+}
+
+export function getMajorGroupSelectionPayload(
+  group: CandidateGroupMajorSelectionLike,
+  preferences: MajorSelectionPreferences = {},
+) {
+  const allMajors = orderedMajors(group);
+  const candidateMajorRanking = allMajors.map((major, index) => toSelectedMajor(major, index + 1));
+  const hasPreference = Boolean(preferences.preferredMajors?.length || preferences.preferredMajorCategories?.length);
+  const selectedSource = allMajors.length <= 6 || !hasPreference
+    ? allMajors.slice(0, 6)
+    : [...allMajors]
+      .map((major, index) => ({ major, index }))
+      .sort((a, b) => preferenceTier(a.major, preferences) - preferenceTier(b.major, preferences) || a.index - b.index)
+      .slice(0, 6)
+      .map((item) => item.major);
+
+  return {
+    selectedMajors: selectedSource.map((major, index) => toSelectedMajor(major, index + 1)),
+    candidateMajorRanking,
+  };
 }

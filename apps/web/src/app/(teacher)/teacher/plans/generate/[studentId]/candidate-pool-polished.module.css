@@ -507,6 +507,35 @@
   border-top: 1px dashed var(--border);
 }
 
+.majorSection {
+  display: grid;
+  gap: 6px;
+}
+
+.majorSection + .majorSection {
+  margin-top: 4px;
+}
+
+.majorSectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--t3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.majorSectionHead em {
+  color: var(--t2);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.majorSectionRows {
+  display: grid;
+  gap: 6px;
+}
+
 .majorRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 150px 88px 92px auto;
@@ -519,11 +548,34 @@
   font-size: 12px;
 }
 
+.majorRowBackup {
+  background: var(--surface-dim);
+}
+
+.majorRowRisk {
+  background: #fff7ed;
+}
+
+.majorNameCell {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
 .majorRow strong {
   overflow: hidden;
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majorNameCell small {
+  overflow: hidden;
+  color: var(--t2);
+  font-size: 11px;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -645,6 +697,27 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+}
+
+.selectedMajorsPanel {
+  margin-top: 10px;
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: 8px;
+}
+
+.selectedMajorsPanel summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.selectedMajorsPanel summary:hover {
+  color: var(--primary-light);
+}
+
+.selectedMajorsPanel > :not(summary) {
+  margin-top: 10px;
 }
 
 .selectedName {

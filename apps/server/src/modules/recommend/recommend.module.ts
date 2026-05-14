@@ -24,6 +24,8 @@ import { HealthFilterService } from './services/health-filter.service';
 import { RegionFilterService } from './services/region-filter.service';
 import { ProspectScorerService } from './services/prospect-scorer.service';
 import { CareerAlignmentService } from './services/career-alignment.service';
+import { AdmissionVolatilityService } from './services/admission-volatility.service';
+import { RankStrategyService } from './services/rank-strategy.service';
 
 // Bull processor
 import { PlanGenerationProcessor } from './processors/plan-generation.processor';
@@ -61,10 +63,12 @@ import { DataImportModule } from '../data-import/data-import.module';
     RegionFilterService,
     ProspectScorerService,
     CareerAlignmentService,
+    AdmissionVolatilityService,
+    RankStrategyService,
 
     // Bull processor
     PlanGenerationProcessor,
   ],
-  exports: [RecommendService, PlanGeneratorService],
+  exports: [RecommendService, PlanGeneratorService, RankStrategyService],
 })
 export class RecommendModule {}

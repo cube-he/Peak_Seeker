@@ -10,6 +10,8 @@ import { TuitionRule } from './filters/soft-rules/tuition.rule';
 import { NatureRule } from './filters/soft-rules/nature.rule';
 import { SoftRule, SoftFailReason } from './filters/soft-rule.interface';
 import { calcDynamicGradient, calcGradient } from './gradient-calculator';
+import type { RankStrategyResult } from '../recommend/interfaces/recommend.types';
+import { RankStrategyService } from '../recommend/services/rank-strategy.service';
 
 interface GetCandidatesQuery {
   page: number;
@@ -32,6 +34,7 @@ type CandidateGroupScoreSource = 'GROUP' | 'FILING' | 'MAJOR' | 'NONE';
 type StudentRankSource = 'PROFILE' | 'SCORE_SEGMENT' | 'MISSING';
 type FirstChoice = 'PHYSICS' | 'HISTORY';
 type SecondarySubject = 'CHEMISTRY' | 'BIOLOGY' | 'GEOGRAPHY' | 'POLITICS';
+type CandidateMajorDisplaySection = 'RECOMMENDED' | 'BACKUP' | 'RISK';
 
 interface EnrollmentPlanSourceInput {
   planYear: number;
@@ -354,6 +357,7 @@ export class PlanCandidateService {
   constructor(
     private prisma: PrismaService,
     @Optional() private readonly scoreSegmentService?: ScoreSegmentService,
+    @Optional() private readonly rankStrategyService?: RankStrategyService,
   ) {}
 
   private candidateGroupCacheKey(plan: any, q: GetCandidatesQuery) {
@@ -883,6 +887,122 @@ export class PlanCandidateService {
     };
   }
 
+  private hasStrictMajorPreference(student: any) {
+    return asStringArray(student.preferredMajors).length > 0 ||
+      asStringArray(student.preferredMajorCategories).length > 0;
+  }
+
+  private isPreferredMajor(student: any, ep: any) {
+    const majorName = ep.majorName || ep.major?.name || '';
+    const category = ep.major?.category || '';
+    return asStringArray(student.preferredMajors).includes(majorName) ||
+      (category ? asStringArray(student.preferredMajorCategories).includes(category) : false);
+  }
+
+  private classifyMajorDisplay(student: any, ep: any, failReasons: SoftFailReason[], rankStrategy: RankStrategyResult) {
+    if (failReasons.length > 0) {
+      return {
+        displaySection: 'RISK' as CandidateMajorDisplaySection,
+        displayReason: failReasons[0]?.note ?? '条件不合适，建议人工判断',
+      };
+    }
+    if (rankStrategy.eligibility === 'INSUFFICIENT_DATA') {
+      return {
+        displaySection: 'RISK' as CandidateMajorDisplaySection,
+        displayReason: '缺少有效位次，需要人工判断',
+      };
+    }
+    if (rankStrategy.eligibility === 'REJECTED') {
+      return {
+        displaySection: 'RISK' as CandidateMajorDisplaySection,
+        displayReason: '位次明显超出历史可解释范围',
+      };
+    }
+
+    const strictPreference = this.hasStrictMajorPreference(student);
+    if (strictPreference && !this.isPreferredMajor(student, ep)) {
+      return {
+        displaySection: 'BACKUP' as CandidateMajorDisplaySection,
+        displayReason: '不在学生意向范围内，仅作备选',
+      };
+    }
+
+    return {
+      displaySection: 'RECOMMENDED' as CandidateMajorDisplaySection,
+      displayReason: rankStrategy.eligibility === 'OBSERVE_ONLY'
+        ? '位次偏冒险，建议老师观察'
+        : strictPreference
+          ? '符合学生意向且位次可参考'
+          : '未排除且位次可参考',
+    };
+  }
+
+  private sortCandidateMajors(majors: any[]) {
+    majors.sort((a, b) => {
+      if (a.matchStatus !== b.matchStatus) return a.matchStatus === 'PASS' ? -1 : 1;
+      if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
+      const ar = a.rankDiffRatio ?? 999;
+      const br = b.rankDiffRatio ?? 999;
+      return Math.abs(ar - 1) - Math.abs(br - 1);
+    });
+  }
+
+  private splitMajorSections(majors: any[]) {
+    return {
+      recommended: majors.filter((major) => major.displaySection === 'RECOMMENDED'),
+      backup: majors.filter((major) => major.displaySection === 'BACKUP'),
+      risk: majors.filter((major) => major.displaySection === 'RISK'),
+    };
+  }
+
+  private emptyRankStrategy(sourceAdmissionYear: number, candidateRank: number | null, eligibility: RankStrategyResult['eligibility'], reason: string): RankStrategyResult {
+    return {
+      sourceAdmissionYear,
+      rankSourceYear: sourceAdmissionYear,
+      candidateRank,
+      requiredEasierDelta: null,
+      safetyMargin: null,
+      rankBucket: 'UNKNOWN',
+      sampleScope: eligibility === 'INSUFFICIENT_DATA' ? 'INSUFFICIENT_DATA' : 'RANK_BUCKET',
+      sampleSize: 0,
+      basisPairs: [],
+      rushFormalLimit: 0,
+      rushObserveLimit: 0,
+      safeNormalMargin: 0,
+      safeStrongMargin: 0,
+      insufficientData: eligibility === 'INSUFFICIENT_DATA',
+      eligibility,
+      reason,
+    };
+  }
+
+  private async evaluateRankStrategy(input: {
+    studentRank: number;
+    candidateRank: number | null | undefined;
+    studentExamYear: number;
+    province: string;
+    examType?: string | null;
+    batch?: string | null;
+    sourceAdmissionYear: number;
+  }) {
+    const candidateRank = this.isPositiveRank(input.candidateRank) ? input.candidateRank : null;
+    if (!candidateRank) {
+      return this.emptyRankStrategy(input.sourceAdmissionYear, null, 'INSUFFICIENT_DATA', 'missing valid candidate rank');
+    }
+    if (!this.rankStrategyService) {
+      return this.emptyRankStrategy(input.sourceAdmissionYear, candidateRank, 'FORMAL', 'rank strategy service unavailable');
+    }
+    return this.rankStrategyService.evaluateCandidate({
+      studentRank: input.studentRank,
+      candidateRank,
+      studentExamYear: input.studentExamYear,
+      province: input.province,
+      examType: input.examType,
+      batch: input.batch,
+      sourceAdmissionYear: input.sourceAdmissionYear,
+    });
+  }
+
   async getCandidateGroups(planId: number, q: GetCandidatesQuery, userId?: number) {
     const plan = await this.prisma.volunteerPlan.findUnique({
       where: { id: planId },
@@ -1046,7 +1166,7 @@ export class PlanCandidateService {
       previousByGroup.set(key, rows);
     }
     const studentRank = studentRankInfo.rank;
-    const resultGroups = Array.from(groups.entries()).map(([groupKey, rows]) => {
+    const resultGroups = (await Promise.all(Array.from(groups.entries()).map(async ([groupKey, rows]) => {
       const groupRecords = [
         ...(adByGroupYear.get(`${groupKey}|${source.sourceYear}`) ?? []),
         ...(adByGroupYear.get(`${groupKey}|${source.sourceYear - 1}`) ?? []),
@@ -1059,11 +1179,21 @@ export class PlanCandidateService {
       const supplementary = supplementaryByGroup.get(groupKey) ?? null;
       const riskSupplementary = supplementaryForGroupRisk(supplementary);
 
-      const majors = rows.map((ep) => {
+      const majors = await Promise.all(rows.map(async (ep) => {
         const currentRecord = adIndex.get(recordKeyOf({ ...ep, year: source.sourceYear }));
         const previousRecord = adIndex.get(recordKeyOf({ ...ep, year: source.sourceYear - 1 }));
         const failReasons = this.checkSoftFails(student, ep, rules);
         const match = this.scoreMajorMatch(student, ep);
+        const rankStrategy = await this.evaluateRankStrategy({
+          studentRank,
+          candidateRank: currentRecord?.majorMinRank ?? null,
+          studentExamYear: plan.year,
+          province,
+          examType: student.examType,
+          batch: plan.batchName,
+          sourceAdmissionYear: source.sourceYear,
+        });
+        const display = this.classifyMajorDisplay(student, ep, failReasons, rankStrategy);
         const historyMin = groupScore.groupMinRank ?? currentRecord?.majorMinRank ?? null;
         const rankDiffRatio = historyMin ? studentRank / historyMin : null;
         const dynamicGradient = calcDynamicGradient({
@@ -1122,24 +1252,29 @@ export class PlanCandidateService {
           suggestedGradient: dynamicGradient.gradient,
           matchStatus: failReasons.length === 0 ? 'PASS' : 'SOFT_FAIL',
           failReasons,
+          displaySection: display.displaySection,
+          displayReason: display.displayReason,
+          rankStrategy,
           isRecommendedAnchor: false,
         };
-      });
+      }));
 
       const visibleMajors = q.includeSoftFails === false
         ? majors.filter((major) => major.matchStatus === 'PASS')
         : majors;
-      visibleMajors.sort((a, b) => {
-        if (a.matchStatus !== b.matchStatus) return a.matchStatus === 'PASS' ? -1 : 1;
-        if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
-        const ar = a.rankDiffRatio ?? 999;
-        const br = b.rankDiffRatio ?? 999;
-        return Math.abs(ar - 1) - Math.abs(br - 1);
-      });
-      if (visibleMajors[0]) visibleMajors[0].isRecommendedAnchor = true;
+      this.sortCandidateMajors(visibleMajors);
+      const majorSections = this.splitMajorSections(visibleMajors);
+      if (majorSections.recommended.length === 0) return null;
 
-      const recommendedAnchor = visibleMajors[0];
-      const majorStrengthScore = bestNumber(visibleMajors.map((major) => major.majorStrengthScore), 'max');
+      const orderedMajors = [
+        ...majorSections.recommended,
+        ...majorSections.backup,
+        ...majorSections.risk,
+      ];
+      if (orderedMajors[0]) orderedMajors[0].isRecommendedAnchor = true;
+
+      const recommendedAnchor = orderedMajors[0];
+      const majorStrengthScore = bestNumber(orderedMajors.map((major) => major.majorStrengthScore), 'max');
       const groupHistoryMin = groupScore.groupMinRank ?? recommendedAnchor?.majorMinRank ?? null;
       const dynamicGradient = calcDynamicGradient({
         studentRank,
@@ -1200,14 +1335,15 @@ export class PlanCandidateService {
         anchorMajorMinRank: recommendedAnchor?.majorMinRank ?? null,
         majorStrengthScore,
         majorCount: rows.length,
-        selectableMajorCount: visibleMajors.filter((major) => major.matchStatus === 'PASS').length,
-        softFailCount: visibleMajors.filter((major) => major.matchStatus === 'SOFT_FAIL').length,
+        selectableMajorCount: majorSections.recommended.length + majorSections.backup.length,
+        softFailCount: majorSections.risk.filter((major) => major.matchStatus === 'SOFT_FAIL').length,
         matchScore: recommendedAnchor?.matchScore ?? -999,
         matchReasons: recommendedAnchor?.matchReasons ?? [],
         recommendedAnchorEnrollmentPlanId: recommendedAnchor?.enrollmentPlanId ?? null,
-        majors: visibleMajors,
+        majors: orderedMajors,
+        majorSections,
       };
-    }).filter((group) => group.majors.length > 0);
+    }))).filter((group): group is any => Boolean(group));
 
     this.sortCandidateGroups(resultGroups, q.sort ?? 'MAJOR_MATCH', studentRank);
 

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   ConflictException,
@@ -17,16 +18,72 @@ export class PlanItemService {
     private sm: PlanStateMachineService,
   ) {}
 
-  private async getEditablePlan(planId: number, actorUserId?: number) {
+  private async getEditablePlan(
+    planId: number,
+    actorUserId?: number,
+    opts: { majorSelectionOnly?: boolean } = {},
+  ) {
     const plan = await this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
     if (!plan) throw new NotFoundException('方案不存在');
     if (actorUserId && plan.createdById !== actorUserId) {
       throw new ForbiddenException('无权编辑此方案');
     }
-    if (!this.sm.canEditItems(plan.status)) {
+    const canEdit = opts.majorSelectionOnly
+      ? this.sm.canEditMajorSelection(plan.status)
+      : this.sm.canEditItems(plan.status);
+    if (!canEdit) {
       throw new ConflictException(`方案状态 ${plan.status} 不允许编辑`);
     }
     return plan;
+  }
+
+  private normalizeMajorOrder(majors: NonNullable<UpdatePlanItemDto['selectedMajors']>) {
+    return majors.map((major, index) => ({ ...major, order: index + 1 }));
+  }
+
+  private buildMajorSelectionUpdate(item: any, dto: UpdatePlanItemDto) {
+    if (dto.selectedMajors === undefined) return null;
+    if (dto.selectedMajors.length < 1 || dto.selectedMajors.length > 6) {
+      throw new BadRequestException('selectedMajors must contain 1 to 6 majors');
+    }
+
+    const existingRanking = item.fullMajorRanking as any;
+    const candidateMajorRanking = dto.candidateMajorRanking
+      ?? existingRanking?.candidateMajorRanking;
+    if (!Array.isArray(candidateMajorRanking) || candidateMajorRanking.length === 0) {
+      throw new BadRequestException('candidateMajorRanking is required for major selection updates');
+    }
+
+    const candidateIds = new Set<number>();
+    const normalizedCandidateMajorRanking = candidateMajorRanking.map((major: any, index: number) => {
+      candidateIds.add(Number(major.enrollmentPlanId));
+      return { ...major, order: index + 1 };
+    });
+
+    const selectedIds = new Set<number>();
+    for (const major of dto.selectedMajors) {
+      const id = Number(major.enrollmentPlanId);
+      if (!candidateIds.has(id)) {
+        throw new BadRequestException('selectedMajors must come from candidateMajorRanking');
+      }
+      if (selectedIds.has(id)) {
+        throw new BadRequestException('selectedMajors cannot contain duplicate majors');
+      }
+      selectedIds.add(id);
+    }
+
+    const selectedMajors = this.normalizeMajorOrder(dto.selectedMajors);
+    return {
+      recommendedOrder: selectedMajors.map((major) => major.majorName).join('、'),
+      fullMajorRanking: {
+        strategyVersion: 'major-group-manual-v1',
+        acceptAdjust: true,
+        selectedMajors,
+        candidateMajorRanking: normalizedCandidateMajorRanking,
+      },
+      acceptAdjust: true,
+      isManuallyModified: true,
+    };
   }
 
   async add(planId: number, dto: AddPlanItemDto, actorUserId?: number) {
@@ -95,6 +152,15 @@ export class PlanItemService {
     const historyMin = ar?.groupMinRank ?? ar?.majorMinRank ?? null;
     const gradient = dto.gradient ?? calcGradient(studentRank, historyMin);
     const groupMajorsList = (ep.groupMajors ?? '').split(/[,，、/]/).filter(Boolean);
+    const selectedMajors = (dto.selectedMajors ?? []).slice(0, 6);
+    const fullMajorRanking = selectedMajors.length > 0
+      ? {
+          strategyVersion: 'major-group-fill-v1',
+          acceptAdjust: true,
+          selectedMajors,
+          candidateMajorRanking: dto.candidateMajorRanking ?? selectedMajors,
+        }
+      : undefined;
 
     return this.prisma.planItem.create({
       data: {
@@ -111,8 +177,12 @@ export class PlanItemService {
         majorCode: ep.majorCode,
         anchorMajor: ep.majorName,
         groupMajorCount: groupMajorsList.length,
+        recommendedOrder: selectedMajors.length > 0
+          ? selectedMajors.map((major) => major.majorName).join('、')
+          : undefined,
+        fullMajorRanking: fullMajorRanking as any,
         subjectRequirement: ep.subjectRequirements,
-        acceptAdjust: dto.acceptAdjust ?? true,
+        acceptAdjust: selectedMajors.length > 0 ? true : dto.acceptAdjust ?? true,
         score25Group: ar?.groupMinScore ?? null,
         rank25Group: ar?.groupMinRank ?? null,
         score25Major: ar?.majorMinScore ?? null,
@@ -130,13 +200,35 @@ export class PlanItemService {
   }
 
   async update(planId: number, itemId: number, dto: UpdatePlanItemDto, actorUserId?: number) {
-    await this.getEditablePlan(planId, actorUserId);
+    const isMajorSelectionUpdate = dto.selectedMajors !== undefined;
+    const plan = await this.getEditablePlan(planId, actorUserId, {
+      majorSelectionOnly: isMajorSelectionUpdate,
+    });
     const item = await this.prisma.planItem.findUnique({ where: { id: itemId } });
     if (!item || item.planId !== planId) throw new NotFoundException('志愿项不存在');
-    return this.prisma.planItem.update({
+
+    const { selectedMajors, candidateMajorRanking, ...legacyDto } = dto;
+    if (candidateMajorRanking !== undefined && selectedMajors === undefined) {
+      throw new BadRequestException('selectedMajors is required when candidateMajorRanking is provided');
+    }
+    const majorSelectionUpdate = this.buildMajorSelectionUpdate(item, dto);
+    const itemUpdate = this.prisma.planItem.update({
       where: { id: itemId },
-      data: { ...dto, isManuallyModified: true },
+      data: majorSelectionUpdate ?? { ...legacyDto, isManuallyModified: true },
     });
+
+    if (majorSelectionUpdate && plan.status === 'PENDING_REVIEW') {
+      const [updated] = await this.prisma.$transaction([
+        itemUpdate,
+        this.prisma.volunteerPlan.update({
+          where: { id: planId },
+          data: { status: 'DRAFT', currentReviewerId: null },
+        }),
+      ]);
+      return updated;
+    }
+
+    return itemUpdate;
   }
 
   async remove(planId: number, itemId: number, actorUserId?: number) {

@@ -53,7 +53,7 @@
         <td>{{gradient}}</td>
         <td>{{universityName}}<br/><small>{{universityCode}}</small></td>
         <td>{{groupCode}} {{groupName}}</td>
-        <td>{{anchorMajor}}</td>
+        <td>{{#if recommendedOrder}}{{recommendedOrder}}{{else}}{{anchorMajor}}{{/if}}</td>
         <td>{{score25Group}} / {{rank25Group}}</td>
         <td>{{score24Major}} / {{rank24Major}}</td>
         <td>{{planCount}}</td>

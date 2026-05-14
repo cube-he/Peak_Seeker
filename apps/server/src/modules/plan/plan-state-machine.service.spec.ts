@@ -76,4 +76,12 @@ describe('PlanStateMachineService', () => {
     expect(sm.canEditItems('APPROVED')).toBe(false);
     expect(sm.canEditItems('FINALIZED')).toBe(false);
   });
+
+  it('canEditMajorSelection: DRAFT and PENDING_REVIEW can adjust majors before review starts', () => {
+    expect(sm.canEditMajorSelection('DRAFT')).toBe(true);
+    expect(sm.canEditMajorSelection('PENDING_REVIEW')).toBe(true);
+    expect(sm.canEditMajorSelection('REVIEWING')).toBe(false);
+    expect(sm.canEditMajorSelection('APPROVED')).toBe(false);
+    expect(sm.canEditMajorSelection('FINALIZED')).toBe(false);
+  });
 });

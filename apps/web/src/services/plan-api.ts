@@ -112,6 +112,10 @@ export const planApi = {
     return api.post(`/plans/${planId}/items`, data) as any;
   },
 
+  updateItem(planId: string | number, itemId: string | number, data: Record<string, unknown>): Promise<any> {
+    return api.patch(`/plans/${planId}/items/${itemId}`, data) as any;
+  },
+
   updatePlan(id: string, data: Record<string, unknown>): Promise<any> {
     return api.put(`/plans/${id}`, data) as any;
   },

@@ -83,6 +83,61 @@ export interface RangeResult {
   rangeDown: number;
 }
 
+// ---- Data-driven rank risk rules ----
+
+export type RankRiskEligibility =
+  | 'FORMAL'
+  | 'OBSERVE_ONLY'
+  | 'REJECTED'
+  | 'INSUFFICIENT_DATA';
+
+export type VolatilitySampleScope = 'RANK_BUCKET' | 'INSUFFICIENT_DATA';
+
+export interface VolatilityYearPair {
+  fromYear: number;
+  toYear: number;
+}
+
+export interface AdmissionVolatilityInput {
+  province: string;
+  examType?: string | null;
+  batch?: string | null;
+  candidateRank: number;
+  sourceAdmissionYear?: number;
+}
+
+export interface AdmissionVolatilityResult {
+  sourceAdmissionYear: number;
+  rankBucket: string;
+  sampleScope: VolatilitySampleScope;
+  sampleSize: number;
+  basisPairs: VolatilityYearPair[];
+  rushFormalLimit: number;
+  rushObserveLimit: number;
+  safeNormalMargin: number;
+  safeStrongMargin: number;
+  insufficientData: boolean;
+}
+
+export interface RankStrategyInput {
+  studentRank: number;
+  candidateRank: number | null | undefined;
+  studentExamYear: number;
+  province: string;
+  examType?: string | null;
+  batch?: string | null;
+  sourceAdmissionYear?: number;
+}
+
+export interface RankStrategyResult extends AdmissionVolatilityResult {
+  rankSourceYear: number | string;
+  candidateRank: number | null;
+  requiredEasierDelta: number | null;
+  safetyMargin: number | null;
+  eligibility: RankRiskEligibility;
+  reason: string;
+}
+
 // ---- Candidate after initial filtering ----
 
 export interface RawCandidate {

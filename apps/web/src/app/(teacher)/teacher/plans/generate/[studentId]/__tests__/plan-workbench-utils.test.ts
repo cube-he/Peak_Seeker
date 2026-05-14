@@ -5,11 +5,15 @@ import {
   formatGroupScoreLine,
   formatRankGap,
   formatSupplementary,
+  getMajorGroupSelectionPayload,
+  getPlanItemMajorSelection,
   getPlanItemsForWorkbench,
   getLatestPlansByBatch,
   hasSupplementaryData,
   isCandidateGroupAlreadyAdded,
+  movePlanMajorSelection,
   sortPlansForWorkbench,
+  togglePlanMajorSelection,
 } from '../plan-workbench-utils';
 
 describe('plan workbench helpers', () => {
@@ -125,5 +129,132 @@ describe('plan workbench helpers', () => {
 
     expect(items).toBe(plan.planItems);
     expect(isCandidateGroupAlreadyAdded({ universityId: 8971, groupCode: '104' }, items)).toBe(true);
+  });
+
+  it('selects all majors when a group has six or fewer majors', () => {
+    const group = {
+      majors: [
+        { enrollmentPlanId: 1, majorId: 1, majorName: 'A', displaySection: 'RECOMMENDED' },
+        { enrollmentPlanId: 2, majorId: 2, majorName: 'B', displaySection: 'RISK' },
+        { enrollmentPlanId: 3, majorId: 3, majorName: 'C', displaySection: 'BACKUP' },
+      ],
+    };
+
+    const payload = getMajorGroupSelectionPayload(group);
+
+    expect(payload.selectedMajors.map((major) => major.majorName)).toEqual(['A', 'B', 'C']);
+    expect(payload.candidateMajorRanking.map((major) => major.order)).toEqual([1, 2, 3]);
+  });
+
+  it('prefers intended majors and categories when a group has more than six majors', () => {
+    const group = {
+      majors: [
+        { enrollmentPlanId: 1, majorId: 1, majorName: 'General A', majorCategory: 'Other', displaySection: 'RECOMMENDED' },
+        { enrollmentPlanId: 2, majorId: 2, majorName: 'Risk A', majorCategory: 'Computer', displaySection: 'RISK' },
+        { enrollmentPlanId: 3, majorId: 3, majorName: 'Software Engineering', majorCategory: 'Computer', displaySection: 'RECOMMENDED' },
+        { enrollmentPlanId: 4, majorId: 4, majorName: 'Computer Science', majorCategory: 'Computer', displaySection: 'RECOMMENDED' },
+        { enrollmentPlanId: 5, majorId: 5, majorName: 'Backup A', majorCategory: 'Other', displaySection: 'BACKUP' },
+        { enrollmentPlanId: 6, majorId: 6, majorName: 'General B', majorCategory: 'Other', displaySection: 'RECOMMENDED' },
+        { enrollmentPlanId: 7, majorId: 7, majorName: 'Data Science', majorCategory: 'Computer', displaySection: 'BACKUP' },
+      ],
+    };
+
+    const payload = getMajorGroupSelectionPayload(group, {
+      preferredMajors: ['Computer Science'],
+      preferredMajorCategories: ['Computer'],
+    });
+
+    expect(payload.selectedMajors.map((major) => major.majorName)).toEqual([
+      'Computer Science',
+      'Software Engineering',
+      'Data Science',
+      'General A',
+      'General B',
+      'Backup A',
+    ]);
+  });
+
+  it('uses current candidate order when the student has no major preference', () => {
+    const group = {
+      majors: Array.from({ length: 7 }, (_, index) => ({
+        enrollmentPlanId: index + 1,
+        majorId: index + 1,
+        majorName: `Major ${index + 1}`,
+        displaySection: index === 0 ? 'RISK' : 'RECOMMENDED',
+      })),
+    };
+
+    const payload = getMajorGroupSelectionPayload(group);
+
+    expect(payload.selectedMajors.map((major) => major.majorName)).toEqual([
+      'Major 1',
+      'Major 2',
+      'Major 3',
+      'Major 4',
+      'Major 5',
+      'Major 6',
+    ]);
+  });
+
+  it('builds selected and unselected major rows for an existing plan item', () => {
+    const selection = getPlanItemMajorSelection({
+      selectedMajors: null,
+      fullMajorRanking: {
+        selectedMajors: [
+          { order: 1, enrollmentPlanId: 102, majorId: 12, majorName: 'C', displaySection: 'BACKUP' },
+          { order: 2, enrollmentPlanId: 100, majorId: 10, majorName: 'A', displaySection: 'RECOMMENDED' },
+        ],
+        candidateMajorRanking: [
+          { order: 1, enrollmentPlanId: 100, majorId: 10, majorName: 'A', displaySection: 'RECOMMENDED' },
+          { order: 2, enrollmentPlanId: 101, majorId: 11, majorName: 'B', displaySection: 'RISK' },
+          { order: 3, enrollmentPlanId: 102, majorId: 12, majorName: 'C', displaySection: 'BACKUP' },
+        ],
+      },
+    });
+
+    expect(selection.canEdit).toBe(true);
+    expect(selection.rows.map((row) => [row.majorName, row.isSelected])).toEqual([
+      ['C', true],
+      ['A', true],
+      ['B', false],
+    ]);
+  });
+
+  it('toggles a plan item major while capping selection at six', () => {
+    const selected = Array.from({ length: 6 }, (_, index) => ({
+      order: index + 1,
+      enrollmentPlanId: index + 1,
+      majorId: index + 1,
+      majorName: `Major ${index + 1}`,
+    }));
+
+    expect(togglePlanMajorSelection(selected, {
+      order: 7,
+      enrollmentPlanId: 7,
+      majorId: 7,
+      majorName: 'Major 7',
+    }, true)).toHaveLength(6);
+    expect(togglePlanMajorSelection(selected, selected[1], false).map((major) => major.majorName)).toEqual([
+      'Major 1',
+      'Major 3',
+      'Major 4',
+      'Major 5',
+      'Major 6',
+    ]);
+  });
+
+  it('moves selected majors up and down with normalized order values', () => {
+    const selected = [
+      { order: 1, enrollmentPlanId: 1, majorId: 1, majorName: 'A' },
+      { order: 2, enrollmentPlanId: 2, majorId: 2, majorName: 'B' },
+      { order: 3, enrollmentPlanId: 3, majorId: 3, majorName: 'C' },
+    ];
+
+    expect(movePlanMajorSelection(selected, 2, 'up')).toEqual([
+      { order: 1, enrollmentPlanId: 2, majorId: 2, majorName: 'B' },
+      { order: 2, enrollmentPlanId: 1, majorId: 1, majorName: 'A' },
+      { order: 3, enrollmentPlanId: 3, majorId: 3, majorName: 'C' },
+    ]);
+    expect(movePlanMajorSelection(selected, 2, 'down').map((major) => major.majorName)).toEqual(['A', 'C', 'B']);
   });
 });

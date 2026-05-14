@@ -1,5 +1,6 @@
 import {
   Allow,
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -30,6 +31,19 @@ export class SoftFailReasonDto {
   note: string;
 }
 
+export class SelectedPlanMajorDto {
+  @Type(() => Number) @IsInt() @Min(1) order: number;
+  @Type(() => Number) @IsInt() enrollmentPlanId: number;
+  @Type(() => Number) @IsInt() majorId: number;
+  @IsString() majorName: string;
+  @IsOptional() @IsString() majorCode?: string | null;
+  @IsOptional() @IsIn(['RECOMMENDED', 'BACKUP', 'RISK']) displaySection?: 'RECOMMENDED' | 'BACKUP' | 'RISK';
+  @IsOptional() @IsString() displayReason?: string | null;
+  @IsOptional() @Type(() => Number) @IsInt() majorMinScore?: number | null;
+  @IsOptional() @Type(() => Number) @IsInt() majorMinRank?: number | null;
+  @IsOptional() @Type(() => Number) @IsInt() planCount?: number | null;
+}
+
 export class AddPlanItemDto {
   @Type(() => Number) @IsInt() enrollmentPlanId: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) sequence?: number;
@@ -43,4 +57,15 @@ export class AddPlanItemDto {
   softFailReasons?: SoftFailReasonDto[];
   @IsOptional() @IsBoolean() softFailOverrideConfirmed?: boolean;
   @IsOptional() @IsString() overrideReason?: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @ValidateNested({ each: true })
+  @Type(() => SelectedPlanMajorDto)
+  selectedMajors?: SelectedPlanMajorDto[];
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SelectedPlanMajorDto)
+  candidateMajorRanking?: SelectedPlanMajorDto[];
 }

@@ -44,4 +44,8 @@ export class PlanStateMachineService {
   canEditItems(from: PlanStatus): boolean {
     return from === 'DRAFT';
   }
+
+  canEditMajorSelection(from: PlanStatus): boolean {
+    return from === 'DRAFT' || from === 'PENDING_REVIEW';
+  }
 }

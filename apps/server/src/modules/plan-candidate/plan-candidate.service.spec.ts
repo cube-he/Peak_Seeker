@@ -3,11 +3,119 @@ import { Test } from '@nestjs/testing';
 import { PlanCandidateService } from './plan-candidate.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScoreSegmentService } from '../score-segment/score-segment.service';
+import { RankStrategyService } from '../recommend/services/rank-strategy.service';
 
 describe('PlanCandidateService', () => {
   let service: PlanCandidateService;
   let prisma: any;
   let scoreSegment: any;
+  let rankStrategy: any;
+
+  function makeRankStrategyResult(eligibility: string, candidateRank: number | null = 10000) {
+    return {
+      sourceAdmissionYear: 2025,
+      rankSourceYear: '2025_ESTIMATED',
+      candidateRank,
+      requiredEasierDelta: null,
+      safetyMargin: null,
+      rushFormalLimit: 16000,
+      rushObserveLimit: 28000,
+      safeNormalMargin: 8000,
+      safeStrongMargin: 17000,
+      rankBucket: '100k-200k',
+      sampleScope: 'RANK_BUCKET',
+      sampleSize: 120,
+      basisPairs: [{ fromYear: 2024, toYear: 2025 }],
+      insufficientData: eligibility === 'INSUFFICIENT_DATA',
+      eligibility,
+      reason: `${eligibility} rank strategy`,
+    };
+  }
+
+  function makeGroupEnrollmentPlan(overrides: any = {}) {
+    return {
+      id: 900,
+      universityId: 9,
+      majorId: 91,
+      university: { id: 9, name: 'Candidate University', code: 'CU' },
+      major: { id: 91, name: 'Candidate Major', code: '0001', category: 'Science' },
+      recruitType: 'General',
+      isSinoForeign: false,
+      planNotes: '',
+      tuition: 5000,
+      majorCode: '0001',
+      majorName: 'Candidate Major',
+      subjects: 'Physics',
+      batch: 'Batch A',
+      groupCode: 'G9',
+      groupName: 'Candidate group',
+      groupPlanCount: 10,
+      subjectRequirements: '',
+      planCount: 10,
+      disciplineEval: '',
+      isNationalFeature: false,
+      ...overrides,
+    };
+  }
+
+  function makeGroupAdmissionRecord(overrides: any = {}) {
+    return {
+      universityId: 9,
+      subjects: 'Physics',
+      batch: 'Batch A',
+      recruitType: 'General',
+      groupCode: 'G9',
+      majorCode: '0001',
+      majorName: 'Candidate Major',
+      year: 2025,
+      groupMinRank: 120000,
+      groupMinScore: 530,
+      groupAdmissionCount: 10,
+      majorMinRank: 120000,
+      majorMinScore: 530,
+      majorAdmissionCount: 10,
+      ...overrides,
+    };
+  }
+
+  function mockCandidateGroupRequest(options: {
+    student?: any;
+    plans: any[];
+    records: any[];
+  }) {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1,
+      studentId: 10,
+      batchName: 'Batch A',
+      batchConfigId: 5,
+      year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10,
+      province: 'Sichuan',
+      examType: 'PHYSICS',
+      provincialRank: 156077,
+      preferredMajors: [],
+      preferredMajorCategories: [],
+      excludedMajors: [],
+      excludedMajorCategories: [],
+      colorBlind: false,
+      colorWeak: false,
+      visionLeft: 5,
+      visionRight: 5,
+      isRural: false,
+      tuitionBudget: 'UNLIMITED',
+      acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED',
+      user: { gender: 'male', ethnicity: 'Han' },
+      ...options.student,
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 1 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce(options.plans)
+      .mockResolvedValueOnce([]);
+    prisma.admissionRecord.findMany.mockResolvedValue(options.records);
+  }
 
   beforeEach(async () => {
     prisma = {
@@ -25,11 +133,17 @@ describe('PlanCandidateService', () => {
       healthRestriction: { findMany: jest.fn().mockResolvedValue([]) },
     };
     scoreSegment = { scoreToRank: jest.fn() };
+    rankStrategy = {
+      evaluateCandidate: jest.fn((input: any) =>
+        Promise.resolve(makeRankStrategyResult('FORMAL', input.candidateRank)),
+      ),
+    };
     const mod = await Test.createTestingModule({
       providers: [
         PlanCandidateService,
         { provide: PrismaService, useValue: prisma },
         { provide: ScoreSegmentService, useValue: scoreSegment },
+        { provide: RankStrategyService, useValue: rankStrategy },
       ],
     }).compile();
     service = mod.get(PlanCandidateService);
@@ -276,9 +390,11 @@ describe('PlanCandidateService', () => {
       groupMinRank: 10000,
       scoreSource: 'GROUP',
       majorCount: 2,
-      selectableMajorCount: 2,
+      selectableMajorCount: 1,
       recommendedAnchorEnrollmentPlanId: 100,
     }));
+    expect(result.groups[0].majorSections.recommended.map((major: any) => major.majorName)).toEqual(['Computer Science']);
+    expect(result.groups[0].majorSections.risk.map((major: any) => major.majorName)).toEqual(['Automation']);
     expect(result.groups[0].majors[0]).toEqual(expect.objectContaining({
       enrollmentPlanId: 100,
       majorName: 'Computer Science',
@@ -576,6 +692,145 @@ describe('PlanCandidateService', () => {
       'Ranked University',
       'Missing Rank University',
     ]);
+  });
+
+  it('drops a group when all acceptable majors are clearly unreachable', async () => {
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({
+          id: 900,
+          university: { id: 9, name: 'Impossible University', code: 'I' },
+          majorName: 'Impossible Major',
+        }),
+      ],
+      records: [
+        makeGroupAdmissionRecord({
+          groupMinRank: 88,
+          majorMinRank: 88,
+          majorName: 'Impossible Major',
+        }),
+      ],
+    });
+    rankStrategy.evaluateCandidate.mockResolvedValue(makeRankStrategyResult('REJECTED', 88));
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    expect(result.groups).toHaveLength(0);
+    expect(result.total).toBe(0);
+  });
+
+  it('keeps a group with a recommended major and puts the unreachable sibling into risk', async () => {
+    mockCandidateGroupRequest({
+      student: { preferredMajors: ['Preferred Major'] },
+      plans: [
+        makeGroupEnrollmentPlan({
+          id: 901,
+          majorId: 101,
+          majorCode: '0001',
+          majorName: 'Preferred Major',
+          major: { id: 101, name: 'Preferred Major', code: '0001', category: 'Science' },
+        }),
+        makeGroupEnrollmentPlan({
+          id: 902,
+          majorId: 102,
+          majorCode: '0002',
+          majorName: 'Impossible Major',
+          major: { id: 102, name: 'Impossible Major', code: '0002', category: 'Science' },
+        }),
+      ],
+      records: [
+        makeGroupAdmissionRecord({
+          majorCode: '0001',
+          majorName: 'Preferred Major',
+          majorMinRank: 150000,
+        }),
+        makeGroupAdmissionRecord({
+          majorCode: '0002',
+          majorName: 'Impossible Major',
+          majorMinRank: 88,
+        }),
+      ],
+    });
+    rankStrategy.evaluateCandidate.mockImplementation(({ candidateRank }: any) =>
+      Promise.resolve(
+        candidateRank === 88
+          ? makeRankStrategyResult('REJECTED', candidateRank)
+          : makeRankStrategyResult('FORMAL', candidateRank),
+      ),
+    );
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].majorSections.recommended.map((major: any) => major.majorName)).toEqual(['Preferred Major']);
+    expect(result.groups[0].majorSections.risk.map((major: any) => major.majorName)).toEqual(['Impossible Major']);
+    expect(result.groups[0].majors.map((major: any) => major.majorName)).toEqual(['Preferred Major', 'Impossible Major']);
+  });
+
+  it('does not let a non-preferred major support a group when the student has strict preferences', async () => {
+    mockCandidateGroupRequest({
+      student: { preferredMajors: ['Wanted Major'] },
+      plans: [
+        makeGroupEnrollmentPlan({
+          id: 903,
+          majorName: 'Other Major',
+          major: { id: 103, name: 'Other Major', code: '0003', category: 'Science' },
+        }),
+      ],
+      records: [
+        makeGroupAdmissionRecord({
+          majorName: 'Other Major',
+          majorMinRank: 150000,
+        }),
+      ],
+    });
+    rankStrategy.evaluateCandidate.mockResolvedValue(makeRankStrategyResult('FORMAL', 150000));
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    expect(result.groups).toHaveLength(0);
+  });
+
+  it('lets an unexcluded feasible major support a group when the student has no major preference', async () => {
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({
+          id: 904,
+          majorName: 'Open Major',
+          major: { id: 104, name: 'Open Major', code: '0004', category: 'Science' },
+        }),
+      ],
+      records: [
+        makeGroupAdmissionRecord({
+          majorName: 'Open Major',
+          majorMinRank: 150000,
+        }),
+      ],
+    });
+    rankStrategy.evaluateCandidate.mockResolvedValue(makeRankStrategyResult('FORMAL', 150000));
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].majorSections.recommended[0].majorName).toBe('Open Major');
+  });
+
+  it('puts missing-rank majors into risk and does not let them support a group', async () => {
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({
+          id: 905,
+          majorName: 'New Major',
+          major: { id: 105, name: 'New Major', code: '0005', category: 'Science' },
+        }),
+      ],
+      records: [],
+    });
+    rankStrategy.evaluateCandidate.mockResolvedValue(makeRankStrategyResult('INSUFFICIENT_DATA', null));
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    expect(result.groups).toHaveLength(0);
   });
 
   it('adds dynamic gradient details from competition and selection pool while exposing supplementary summaries', async () => {

@@ -133,4 +133,38 @@ describe('PlanService workflow gates', () => {
 
     await expect(service.finalize(1, 99)).rejects.toThrow(ForbiddenException);
   });
+
+  it('exposes selected majors and adjustment status in plan item details', () => {
+    const fullMajorRanking = {
+      strategyVersion: 'major-group-fill-v1',
+      acceptAdjust: true,
+      selectedMajors: [
+        { order: 1, majorName: 'Computer Science' },
+        { order: 2, majorName: 'Software Engineering' },
+      ],
+      candidateMajorRanking: [],
+    };
+
+    const result = (service as any).toPlanItem({
+      id: 1,
+      sequence: 1,
+      universityName: 'U',
+      universityCode: 'UC',
+      groupCode: 'G',
+      groupName: 'GN',
+      majorName: 'Computer Science',
+      majorCode: '080901',
+      gradient: 'WEN',
+      planCount: 10,
+      tuition: 5000,
+      recommendedOrder: 'Computer Science、Software Engineering',
+      fullMajorRanking,
+      acceptAdjust: true,
+    });
+
+    expect(result.recommendedOrder).toBe('Computer Science、Software Engineering');
+    expect(result.fullMajorRanking).toBe(fullMajorRanking);
+    expect(result.selectedMajors).toEqual(fullMajorRanking.selectedMajors);
+    expect(result.acceptAdjust).toBe(true);
+  });
 });
