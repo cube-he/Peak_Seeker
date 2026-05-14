@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Dropdown, Space } from 'antd';
+import { Dropdown } from 'antd';
 import {
   AppstoreOutlined,
   FileTextOutlined,
@@ -82,11 +82,16 @@ export default function StudentLayout({ children }: StudentLayoutProps) {
               <BellOutlined className="text-base" />
             </button>
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
-              <Space className="cursor-pointer">
+              <button
+                type="button"
+                aria-label="用户菜单"
+                aria-haspopup="menu"
+                className="cursor-pointer border-0 bg-transparent p-0"
+              >
                 <span className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white text-[13px] font-medium">
                   {user?.realName?.charAt(0) || user?.username?.charAt(0) || <UserOutlined />}
                 </span>
-              </Space>
+              </button>
             </Dropdown>
           </div>
         </div>

@@ -63,11 +63,14 @@ describe('TeacherLayout', () => {
       </TeacherLayout>,
     );
 
-    fireEvent.click(screen.getByText('t'));
+    const userMenuButton = screen.getByRole('button', { name: '用户菜单' });
+
+    fireEvent.click(userMenuButton);
 
     await waitFor(() => {
       expect(screen.getByText('个人中心')).toBeInTheDocument();
       expect(screen.getAllByText('退出登录')).toHaveLength(2);
+      expect(userMenuButton).toHaveAttribute('aria-haspopup', 'menu');
     });
   });
 });

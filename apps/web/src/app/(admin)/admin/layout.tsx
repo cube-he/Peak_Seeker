@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Dropdown, Space } from 'antd';
+import { Dropdown } from 'antd';
 import {
   AppstoreOutlined,
   BellOutlined,
@@ -131,14 +131,19 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 <BellOutlined className="text-base" />
               </button>
               <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
-                <Space className="cursor-pointer">
+                <button
+                  type="button"
+                  aria-label="用户菜单"
+                  aria-haspopup="menu"
+                  className="flex cursor-pointer items-center gap-2 border-0 bg-transparent p-0"
+                >
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[13px] font-medium text-white">
                     {user?.username?.charAt(0) || <UserOutlined />}
                   </span>
                   <span className="hidden text-sm font-medium text-text sm:inline">
                     {user?.username || '管理员'}
                   </span>
-                </Space>
+                </button>
               </Dropdown>
             </div>
           </div>
