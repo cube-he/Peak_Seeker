@@ -33,6 +33,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type EligibleBatch } from '@/services/student-api';
 import { planApi, type CandidateGroupSort } from '@/services/plan-api';
+import UniversityLogo from '@/components/university/UniversityLogo';
 import PlanMajorSelectionEditor from '../../components/PlanMajorSelectionEditor';
 import {
   findPlanForBatch,
@@ -190,6 +191,7 @@ interface CandidateGroup {
     runningNature?: string | null;
     province?: string | null;
     city?: string | null;
+    logoUrl?: string | null;
   };
   groupCode?: string | null;
   groupName?: string | null;
@@ -1328,7 +1330,7 @@ export default function GeneratePlanPage() {
                       return (
                         <article key={group.groupKey} className={styles.candidateCard}>
                           <div className={styles.candidateTop}>
-                            <span className={styles.crest}>{group.universityName?.slice(0, 1) || '校'}</span>
+                            <UniversityLogo name={group.universityName || '学校'} logoUrl={group.university?.logoUrl} size={40} />
                             <button type="button" className="min-w-0 border-0 bg-transparent p-0 text-left" onClick={() => toggleGroup(group.groupKey)}>
                               <div className={styles.nameLine}>
                                 <h3>{group.universityName}</h3>

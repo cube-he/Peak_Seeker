@@ -503,20 +503,6 @@
   align-items: start;
 }
 
-.crest {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: var(--primary-fixed);
-  color: var(--primary);
-  display: grid;
-  place-items: center;
-  font-family: var(--page-font-serif);
-  font-weight: 600;
-  font-size: 18px;
-  overflow: hidden;
-}
-
 .nameLine {
   display: flex;
   align-items: center;
