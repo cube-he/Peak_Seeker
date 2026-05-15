@@ -1,143 +1,172 @@
 .root {
+  position: relative;
   background: #fff;
-  color: #222;
-  font-family: var(--page-font-serif, "Microsoft YaHei"), serif;
+  color: #000;
 }
 
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  gap: 12px;
-  flex-wrap: wrap;
+.actions {
+  position: absolute;
+  top: -54px;
+  right: 0;
+  z-index: 1;
 }
 
-.title {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
+.sheet {
+  width: 704px;
+  max-width: 100%;
+  overflow-x: auto;
+  background: #fff;
 }
 
-.title strong {
-  font-size: 18px;
-  color: #1f1f1f;
-}
-
-.title span {
-  font-size: 16px;
-  color: #1f1f1f;
-}
-
-.title em {
-  font-style: normal;
-  font-size: 13px;
-  color: #666;
-}
-
-.printBtn {
-  flex: 0 0 auto;
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.excelTable {
+  width: 704px;
   table-layout: fixed;
+  border-collapse: collapse;
+  border-spacing: 0;
+  color: #000;
+  background: #fff;
+  font-family: "宋体", SimSun, serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
-.table th,
-.table td {
-  border: 1px solid #999;
-  padding: 6px 8px;
-  text-align: left;
+.excelTable th,
+.excelTable td {
+  box-sizing: border-box;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid #000;
+  color: #000;
+  background: #fff;
+  text-align: center;
   vertical-align: middle;
+  white-space: pre-line;
   word-break: break-all;
+  line-height: 1.1;
+  font-size: 11pt;
+  font-weight: 400;
 }
 
-.table thead th {
-  background: #e8e8e8;
-  text-align: center;
-  font-weight: 600;
+.colA {
+  width: 73px;
 }
 
-.colSeq {
-  width: 88px;
-  text-align: center;
+.colB {
+  width: 44px;
 }
 
-.colSchool {
-  width: 22%;
+.colC {
+  width: 153px;
 }
 
-.colGroup {
-  width: 76px;
-  text-align: center;
+.colD {
+  width: 75px;
 }
 
-.colMajor {
-  /* 占用剩余宽度 */
+.colE {
+  width: 40px;
 }
 
-.colAdjust {
-  width: 108px;
-  text-align: center;
+.colF {
+  width: 37px;
 }
 
-.seqCell {
-  text-align: center;
-  font-size: 12px;
-  line-height: 1.4;
+.colG {
+  width: 155px;
 }
 
-.seqNum {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 4px 0;
+.colH {
+  width: 127px;
 }
 
-.schoolCell {
-  font-size: 13px;
+.titleRow th {
+  height: 83px;
 }
 
-.groupCell {
-  text-align: center;
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+.titleCell {
+  border-top-width: 3px !important;
+  border-right-width: 3px !important;
+  border-left-width: 3px !important;
+  border-bottom-width: 0 !important;
+  font-family: "仿宋", FangSong, STFangsong, serif !important;
+  font-size: 18pt !important;
+  font-weight: 700 !important;
+  line-height: 1.28 !important;
 }
 
-.majorIdx {
-  width: 36px;
-  text-align: center;
-  color: #888;
-}
-
-.majorCode {
-  width: 60px;
-  text-align: center;
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-}
-
-.majorName {
-  font-size: 13px;
-}
-
-.adjustCell {
-  text-align: center;
-  line-height: 1.8;
-}
-
-.adjustHit {
+.metaLabelRow td {
+  height: 25px;
+  border-top-width: 2px;
+  border-bottom-width: 1px;
+  font-family: "仿宋", FangSong, STFangsong, serif;
+  font-size: 14pt;
   font-weight: 700;
 }
 
-.empty {
-  text-align: center;
-  color: #999;
-  padding: 36px 0;
+.metaValueRow td {
+  height: 81px;
+  border-bottom-width: 3px;
+  font-family: "仿宋", FangSong, STFangsong, serif;
+  font-size: 10pt;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
-.itemBlock {
-  page-break-inside: avoid;
+.metaSmall {
+  font-size: 8pt !important;
+}
+
+.thickLeft {
+  border-left-width: 3px !important;
+}
+
+.thickRight {
+  border-right-width: 3px !important;
+}
+
+.groupHeaderRow th {
+  height: 41px;
+  border-top-width: 0;
+  border-bottom-width: 0;
+  border-right-width: 2px;
+  border-left-width: 2px;
+  font-family: "宋体", SimSun, serif;
+  font-size: 14pt;
+  font-weight: 700;
+}
+
+.groupHeaderRow .adjustHead {
+  font-size: 11pt;
+}
+
+.slotBlock {
   break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.slotBlock tr:first-child td {
+  border-top-width: 2px;
+}
+
+.slotBlock tr:last-child td {
+  border-bottom-width: 2px;
+}
+
+.mergedCell {
+  border-top-width: 2px !important;
+  border-bottom-width: 2px !important;
+}
+
+.seqCell {
+  border-left-width: 2px !important;
+  line-height: 1.35 !important;
+}
+
+.adjustCell {
+  border-right-width: 2px !important;
+  line-height: 1.55 !important;
+}
+
+.wingdings {
+  font-family: Wingdings, "Wingdings 2", "Segoe UI Symbol", sans-serif;
 }
