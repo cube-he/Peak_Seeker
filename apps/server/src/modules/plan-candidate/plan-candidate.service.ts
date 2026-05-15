@@ -1264,7 +1264,7 @@ export class PlanCandidateService {
         : majors;
       this.sortCandidateMajors(visibleMajors);
       const majorSections = this.splitMajorSections(visibleMajors);
-      if (majorSections.recommended.length === 0) return null;
+      if (majorSections.recommended.length === 0 && majorSections.backup.length === 0) return null;
 
       const orderedMajors = [
         ...majorSections.recommended,

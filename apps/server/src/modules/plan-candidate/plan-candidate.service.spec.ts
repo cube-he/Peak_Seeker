@@ -767,7 +767,7 @@ describe('PlanCandidateService', () => {
     expect(result.groups[0].majors.map((major: any) => major.majorName)).toEqual(['Preferred Major', 'Impossible Major']);
   });
 
-  it('does not let a non-preferred major support a group when the student has strict preferences', async () => {
+  it('keeps a feasible non-preferred major as a backup group when the student has strict preferences', async () => {
     mockCandidateGroupRequest({
       student: { preferredMajors: ['Wanted Major'] },
       plans: [
@@ -788,7 +788,11 @@ describe('PlanCandidateService', () => {
 
     const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
 
-    expect(result.groups).toHaveLength(0);
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].selectableMajorCount).toBe(1);
+    expect(result.groups[0].recommendedAnchorEnrollmentPlanId).toBe(903);
+    expect(result.groups[0].majorSections.recommended).toHaveLength(0);
+    expect(result.groups[0].majorSections.backup.map((major: any) => major.majorName)).toEqual(['Other Major']);
   });
 
   it('lets an unexcluded feasible major support a group when the student has no major preference', async () => {
