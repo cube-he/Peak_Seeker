@@ -141,35 +141,3 @@
   page-break-inside: avoid;
   break-inside: avoid;
 }
-
-@media print {
-  @page {
-    size: A4;
-    margin: 12mm;
-  }
-
-  :global(body) * {
-    visibility: hidden !important;
-  }
-
-  :global([data-print-root]),
-  :global([data-print-root]) * {
-    visibility: visible !important;
-  }
-
-  :global([data-print-root]) {
-    position: absolute !important;
-    inset: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    background: #fff !important;
-  }
-
-  .printBtn {
-    display: none !important;
-  }
-
-  .table {
-    page-break-inside: auto;
-  }
-}

@@ -14,6 +14,52 @@ interface PlanPreparationTableProps {
 }
 
 const MAJOR_ROWS = 6;
+const PRINT_STYLE_ID = 'plan-preparation-table-print-style';
+const PRINT_STYLE = `
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  [data-print-root],
+  [data-print-root] * {
+    visibility: visible !important;
+  }
+
+  [data-print-root] {
+    position: absolute !important;
+    inset: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  [data-print-root] [data-print-action] {
+    display: none !important;
+  }
+
+  [data-print-root] table {
+    page-break-inside: auto;
+  }
+}
+`;
+
+function installPrintStyle() {
+  if (typeof document === 'undefined' || document.getElementById(PRINT_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = PRINT_STYLE_ID;
+  style.textContent = PRINT_STYLE;
+  document.head.appendChild(style);
+}
+
+function removePrintStyle() {
+  document.getElementById(PRINT_STYLE_ID)?.remove();
+}
 
 function formatScore(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return `${value} 分`;
@@ -41,7 +87,10 @@ export default function PlanPreparationTable({ plan, items }: PlanPreparationTab
   const batchLabel = plan?.batchName ?? plan?.batch ?? '本科批';
 
   const handlePrint = () => {
-    if (typeof window !== 'undefined') window.print();
+    if (typeof window === 'undefined') return;
+    installPrintStyle();
+    window.addEventListener('afterprint', removePrintStyle, { once: true });
+    window.print();
   };
 
   return (
@@ -56,6 +105,7 @@ export default function PlanPreparationTable({ plan, items }: PlanPreparationTab
           type="primary"
           icon={<PrinterOutlined />}
           onClick={handlePrint}
+          data-print-action
           className={styles.printBtn}
         >
           打印预案表
