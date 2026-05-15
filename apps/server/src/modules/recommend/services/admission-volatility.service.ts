@@ -28,6 +28,7 @@ const MAX_LOOKBACK_PAIRS = 3;
 @Injectable()
 export class AdmissionVolatilityService {
   private readonly cache = new Map<string, AdmissionVolatilityResult>();
+  private readonly pending = new Map<string, Promise<AdmissionVolatilityResult>>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -41,6 +42,27 @@ export class AdmissionVolatilityService {
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
+    const pending = this.pending.get(cacheKey);
+    if (pending) return pending;
+
+    const calculation = this.calculateUncached(input, sourceAdmissionYear, bucket)
+      .then((result) => {
+        this.cache.set(cacheKey, result);
+        return result;
+      })
+      .finally(() => {
+        this.pending.delete(cacheKey);
+      });
+
+    this.pending.set(cacheKey, calculation);
+    return calculation;
+  }
+
+  private async calculateUncached(
+    input: AdmissionVolatilityInput,
+    sourceAdmissionYear: number,
+    bucket: RankBucket,
+  ): Promise<AdmissionVolatilityResult> {
     const deltas: number[] = [];
     const basisPairs: VolatilityYearPair[] = [];
 
@@ -73,7 +95,6 @@ export class AdmissionVolatilityService {
             basisPairs,
           );
 
-    this.cache.set(cacheKey, result);
     return result;
   }
 

@@ -115,4 +115,30 @@ describe('AdmissionVolatilityService', () => {
     ]);
     expect(result.sampleSize).toBe(35);
   });
+
+  it('deduplicates concurrent identical rank-bucket calculations', async () => {
+    const deltas = Array.from({ length: 30 }, (_, index) => index * 100);
+    const { fromRows, toRows } = makeRows(105000, deltas);
+
+    prisma.admissionRecord.findMany.mockImplementation(async ({ where }: any) => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      if (where.year === 2024) return fromRows;
+      if (where.year === 2025) return toRows;
+      return [];
+    });
+
+    await Promise.all(
+      Array.from({ length: 5 }, () =>
+        service.calculate({
+          province: 'Sichuan',
+          examType: 'PHYSICS',
+          batch: 'Batch A',
+          candidateRank: 120000,
+          sourceAdmissionYear: 2025,
+        }),
+      ),
+    );
+
+    expect(prisma.admissionRecord.findMany).toHaveBeenCalledTimes(2);
+  });
 });
