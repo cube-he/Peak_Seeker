@@ -1,0 +1,175 @@
+.root {
+  background: #fff;
+  color: #222;
+  font-family: var(--page-font-serif, "Microsoft YaHei"), serif;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title strong {
+  font-size: 18px;
+  color: #1f1f1f;
+}
+
+.title span {
+  font-size: 16px;
+  color: #1f1f1f;
+}
+
+.title em {
+  font-style: normal;
+  font-size: 13px;
+  color: #666;
+}
+
+.printBtn {
+  flex: 0 0 auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+.table th,
+.table td {
+  border: 1px solid #999;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: middle;
+  word-break: break-all;
+}
+
+.table thead th {
+  background: #e8e8e8;
+  text-align: center;
+  font-weight: 600;
+}
+
+.colSeq {
+  width: 88px;
+  text-align: center;
+}
+
+.colSchool {
+  width: 22%;
+}
+
+.colGroup {
+  width: 76px;
+  text-align: center;
+}
+
+.colMajor {
+  /* 占用剩余宽度 */
+}
+
+.colAdjust {
+  width: 108px;
+  text-align: center;
+}
+
+.seqCell {
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.seqNum {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 4px 0;
+}
+
+.schoolCell {
+  font-size: 13px;
+}
+
+.groupCell {
+  text-align: center;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.majorIdx {
+  width: 36px;
+  text-align: center;
+  color: #888;
+}
+
+.majorCode {
+  width: 60px;
+  text-align: center;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.majorName {
+  font-size: 13px;
+}
+
+.adjustCell {
+  text-align: center;
+  line-height: 1.8;
+}
+
+.adjustHit {
+  font-weight: 700;
+}
+
+.empty {
+  text-align: center;
+  color: #999;
+  padding: 36px 0;
+}
+
+.itemBlock {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  :global(body) * {
+    visibility: hidden !important;
+  }
+
+  :global([data-print-root]),
+  :global([data-print-root]) * {
+    visibility: visible !important;
+  }
+
+  :global([data-print-root]) {
+    position: absolute !important;
+    inset: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  .printBtn {
+    display: none !important;
+  }
+
+  .table {
+    page-break-inside: auto;
+  }
+}

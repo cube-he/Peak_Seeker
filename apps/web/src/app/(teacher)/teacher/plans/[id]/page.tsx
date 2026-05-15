@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
 import PlanMajorSelectionEditor from '../components/PlanMajorSelectionEditor';
+import PlanPreparationTable from '../components/PlanPreparationTable';
 
 const GRADIENT_LABEL: Record<string, string> = {
   CHONG: '冲',
@@ -253,6 +254,13 @@ export default function PlanDetailPage() {
             rowExpandable: (item) => Boolean(item.fullMajorRanking || item.selectedMajors?.length || item.recommendedOrder),
           }}
         />
+      </Card>
+
+      <Card
+        title="志愿填报预案一览表"
+        className="rounded-2xl shadow-card"
+      >
+        <PlanPreparationTable plan={plan} items={items} />
       </Card>
 
       <Card title="审核与确认记录" className="rounded-2xl shadow-card">
