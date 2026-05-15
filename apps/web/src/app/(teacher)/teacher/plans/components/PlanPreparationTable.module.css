@@ -12,14 +12,15 @@
 }
 
 .sheet {
-  width: 704px;
+  width: 707px;
   max-width: 100%;
   overflow-x: auto;
+  margin: 0 auto;
   background: #fff;
 }
 
 .excelTable {
-  width: 704px;
+  width: 707px;
   table-layout: fixed;
   border-collapse: collapse;
   border-spacing: 0;

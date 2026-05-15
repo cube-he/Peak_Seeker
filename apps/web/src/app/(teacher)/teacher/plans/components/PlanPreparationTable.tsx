@@ -16,6 +16,7 @@ interface PlanPreparationTableProps {
 const MAJOR_ROWS = 6;
 const TEMPLATE_SLOT_COUNT = 50;
 const PRINT_STYLE_ID = 'plan-preparation-table-print-style';
+const PRINT_ROOT_ID = 'plan-preparation-table-print-root';
 const PRINT_STYLE = `
 @page {
   size: A4 portrait;
@@ -28,41 +29,41 @@ const PRINT_STYLE = `
     background: #fff !important;
   }
 
-  body * {
-    visibility: hidden !important;
+  body > *:not(#${PRINT_ROOT_ID}) {
+    display: none !important;
   }
 
-  [data-print-root],
-  [data-print-root] * {
-    visibility: visible !important;
-  }
-
-  [data-print-root] {
-    position: absolute !important;
-    inset: 0 auto auto 0 !important;
-    width: 704px !important;
-    overflow: visible !important;
+  #${PRINT_ROOT_ID} {
+    display: block !important;
+    width: 707px !important;
     padding: 0 !important;
     margin: 0 !important;
     background: #fff !important;
   }
 
-  [data-print-root] [data-print-action] {
+  #${PRINT_ROOT_ID} [data-print-action] {
     display: none !important;
   }
 
-  [data-print-root] table {
-    width: 704px !important;
+  #${PRINT_ROOT_ID} .${styles.sheet} {
+    width: 707px !important;
+    max-width: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+  }
+
+  #${PRINT_ROOT_ID} table {
+    width: 707px !important;
     page-break-inside: auto;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  [data-print-root] thead {
+  #${PRINT_ROOT_ID} thead {
     display: table-header-group;
   }
 
-  [data-print-root] tbody {
+  #${PRINT_ROOT_ID} tbody {
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -79,6 +80,19 @@ function installPrintStyle() {
 
 function removePrintStyle() {
   document.getElementById(PRINT_STYLE_ID)?.remove();
+}
+
+function installPrintRoot(source: HTMLElement) {
+  document.getElementById(PRINT_ROOT_ID)?.remove();
+  const clone = source.cloneNode(true) as HTMLElement;
+  clone.id = PRINT_ROOT_ID;
+  clone.removeAttribute('data-print-root');
+  document.body.appendChild(clone);
+}
+
+function removePrintArtifacts() {
+  removePrintStyle();
+  document.getElementById(PRINT_ROOT_ID)?.remove();
 }
 
 function textValue(value: unknown) {
@@ -148,8 +162,10 @@ export default function PlanPreparationTable({ plan, items }: PlanPreparationTab
 
   const handlePrint = () => {
     if (typeof window === 'undefined') return;
+    const source = document.querySelector('[data-print-root]') as HTMLElement | null;
     installPrintStyle();
-    window.addEventListener('afterprint', removePrintStyle, { once: true });
+    if (source) installPrintRoot(source);
+    window.addEventListener('afterprint', removePrintArtifacts, { once: true });
     window.print();
   };
 
