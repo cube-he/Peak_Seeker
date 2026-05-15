@@ -829,9 +829,26 @@
 
 .rail {
   position: sticky;
-  top: 82px;
+  top: 116px;
+  align-self: start;
   display: grid;
   gap: 12px;
+  max-height: calc(100vh - 132px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.rail::-webkit-scrollbar {
+  width: 6px;
+}
+
+.rail::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+}
+
+.rail::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .railCard {
@@ -919,8 +936,6 @@
 .selectedList {
   display: grid;
   gap: 8px;
-  max-height: 360px;
-  overflow: auto;
   padding-right: 2px;
 }
 
@@ -1178,6 +1193,8 @@
 
   .rail {
     position: static;
+    max-height: none;
+    overflow: visible;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
