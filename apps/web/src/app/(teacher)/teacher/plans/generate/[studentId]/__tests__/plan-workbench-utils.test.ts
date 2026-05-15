@@ -4,15 +4,18 @@ import {
   formatGroupPlanChange,
   formatGroupScoreLine,
   formatRankGap,
+  formatSubjectCombination,
   formatSupplementary,
   getMajorGroupSelectionPayload,
   getPlanItemMajorSelection,
   getPlanItemsForWorkbench,
   getLatestPlansByBatch,
+  getSubjectHighlights,
   hasSupplementaryData,
   isCandidateGroupAlreadyAdded,
   movePlanMajorSelection,
   sortPlansForWorkbench,
+  summarizeTags,
   togglePlanMajorSelection,
 } from '../plan-workbench-utils';
 
@@ -256,5 +259,44 @@ describe('plan workbench helpers', () => {
       { order: 3, enrollmentPlanId: 3, majorId: 3, majorName: 'C' },
     ]);
     expect(movePlanMajorSelection(selected, 2, 'down').map((major) => major.majorName)).toEqual(['A', 'C', 'B']);
+  });
+
+  it('formats the selected subject combination with readable labels', () => {
+    expect(formatSubjectCombination({ firstChoice: 'PHYSICS', reChoices: ['CHEM', 'GEO'] })).toBe('物理 / 化学 / 地理');
+    expect(formatSubjectCombination({ firstChoice: null, reChoices: [] })).toBe('未填写选科');
+  });
+
+  it('ranks subject strengths and weaknesses by score percentage instead of raw score', () => {
+    const highlights = getSubjectHighlights({
+      firstChoice: 'PHYSICS',
+      reChoices: ['CHEM', 'BIO'],
+      scoreChinese: 120,
+      scoreMath: 100,
+      scoreEnglish: 118,
+      scoreFirstChoice: 88,
+      scoreSub1: 70,
+      scoreSub2: 95,
+    });
+
+    expect(highlights.strengths.map((item) => `${item.label}:${item.score}`)).toEqual(['生物:95', '物理:88']);
+    expect(highlights.weaknesses.map((item) => `${item.label}:${item.score}`)).toEqual(['数学:100', '化学:70']);
+  });
+
+  it('ignores missing subject scores when computing highlights', () => {
+    const highlights = getSubjectHighlights({
+      firstChoice: 'HISTORY',
+      reChoices: ['POL', 'GEO'],
+      scoreMath: 135,
+      scoreFirstChoice: null,
+      scoreSub1: undefined,
+    });
+
+    expect(highlights.strengths.map((item) => item.label)).toEqual(['数学']);
+    expect(highlights.weaknesses).toEqual([]);
+  });
+
+  it('summarizes long preference and exclusion lists without losing item count', () => {
+    expect(summarizeTags(['成都', '重庆', '杭州', '武汉'], 2)).toBe('成都、重庆等 4 项');
+    expect(summarizeTags([], 2)).toBe('暂无');
   });
 });

@@ -40,13 +40,16 @@ import {
   formatGroupPlanChange,
   formatGroupScoreLine,
   formatRankGap,
+  formatSubjectCombination,
   formatSupplementary,
   getMajorGroupSelectionPayload,
   getLatestPlansByBatch,
   getPlanItemsForWorkbench,
+  getSubjectHighlights,
   hasSupplementaryData,
   isCandidateGroupAlreadyAdded,
   sortPlansForWorkbench,
+  summarizeTags,
   type SelectedPlanMajorPayload,
   type WorkbenchPlan,
 } from './plan-workbench-utils';
@@ -281,6 +284,69 @@ const CANDIDATE_SORT_OPTIONS: Array<{ label: string; value: CandidateGroupSort }
   { label: '安全程度高', value: 'SAFETY_DESC' },
 ];
 
+const PRIORITY_MODE_LABEL: Record<string, string> = {
+  UNIVERSITY_FIRST: '院校优先',
+  MAJOR_FIRST: '专业优先',
+  CITY_FIRST: '城市优先',
+  BALANCED: '均衡',
+};
+
+const CAREER_PLAN_LABEL: Record<string, string> = {
+  POSTGRADUATE: '考研深造',
+  EMPLOYMENT: '本科就业',
+  ABROAD: '出国留学',
+  PUBLIC_SERVANT: '公考/编制',
+  UNDECIDED: '暂未确定',
+};
+
+const STAY_PREFERENCE_LABEL: Record<string, string> = {
+  LOCAL_ONLY: '只考虑本省',
+  PREFER_LOCAL: '倾向本省',
+  NO_PREFERENCE: '地域不限',
+  PREFER_OUTSIDE: '倾向外省',
+};
+
+const TUITION_BUDGET_LABEL: Record<string, string> = {
+  LOW: '低(<6k/年)',
+  MEDIUM: '中(6k-1w)',
+  HIGH: '高(1w-3w)',
+  UNLIMITED: '不限',
+};
+
+const ACCEPT_LEVEL_LABEL: Record<string, string> = {
+  STRICT: '严格限制',
+  MODERATE: '谨慎考虑',
+  RELAXED: '可接受',
+  UNDECIDED: '未确定',
+};
+
+const REMOTE_AREA_LABEL: Record<string, string> = {
+  ABSOLUTELY_NO: '不接受偏远',
+  BACKUP_ONLY: '仅兜底考虑',
+  FAMOUS_OK: '名校可接受',
+  GOOD_MAJOR_OK: '好专业可接受',
+};
+
+const COLD_MAJOR_LABEL: Record<string, string> = {
+  ABSOLUTELY_NO: '不接受冷门',
+  FAMOUS_OK: '名校可接受',
+  DEVELOPED_AREA_OK: '发达地区可接受',
+  GOOD_PROSPECT_OK: '前景好可接受',
+};
+
+const INTAKE_STATUS_LABEL: Record<string, string> = {
+  DRAFT: '资料草稿',
+  SUBMITTED: '待老师确认',
+  VERIFIED: '资料已确认',
+  REQUEST_CHANGE: '已退回修改',
+};
+
+const EXAM_SOURCE_LABEL: Record<string, string> = {
+  REAL_EXAM: '正式高考',
+  MOCK_EXAM: '模拟考',
+  ESTIMATED: '估分',
+};
+
 function unwrap<T>(value: any): T {
   return (value?.data ?? value) as T;
 }
@@ -294,6 +360,20 @@ function formatValue(value?: number | string | null, suffix = '') {
   return `${typeof value === 'number' ? value.toLocaleString() : value}${suffix}`;
 }
 
+function formatLabel(value: unknown, labels: Record<string, string>) {
+  if (typeof value !== 'string' || !value.trim()) return '-';
+  return labels[value] ?? value;
+}
+
+function formatPlainText(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : '-';
+}
+
+function formatBooleanChoice(value: unknown, yes = '接受', no = '不接受') {
+  if (typeof value !== 'boolean') return '未填写';
+  return value ? yes : no;
+}
+
 function renderTags(values?: string[] | null, color: string = 'default') {
   const items = Array.isArray(values) ? values.filter(Boolean).slice(0, 10) : [];
   if (!items.length) return <span className="text-text-faint">暂无</span>;
@@ -303,6 +383,65 @@ function renderTags(values?: string[] | null, color: string = 'default') {
         <Tag key={value} color={color} className="m-0">{value}</Tag>
       ))}
     </Space>
+  );
+}
+
+function renderHighlights(items: ReturnType<typeof getSubjectHighlights>['strengths'], color: string) {
+  if (!items.length) return <span className="text-text-faint">暂无</span>;
+  return (
+    <Space size={[4, 6]} wrap>
+      {items.map((item) => (
+        <Tag key={item.key} color={color} className="m-0">
+          {item.label} {item.score}/{item.maxScore}
+        </Tag>
+      ))}
+    </Space>
+  );
+}
+
+function getStudentName(student?: Record<string, any>) {
+  return student?.user?.realName || student?.realName || student?.user?.username || '-';
+}
+
+function getArrayValues(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+}
+
+function getPhysicalLimitTags(student?: Record<string, any>) {
+  return [
+    ...(getArrayValues(student?.physicalLimits)),
+    student?.colorBlind ? '色盲' : null,
+    student?.colorWeak ? '色弱' : null,
+    student?.medicalHistory ? `病史：${student.medicalHistory}` : null,
+  ].filter((item): item is string => Boolean(item));
+}
+
+function StudentProfileBlock({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className={styles.profileBlock}>
+      <h2>{title}</h2>
+      <div className={styles.profileBlockBody}>{children}</div>
+    </div>
+  );
+}
+
+function StudentFact({
+  label,
+  value,
+  note,
+  accent = false,
+}: {
+  label: string;
+  value: ReactNode;
+  note?: ReactNode;
+  accent?: boolean;
+}) {
+  return (
+    <div className={cx(styles.profileFact, accent && styles.profileFactAccent)}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {note ? <em>{note}</em> : null}
+    </div>
   );
 }
 
@@ -604,11 +743,53 @@ export default function GeneratePlanPage() {
   const rawStudentScore = Number(student?.totalScore);
   const studentRankForDecision = candidateGroups?.studentRankUsed ?? (Number.isFinite(rawStudentRank) && rawStudentRank > 0 ? rawStudentRank : undefined);
   const studentScoreForDecision = Number.isFinite(rawStudentScore) ? rawStudentScore : undefined;
+  const subjectCombination = formatSubjectCombination(student ?? {});
+  const subjectHighlights = getSubjectHighlights(student ?? {});
+  const physicalLimitTags = getPhysicalLimitTags(student);
 
   const selectedBatchPlan = useMemo(
     () => findPlanForBatch(existingPlans, batchConfigId),
     [existingPlans, batchConfigId],
   );
+  const selectedBatchName = batches.find((batch) => batch.batchConfigId === batchConfigId)?.batchName
+    ?? selectedBatchPlan?.batchName
+    ?? selectedBatchPlan?.batch
+    ?? plan?.batchName
+    ?? '未选择批次';
+  const rankCheck = student?.rankCheck as { isEstimated?: boolean; sourceYear?: number | null } | undefined;
+  const scoreRankNote = isUsingScoreBasedRank
+    ? `排序按 ${formatRankValue(candidateGroups?.scoreBasedRank)} 计算`
+    : rankCheck?.isEstimated
+      ? `一分一段暂用 ${rankCheck.sourceYear ?? '-'} 年`
+      : formatLabel(student?.examSource, EXAM_SOURCE_LABEL);
+  const preferredLocationSummary = summarizeTags([
+    ...getArrayValues(student?.preferredProvinces),
+    ...getArrayValues(student?.preferredCities),
+  ], 2);
+  const preferredMajorSummary = summarizeTags([
+    ...getArrayValues(student?.preferredMajors),
+    ...getArrayValues(student?.preferredMajorCategories),
+  ], 2);
+  const excludedSummary = summarizeTags([
+    ...getArrayValues(student?.excludedProvinces),
+    ...getArrayValues(student?.excludedCities),
+    ...getArrayValues(student?.excludedUniversities),
+    ...getArrayValues(student?.excludedMajors),
+    ...getArrayValues(student?.excludedMajorCategories),
+  ], 3);
+  const stickyStrengthSummary = subjectHighlights.strengths.length
+    ? subjectHighlights.strengths.map((item) => `${item.label}${item.score}`).join('、')
+    : '暂无';
+  const stickyWeaknessSummary = subjectHighlights.weaknesses.length
+    ? subjectHighlights.weaknesses.map((item) => `${item.label}${item.score}`).join('、')
+    : '暂无';
+  const riskPreferenceTags = [
+    formatLabel(student?.tuitionBudget, TUITION_BUDGET_LABEL),
+    student?.acceptPrivate ? `民办：${formatLabel(student.acceptPrivate, ACCEPT_LEVEL_LABEL)}` : null,
+    typeof student?.acceptSinoForeign === 'boolean' ? `中外：${formatBooleanChoice(student.acceptSinoForeign)}` : null,
+    formatLabel(student?.remoteAreaAcceptance, REMOTE_AREA_LABEL),
+    formatLabel(student?.coldMajorAcceptance, COLD_MAJOR_LABEL),
+  ].filter((item): item is string => Boolean(item && item !== '-'));
 
   useEffect(() => {
     if (!planId && existingPlans.length > 0) {
@@ -939,13 +1120,54 @@ export default function GeneratePlanPage() {
             ) : null}
             </div>
           </div>
-          <div className={styles.studentStrip}>
-            <div className={styles.studentChip}><span>Score</span><strong>{student?.totalScore ?? '-'}</strong></div>
-            <div className={styles.studentChip}><span>{isUsingScoreBasedRank ? 'Profile Rank' : 'Rank'}</span><strong>{formatRankValue(student?.provincialRank)}</strong></div>
-            <div className={styles.studentChip}><span>Status</span><strong>{student?.intakeStatus || 'DRAFT'}</strong></div>
-            {isUsingScoreBasedRank && candidateGroups?.scoreBasedRank ? (
-              <div className={styles.studentChip}><span>Sort Rank</span><strong>{formatRankValue(candidateGroups.scoreBasedRank)}</strong></div>
-            ) : null}
+          <div className={styles.studentProfileGrid}>
+            <div className={styles.scoreOverview}>
+              <StudentFact label="总分" value={formatScoreValue(student?.totalScore)} note={scoreRankNote} accent />
+              <StudentFact label="档案位次" value={formatRankValue(student?.provincialRank)} note="学生档案记录" accent />
+              <StudentFact label="排序位次" value={formatRankValue(studentRankForDecision)} note={isUsingScoreBasedRank ? '已按一分一段修正' : '候选池计算口径'} accent />
+              <StudentFact label="资料状态" value={formatLabel(student?.intakeStatus || 'DRAFT', INTAKE_STATUS_LABEL)} note={student?.intakeStatus || 'DRAFT'} />
+              <StudentFact label="选科组合" value={subjectCombination} note={formatLabel(student?.examSource, EXAM_SOURCE_LABEL)} />
+            </div>
+
+            <div className={styles.profileDetailsGrid}>
+              <StudentProfileBlock title="科目结构">
+                <div className={styles.subjectScoreGrid}>
+                  <StudentFact label="语文" value={formatScoreValue(student?.scoreChinese)} />
+                  <StudentFact label="数学" value={formatScoreValue(student?.scoreMath)} />
+                  <StudentFact label="英语" value={formatScoreValue(student?.scoreEnglish)} />
+                  <StudentFact label="首选科目" value={formatScoreValue(student?.scoreFirstChoice)} />
+                  <StudentFact label="再选一" value={formatScoreValue(student?.scoreSub1)} />
+                  <StudentFact label="再选二" value={formatScoreValue(student?.scoreSub2)} />
+                </div>
+                <div className={styles.profileLine}>
+                  <span>优势科目</span>
+                  <div>{renderHighlights(subjectHighlights.strengths, 'green')}</div>
+                </div>
+                <div className={styles.profileLine}>
+                  <span>短板科目</span>
+                  <div>{renderHighlights(subjectHighlights.weaknesses, 'orange')}</div>
+                </div>
+              </StudentProfileBlock>
+
+              <StudentProfileBlock title="意向信息">
+                <div className={styles.profileLine}><span>优先模式</span><strong>{formatLabel(student?.priorityMode, PRIORITY_MODE_LABEL)}</strong></div>
+                <div className={styles.profileLine}><span>留省偏好</span><strong>{formatLabel(student?.stayPreference, STAY_PREFERENCE_LABEL)}</strong></div>
+                <div className={styles.profileLine}><span>升学/职业</span><strong>{formatLabel(student?.careerPlan, CAREER_PLAN_LABEL)} · {formatPlainText(student?.careerDirection)}</strong></div>
+                <div className={styles.profileLine}><span>地域意向</span><div>{renderTags([...getArrayValues(student?.preferredProvinces), ...getArrayValues(student?.preferredCities)], 'blue')}</div></div>
+                <div className={styles.profileLine}><span>院校意向</span><div>{renderTags(student?.preferredUniversities, 'geekblue')}</div></div>
+                <div className={styles.profileLine}><span>专业意向</span><div>{renderTags([...getArrayValues(student?.preferredMajors), ...getArrayValues(student?.preferredMajorCategories)], 'green')}</div></div>
+                <div className={styles.profileLine}><span>意向批次</span><div>{renderTags(student?.preferredBatches, 'purple')}</div></div>
+              </StudentProfileBlock>
+
+              <StudentProfileBlock title="排除与红线">
+                <div className={styles.profileLine}><span>排除地域</span><div>{renderTags([...getArrayValues(student?.excludedProvinces), ...getArrayValues(student?.excludedCities)], 'red')}</div></div>
+                <div className={styles.profileLine}><span>排除院校</span><div>{renderTags(student?.excludedUniversities, 'red')}</div></div>
+                <div className={styles.profileLine}><span>排除专业</span><div>{renderTags([...getArrayValues(student?.excludedMajors), ...getArrayValues(student?.excludedMajorCategories)], 'volcano')}</div></div>
+                <div className={styles.profileLine}><span>接受边界</span><div>{renderTags(riskPreferenceTags, 'gold')}</div></div>
+                <div className={styles.profileLine}><span>身体限制</span><div>{renderTags(physicalLimitTags, 'orange')}</div></div>
+                <div className={styles.profileLine}><span>其他要求</span><strong>{formatPlainText(student?.otherRequirements)}</strong></div>
+              </StudentProfileBlock>
+            </div>
           </div>
           <div className={styles.noteRow}>
             <span className={styles.collectionNote}>已有方案</span>
@@ -969,6 +1191,22 @@ export default function GeneratePlanPage() {
           <Alert className="mt-4" type="warning" showIcon message="学生资料尚未确认，需要先在学生详情页完成资料审核。" />
         ) : null}
       </section>
+
+      <div className={styles.stickyStudentBar} aria-label="学生关键信息常驻摘要">
+        <div className={styles.stickyStudentIdentity}>
+          <strong>{getStudentName(student)}</strong>
+          <span>{selectedBatchName} · {plan ? `方案 ${plan.versionNo ? `V${plan.versionNo}` : ''} ${plan.status ?? '-'}` : '未打开方案'}</span>
+        </div>
+        <div className={styles.stickyStudentFacts}>
+          <span><b>总分</b>{formatScoreValue(student?.totalScore)}</span>
+          <span><b>位次</b>{formatRankValue(studentRankForDecision)}</span>
+          <span><b>选科</b>{subjectCombination}</span>
+          <span><b>优势</b>{stickyStrengthSummary}</span>
+          <span><b>短板</b>{stickyWeaknessSummary}</span>
+          <span><b>意向</b>{preferredLocationSummary} / {preferredMajorSummary}</span>
+          <span><b>排除</b>{excludedSummary}</span>
+        </div>
+      </div>
 
       {planId ? (
         <>

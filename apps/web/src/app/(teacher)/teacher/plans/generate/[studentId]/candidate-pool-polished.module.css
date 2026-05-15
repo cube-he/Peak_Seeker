@@ -1,4 +1,6 @@
 .page {
+  --page-font-sans: var(--font-sans), "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --page-font-serif: var(--font-serif), Georgia, "Noto Serif SC", SimSun, serif;
   --primary: #1e3a5f;
   --primary-light: #2c5282;
   --primary-fixed: #ebf4ff;
@@ -24,6 +26,7 @@
   --shadow-card: 0 1px 3px rgba(26, 26, 25, 0.04);
   --shadow-hover: 0 8px 20px rgba(26, 26, 25, 0.045);
   color: var(--text);
+  font-family: var(--page-font-sans);
 }
 
 .backLink {
@@ -64,7 +67,7 @@
 
 .studentIdentity h1 {
   margin: 0;
-  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-family: var(--page-font-serif);
   font-size: 24px;
   line-height: 1.2;
   font-weight: 600;
@@ -117,12 +120,185 @@
 .summaryCard .value {
   display: block;
   margin-top: 1px;
-  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-family: var(--page-font-serif);
   font-size: 18px;
   line-height: 1.1;
   font-weight: 600;
   color: var(--primary);
   font-variant-numeric: tabular-nums;
+}
+
+.studentProfileGrid {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.scoreOverview {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profileDetailsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.profileBlock {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.profileBlock h2 {
+  margin: 0 0 9px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.profileBlockBody {
+  display: grid;
+  gap: 8px;
+}
+
+.profileFact {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-high);
+  padding: 8px 10px;
+}
+
+.profileFactAccent {
+  background: var(--primary-fixed);
+  border-color: rgba(30, 58, 95, 0.12);
+}
+
+.profileFact span,
+.profileLine > span,
+.stickyStudentFacts b {
+  display: block;
+  color: var(--t4);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.profileFact strong {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-family: var(--page-font-serif);
+  font-size: 17px;
+  line-height: 1.15;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.profileFact em {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--t3);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subjectScoreGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.profileLine {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  color: var(--t2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.profileLine strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.stickyStudentBar {
+  position: sticky;
+  top: 56px;
+  z-index: 35;
+  display: grid;
+  grid-template-columns: minmax(180px, auto) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  border: 1px solid rgba(232, 230, 220, 0.9);
+  border-radius: 10px;
+  background: rgba(250, 249, 245, 0.94);
+  box-shadow: 0 10px 26px rgba(26, 26, 25, 0.08);
+  padding: 9px 12px;
+  backdrop-filter: blur(14px);
+}
+
+.stickyStudentIdentity {
+  min-width: 0;
+}
+
+.stickyStudentIdentity strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--page-font-serif);
+  font-size: 16px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stickyStudentIdentity span {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--t3);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stickyStudentFacts {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 1px;
+}
+
+.stickyStudentFacts span {
+  min-width: max-content;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 9px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .summaryStrip {
@@ -177,7 +353,7 @@
 .drawerSection h3 {
   margin: 0;
   color: var(--text);
-  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-family: var(--page-font-serif);
   font-weight: 600;
 }
 
@@ -272,7 +448,7 @@
   color: var(--primary);
   display: grid;
   place-items: center;
-  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-family: var(--page-font-serif);
   font-weight: 600;
   font-size: 18px;
   overflow: hidden;
@@ -424,7 +600,7 @@
 
 .diff strong {
   color: var(--text);
-  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-family: var(--page-font-serif);
   font-size: 18px;
   font-variant-numeric: tabular-nums;
 }
@@ -447,7 +623,7 @@
 .signal .value {
   margin-top: 3px;
   color: var(--text);
-  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-family: var(--page-font-serif);
   font-size: 17px;
   line-height: 1.1;
   font-weight: 600;
@@ -582,7 +758,7 @@
 
 .majorRow .num {
   color: var(--text);
-  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-family: var(--page-font-serif);
   font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -628,7 +804,7 @@
   display: block;
   margin-top: 2px;
   color: var(--text);
-  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-family: var(--page-font-serif);
   font-size: 22px;
   line-height: 1;
 }
@@ -762,7 +938,10 @@
 }
 
 .drawerRoot :global(.ant-drawer-content) {
+  --page-font-sans: var(--font-sans), "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --page-font-serif: var(--font-serif), Georgia, "Noto Serif SC", SimSun, serif;
   background: var(--surface-high);
+  font-family: var(--page-font-sans);
 }
 
 .drawerRoot :global(.ant-drawer-header) {
@@ -794,7 +973,7 @@
 .drawerTitle h2 {
   margin: 0;
   color: var(--text);
-  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-family: var(--page-font-serif);
   font-size: 22px;
   line-height: 1.18;
   font-weight: 600;
@@ -842,7 +1021,7 @@
   display: block;
   margin-top: 1px;
   color: var(--primary);
-  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+  font-family: var(--page-font-serif);
   font-size: 21px;
   line-height: 1;
   font-weight: 700;
@@ -926,6 +1105,14 @@
     grid-template-columns: 1fr;
   }
 
+  .scoreOverview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .profileDetailsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .rail {
     position: static;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -943,12 +1130,24 @@
   }
 
   .summaryStrip,
+  .scoreOverview,
+  .profileDetailsGrid,
+  .subjectScoreGrid,
   .signalGrid,
   .evidenceGrid,
   .decisionGrid,
   .riskReview,
   .rail {
     grid-template-columns: 1fr;
+  }
+
+  .stickyStudentBar {
+    grid-template-columns: 1fr;
+  }
+
+  .profileLine {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .majorRow {

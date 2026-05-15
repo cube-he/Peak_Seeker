@@ -108,6 +108,100 @@ export interface WorkbenchPlanDetailLike {
   items?: CandidateGroupIdentityLike[] | null;
 }
 
+export interface StudentProfileSubjectLike {
+  firstChoice?: string | null;
+  reChoices?: string[] | null;
+  scoreChinese?: number | null;
+  scoreMath?: number | null;
+  scoreEnglish?: number | null;
+  scoreFirstChoice?: number | null;
+  scoreSub1?: number | null;
+  scoreSub2?: number | null;
+}
+
+export interface SubjectHighlight {
+  key: string;
+  label: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+}
+
+const SUBJECT_LABELS: Record<string, string> = {
+  PHYSICS: '物理',
+  HISTORY: '历史',
+  COMPREHENSIVE_LIBERAL: '文科综合',
+  COMPREHENSIVE_SCIENCE: '理科综合',
+  CHEM: '化学',
+  BIO: '生物',
+  POL: '政治',
+  GEO: '地理',
+};
+
+function subjectLabel(value?: string | null, fallback = '-') {
+  if (!value) return fallback;
+  return SUBJECT_LABELS[value] ?? value;
+}
+
+function numericScore(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function subjectScore(key: string, label: string, score: unknown, maxScore: number): SubjectHighlight | null {
+  const value = numericScore(score);
+  if (value == null) return null;
+  return {
+    key,
+    label,
+    score: value,
+    maxScore,
+    percentage: value / maxScore,
+  };
+}
+
+export function formatSubjectCombination(profile: StudentProfileSubjectLike) {
+  const parts = [
+    profile.firstChoice ? subjectLabel(profile.firstChoice) : null,
+    ...(profile.reChoices ?? []).map((choice) => subjectLabel(choice)).filter(Boolean),
+  ].filter((part): part is string => Boolean(part));
+
+  return parts.length ? parts.join(' / ') : '未填写选科';
+}
+
+export function getSubjectHighlights(profile: StudentProfileSubjectLike, limit = 2) {
+  const reChoices = profile.reChoices ?? [];
+  const scores = [
+    subjectScore('chinese', '语文', profile.scoreChinese, 150),
+    subjectScore('math', '数学', profile.scoreMath, 150),
+    subjectScore('english', '英语', profile.scoreEnglish, 150),
+    subjectScore('firstChoice', subjectLabel(profile.firstChoice, '首选科目'), profile.scoreFirstChoice, 100),
+    subjectScore('sub1', subjectLabel(reChoices[0], '再选一'), profile.scoreSub1, 100),
+    subjectScore('sub2', subjectLabel(reChoices[1], '再选二'), profile.scoreSub2, 100),
+  ].filter((item): item is SubjectHighlight => Boolean(item));
+  const cappedLimit = Math.max(1, limit);
+
+  return {
+    strengths: [...scores]
+      .sort((a, b) => b.percentage - a.percentage || b.score - a.score)
+      .slice(0, cappedLimit),
+    weaknesses: scores.length <= 1
+      ? []
+      : [...scores]
+        .sort((a, b) => a.percentage - b.percentage || a.score - b.score)
+        .slice(0, cappedLimit),
+  };
+}
+
+export function summarizeTags(items?: Array<string | number | null | undefined> | null, limit = 3) {
+  const values = (items ?? [])
+    .map((item) => String(item ?? '').trim())
+    .filter(Boolean);
+  if (!values.length) return '暂无';
+  const cappedLimit = Math.max(1, limit);
+  const visible = values.slice(0, cappedLimit).join('、');
+  return values.length > cappedLimit ? `${visible}等 ${values.length} 项` : visible;
+}
+
 export function getLatestPlansByBatch<T extends WorkbenchPlan>(plans: T[]): T[] {
   const byBatch = new Map<string, T>();
 
