@@ -242,10 +242,9 @@
   position: sticky;
   top: 56px;
   z-index: 35;
-  display: grid;
-  grid-template-columns: minmax(180px, auto) minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 12px;
   border: 1px solid rgba(232, 230, 220, 0.9);
   border-radius: 10px;
@@ -253,6 +252,13 @@
   box-shadow: 0 10px 26px rgba(26, 26, 25, 0.08);
   padding: 9px 12px;
   backdrop-filter: blur(14px);
+}
+
+.stickyBarPrimary {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
 }
 
 .stickyStudentIdentity {
@@ -299,6 +305,63 @@
   font-size: 12px;
   line-height: 1.25;
   white-space: nowrap;
+}
+
+.stickyStudentFacts b {
+  display: block;
+  color: var(--t4);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.stickyBarToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.stickyBarToggle:hover {
+  background: var(--surface-dim);
+  color: var(--primary);
+}
+
+.stickyBarSecondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.stickyBarSecondary span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 9px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.stickyBarSecondary b {
+  color: var(--t4);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
 }
 
 .summaryStrip {
@@ -1141,8 +1204,12 @@
     grid-template-columns: 1fr;
   }
 
-  .stickyStudentBar {
-    grid-template-columns: 1fr;
+  .stickyBarPrimary {
+    grid-template-columns: 1fr auto;
+  }
+
+  .stickyStudentFacts {
+    grid-column: 1 / -1;
   }
 
   .profileLine {

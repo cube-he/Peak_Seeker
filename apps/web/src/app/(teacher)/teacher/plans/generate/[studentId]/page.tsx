@@ -245,6 +245,8 @@ interface CandidateGroupListResult {
   scoreBasedRank?: number | null;
 }
 
+const STICKY_BAR_STORAGE_KEY = 'plan-workbench:student-bar-expanded';
+
 const GRADIENT_LABEL: Record<DynamicGradientTier, string> = {
   JI_CHONG: '极冲',
   CHONG: '冲',
@@ -687,6 +689,10 @@ export default function GeneratePlanPage() {
   const [candidatePage, setCandidatePage] = useState(1);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
   const [activeDetail, setActiveDetail] = useState<{ group: CandidateGroup; major: CandidateMajor } | null>(null);
+  const [stickyBarExpanded, setStickyBarExpanded] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(STICKY_BAR_STORAGE_KEY) === '1';
+  });
   const candidatePageSize = 12;
 
   const { data: studentData, isLoading: studentLoading } = useQuery({
@@ -803,6 +809,11 @@ export default function GeneratePlanPage() {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
   }, [planId, keyword, includeSoftFails, candidateSort]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(STICKY_BAR_STORAGE_KEY, stickyBarExpanded ? '1' : '0');
+  }, [stickyBarExpanded]);
 
   const createMutation = useMutation({
     mutationFn: () => planApi.createForStudent(studentId, { batchConfigId: batchConfigId! }),
@@ -1193,19 +1204,36 @@ export default function GeneratePlanPage() {
       </section>
 
       <div className={styles.stickyStudentBar} aria-label="学生关键信息常驻摘要">
-        <div className={styles.stickyStudentIdentity}>
-          <strong>{getStudentName(student)}</strong>
-          <span>{selectedBatchName} · {plan ? `方案 ${plan.versionNo ? `V${plan.versionNo}` : ''} ${plan.status ?? '-'}` : '未打开方案'}</span>
+        <div className={styles.stickyBarPrimary}>
+          <div className={styles.stickyStudentIdentity}>
+            <strong>{getStudentName(student)}</strong>
+            <span>{selectedBatchName} · {plan ? `方案 ${plan.versionNo ? `V${plan.versionNo}` : ''} ${plan.status ?? '-'}` : '未打开方案'}</span>
+          </div>
+          <div className={styles.stickyStudentFacts}>
+            <span><b>总分</b>{formatScoreValue(student?.totalScore)}</span>
+            <span><b>位次</b>{formatRankValue(studentRankForDecision)}</span>
+            <span><b>选科</b>{subjectCombination}</span>
+          </div>
+          <button
+            type="button"
+            className={styles.stickyBarToggle}
+            aria-expanded={stickyBarExpanded}
+            aria-controls="sticky-bar-secondary"
+            onClick={() => setStickyBarExpanded((prev) => !prev)}
+          >
+            {stickyBarExpanded ? '收起' : '展开'}
+            <DownOutlined rotate={stickyBarExpanded ? 180 : 0} />
+          </button>
         </div>
-        <div className={styles.stickyStudentFacts}>
-          <span><b>总分</b>{formatScoreValue(student?.totalScore)}</span>
-          <span><b>位次</b>{formatRankValue(studentRankForDecision)}</span>
-          <span><b>选科</b>{subjectCombination}</span>
-          <span><b>优势</b>{stickyStrengthSummary}</span>
-          <span><b>短板</b>{stickyWeaknessSummary}</span>
-          <span><b>意向</b>{preferredLocationSummary} / {preferredMajorSummary}</span>
-          <span><b>排除</b>{excludedSummary}</span>
-        </div>
+        {stickyBarExpanded ? (
+          <div className={styles.stickyBarSecondary} id="sticky-bar-secondary">
+            <span><b>优势</b>{stickyStrengthSummary}</span>
+            <span><b>短板</b>{stickyWeaknessSummary}</span>
+            <span><b>意向</b>{preferredLocationSummary} / {preferredMajorSummary}</span>
+            <span><b>排除</b>{excludedSummary}</span>
+            <span><b>接受边界</b>{riskPreferenceTags.length ? riskPreferenceTags.join('、') : '未填写'}</span>
+          </div>
+        ) : null}
       </div>
 
       {planId ? (
