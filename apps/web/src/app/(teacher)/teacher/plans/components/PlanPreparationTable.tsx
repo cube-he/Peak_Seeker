@@ -1,11 +1,17 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { Button } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import {
   getPlanItemMajorSelection,
   type PlanItemMajorSelectionLike,
 } from '../generate/[studentId]/plan-workbench-utils';
+import {
+  getPlanDraftLabel,
+  getPreparationSlotCount,
+  PREPARATION_TABLE_WIDTH,
+} from './PlanPreparationTable.utils';
 import styles from './PlanPreparationTable.module.css';
 
 interface PlanPreparationTableProps {
@@ -14,7 +20,6 @@ interface PlanPreparationTableProps {
 }
 
 const MAJOR_ROWS = 6;
-const TEMPLATE_SLOT_COUNT = 50;
 const PRINT_STYLE_ID = 'plan-preparation-table-print-style';
 const PRINT_ROOT_ID = 'plan-preparation-table-print-root';
 const PRINT_STYLE = `
@@ -43,6 +48,17 @@ const PRINT_STYLE = `
 
   #${PRINT_ROOT_ID} [data-print-action] {
     display: none !important;
+  }
+
+  #${PRINT_ROOT_ID} .${styles.previewViewport} {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  #${PRINT_ROOT_ID} .${styles.sheetScale} {
+    width: 707px !important;
+    margin: 0 !important;
+    transform: none !important;
   }
 
   #${PRINT_ROOT_ID} .${styles.sheet} {
@@ -149,6 +165,10 @@ function slotLabel(index: number) {
 }
 
 export default function PlanPreparationTable({ plan, items }: PlanPreparationTableProps) {
+  const previewRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [previewScale, setPreviewScale] = useState(1);
+  const [previewHeight, setPreviewHeight] = useState<number>();
   const student = plan?.student as Record<string, any> | undefined;
   const studentName =
     plan?.studentName ?? student?.user?.realName ?? student?.user?.username ?? '';
@@ -157,8 +177,34 @@ export default function PlanPreparationTable({ plan, items }: PlanPreparationTab
   const year = plan?.year ?? student?.examYear ?? 2025;
   const batchLabel = textValue(plan?.batchName ?? plan?.batch) || '本科批B段';
   const schoolName = textValue(student?.highSchool) || '优典学校';
-  const slotCount = Math.max(TEMPLATE_SLOT_COUNT, items.length);
+  const draftLabel = getPlanDraftLabel(plan);
+  const slotCount = getPreparationSlotCount(plan, items.length);
   const slots = Array.from({ length: slotCount }, (_, index) => items[index]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const updatePreviewScale = () => {
+      const availableWidth = previewRef.current?.clientWidth ?? PREPARATION_TABLE_WIDTH;
+      const rawScale = availableWidth / PREPARATION_TABLE_WIDTH;
+      const nextScale = Number(Math.min(1.45, Math.max(0.65, rawScale)).toFixed(3));
+      const sheetHeight = sheetRef.current?.offsetHeight ?? 0;
+
+      setPreviewScale(nextScale);
+      if (sheetHeight) setPreviewHeight(Math.ceil(sheetHeight * nextScale));
+    };
+
+    updatePreviewScale();
+    const resizeObserver = new ResizeObserver(updatePreviewScale);
+    if (previewRef.current) resizeObserver.observe(previewRef.current);
+    if (sheetRef.current) resizeObserver.observe(sheetRef.current);
+    window.addEventListener('resize', updatePreviewScale);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updatePreviewScale);
+    };
+  }, [slotCount]);
 
   const handlePrint = () => {
     if (typeof window === 'undefined') return;
@@ -177,107 +223,118 @@ export default function PlanPreparationTable({ plan, items }: PlanPreparationTab
         </Button>
       </div>
 
-      <div className={styles.sheet}>
-        <table className={styles.excelTable}>
-          <colgroup>
-            <col className={styles.colA} />
-            <col className={styles.colB} />
-            <col className={styles.colC} />
-            <col className={styles.colD} />
-            <col className={styles.colE} />
-            <col className={styles.colF} />
-            <col className={styles.colG} />
-            <col className={styles.colH} />
-          </colgroup>
-          <thead>
-            <tr className={styles.titleRow}>
-              <th colSpan={8} className={styles.titleCell}>
-                {`${schoolName}${year}高考志愿\n${batchLabel} 志愿填报预案一览表`}
-              </th>
-            </tr>
-            <tr className={styles.metaLabelRow}>
-              <td className={styles.thickLeft}>姓名</td>
-              <td colSpan={2}>分数/2024/2023</td>
-              <td>位次</td>
-              <td colSpan={3}>志愿倾向</td>
-              <td className={styles.thickRight}>身体情况</td>
-            </tr>
-            <tr className={styles.metaValueRow}>
-              <td className={styles.thickLeft}>{textValue(studentName)}</td>
-              <td colSpan={2}>{formatInteger(totalScore)}</td>
-              <td>{formatInteger(rank)}</td>
-              <td colSpan={3} className={styles.metaSmall}>
-                {formatPreference(student)}
-              </td>
-              <td className={`${styles.metaSmall} ${styles.thickRight}`}>
-                {formatPhysical(student)}
-              </td>
-            </tr>
-            <tr className={styles.groupHeaderRow}>
-              <th>序号</th>
-              <th colSpan={2}>院校</th>
-              <th>专业组</th>
-              <th colSpan={3}>专业</th>
-              <th className={styles.adjustHead}>是否服从专业调剂</th>
-            </tr>
-          </thead>
+      <div
+        ref={previewRef}
+        className={styles.previewViewport}
+        style={previewHeight ? { height: previewHeight } : undefined}
+      >
+        <div
+          className={styles.sheetScale}
+          style={{ transform: `scale(${previewScale})` }}
+        >
+          <div ref={sheetRef} className={styles.sheet}>
+            <table className={styles.excelTable}>
+              <colgroup>
+                <col className={styles.colA} />
+                <col className={styles.colB} />
+                <col className={styles.colC} />
+                <col className={styles.colD} />
+                <col className={styles.colE} />
+                <col className={styles.colF} />
+                <col className={styles.colG} />
+                <col className={styles.colH} />
+              </colgroup>
+              <thead>
+                <tr className={styles.titleRow}>
+                  <th colSpan={8} className={styles.titleCell}>
+                    {`${schoolName}${year}高考志愿\n${batchLabel} 志愿填报预案一览表（${draftLabel}）`}
+                  </th>
+                </tr>
+                <tr className={styles.metaLabelRow}>
+                  <td className={styles.thickLeft}>姓名</td>
+                  <td colSpan={2}>分数/2024/2023</td>
+                  <td>位次</td>
+                  <td colSpan={3}>志愿倾向</td>
+                  <td className={styles.thickRight}>身体情况</td>
+                </tr>
+                <tr className={styles.metaValueRow}>
+                  <td className={styles.thickLeft}>{textValue(studentName)}</td>
+                  <td colSpan={2}>{formatInteger(totalScore)}</td>
+                  <td>{formatInteger(rank)}</td>
+                  <td colSpan={3} className={styles.metaSmall}>
+                    {formatPreference(student)}
+                  </td>
+                  <td className={`${styles.metaSmall} ${styles.thickRight}`}>
+                    {formatPhysical(student)}
+                  </td>
+                </tr>
+                <tr className={styles.groupHeaderRow}>
+                  <th>序号</th>
+                  <th colSpan={2}>院校</th>
+                  <th>专业组</th>
+                  <th colSpan={3}>专业</th>
+                  <th className={styles.adjustHead}>是否服从专业调剂</th>
+                </tr>
+              </thead>
 
-          {slots.map((item, index) => {
-            const selection = item
-              ? getPlanItemMajorSelection(item as PlanItemMajorSelectionLike)
-              : { selectedMajors: [] };
-            const selectedMajors = (selection.selectedMajors ?? []) as Array<Record<string, any>>;
-            const acceptsAdjust = item?.acceptAdjust !== false;
+              {slots.map((item, index) => {
+                const selection = item
+                  ? getPlanItemMajorSelection(item as PlanItemMajorSelectionLike)
+                  : { selectedMajors: [] };
+                const selectedMajors = (selection.selectedMajors ?? []) as Array<Record<string, any>>;
+                const acceptsAdjust = item?.acceptAdjust !== false;
 
-            return (
-              <tbody key={item?.id ?? `empty-${index}`} className={styles.slotBlock}>
-                {Array.from({ length: MAJOR_ROWS }).map((_, majorIndex) => {
-                  const major = selectedMajors[majorIndex];
-                  const isFirst = majorIndex === 0;
+                return (
+                  <tbody key={item?.id ?? `empty-${index}`} className={styles.slotBlock}>
+                    {Array.from({ length: MAJOR_ROWS }).map((_, majorIndex) => {
+                      const major = selectedMajors[majorIndex];
+                      const isFirst = majorIndex === 0;
 
-                  return (
-                    <tr key={majorIndex}>
-                      {isFirst ? (
-                        <td rowSpan={MAJOR_ROWS} className={`${styles.seqCell} ${styles.mergedCell}`}>
-                          {slotLabel(index)}
-                        </td>
-                      ) : null}
-                      {isFirst ? (
-                        <td rowSpan={MAJOR_ROWS} className={styles.mergedCell}>
-                          {textValue(item?.universityCode)}
-                        </td>
-                      ) : null}
-                      {isFirst ? (
-                        <td rowSpan={MAJOR_ROWS} className={styles.mergedCell}>
-                          {textValue(item?.universityName)}
-                        </td>
-                      ) : null}
-                      {isFirst ? (
-                        <td rowSpan={MAJOR_ROWS} className={styles.mergedCell}>
-                          {textValue(item?.groupCode)}
-                        </td>
-                      ) : null}
-                      <td>{majorIndex + 1}</td>
-                      <td>{getMajorValue(major, 'majorCode')}</td>
-                      <td>{getMajorValue(major, 'majorName')}</td>
-                      {isFirst ? (
-                        <td rowSpan={MAJOR_ROWS} className={`${styles.adjustCell} ${styles.mergedCell}`}>
-                          <span>
-                            是<span className={styles.wingdings}>{acceptsAdjust ? 'þ' : '¨'}</span>
-                          </span>
-                          <br />
-                          <span>
-                            否<span className={styles.wingdings}>{acceptsAdjust ? '¨' : 'þ'}</span>
-                          </span>
-                        </td>
-                      ) : null}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            );
-          })}
-        </table>
+                      return (
+                        <tr key={majorIndex}>
+                          {isFirst ? (
+                            <td rowSpan={MAJOR_ROWS} className={`${styles.seqCell} ${styles.mergedCell}`}>
+                              {slotLabel(index)}
+                            </td>
+                          ) : null}
+                          {isFirst ? (
+                            <td rowSpan={MAJOR_ROWS} className={styles.mergedCell}>
+                              {textValue(item?.universityCode)}
+                            </td>
+                          ) : null}
+                          {isFirst ? (
+                            <td rowSpan={MAJOR_ROWS} className={styles.mergedCell}>
+                              {textValue(item?.universityName)}
+                            </td>
+                          ) : null}
+                          {isFirst ? (
+                            <td rowSpan={MAJOR_ROWS} className={styles.mergedCell}>
+                              {textValue(item?.groupCode)}
+                            </td>
+                          ) : null}
+                          <td>{majorIndex + 1}</td>
+                          <td>{getMajorValue(major, 'majorCode')}</td>
+                          <td>{getMajorValue(major, 'majorName')}</td>
+                          {isFirst ? (
+                            <td rowSpan={MAJOR_ROWS} className={`${styles.adjustCell} ${styles.mergedCell}`}>
+                              <span>
+                                是<span className={styles.wingdings}>{acceptsAdjust ? 'þ' : '¨'}</span>
+                              </span>
+                              <br />
+                              <span>
+                                否<span className={styles.wingdings}>{acceptsAdjust ? '¨' : 'þ'}</span>
+                              </span>
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                );
+              })}
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -177,11 +177,24 @@ export class PlanService {
     if (!(await this.canReadPlan(plan, userId))) {
       throw new ForbiddenException('无权访问此方案');
     }
+    const batchConfig = plan.batchConfigId
+      ? await this.prisma.batchConfig.findUnique({
+          where: { id: plan.batchConfigId },
+          select: {
+            id: true,
+            batch: true,
+            maxGroupCount: true,
+            maxMajorPerGroup: true,
+            volunteerMode: true,
+          },
+        })
+      : null;
     return {
       ...plan,
       studentName: plan.student?.user?.realName ?? plan.student?.user?.username,
       version: plan.versionNo,
       batch: plan.batchName ?? plan.batch,
+      batchConfig,
       itemCount: plan.planItems?.length ?? 0,
       items: (plan.planItems ?? []).map((item) => this.toPlanItem(item)),
     };

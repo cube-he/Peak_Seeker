@@ -167,4 +167,46 @@ describe('PlanService workflow gates', () => {
     expect(result.selectedMajors).toEqual(fullMajorRanking.selectedMajors);
     expect(result.acceptAdjust).toBe(true);
   });
+
+  it('includes batch group rules in plan detail', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1,
+      createdById: 20,
+      userId: null,
+      studentId: 10,
+      batchConfigId: 22,
+      batchName: '本科批B段',
+      status: 'DRAFT',
+      student: { user: { realName: '小王', username: 'student' } },
+      planItems: [],
+      reviews: [],
+    });
+    prisma.batchConfig.findUnique.mockResolvedValue({
+      id: 22,
+      batch: '本科批B段',
+      maxGroupCount: 45,
+      maxMajorPerGroup: 6,
+      volunteerMode: 'parallel',
+    });
+
+    const result = await service.findById(1, 20);
+
+    expect(prisma.batchConfig.findUnique).toHaveBeenCalledWith({
+      where: { id: 22 },
+      select: {
+        id: true,
+        batch: true,
+        maxGroupCount: true,
+        maxMajorPerGroup: true,
+        volunteerMode: true,
+      },
+    });
+    expect(result.batchConfig).toEqual({
+      id: 22,
+      batch: '本科批B段',
+      maxGroupCount: 45,
+      maxMajorPerGroup: 6,
+      volunteerMode: 'parallel',
+    });
+  });
 });

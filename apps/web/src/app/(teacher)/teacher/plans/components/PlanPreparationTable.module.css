@@ -11,10 +11,21 @@
   z-index: 1;
 }
 
+.previewViewport {
+  width: 100%;
+  overflow: hidden;
+}
+
+.sheetScale {
+  width: 707px;
+  margin: 0 auto;
+  transform-origin: top center;
+}
+
 .sheet {
   width: 707px;
-  max-width: 100%;
-  overflow-x: auto;
+  max-width: none;
+  overflow: visible;
   margin: 0 auto;
   background: #fff;
 }
