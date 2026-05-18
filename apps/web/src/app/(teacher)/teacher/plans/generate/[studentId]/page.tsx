@@ -55,6 +55,7 @@ import {
   type WorkbenchPlan,
 } from './plan-workbench-utils';
 import styles from './candidate-pool-polished.module.css';
+import { MatchHeader, TrendChart, NotesChip } from '@/components/candidate-pool-v2';
 
 type Gradient = 'CHONG' | 'WEN' | 'BAO';
 type DynamicGradientTier =
@@ -162,6 +163,7 @@ interface CandidateMajor {
   previousMajorAdmissionCount?: number | null;
   matchScore?: number | null;
   matchReasons?: string[];
+  matchReason?: string | null;
   dynamicGradient?: DynamicGradientDetail | null;
   suggestedGradient: Gradient;
   matchStatus: MatchStatus;
@@ -224,6 +226,9 @@ interface CandidateGroup {
   softFailCount: number;
   matchScore?: number | null;
   matchReasons?: string[];
+  matchReason?: string | null;
+  history3y?: Array<{ year: number; score: number; rank: number }>;
+  historyFiling3y?: Array<{ year: number; score: number; rank: number }>;
   universityRank?: number | null;
   anchorMajorMinScore?: number | null;
   anchorMajorMinRank?: number | null;
@@ -556,6 +561,7 @@ function CandidateMajorSection({
           >
             <span className={styles.majorNameCell}>
               <strong>{major.majorName}</strong>
+              {major.planNotes ? <NotesChip notes={major.planNotes} /> : null}
               {major.displayReason ? <small>{major.displayReason}</small> : null}
             </span>
             <span className={styles.num}>{formatScoreRankValue(major.majorMinScore, major.majorMinRank)}</span>
@@ -688,6 +694,7 @@ export default function GeneratePlanPage() {
   const [searchText, setSearchText] = useState('');
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
+  const [trendType, setTrendType] = useState<'filing' | 'min'>('filing');
   const [candidatePage, setCandidatePage] = useState(1);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
   const [activeDetail, setActiveDetail] = useState<{ group: CandidateGroup; major: CandidateMajor } | null>(null);
@@ -1017,6 +1024,7 @@ export default function GeneratePlanPage() {
           {major.majorCode ? <span className="ml-2 font-mono text-xs text-text-tertiary">{major.majorCode}</span> : null}
           {major.isRecommendedAnchor ? <Tag color="gold" className="ml-2">推荐锚定</Tag> : null}
           {major.displaySection ? <Tag color={major.displaySection === 'RISK' ? 'warning' : major.displaySection === 'BACKUP' ? 'default' : 'success'} className="ml-2">{MAJOR_SECTION_LABEL[major.displaySection]}</Tag> : null}
+          {major.planNotes ? <span className="ml-2 inline-block"><NotesChip notes={major.planNotes} /></span> : null}
           {major.displayReason ? <div className="mt-1 text-xs text-text-tertiary">{major.displayReason}</div> : null}
         </button>
       ),
@@ -1286,7 +1294,35 @@ export default function GeneratePlanPage() {
                 <div>
                   当前展示 <strong>{groups.length}</strong> 个候选，按 <strong>{CANDIDATE_SORT_OPTIONS.find((item) => item.value === candidateSort)?.label}</strong> 排序
                 </div>
-                <span>{includeSoftFails ? '包含风险项' : '仅显示可选项'}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ display: 'inline-flex', gap: 2, padding: 2, borderRadius: 6, background: 'var(--surface-dim, #f0eee6)' }}>
+                    <button
+                      type="button"
+                      onClick={() => setTrendType('filing')}
+                      style={{
+                        height: 22, padding: '0 10px', borderRadius: 4, border: 0, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        background: trendType === 'filing' ? '#fff' : 'transparent',
+                        color: trendType === 'filing' ? '#1e3a5f' : '#6b6962',
+                        boxShadow: trendType === 'filing' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                      }}
+                    >
+                      投档线趋势
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTrendType('min')}
+                      style={{
+                        height: 22, padding: '0 10px', borderRadius: 4, border: 0, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        background: trendType === 'min' ? '#fff' : 'transparent',
+                        color: trendType === 'min' ? '#1e3a5f' : '#6b6962',
+                        boxShadow: trendType === 'min' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                      }}
+                    >
+                      组最低趋势
+                    </button>
+                  </div>
+                  <span>{includeSoftFails ? '包含风险项' : '仅显示可选项'}</span>
+                </div>
               </div>
               {isUsingFallbackYear ? (
                 <Alert
@@ -1327,8 +1363,21 @@ export default function GeneratePlanPage() {
                         ...(group.matchReasons ?? []),
                         ...(anchor?.matchReasons ?? []),
                       ].filter(Boolean);
+                      const trendPoints = (trendType === 'filing' ? group.historyFiling3y : group.history3y) ?? [];
                       return (
                         <article key={group.groupKey} className={styles.candidateCard}>
+                          <MatchHeader
+                            matchScore={group.matchScore ?? 0}
+                            matchReason={group.matchReason}
+                          />
+                          {trendPoints.length > 0 ? (
+                            <div style={{ padding: '10px 16px', borderTop: '1px solid #f0eee6', borderBottom: '1px solid #f0eee6', background: '#faf9f5', display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: 12, alignItems: 'center' }}>
+                              <span style={{ fontSize: 11, color: '#6b6962', fontWeight: 600, letterSpacing: 0.4 }}>
+                                {trendType === 'filing' ? '近 3 年投档线' : '近 3 年组最低分'}
+                              </span>
+                              <TrendChart points={trendPoints} />
+                            </div>
+                          ) : null}
                           <div className={styles.candidateTop}>
                             <UniversityLogo name={group.universityName || '学校'} logoUrl={group.university?.logoUrl} size={40} />
                             <button type="button" className="min-w-0 border-0 bg-transparent p-0 text-left" onClick={() => toggleGroup(group.groupKey)}>

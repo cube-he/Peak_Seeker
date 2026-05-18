@@ -15,6 +15,7 @@ const mockMajor = {
   matchStatus: 'PASS',
   failReasons: [],
   planCount: 20,
+  planNotes: '色弱、色盲考生不录取；英语单科 ≥ 110',
 };
 
 const mockCandidateGroup = {
@@ -52,6 +53,18 @@ const mockCandidateGroup = {
   majorCount: 1,
   selectableMajorCount: 1,
   softFailCount: 0,
+  matchScore: 87,
+  matchReason: '本省·985·位次安全',
+  history3y: [
+    { year: 2023, score: 619, rank: 14200 },
+    { year: 2024, score: 622, rank: 12800 },
+    { year: 2025, score: 624, rank: 12034 },
+  ],
+  historyFiling3y: [
+    { year: 2023, score: 624, rank: 13100 },
+    { year: 2024, score: 627, rank: 11800 },
+    { year: 2025, score: 629, rank: 11200 },
+  ],
   majors: [mockMajor],
   majorSections: {
     recommended: [mockMajor],
@@ -159,5 +172,32 @@ describe('GeneratePlanPage', () => {
     const logo = await screen.findByRole('img', { name: 'Alpha University' });
 
     expect(logo).toHaveAttribute('src', '/logos/alpha.png');
+  });
+
+  it('renders MatchHeader with matchScore and matchReason', async () => {
+    render(<GeneratePlanPage />);
+
+    expect(await screen.findByText('匹配度')).toBeInTheDocument();
+    expect(await screen.findByText('87')).toBeInTheDocument();
+    expect(await screen.findByText('本省·985·位次安全')).toBeInTheDocument();
+  });
+
+  it('renders 3-year trend chart with default 投档线 toggle', async () => {
+    render(<GeneratePlanPage />);
+
+    // 趋势条 label
+    expect(await screen.findByText(/近 3 年投档线/)).toBeInTheDocument();
+    // 切换按钮
+    expect(await screen.findByText('投档线趋势')).toBeInTheDocument();
+    expect(await screen.findByText('组最低趋势')).toBeInTheDocument();
+  });
+
+  it('renders NotesChip next to major name when planNotes present', async () => {
+    render(<GeneratePlanPage />);
+
+    // NotesChip 取首句作为摘要（≤14 字截断），"色弱、色盲考生不录取" 是 10 字
+    expect(await screen.findByText('色弱、色盲考生不录取')).toBeInTheDocument();
+    // 多句备注末尾显示 +N
+    expect(await screen.findByText('+1')).toBeInTheDocument();
   });
 });
