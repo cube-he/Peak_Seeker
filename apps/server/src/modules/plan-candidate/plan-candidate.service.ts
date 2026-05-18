@@ -1525,6 +1525,23 @@ export class PlanCandidateService {
 
     this.sortCandidateGroups(resultGroups, q.sort ?? 'MAJOR_MATCH', studentRank);
 
+    // matchScore 归一化：原 scoreMajorMatch 算法理论 0-196，实际多数 0-30。
+    // 前端 MatchHeader 按 0-100 制着色（≥85 绿/70-84 蓝/<70 橙），导致几乎所有候选
+    // 都显示低匹配。这里按本批最高分拉伸到 0-100，让色阶有意义。
+    // 保留原始相对排序（单调变换不改变顺序）；原始分保留在 matchScoreRaw。
+    if (resultGroups.length > 0) {
+      const rawScores = (resultGroups as any[]).map((g) => {
+        const n = Number(g.matchScore);
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      });
+      const rawMax = Math.max(0, ...rawScores);
+      for (let i = 0; i < resultGroups.length; i++) {
+        const g = resultGroups[i] as any;
+        g.matchScoreRaw = Number.isFinite(Number(g.matchScore)) ? Number(g.matchScore) : null;
+        g.matchScore = rawMax > 0 ? Math.round((rawScores[i] / rawMax) * 100) : 0;
+      }
+    }
+
     const fullResult: CandidateGroupFullResult = {
       total: resultGroups.length,
       planYear: source.planYear,
