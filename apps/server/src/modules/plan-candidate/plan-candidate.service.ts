@@ -215,6 +215,58 @@ function extractRankingScore(value: unknown) {
   return Math.max(0, 100 - rank);
 }
 
+// 人话化 matchReason：地域 · 档次 · 梯度说明（最多 3 段，· 分隔）
+function buildMatchReason(params: {
+  universityProvince: string | null | undefined;
+  studentProvince: string | null | undefined;
+  is985: boolean;
+  is211: boolean;
+  isDoubleFirstClass: boolean;
+  runningNature: string | null | undefined;
+  gradient: string | null | undefined;
+}): string {
+  const parts: string[] = [];
+
+  // 1. 地域
+  if (params.universityProvince && params.studentProvince) {
+    parts.push(params.universityProvince === params.studentProvince ? '本省' : '外省');
+  }
+
+  // 2. 档次
+  if (params.is985) parts.push('985');
+  else if (params.is211) parts.push('211');
+  else if (params.isDoubleFirstClass) parts.push('双一流');
+  else if (params.runningNature === '民办') parts.push('民办');
+
+  // 3. 梯度说明
+  switch (params.gradient) {
+    case 'JI_CHONG':
+      parts.push('位次差距大');
+      break;
+    case 'CHONG':
+      parts.push('位次有挑战');
+      break;
+    case 'XIAO_CHONG':
+    case 'WEN':
+      parts.push('位次安全');
+      break;
+    case 'WEN_BAO':
+      parts.push('稳保兼具');
+      break;
+    case 'BAO':
+    case 'QIANG_BAO':
+      parts.push('保底稳');
+      break;
+    case 'DIBAO':
+      parts.push('适合兜底');
+      break;
+    default:
+      break;
+  }
+
+  return parts.length > 0 ? parts.join('·') : '常规候选';
+}
+
 const CANDIDATE_ENROLLMENT_PLAN_SELECT = {
   id: true,
   universityId: true,
@@ -258,6 +310,12 @@ const CANDIDATE_ENROLLMENT_PLAN_SELECT = {
       isDoubleFirstClass: true,
       softRanking: true,
       logoUrl: true,
+      postgradRate: true,
+      furtherStudyRate: true,
+      employmentRate: true,
+      avgSalary: true,
+      satisfactionOverall: true,
+      satisfactionCount: true,
     },
   },
   major: {
@@ -807,6 +865,33 @@ export class PlanCandidateService {
     });
   }
 
+  // 聚合 3 年组级历史：返回 history3y（组最低）+ historyFiling3y（投档线），按 year ASC 排
+  private pickGroupHistory(records: any[], sourceYear: number) {
+    const history3y: Array<{ year: number; score: number; rank: number }> = [];
+    const historyFiling3y: Array<{ year: number; score: number; rank: number }> = [];
+
+    for (let offset = 2; offset >= 0; offset--) {
+      const year = sourceYear - offset;
+      const yearRecords = records.filter((r) => r.year === year);
+      if (yearRecords.length === 0) continue;
+
+      // 组内多专业的同年记录，groupMinScore/groupMinRank 应相同——取首个
+      const groupScore = bestNumber(yearRecords.map((r) => r.groupMinScore));
+      const groupRank = bestNumber(yearRecords.map((r) => r.groupMinRank), 'max');
+      if (groupScore !== null && groupRank !== null) {
+        history3y.push({ year, score: groupScore, rank: groupRank });
+      }
+
+      const filingScore = bestNumber(yearRecords.map((r) => r.filingMinScore));
+      const filingRank = bestNumber(yearRecords.map((r) => r.filingMinRank), 'max');
+      if (filingScore !== null && filingRank !== null) {
+        historyFiling3y.push({ year, score: filingScore, rank: filingRank });
+      }
+    }
+
+    return { history3y, historyFiling3y };
+  }
+
   private pickGroupScore(records: any[], sourceYear: number) {
     const current = records.filter((record) => record.year === sourceYear);
     const groupScore = bestNumber(current.map((record) => record.groupMinScore));
@@ -1051,7 +1136,8 @@ export class PlanCandidateService {
       this.prisma.healthRestriction.findMany(),
     ]);
     const rules = this.buildSoftRules(restrictions);
-    const years = [source.sourceYear, source.sourceYear - 1];
+    // 3 年历史：sourceYear / -1 / -2（前端 TrendChart 需要 3 点）
+    const years = [source.sourceYear, source.sourceYear - 1, source.sourceYear - 2];
     const adRecords = eps.length
       ? await this.prisma.admissionRecord.findMany({
           where: this.buildAdmissionRecordWhere(eps, province, years),
@@ -1170,8 +1256,10 @@ export class PlanCandidateService {
       const groupRecords = [
         ...(adByGroupYear.get(`${groupKey}|${source.sourceYear}`) ?? []),
         ...(adByGroupYear.get(`${groupKey}|${source.sourceYear - 1}`) ?? []),
+        ...(adByGroupYear.get(`${groupKey}|${source.sourceYear - 2}`) ?? []),
       ];
       const groupScore = this.pickGroupScore(groupRecords, source.sourceYear);
+      const groupHistory = this.pickGroupHistory(groupRecords, source.sourceYear);
       const first = rows[0];
       const currentPlanCount = this.planCountForGroup(rows);
       const previousPlanCount = this.planCountForGroup(previousByGroup.get(groupKey) ?? []);
@@ -1307,6 +1395,12 @@ export class PlanCandidateService {
           isDoubleFirstClass: first.university?.isDoubleFirstClass ?? false,
           softRanking: first.university?.softRanking ?? null,
           logoUrl: first.university?.logoUrl ?? null,
+          postgradRate: first.university?.postgradRate ?? null,
+          furtherStudyRate: first.university?.furtherStudyRate ?? null,
+          employmentRate: first.university?.employmentRate ?? null,
+          avgSalary: first.university?.avgSalary ?? null,
+          satisfactionOverall: first.university?.satisfactionOverall ?? null,
+          satisfactionCount: first.university?.satisfactionCount ?? null,
         },
         groupCode: first.groupCode,
         groupName: first.groupName,
@@ -1339,6 +1433,17 @@ export class PlanCandidateService {
         softFailCount: majorSections.risk.filter((major) => major.matchStatus === 'SOFT_FAIL').length,
         matchScore: recommendedAnchor?.matchScore ?? -999,
         matchReasons: recommendedAnchor?.matchReasons ?? [],
+        matchReason: buildMatchReason({
+          universityProvince: first.university?.province,
+          studentProvince: student.province,
+          is985: first.university?.is985 ?? false,
+          is211: first.university?.is211 ?? false,
+          isDoubleFirstClass: first.university?.isDoubleFirstClass ?? false,
+          runningNature: first.university?.runningNature,
+          gradient: dynamicGradient.gradient,
+        }),
+        history3y: groupHistory.history3y,
+        historyFiling3y: groupHistory.historyFiling3y,
         recommendedAnchorEnrollmentPlanId: recommendedAnchor?.enrollmentPlanId ?? null,
         majors: orderedMajors,
         majorSections,
