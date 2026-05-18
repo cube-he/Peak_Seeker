@@ -784,6 +784,11 @@ export default function GeneratePlanPage() {
       return next;
     });
 
+  // 展开态 Tab（per-group），默认 majors
+  const [groupExpandTabs, setGroupExpandTabs] = useState<Record<string, 'majors' | 'evidence' | 'school'>>({});
+  const setGroupExpandTab = (key: string, tab: 'majors' | 'evidence' | 'school') =>
+    setGroupExpandTabs((prev) => ({ ...prev, [key]: tab }));
+
   // 多卡对比（最多 4 张）
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
   const [compareDrawerOpen, setCompareDrawerOpen] = useState(false);
@@ -1654,29 +1659,6 @@ export default function GeneratePlanPage() {
                             duration={anchor?.duration ?? anchor?.standardDuration ?? null}
                           />
 
-                          {expanded ? (
-                            <div className={styles.dataEvidence}>
-                              <div className={styles.evidenceTitle}>数据依据</div>
-                              <div className={styles.evidenceGrid}>
-                                <EvidenceItem label="位次依据">
-                                  排序位次 {formatRankValue(studentRankForDecision)}，修正位次 {formatRankValue(adjustedRank)}，{rankGap.text}。
-                                </EvidenceItem>
-                                <EvidenceItem label="计划变化">{planChange.text}</EvidenceItem>
-                                <EvidenceItem label="竞争变化">{formatCompetition(group)}；{formatSelectionCompetition(group)}</EvidenceItem>
-                                <EvidenceItem label="风险提示">
-                                  {group.dynamicGradient?.reasons?.length
-                                    ? group.dynamicGradient.reasons.slice(0, 2).join('；')
-                                    : evidence.length ? evidence.slice(0, 2).join('；') : '按专业匹配排序'}
-                                </EvidenceItem>
-                              </div>
-                              {group.supplementary?.scope === 'UNIVERSITY_BATCH' ? (
-                                <div className={styles.noteRow}>
-                                  <span className={styles.compareNote}>院校批次征集仅参考，不直接降低专业组风险</span>
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : null}
-
                           <div className={styles.majorList}>
                             <CandidateMajorSection
                               title={MAJOR_SECTION_LABEL.RECOMMENDED}
@@ -1686,40 +1668,125 @@ export default function GeneratePlanPage() {
                               onAdd={addCandidateGroup}
                               addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
                             />
-                            {expanded ? (
-                              <>
-                                <CandidateMajorSection
-                                  title={MAJOR_SECTION_LABEL.BACKUP}
-                                  section="BACKUP"
-                                  majors={majorSections.backup}
-                                  group={group}
-                                  onAdd={addCandidateGroup}
-                                  addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
-                                />
-                                <CandidateMajorSection
-                                  title={MAJOR_SECTION_LABEL.RISK}
-                                  section="RISK"
-                                  majors={majorSections.risk}
-                                  group={group}
-                                  onAdd={addCandidateGroup}
-                                  addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
-                                />
-                              </>
-                            ) : null}
                           </div>
 
-                          {expanded ? (
-                            <div className="mt-4">
-                              <Table
-                                rowKey="enrollmentPlanId"
-                                size="small"
-                                columns={majorColumns(group)}
-                                dataSource={group.majors}
-                                pagination={false}
-                                scroll={{ x: 900 }}
-                              />
-                            </div>
-                          ) : null}
+                          {expanded ? (() => {
+                            const currentTab = groupExpandTabs[group.groupKey] ?? 'majors';
+                            return (
+                              <>
+                                <div className={compareStyles.expandedTabs}>
+                                  <button
+                                    type="button"
+                                    className={`${compareStyles.expandedTab} ${currentTab === 'majors' ? compareStyles.active : ''}`}
+                                    onClick={() => setGroupExpandTab(group.groupKey, 'majors')}
+                                  >
+                                    完整专业（{group.majorCount}）
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`${compareStyles.expandedTab} ${currentTab === 'evidence' ? compareStyles.active : ''}`}
+                                    onClick={() => setGroupExpandTab(group.groupKey, 'evidence')}
+                                  >
+                                    数据依据 / 模型校验
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`${compareStyles.expandedTab} ${currentTab === 'school' ? compareStyles.active : ''}`}
+                                    onClick={() => setGroupExpandTab(group.groupKey, 'school')}
+                                  >
+                                    院校详情
+                                  </button>
+                                </div>
+                                <div className={compareStyles.expandedPanel}>
+                                  {currentTab === 'majors' ? (
+                                    <>
+                                      <CandidateMajorSection
+                                        title={MAJOR_SECTION_LABEL.BACKUP}
+                                        section="BACKUP"
+                                        majors={majorSections.backup}
+                                        group={group}
+                                        onAdd={addCandidateGroup}
+                                        addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
+                                      />
+                                      <CandidateMajorSection
+                                        title={MAJOR_SECTION_LABEL.RISK}
+                                        section="RISK"
+                                        majors={majorSections.risk}
+                                        group={group}
+                                        onAdd={addCandidateGroup}
+                                        addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
+                                      />
+                                      <div className="mt-4">
+                                        <Table
+                                          rowKey="enrollmentPlanId"
+                                          size="small"
+                                          columns={majorColumns(group)}
+                                          dataSource={group.majors}
+                                          pagination={false}
+                                          scroll={{ x: 900 }}
+                                        />
+                                      </div>
+                                    </>
+                                  ) : currentTab === 'evidence' ? (
+                                    <div className={styles.dataEvidence}>
+                                      <div className={styles.evidenceTitle}>数据依据</div>
+                                      <div className={styles.evidenceGrid}>
+                                        <EvidenceItem label="位次依据">
+                                          排序位次 {formatRankValue(studentRankForDecision)}，修正位次 {formatRankValue(adjustedRank)}，{rankGap.text}。
+                                        </EvidenceItem>
+                                        <EvidenceItem label="计划变化">{planChange.text}</EvidenceItem>
+                                        <EvidenceItem label="竞争变化">{formatCompetition(group)}；{formatSelectionCompetition(group)}</EvidenceItem>
+                                        <EvidenceItem label="风险提示">
+                                          {group.dynamicGradient?.reasons?.length
+                                            ? group.dynamicGradient.reasons.slice(0, 2).join('；')
+                                            : evidence.length ? evidence.slice(0, 2).join('；') : '按专业匹配排序'}
+                                        </EvidenceItem>
+                                      </div>
+                                      {group.supplementary?.scope === 'UNIVERSITY_BATCH' ? (
+                                        <div className={styles.noteRow}>
+                                          <span className={styles.compareNote}>院校批次征集仅参考，不直接降低专业组风险</span>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
+                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>办学层次</div>
+                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
+                                          {group.university?.is985 ? '985 工程 · ' : ''}
+                                          {group.university?.is211 ? '211 工程 · ' : ''}
+                                          {group.university?.isDoubleFirstClass ? '双一流建设高校 · ' : ''}
+                                          {group.university?.runningNature ?? '—'}
+                                        </div>
+                                      </div>
+                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
+                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>排名参考</div>
+                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
+                                          软科 #{group.university?.softRanking ?? '—'}
+                                        </div>
+                                      </div>
+                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
+                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>地理位置</div>
+                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
+                                          {group.university?.province ?? '—'}{group.university?.city ? ' · ' + group.university.city : ''}
+                                        </div>
+                                      </div>
+                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
+                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>升学就业</div>
+                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
+                                          {group.university?.postgradRate ? `保研 ${group.university.postgradRate}` : ''}
+                                          {group.university?.furtherStudyRate ? ` · 升学 ${group.university.furtherStudyRate}` : ''}
+                                          {group.university?.employmentRate ? ` · 就业 ${group.university.employmentRate}` : ''}
+                                          {group.university?.avgSalary ? ` · 月薪 ${group.university.avgSalary}` : ''}
+                                          {!group.university?.postgradRate && !group.university?.employmentRate ? '—' : ''}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })() : null}
                         </article>
                       );
                     })}
