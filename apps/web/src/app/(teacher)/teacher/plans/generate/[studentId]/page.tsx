@@ -694,7 +694,9 @@ export default function GeneratePlanPage() {
   const [searchText, setSearchText] = useState('');
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
-  const [trendType, setTrendType] = useState<'filing' | 'min'>('filing');
+  // 默认显示「组最低」：后端对组最低做了 majorMin fallback，趋势连续性更好
+  // 切到「投档线」时只显示 2025 起的真投档数据（早期记录缺失 filing 字段）
+  const [trendType, setTrendType] = useState<'filing' | 'min'>('min');
   const [candidatePage, setCandidatePage] = useState(1);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
   const [activeDetail, setActiveDetail] = useState<{ group: CandidateGroup; major: CandidateMajor } | null>(null);

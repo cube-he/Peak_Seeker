@@ -866,6 +866,8 @@ export class PlanCandidateService {
   }
 
   // 聚合 3 年组级历史：返回 history3y（组最低）+ historyFiling3y（投档线），按 year ASC 排
+  // 数据演进：早期记录只有 majorMin，2024 起有 groupMin，2025 起有 filing。
+  // 组最低 fallback 到 majorMin 以维持趋势连续；投档线不 fallback（保严谨）。
   private pickGroupHistory(records: any[], sourceYear: number) {
     const history3y: Array<{ year: number; score: number; rank: number }> = [];
     const historyFiling3y: Array<{ year: number; score: number; rank: number }> = [];
@@ -875,13 +877,18 @@ export class PlanCandidateService {
       const yearRecords = records.filter((r) => r.year === year);
       if (yearRecords.length === 0) continue;
 
-      // 组内多专业的同年记录，groupMinScore/groupMinRank 应相同——取首个
-      const groupScore = bestNumber(yearRecords.map((r) => r.groupMinScore));
-      const groupRank = bestNumber(yearRecords.map((r) => r.groupMinRank), 'max');
+      // 组最低：优先 groupMin，缺失时 fallback majorMin（数据演进所致）
+      const groupScore =
+        bestNumber(yearRecords.map((r) => r.groupMinScore)) ??
+        bestNumber(yearRecords.map((r) => r.majorMinScore));
+      const groupRank =
+        bestNumber(yearRecords.map((r) => r.groupMinRank), 'max') ??
+        bestNumber(yearRecords.map((r) => r.majorMinRank), 'max');
       if (groupScore !== null && groupRank !== null) {
         history3y.push({ year, score: groupScore, rank: groupRank });
       }
 
+      // 投档线不 fallback（投档分 ≠ 专业最低分，语义不同）
       const filingScore = bestNumber(yearRecords.map((r) => r.filingMinScore));
       const filingRank = bestNumber(yearRecords.map((r) => r.filingMinRank), 'max');
       if (filingScore !== null && filingRank !== null) {
