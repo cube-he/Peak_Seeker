@@ -55,7 +55,7 @@ import {
   type WorkbenchPlan,
 } from './plan-workbench-utils';
 import styles from './candidate-pool-polished.module.css';
-import { MatchHeader, TrendChart, NotesChip } from '@/components/candidate-pool-v2';
+import { MatchHeader, TrendChart, NotesChip, MetricStrip } from '@/components/candidate-pool-v2';
 
 type Gradient = 'CHONG' | 'WEN' | 'BAO';
 type DynamicGradientTier =
@@ -194,6 +194,12 @@ interface CandidateGroup {
     province?: string | null;
     city?: string | null;
     logoUrl?: string | null;
+    postgradRate?: string | null;
+    furtherStudyRate?: string | null;
+    employmentRate?: string | null;
+    avgSalary?: string | null;
+    satisfactionOverall?: number | null;
+    satisfactionCount?: number | null;
   };
   groupCode?: string | null;
   groupName?: string | null;
@@ -1465,6 +1471,19 @@ export default function GeneratePlanPage() {
                             <MetricTile label="招生计划" value={planChange.text} note={planChange.tone === 'down' ? '缩招需复核' : '按后端年份口径'} />
                             <MetricTile label="专业" value={`${group.majorCount} 个 / ${group.selectableMajorCount} 可选`} note={anchor?.majorName ?? '-'} />
                           </div>
+
+                          <MetricStrip
+                            planCount={group.currentPlanCount}
+                            planDelta={group.planCountChange}
+                            postgradRate={group.university?.postgradRate}
+                            furtherStudyRate={group.university?.furtherStudyRate}
+                            employmentRate={group.university?.employmentRate}
+                            avgSalary={group.university?.avgSalary}
+                            satisfaction={group.university?.satisfactionOverall}
+                            satisfactionSample={group.university?.satisfactionCount}
+                            tuition={anchor?.tuition ?? null}
+                            duration={anchor?.duration ?? anchor?.standardDuration ?? null}
+                          />
 
                           <div className={styles.dataEvidence}>
                             <div className={styles.evidenceTitle}>数据依据</div>

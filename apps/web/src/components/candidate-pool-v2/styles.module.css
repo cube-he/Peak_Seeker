@@ -209,3 +209,100 @@
   font-weight: 700;
   line-height: 1;
 }
+
+/* ============ 定量条 4 列 ============ */
+.metricStrip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  padding: 10px 16px;
+  border-top: 1px solid #f0eee6;
+  background: #fff;
+}
+
+.metricTile {
+  padding: 0 14px;
+  border-left: 1px solid #f0eee6;
+  min-width: 0;
+}
+
+.metricTile:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.metricLabel {
+  display: block;
+  font-size: 10px;
+  color: #87867f;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.metricValue {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-serif, Georgia), 'Noto Serif SC', SimSun, serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a19;
+  line-height: 1.1;
+}
+
+.metricValue small {
+  font-family: var(--font-sans, "Noto Sans SC"), sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b6962;
+}
+
+.metricDelta {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-sans, "Noto Sans SC"), sans-serif;
+}
+
+.metricDeltaUp {
+  color: #c53030;
+}
+
+.metricDeltaDown {
+  color: #276749;
+}
+
+.metricSub {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: #6b6962;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* —— 满意度星星 —— */
+.satisStars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 13px;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.satisStarFull {
+  color: #f5b800;
+}
+
+.satisStarHalf {
+  background: linear-gradient(90deg, #f5b800 50%, #d8d4c4 50%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.satisStarEmpty {
+  color: #d8d4c4;
+}
