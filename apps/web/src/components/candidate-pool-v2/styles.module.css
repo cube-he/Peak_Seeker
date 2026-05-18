@@ -297,6 +297,26 @@
 .majorRankingB { background: #4a7ca8; color: #fff; }
 .majorRankingC { background: #87867f; color: #fff; }
 
+/* —— 排名数字 chip（#N，按区间染色）—— */
+.majorRankNum {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  flex-shrink: 0;
+  font-family: var(--font-serif, Georgia), 'Noto Serif SC', SimSun, serif;
+}
+
+.majorRankNumTop3 { background: linear-gradient(135deg, #b8860b, #d4a017); color: #fff; }
+.majorRankNumTop10 { background: #1e3a5f; color: #fff; }
+.majorRankNumTop30 { background: #2c5282; color: #fff; }
+.majorRankNumTop100 { background: #4a7ca8; color: #fff; }
+.majorRankNumOther { background: #87867f; color: #fff; }
+
 .majorTag {
   display: inline-flex;
   align-items: center;

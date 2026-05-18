@@ -605,15 +605,42 @@ function CandidateMajorSection({
 
               <div className={compareStyles.majorNameV2}>
                 <b>{major.majorName}</b>
-                {/* 评级 chip 优先用 disciplineEval（学校×专业，针对性强），不用 softRating（专业大类通用，会误导民办学院显示 A+）*/}
-                {major.disciplineEval ? (
-                  <span
-                    className={`${compareStyles.majorRankingChip} ${getRankingClass(major.disciplineEval)}`}
-                    title="学科评估等级（学校×专业）"
-                  >
-                    {major.disciplineEval}
-                  </span>
-                ) : null}
+                {/* 评级优先级：① 学科评估等级 disciplineEval (A+/A/B+ 字母) - 学校×专业最权威
+                    ② 专业排名 majorRanking (#N 数字) - 全国该专业排名，覆盖率更高
+                    都没有就不显示 */}
+                {(() => {
+                  const evalText = major.disciplineEval && String(major.disciplineEval).trim() && String(major.disciplineEval).trim() !== '/' ? String(major.disciplineEval).trim() : null;
+                  if (evalText) {
+                    return (
+                      <span
+                        className={`${compareStyles.majorRankingChip} ${getRankingClass(evalText)}`}
+                        title="学科评估等级（学校×专业）"
+                      >
+                        {evalText}
+                      </span>
+                    );
+                  }
+                  const rankText = major.majorRanking && String(major.majorRanking).trim() && String(major.majorRanking).trim() !== '/' ? String(major.majorRanking).trim() : null;
+                  if (rankText) {
+                    const n = parseInt(rankText, 10);
+                    const numClass =
+                      !Number.isFinite(n) ? compareStyles.majorRankNumOther :
+                      n <= 3 ? compareStyles.majorRankNumTop3 :
+                      n <= 10 ? compareStyles.majorRankNumTop10 :
+                      n <= 30 ? compareStyles.majorRankNumTop30 :
+                      n <= 100 ? compareStyles.majorRankNumTop100 :
+                      compareStyles.majorRankNumOther;
+                    return (
+                      <span
+                        className={`${compareStyles.majorRankNum} ${numClass}`}
+                        title={`专业全国排名 第 ${rankText} 名`}
+                      >
+                        #{rankText}
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
                 {major.isNationalFeature ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagNational}`}>国家特色</span> : null}
                 {major.isSinoForeign ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagSino}`}>中外</span> : null}
                 {major.planNotes ? <NotesChip notes={major.planNotes} /> : null}
