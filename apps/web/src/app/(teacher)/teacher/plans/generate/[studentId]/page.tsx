@@ -57,9 +57,10 @@ import {
 import styles from './candidate-pool-polished.module.css';
 import {
   MatchHeader, TrendChart, NotesChip, MetricStrip,
-  FilterBar, DEFAULT_FILTERS, HiddenCard,
+  FilterBar, DEFAULT_FILTERS, HiddenCard, ComparePanel,
   type FilterState, type FilterGradeKey, type TierFilter,
 } from '@/components/candidate-pool-v2';
+import compareStyles from '@/components/candidate-pool-v2/styles.module.css';
 
 type Gradient = 'CHONG' | 'WEN' | 'BAO';
 type DynamicGradientTier =
@@ -721,6 +722,17 @@ export default function GeneratePlanPage() {
     setHiddenGroupKeys((prev) => {
       const next = new Set(prev);
       next.delete(key);
+      return next;
+    });
+
+  // 多卡对比（最多 4 张）
+  const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
+  const [compareDrawerOpen, setCompareDrawerOpen] = useState(false);
+  const toggleCompare = (key: string) =>
+    setCompareSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else if (next.size < 4) next.add(key);
       return next;
     });
   const [candidatePage, setCandidatePage] = useState(1);
@@ -1442,6 +1454,8 @@ export default function GeneratePlanPage() {
                             matchScore={group.matchScore ?? 0}
                             matchReason={group.matchReason}
                             prefMatch={group.prefMatch}
+                            compared={compareSet.has(group.groupKey)}
+                            onCompareToggle={() => toggleCompare(group.groupKey)}
                           />
                           {trendPoints.length > 0 ? (
                             <div style={{ padding: '8px 16px', borderTop: '1px solid #f0eee6', borderBottom: '1px solid #f0eee6', background: '#faf9f5', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
@@ -1920,6 +1934,44 @@ export default function GeneratePlanPage() {
             </section>
           </div>
         ) : null}
+      </Drawer>
+
+      {/* 浮动对比 bar */}
+      {compareSet.size > 0 ? (
+        <div className={compareStyles.compareBar}>
+          <span className={compareStyles.compareBarIcon}>⚖</span>
+          <div className={compareStyles.compareBarText}>
+            已选 <b>{compareSet.size}</b> / 4 项参与对比
+            <div className={compareStyles.compareBarNames}>
+              {Array.from(compareSet).map((key) => visibleGroups.find((g) => g.groupKey === key)?.universityName ?? '').filter(Boolean).join(' · ')}
+            </div>
+          </div>
+          <button className={compareStyles.compareBarBtnGhost} onClick={() => setCompareSet(new Set())}>
+            清空
+          </button>
+          <button
+            className={compareStyles.compareBarBtnPrimary}
+            disabled={compareSet.size < 2}
+            onClick={() => setCompareDrawerOpen(true)}
+          >
+            打开对比 →
+          </button>
+        </div>
+      ) : null}
+
+      {/* 对比 Drawer */}
+      <Drawer
+        open={compareDrawerOpen}
+        onClose={() => setCompareDrawerOpen(false)}
+        title={<span>⚖ 候选对比（{compareSet.size} 项）</span>}
+        width={typeof window !== 'undefined' ? Math.min(1180, window.innerWidth * 0.92) : 1100}
+        placement="right"
+      >
+        <ComparePanel
+          groups={Array.from(compareSet)
+            .map((key) => visibleGroups.find((g) => g.groupKey === key))
+            .filter((g): g is NonNullable<typeof g> => Boolean(g))}
+        />
       </Drawer>
     </div>
   );
