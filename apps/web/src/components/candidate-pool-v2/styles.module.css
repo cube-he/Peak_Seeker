@@ -306,3 +306,107 @@
 .satisStarEmpty {
   color: #d8d4c4;
 }
+
+/* ============ 候选筛选条 ============ */
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+  align-items: center;
+  padding: 11px 14px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #f0eee6;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(26, 26, 25, 0.04);
+}
+
+.filterGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filterGroupLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b6962;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.filterChips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 5px;
+  border: 1px solid #e8e6dc;
+  background: #fff;
+  color: #4d4c48;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filterChip:hover {
+  border-color: #2c5282;
+  color: #1e3a5f;
+}
+
+.filterChipActive {
+  background: #1e3a5f;
+  border-color: #1e3a5f;
+  color: #fff;
+}
+
+.filterChipActive:hover {
+  background: #2c5282;
+  border-color: #2c5282;
+  color: #fff;
+}
+
+.filterRight {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filterCount {
+  font-size: 12px;
+  color: #6b6962;
+  white-space: nowrap;
+}
+
+.filterCount b {
+  font-family: var(--font-serif, Georgia), 'Noto Serif SC', SimSun, serif;
+  font-size: 15px;
+  color: #1a1a19;
+}
+
+.filterReset {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid #e8e6dc;
+  background: #f0eee6;
+  color: #4d4c48;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filterReset:hover {
+  border-color: #1e3a5f;
+  color: #1e3a5f;
+  background: #ebf4ff;
+}

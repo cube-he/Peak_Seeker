@@ -55,7 +55,11 @@ import {
   type WorkbenchPlan,
 } from './plan-workbench-utils';
 import styles from './candidate-pool-polished.module.css';
-import { MatchHeader, TrendChart, NotesChip, MetricStrip } from '@/components/candidate-pool-v2';
+import {
+  MatchHeader, TrendChart, NotesChip, MetricStrip,
+  FilterBar, DEFAULT_FILTERS,
+  type FilterState, type FilterGradeKey, type TierFilter,
+} from '@/components/candidate-pool-v2';
 
 type Gradient = 'CHONG' | 'WEN' | 'BAO';
 type DynamicGradientTier =
@@ -709,6 +713,7 @@ export default function GeneratePlanPage() {
   // 默认显示「组最低」：后端对组最低做了 majorMin fallback，趋势连续性更好
   // 切到「投档线」时只显示 2025 起的真投档数据（早期记录缺失 filing 字段）
   const [trendType, setTrendType] = useState<'filing' | 'min'>('min');
+  const [poolFilters, setPoolFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [candidatePage, setCandidatePage] = useState(1);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
   const [activeDetail, setActiveDetail] = useState<{ group: CandidateGroup; major: CandidateMajor } | null>(null);
@@ -761,6 +766,30 @@ export default function GeneratePlanPage() {
   });
   const candidateGroups = unwrap<CandidateGroupListResult>(groupData);
   const groups = candidateGroups?.groups ?? [];
+
+  // 前端筛选：基于 poolFilters 过滤 groups（不改变 service 返回顺序）
+  const visibleGroups = useMemo(() => {
+    return groups.filter((group) => {
+      // 梯度筛选
+      const tier = gradientTier(group) as FilterGradeKey;
+      if (!poolFilters.grades.has(tier)) return false;
+
+      // 档次筛选
+      const cardTiers: TierFilter[] = [];
+      if (group.university?.is985) cardTiers.push('985');
+      if (group.university?.is211) cardTiers.push('211');
+      if (group.university?.isDoubleFirstClass) cardTiers.push('DFC');
+      if (cardTiers.length === 0) cardTiers.push('other');
+      const tierMatch = cardTiers.some((t) => poolFilters.tiers.has(t));
+      if (!tierMatch) return false;
+
+      // 地域筛选（依据后端计算的 prefMatch.province）
+      if (poolFilters.province === 'local' && group.prefMatch?.province !== 'match') return false;
+      if (poolFilters.province === 'outside' && group.prefMatch?.province !== 'mismatch') return false;
+
+      return true;
+    });
+  }, [groups, poolFilters]);
   const isUsingFallbackYear = Boolean(candidateGroups?.isFallbackYear && candidateGroups.sourceYear && candidateGroups.planYear);
   const isUsingScoreBasedRank = Boolean(
     candidateGroups?.studentRankSource === 'SCORE_SEGMENT' &&
@@ -1304,9 +1333,15 @@ export default function GeneratePlanPage() {
               </div>
             </div>
             <div className={styles.candidateView}>
+              <FilterBar
+                filters={poolFilters}
+                setFilters={setPoolFilters}
+                filteredCount={visibleGroups.length}
+                totalCount={groups.length}
+              />
               <div className={styles.densityNote}>
                 <div>
-                  当前展示 <strong>{groups.length}</strong> 个候选，按 <strong>{CANDIDATE_SORT_OPTIONS.find((item) => item.value === candidateSort)?.label}</strong> 排序
+                  当前展示 <strong>{visibleGroups.length}</strong> 个候选，按 <strong>{CANDIDATE_SORT_OPTIONS.find((item) => item.value === candidateSort)?.label}</strong> 排序
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ display: 'inline-flex', gap: 2, padding: 2, borderRadius: 6, background: 'var(--surface-dim, #f0eee6)' }}>
@@ -1360,10 +1395,10 @@ export default function GeneratePlanPage() {
                   <div className="mt-4 text-sm font-medium text-text">正在计算候选专业组</div>
                   <div className="mt-1 text-xs text-text-tertiary">系统正在综合位次、计划变化、竞争人数、选科池和征集数据</div>
                 </div>
-              ) : groups.length ? (
+              ) : visibleGroups.length ? (
                 <>
                   <div className={styles.cardList}>
-                    {groups.map((group) => {
+                    {visibleGroups.map((group) => {
                       const expanded = expandedGroupKeys.includes(group.groupKey);
                       const planChange = formatGroupPlanChange(group);
                       const added = isCandidateGroupAlreadyAdded(group, planItems);
