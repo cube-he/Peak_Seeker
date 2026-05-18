@@ -227,6 +227,12 @@ interface CandidateGroup {
   matchScore?: number | null;
   matchReasons?: string[];
   matchReason?: string | null;
+  prefMatch?: {
+    province?: 'match' | 'mismatch';
+    tuition?: 'within' | 'over';
+    career?: 'strong' | 'weak';
+    subjects?: 'match';
+  };
   history3y?: Array<{ year: number; score: number; rank: number }>;
   historyFiling3y?: Array<{ year: number; score: number; rank: number }>;
   universityRank?: number | null;
@@ -1374,6 +1380,7 @@ export default function GeneratePlanPage() {
                           <MatchHeader
                             matchScore={group.matchScore ?? 0}
                             matchReason={group.matchReason}
+                            prefMatch={group.prefMatch}
                           />
                           {trendPoints.length > 0 ? (
                             <div style={{ padding: '8px 16px', borderTop: '1px solid #f0eee6', borderBottom: '1px solid #f0eee6', background: '#faf9f5', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>

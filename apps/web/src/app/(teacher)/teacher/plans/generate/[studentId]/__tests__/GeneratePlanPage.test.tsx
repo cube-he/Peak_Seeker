@@ -65,6 +65,12 @@ const mockCandidateGroup = {
     { year: 2024, score: 627, rank: 11800 },
     { year: 2025, score: 629, rank: 11200 },
   ],
+  prefMatch: {
+    province: 'match',
+    tuition: 'within',
+    career: 'strong',
+    subjects: 'match',
+  },
   majors: [mockMajor],
   majorSections: {
     recommended: [mockMajor],
@@ -182,12 +188,12 @@ describe('GeneratePlanPage', () => {
     expect(await screen.findByText('本省·985·位次安全')).toBeInTheDocument();
   });
 
-  it('renders 3-year trend chart with default 投档线 toggle', async () => {
+  it('renders 3-year trend chart with default 组最低 toggle', async () => {
     render(<GeneratePlanPage />);
 
-    // 趋势条 label
-    expect(await screen.findByText(/近 3 年投档线/)).toBeInTheDocument();
-    // 切换按钮
+    // 默认 toggle 现在是 'min'（因为投档线数据稀疏，组最低有 fallback 更连续）
+    expect(await screen.findByText(/近 3 年组最低分/)).toBeInTheDocument();
+    // 切换按钮始终显示两个
     expect(await screen.findByText('投档线趋势')).toBeInTheDocument();
     expect(await screen.findByText('组最低趋势')).toBeInTheDocument();
   });
@@ -199,5 +205,23 @@ describe('GeneratePlanPage', () => {
     expect(await screen.findByText('色弱、色盲考生不录取')).toBeInTheDocument();
     // 多句备注末尾显示 +N
     expect(await screen.findByText('+1')).toBeInTheDocument();
+  });
+
+  it('renders prefMatch chips (province / tuition / career / subjects)', async () => {
+    const { container } = render(<GeneratePlanPage />);
+
+    // 等待 match header 渲染
+    await screen.findByText('匹配度');
+
+    // prefChip 由 CSS class 标识（jest.style-mock 把 class 名映射为字面字符串）
+    const prefChips = container.querySelectorAll('.prefChip');
+    expect(prefChips.length).toBeGreaterThanOrEqual(4);
+
+    // 4 个 label 都在 prefChip 容器里
+    const labels = Array.from(prefChips).map((el) => el.textContent || '');
+    expect(labels.some((t) => t.includes('本省'))).toBe(true);
+    expect(labels.some((t) => t.includes('学费'))).toBe(true);
+    expect(labels.some((t) => t.includes('考研方向'))).toBe(true);
+    expect(labels.some((t) => t.includes('选科'))).toBe(true);
   });
 });

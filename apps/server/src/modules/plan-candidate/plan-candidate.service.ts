@@ -215,6 +215,60 @@ function extractRankingScore(value: unknown) {
   return Math.max(0, 100 - rank);
 }
 
+// 学生 tuitionBudget 枚举 → 学费上限（元/年）
+const TUITION_CAP: Record<string, number> = {
+  LOW: 6000,
+  MEDIUM: 10000,
+  HIGH: 30000,
+  UNLIMITED: Number.POSITIVE_INFINITY,
+};
+
+interface PrefMatchResult {
+  province?: 'match' | 'mismatch';
+  tuition?: 'within' | 'over';
+  career?: 'strong' | 'weak';
+  subjects?: 'match';
+}
+
+// 学生偏好对比：candidate group 与 student preferences 的 4 维匹配
+function buildPrefMatch(params: {
+  studentProvince: string | null | undefined;
+  studentTuitionBudget: string | null | undefined;
+  studentCareerPlan: string | null | undefined;
+  universityProvince: string | null | undefined;
+  anchorTuition: number | null | undefined;
+  anchorHasMasterPoint: boolean;
+  anchorEmploymentRate: number | null | undefined;
+}): PrefMatchResult {
+  const result: PrefMatchResult = {};
+
+  // 1. 地域：本省 / 外省
+  if (params.studentProvince && params.universityProvince) {
+    result.province = params.studentProvince === params.universityProvince ? 'match' : 'mismatch';
+  }
+
+  // 2. 学费：是否在学生预算内（仅当 student 设了 tuitionBudget 且候选有 tuition）
+  if (params.studentTuitionBudget && params.anchorTuition != null) {
+    const cap = TUITION_CAP[params.studentTuitionBudget];
+    if (cap != null) {
+      result.tuition = params.anchorTuition <= cap ? 'within' : 'over';
+    }
+  }
+
+  // 3. 职业方向：考研 → 看硕士点；就业 → 看就业率；其他不评
+  if (params.studentCareerPlan === 'POSTGRADUATE') {
+    result.career = params.anchorHasMasterPoint ? 'strong' : 'weak';
+  } else if (params.studentCareerPlan === 'EMPLOYMENT') {
+    result.career =
+      params.anchorEmploymentRate != null && params.anchorEmploymentRate >= 90 ? 'strong' : 'weak';
+  }
+
+  // 4. 选科：候选池已按选科过滤，全部 match
+  result.subjects = 'match';
+
+  return result;
+}
+
 // 人话化 matchReason：地域 · 档次 · 梯度说明（最多 3 段，· 分隔）
 function buildMatchReason(params: {
   universityProvince: string | null | undefined;
@@ -1448,6 +1502,18 @@ export class PlanCandidateService {
           isDoubleFirstClass: first.university?.isDoubleFirstClass ?? false,
           runningNature: first.university?.runningNature,
           gradient: dynamicGradient.gradient,
+        }),
+        prefMatch: buildPrefMatch({
+          studentProvince: student.province,
+          studentTuitionBudget: (student as any).tuitionBudget ?? null,
+          studentCareerPlan: (student as any).careerPlan ?? null,
+          universityProvince: first.university?.province,
+          anchorTuition: first.tuition,
+          anchorHasMasterPoint: first.major?.localMasterPoint ?? false,
+          anchorEmploymentRate:
+            typeof first.major?.employmentRate === 'number'
+              ? first.major.employmentRate
+              : null,
         }),
         history3y: groupHistory.history3y,
         historyFiling3y: groupHistory.historyFiling3y,
