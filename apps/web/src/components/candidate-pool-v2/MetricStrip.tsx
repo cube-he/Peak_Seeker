@@ -28,11 +28,25 @@ function formatSample(n: Props['satisfactionSample']): string {
   return String(n);
 }
 
+// 识别 OCR 录入的"无数据"占位符："/" "-" "—" 空字符串
+function cleanStr(v: string | null | undefined): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (!s || s === '/' || s === '-' || s === '—' || s === 'N/A' || s.toLowerCase() === 'null') return null;
+  return s;
+}
+
 /**
  * MetricStrip —— 候选卡定量条（4 列）
  * 本组招生 · 升学走向 · 学费学制 · 口碑薪资
  */
 export function MetricStrip(props: Props) {
+  // 对所有字符串字段做棑手值清洗（'/' '-' 空 等都视为无数据）
+  const postgradRate = cleanStr(props.postgradRate);
+  const furtherStudyRate = cleanStr(props.furtherStudyRate);
+  const abroadRate = cleanStr(props.abroadRate);
+  const employmentRate = cleanStr(props.employmentRate);
+  const avgSalary = cleanStr(props.avgSalary);
   const showSatisfaction = props.satisfaction != null;
 
   return (
@@ -61,12 +75,13 @@ export function MetricStrip(props: Props) {
       <div className={styles.metricTile}>
         <span className={styles.metricLabel}>升学走向</span>
         <span className={styles.metricValue}>
-          {props.postgradRate ? `保研 ${props.postgradRate}` : props.employmentRate ? `就业 ${props.employmentRate}` : '—'}
+          {postgradRate ? `保研 ${postgradRate}` : employmentRate ? `就业 ${employmentRate}` : '—'}
         </span>
         <span className={styles.metricSub}>
-          {props.furtherStudyRate ? `升学 ${props.furtherStudyRate}` : ''}
-          {props.abroadRate ? ` · 出国 ${props.abroadRate}` : ''}
-          {props.employmentRate && props.postgradRate ? ` · 就业 ${props.employmentRate}` : ''}
+          {furtherStudyRate ? `升学 ${furtherStudyRate}` : ''}
+          {abroadRate ? ` · 出国 ${abroadRate}` : ''}
+          {employmentRate && postgradRate ? ` · 就业 ${employmentRate}` : ''}
+          {!postgradRate && !furtherStudyRate && !employmentRate ? '暂无数据' : ''}
         </span>
       </div>
 
@@ -91,9 +106,9 @@ export function MetricStrip(props: Props) {
           )}
         </span>
         <span className={styles.metricSub}>
-          {props.avgSalary ? `月薪 ${props.avgSalary}` : ''}
+          {avgSalary ? `月薪 ${avgSalary}` : ''}
           {props.satisfactionSample ? ` · 样本 ${formatSample(props.satisfactionSample)}` : ''}
-          {!props.avgSalary && !props.satisfactionSample ? '暂无样本' : ''}
+          {!avgSalary && !props.satisfactionSample ? '暂无样本' : ''}
         </span>
       </div>
     </div>

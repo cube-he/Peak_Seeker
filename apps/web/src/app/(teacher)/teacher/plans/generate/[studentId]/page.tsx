@@ -605,9 +605,13 @@ function CandidateMajorSection({
 
               <div className={compareStyles.majorNameV2}>
                 <b>{major.majorName}</b>
-                {major.softRating ? (
-                  <span className={`${compareStyles.majorRankingChip} ${getRankingClass(major.softRating)}`}>
-                    {major.softRating}
+                {/* 评级 chip 优先用 disciplineEval（学校×专业，针对性强），不用 softRating（专业大类通用，会误导民办学院显示 A+）*/}
+                {major.disciplineEval ? (
+                  <span
+                    className={`${compareStyles.majorRankingChip} ${getRankingClass(major.disciplineEval)}`}
+                    title="学科评估等级（学校×专业）"
+                  >
+                    {major.disciplineEval}
                   </span>
                 ) : null}
                 {major.isNationalFeature ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagNational}`}>国家特色</span> : null}
