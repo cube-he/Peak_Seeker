@@ -57,7 +57,7 @@ import {
 import styles from './candidate-pool-polished.module.css';
 import {
   MatchHeader, TrendChart, NotesChip, MetricStrip,
-  FilterBar, DEFAULT_FILTERS,
+  FilterBar, DEFAULT_FILTERS, HiddenCard,
   type FilterState, type FilterGradeKey, type TierFilter,
 } from '@/components/candidate-pool-v2';
 
@@ -714,6 +714,15 @@ export default function GeneratePlanPage() {
   // 切到「投档线」时只显示 2025 起的真投档数据（早期记录缺失 filing 字段）
   const [trendType, setTrendType] = useState<'filing' | 'min'>('min');
   const [poolFilters, setPoolFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  // 不持久化的"不考虑"集合（per-session）
+  const [hiddenGroupKeys, setHiddenGroupKeys] = useState<Set<string>>(new Set());
+  const hideGroup = (key: string) => setHiddenGroupKeys((prev) => new Set([...prev, key]));
+  const restoreGroup = (key: string) =>
+    setHiddenGroupKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
   const [candidatePage, setCandidatePage] = useState(1);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
   const [activeDetail, setActiveDetail] = useState<{ group: CandidateGroup; major: CandidateMajor } | null>(null);
@@ -1399,6 +1408,17 @@ export default function GeneratePlanPage() {
                 <>
                   <div className={styles.cardList}>
                     {visibleGroups.map((group) => {
+                      // 隐藏的卡：渲染塌缩 HiddenCard
+                      if (hiddenGroupKeys.has(group.groupKey)) {
+                        return (
+                          <HiddenCard
+                            key={group.groupKey}
+                            universityName={group.universityName}
+                            meta={`${GRADIENT_LABEL[gradientTier(group)]}${group.university?.softRanking ? ' · 软科 #' + group.university.softRanking : ''}${group.university?.city ? ' · ' + group.university.city : ''}`}
+                            onRestore={() => restoreGroup(group.groupKey)}
+                          />
+                        );
+                      }
                       const expanded = expandedGroupKeys.includes(group.groupKey);
                       const planChange = formatGroupPlanChange(group);
                       const added = isCandidateGroupAlreadyAdded(group, planItems);
@@ -1519,6 +1539,15 @@ export default function GeneratePlanPage() {
                                   {getAddActionLabel(group, anchor, added)}
                                 </button>
                               ) : null}
+                              <button
+                                type="button"
+                                className={cx(styles.btn, styles.btnSmall)}
+                                onClick={() => hideGroup(group.groupKey)}
+                                title="不考虑此校（可恢复）"
+                                style={{ color: '#87867f' }}
+                              >
+                                ✕ 不考虑
+                              </button>
                             </div>
                           </div>
 

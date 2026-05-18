@@ -410,3 +410,77 @@
   color: #1e3a5f;
   background: #ebf4ff;
 }
+
+/* ============ 隐藏的候选卡（紧凑单行）============ */
+.hiddenCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #f0eee6;
+  border: 1px dashed #d8d4c4;
+  color: #6b6962;
+  font-size: 13px;
+}
+
+.hiddenCardIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #c53030;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.hiddenCardInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.hiddenCardInfo b {
+  font-size: 14px;
+  color: #4d4c48;
+  text-decoration: line-through;
+  text-decoration-color: #b0aea5;
+  font-weight: 600;
+}
+
+.hiddenCardMeta {
+  font-size: 11px;
+  color: #87867f;
+}
+
+.hiddenCardReason {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fef2f2;
+  color: #c53030;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.hiddenCardBtn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid #e8e6dc;
+  background: #fff;
+  color: #4d4c48;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hiddenCardBtn:hover {
+  border-color: #1e3a5f;
+  color: #1e3a5f;
+}
