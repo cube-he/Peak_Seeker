@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Avatar, Button, Input, Progress, Select, Space, Table, Tag } from 'antd';
+import { Avatar, Button, Input, Progress, Select, Space, Spin, Table, Tag } from 'antd';
 import {
   EditOutlined,
   FileTextOutlined,
@@ -46,6 +46,21 @@ function formatNumber(value?: number | null) {
 }
 
 export default function TeacherStudentsPage() {
+  // useSearchParams 要求外层包 Suspense，否则 Next 14 build 会 prerender 失败
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-2xl bg-surface py-20 text-center shadow-card">
+          <Spin size="large" />
+        </div>
+      }
+    >
+      <TeacherStudentsPageInner />
+    </Suspense>
+  );
+}
+
+function TeacherStudentsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Dashboard 跳转过来时会带 ?status=COLLECTING 或 ?keyword=xxx 作为初始 filter
