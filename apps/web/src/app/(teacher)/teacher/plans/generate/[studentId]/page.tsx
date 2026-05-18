@@ -1396,22 +1396,56 @@ export default function GeneratePlanPage() {
                               <div style={{ width: 280, flexShrink: 0 }}>
                                 <TrendChart points={trendPoints} />
                               </div>
-                              {trendDelta != null ? (
-                                <div style={{ fontSize: 12, color: '#6b6962', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-                                  <span style={{ fontFamily: 'Georgia, "Noto Serif SC", SimSun, serif', fontWeight: 600, color: '#1a1a19' }}>
-                                    {trendPoints[0].score} → {trendPoints[trendPoints.length - 1].score}
+                              <div style={{ fontSize: 12, color: '#6b6962', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', flexWrap: 'wrap' }}>
+                                {trendDelta != null ? (
+                                  <>
+                                    <span style={{ fontFamily: 'Georgia, "Noto Serif SC", SimSun, serif', fontWeight: 600, color: '#1a1a19' }}>
+                                      {trendPoints[0].score} → {trendPoints[trendPoints.length - 1].score}
+                                    </span>
+                                    <span style={{
+                                      fontSize: 11, fontWeight: 700,
+                                      padding: '2px 6px', borderRadius: 4,
+                                      background: trendDelta > 0 ? '#fef2f2' : trendDelta < 0 ? '#f0fff4' : '#f0eee6',
+                                      color: trendDelta > 0 ? '#c53030' : trendDelta < 0 ? '#276749' : '#6b6962',
+                                    }}>
+                                      {trendDelta > 0 ? '+' : ''}{trendDelta}
+                                    </span>
+                                    <span style={{ fontSize: 10, color: '#87867f' }}>{trendPoints.length} 年</span>
+                                  </>
+                                ) : null}
+                                {group.predictedMinRank?.point != null ? (
+                                  <span
+                                    title={`基于 ${group.predictedMinRank.targetYear ?? '2026'} 年预测 · 信心 ${group.predictedMinRank.confidence ?? '—'}`}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                                      padding: '3px 8px', borderRadius: 5,
+                                      background: '#fdf8ec', border: '1px solid #f0dfad',
+                                      color: '#8a6510', fontSize: 11, fontWeight: 600,
+                                      cursor: 'help',
+                                    }}
+                                  >
+                                    ◇ {group.predictedMinRank.targetYear ?? 2026} 预测 ~{group.predictedMinRank.point.toLocaleString()} 位
+                                    {group.predictedMinRank.confidence ? (
+                                      <span style={{
+                                        marginLeft: 2,
+                                        padding: '0 4px',
+                                        borderRadius: 3,
+                                        fontSize: 9,
+                                        background: group.predictedMinRank.confidence === 'high' ? '#e8f5ec'
+                                          : group.predictedMinRank.confidence === 'medium' ? '#ebf4ff'
+                                          : '#f0eee6',
+                                        color: group.predictedMinRank.confidence === 'high' ? '#276749'
+                                          : group.predictedMinRank.confidence === 'medium' ? '#2c5282'
+                                          : '#87867f',
+                                      }}>
+                                        {group.predictedMinRank.confidence === 'high' ? '高'
+                                          : group.predictedMinRank.confidence === 'medium' ? '中'
+                                          : '低'}
+                                      </span>
+                                    ) : null}
                                   </span>
-                                  <span style={{
-                                    fontSize: 11, fontWeight: 700,
-                                    padding: '2px 6px', borderRadius: 4,
-                                    background: trendDelta > 0 ? '#fef2f2' : trendDelta < 0 ? '#f0fff4' : '#f0eee6',
-                                    color: trendDelta > 0 ? '#c53030' : trendDelta < 0 ? '#276749' : '#6b6962',
-                                  }}>
-                                    {trendDelta > 0 ? '+' : ''}{trendDelta}
-                                  </span>
-                                  <span style={{ fontSize: 10, color: '#87867f' }}>{trendPoints.length} 年</span>
-                                </div>
-                              ) : null}
+                                ) : null}
+                              </div>
                             </div>
                           ) : null}
                           <div className={styles.candidateTop}>
