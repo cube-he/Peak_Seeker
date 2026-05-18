@@ -35,6 +35,9 @@ interface StudentCard {
   id: number;
   realName?: string;
   username?: string;
+  // 后端派生的工作流状态：COLLECTING/GENERATING/REVIEWING/FINALIZED/SUBMITTED
+  workflowStatus?: string;
+  // 原始 StudentStatus (ACTIVE/GRADUATED/...)，保留向后兼容，业务上不要直接判断
   status?: string;
   score?: number;
   totalScore?: number;
@@ -44,6 +47,10 @@ interface StudentCard {
   progress?: { overallCompleteness?: number; studentSelfCompleteness?: number };
   planCount?: number;
   updatedAt?: string;
+}
+
+function getWorkflowStatus(student: StudentCard): string {
+  return student.workflowStatus ?? 'COLLECTING';
 }
 
 interface PendingPlan {
@@ -103,7 +110,7 @@ function computeRisks(
   const daysToDeadline = daysUntil(deadline, now);
 
   students.forEach((student) => {
-    const status = student.status ?? 'COLLECTING';
+    const status = getWorkflowStatus(student);
     const noActionDays = daysSince(student.updatedAt, now);
     const completeness = getCompleteness(student);
     const name = student.realName || student.username || '学生';
@@ -226,7 +233,8 @@ export default function TeacherDashboardPage() {
       SUBMITTED: 0,
     };
     students.forEach((s) => {
-      const key = s.status && counts[s.status] !== undefined ? s.status : 'COLLECTING';
+      const ws = getWorkflowStatus(s);
+      const key = counts[ws] !== undefined ? ws : 'COLLECTING';
       counts[key] += 1;
     });
     return counts;
@@ -327,7 +335,7 @@ export default function TeacherDashboardPage() {
           </span>
           {deadlineRiskCount > 0 ? (
             <Link
-              href="/teacher/students?status=COLLECTING"
+              href="/teacher/students?workflowStatus=COLLECTING"
               className="inline-flex items-center gap-1.5 rounded-md bg-[#fee2e2] px-3 py-1.5 text-rush no-underline"
             >
               <WarningOutlined /> {deadlineRiskCount} 人定稿临期
@@ -423,7 +431,7 @@ function FunnelSection({
           return (
             <Link
               key={stage.key}
-              href={`/teacher/students?status=${stage.key}`}
+              href={`/teacher/students?workflowStatus=${stage.key}`}
               className="group flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg/40 p-3 no-underline transition hover:border-primary hover:bg-surface hover:shadow-sm"
             >
               <span className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
@@ -443,7 +451,7 @@ function FunnelSection({
           <WarningOutlined className="mr-2 text-rush" />
           瓶颈：<strong className="text-text">{bottleneck.count}</strong> 名学生卡在「{bottleneck.stage.label}」环节
           <Link
-            href={`/teacher/students?status=${bottleneck.stage.key}`}
+            href={`/teacher/students?workflowStatus=${bottleneck.stage.key}`}
             className="ml-2 font-medium text-primary no-underline"
           >
             优先处理 →

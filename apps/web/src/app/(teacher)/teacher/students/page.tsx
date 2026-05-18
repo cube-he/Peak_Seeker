@@ -29,13 +29,22 @@ interface Student {
   username: string;
   realName?: string;
   phone?: string;
+  // 后端派生的工作流状态：COLLECTING/GENERATING/REVIEWING/FINALIZED/SUBMITTED
+  workflowStatus?: string;
+  // 原始 StudentStatus (ACTIVE/GRADUATED/...)，业务上不直接用
   status: string;
   user?: { realName?: string; phone?: string };
   totalScore?: number;
   provincialRank?: number;
   progress?: ProfileProgress;
   planCount?: number;
+  latestPlanStatus?: string | null;
+  latestPlanId?: number | null;
   createdAt: string;
+}
+
+function getWorkflowStatus(student: Student): string {
+  return student.workflowStatus ?? 'COLLECTING';
 }
 
 type ProgressFilter = 'all' | 'self_low' | 'self_mid' | 'teacher_pending' | 'recommendable';
@@ -63,46 +72,55 @@ export default function TeacherStudentsPage() {
 function TeacherStudentsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Dashboard 跳转过来时会带 ?status=COLLECTING 或 ?keyword=xxx 作为初始 filter
+  // Dashboard 跳转过来时会带 ?workflowStatus=... 或 ?keyword=... 作为初始 filter
+  // 也兼容老链接 ?status=...
   const [search, setSearch] = useState(() => searchParams.get('keyword') ?? '');
   const [statusFilter, setStatusFilter] = useState<string | undefined>(
-    () => searchParams.get('status') ?? undefined,
+    () => searchParams.get('workflowStatus') ?? searchParams.get('status') ?? undefined,
   );
   const [progressFilter, setProgressFilter] = useState<ProgressFilter>('all');
 
+  // status 不再发给后端（后端的 status 字段是 ACTIVE/GRADUATED，与教师工作流无关）
+  // workflowStatus 在前端按派生字段本地过滤
   const { data, isLoading } = useQuery({
-    queryKey: ['teacher-students', search, statusFilter],
-    queryFn: () => studentApi.getList({ search, status: statusFilter }),
+    queryKey: ['teacher-students', search],
+    queryFn: () => studentApi.getList({ search, pageSize: 200 }),
   });
 
   const allStudents: Student[] = data?.data?.data ?? data?.data ?? [];
 
   const students = useMemo(() => {
-    if (progressFilter === 'all') return allStudents;
-    return allStudents.filter((student) => {
-      const progress = student.progress;
-      if (!progress) return progressFilter === 'self_low';
-      switch (progressFilter) {
-        case 'self_low':
-          return progress.studentSelfCompleteness < 50;
-        case 'self_mid':
-          return progress.studentSelfCompleteness >= 50 && progress.studentSelfCompleteness < 80;
-        case 'teacher_pending':
-          return progress.teacherDataCompleteness < 100;
-        case 'recommendable':
-          return progress.isRecommendable;
-        default:
-          return true;
-      }
-    });
-  }, [allStudents, progressFilter]);
+    let list = allStudents;
+    if (statusFilter) {
+      list = list.filter((s) => getWorkflowStatus(s) === statusFilter);
+    }
+    if (progressFilter !== 'all') {
+      list = list.filter((student) => {
+        const progress = student.progress;
+        if (!progress) return progressFilter === 'self_low';
+        switch (progressFilter) {
+          case 'self_low':
+            return progress.studentSelfCompleteness < 50;
+          case 'self_mid':
+            return progress.studentSelfCompleteness >= 50 && progress.studentSelfCompleteness < 80;
+          case 'teacher_pending':
+            return progress.teacherDataCompleteness < 100;
+          case 'recommendable':
+            return progress.isRecommendable;
+          default:
+            return true;
+        }
+      });
+    }
+    return list;
+  }, [allStudents, statusFilter, progressFilter]);
 
   const counts = useMemo(
     () => ({
       all: allStudents.length,
       attention: allStudents.filter((student) => (student.progress?.studentSelfCompleteness ?? 0) < 60).length,
       noPlan: allStudents.filter((student) => !student.planCount).length,
-      reviewing: allStudents.filter((student) => student.status === 'REVIEWING').length,
+      reviewing: allStudents.filter((student) => getWorkflowStatus(student) === 'REVIEWING').length,
       highScore: allStudents.filter((student) => (student.totalScore ?? 0) >= 640).length,
     }),
     [allStudents],
@@ -141,11 +159,11 @@ function TeacherStudentsPageInner() {
     },
     {
       title: '状态',
-      dataIndex: 'status',
       key: 'status',
       width: 100,
-      render: (status: string) => {
-        const state = STATUS_MAP[status] || { label: status, color: 'default' };
+      render: (_, record) => {
+        const ws = getWorkflowStatus(record);
+        const state = STATUS_MAP[ws] || { label: ws, color: 'default' };
         return <Tag color={state.color}>{state.label}</Tag>;
       },
     },
