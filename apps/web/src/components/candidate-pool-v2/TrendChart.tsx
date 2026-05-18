@@ -20,6 +20,29 @@ interface Props {
 export function TrendChart({ points, prediction, width = 240, height = 46 }: Props) {
   if (points.length === 0) return null;
 
+  // 数据点 < 2：无法画折线，显示单点 + 提示
+  if (points.length === 1 && !prediction) {
+    const only = points[0];
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '4px 8px',
+          fontSize: 12,
+          color: '#6b6962',
+        }}
+      >
+        <span style={{ fontFamily: 'Georgia, "Noto Serif SC", SimSun, serif', fontWeight: 700, fontSize: 16, color: '#1a1a19' }}>
+          {only.score}
+        </span>
+        <span style={{ fontSize: 10, color: '#87867f' }}>&apos;{String(only.year).slice(-2)}</span>
+        <span style={{ fontSize: 10, color: '#b0aea5', fontStyle: 'italic' }}>仅 1 年数据</span>
+      </div>
+    );
+  }
+
   const W = width;
   const H = height;
   const PAD_X = 12;
