@@ -1516,16 +1516,17 @@ export default function GeneratePlanPage() {
                                 <span>{formatCandidateGroup(group)}</span>
                               </div>
                             </button>
-                            <div className={`${compareStyles.gradeBadge} ${
-                              gradientTone(gradientTier(group)) === 'rush' ? compareStyles.gradeBadgeRush :
-                              gradientTone(gradientTier(group)) === 'safe' ? compareStyles.gradeBadgeSafe :
-                              compareStyles.gradeBadgeStable
-                            }`}>
-                              <span className={compareStyles.gradeLabel}>梯度</span>
-                              <span className={compareStyles.gradeValue}>{GRADIENT_LABEL[gradientTier(group)]}</span>
-                              <span className={compareStyles.gradeNote}>{rankGap.text}</span>
-                            </div>
-                            <div className={styles.cardActions}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                              <div className={`${compareStyles.gradeBadge} ${
+                                gradientTone(gradientTier(group)) === 'rush' ? compareStyles.gradeBadgeRush :
+                                gradientTone(gradientTier(group)) === 'safe' ? compareStyles.gradeBadgeSafe :
+                                compareStyles.gradeBadgeStable
+                              }`}>
+                                <span className={compareStyles.gradeLabel}>梯度</span>
+                                <span className={compareStyles.gradeValue}>{GRADIENT_LABEL[gradientTier(group)]}</span>
+                                <span className={compareStyles.gradeNote}>{rankGap.text}</span>
+                              </div>
+                              <div className={styles.cardActions}>
                               <button type="button" className={cx(styles.btn, styles.btnSmall)} onClick={() => anchor && setActiveDetail({ group, major: anchor })}>详情</button>
                               <button
                                 type="button"
@@ -1554,6 +1555,7 @@ export default function GeneratePlanPage() {
                               >
                                 ✕ 不考虑
                               </button>
+                              </div>
                             </div>
                           </div>
 
