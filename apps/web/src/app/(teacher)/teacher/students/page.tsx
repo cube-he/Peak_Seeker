@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Avatar, Button, Input, Progress, Select, Space, Table, Tag } from 'antd';
 import {
   EditOutlined,
@@ -47,8 +47,12 @@ function formatNumber(value?: number | null) {
 
 export default function TeacherStudentsPage() {
   const router = useRouter();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const searchParams = useSearchParams();
+  // Dashboard 跳转过来时会带 ?status=COLLECTING 或 ?keyword=xxx 作为初始 filter
+  const [search, setSearch] = useState(() => searchParams.get('keyword') ?? '');
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(
+    () => searchParams.get('status') ?? undefined,
+  );
   const [progressFilter, setProgressFilter] = useState<ProgressFilter>('all');
 
   const { data, isLoading } = useQuery({

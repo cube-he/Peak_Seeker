@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Button, Card, Empty, Input, Modal, Segmented, Select, Space, Spin, Table, Tag, message } from 'antd';
 import {
   AppstoreOutlined,
@@ -58,10 +59,16 @@ function formatDate(value?: string) {
 }
 
 export default function TeacherPlansPage() {
+  const searchParams = useSearchParams();
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
-  const [search, setSearch] = useState('');
-  const [batchFilter, setBatchFilter] = useState<string | undefined>();
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  // Dashboard 跳转过来时会带 ?status=PENDING_REVIEW 或 ?batch=xxx 作为初始 filter
+  const [search, setSearch] = useState(() => searchParams.get('keyword') ?? '');
+  const [batchFilter, setBatchFilter] = useState<string | undefined>(
+    () => searchParams.get('batch') ?? undefined,
+  );
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(
+    () => searchParams.get('status') ?? undefined,
+  );
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({

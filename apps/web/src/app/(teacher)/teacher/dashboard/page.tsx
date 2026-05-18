@@ -1,15 +1,27 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Button, Empty, Spin } from 'antd';
+import { useRouter } from 'next/navigation';
+import { Button, Empty, Input, Spin } from 'antd';
 import {
+  CheckCircleOutlined,
+  FileTextOutlined,
   PlusOutlined,
   ReloadOutlined,
   RightOutlined,
+  SearchOutlined,
+  UploadOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
+import { planApi } from '@/services/plan-api';
+
+// 高考 / 志愿填报截止日。今年官方日期公布前先用去年时间，由 VOLUNTEER_DEADLINE_IS_LAST_YEAR 控制 UI 提示
+const EXAM_DATE = '2026-06-07T09:00:00+08:00';
+const VOLUNTEER_DEADLINE = '2026-06-30T18:00:00+08:00';
+const VOLUNTEER_DEADLINE_IS_LAST_YEAR = true;
 
 const STATUS_LABELS: Record<string, string> = {
   COLLECTING: '待采集',
@@ -29,267 +41,514 @@ interface StudentCard {
   rank?: number;
   provincialRank?: number;
   completeness?: number;
-  progress?: { overallCompleteness?: number };
+  progress?: { overallCompleteness?: number; studentSelfCompleteness?: number };
   planCount?: number;
   updatedAt?: string;
+}
+
+interface PendingPlan {
+  id: number;
+  studentName: string;
+  studentId: number;
+  status: string;
+  updatedAt: string;
+}
+
+interface RiskItem {
+  key: string;
+  studentId: number;
+  name: string;
+  initial: string;
+  tag: string;
+  reason: string;
+  priority: number;
+  severity: 'high' | 'medium';
+  primaryAction: { label: string; href: string };
 }
 
 function getScore(student: StudentCard) {
   return student.score ?? student.totalScore ?? null;
 }
 
-function getRank(student: StudentCard) {
-  return student.rank ?? student.provincialRank ?? null;
-}
-
 function getCompleteness(student: StudentCard) {
   return student.completeness ?? student.progress?.overallCompleteness ?? 0;
 }
 
-function formatNumber(value?: number | null) {
-  if (value === null || value === undefined) return '--';
-  return value.toLocaleString('zh-CN');
+function daysUntil(target: Date, now: Date) {
+  return Math.ceil((target.getTime() - now.getTime()) / 86_400_000);
+}
+
+function daysSince(date: string | undefined, now: Date) {
+  if (!date) return null;
+  const past = new Date(date);
+  if (Number.isNaN(past.getTime())) return null;
+  return Math.floor((now.getTime() - past.getTime()) / 86_400_000);
+}
+
+function formatRelativeTime(date: Date, now: Date) {
+  const seconds = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
+  if (seconds < 60) return '刚刚';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)} 小时前`;
+  return `${Math.floor(seconds / 86_400)} 天前`;
+}
+
+function computeRisks(
+  students: StudentCard[],
+  pendingPlans: PendingPlan[],
+  now: Date,
+  deadline: Date,
+): RiskItem[] {
+  const list: RiskItem[] = [];
+  const daysToDeadline = daysUntil(deadline, now);
+
+  students.forEach((student) => {
+    const status = student.status ?? 'COLLECTING';
+    const noActionDays = daysSince(student.updatedAt, now);
+    const completeness = getCompleteness(student);
+    const name = student.realName || student.username || '学生';
+    const initial = name.charAt(0);
+
+    // 已定稿/已填报学生不再产生风险（除非临期但还没填报）
+    if (status === 'SUBMITTED') return;
+
+    // 信号 1：临期未定稿（7 天内截止且未定稿）
+    if (status !== 'FINALIZED' && daysToDeadline <= 7 && daysToDeadline >= 0) {
+      list.push({
+        key: `deadline-${student.id}`,
+        studentId: student.id,
+        name,
+        initial,
+        tag: '临期未定稿',
+        reason: `距填报截止还剩 ${daysToDeadline} 天 · 当前${STATUS_LABELS[status] ?? '未知'}`,
+        priority: 1000 + (7 - daysToDeadline) * 10,
+        severity: 'high',
+        primaryAction: { label: '打开档案', href: `/teacher/students/${student.id}` },
+      });
+      return;
+    }
+
+    // 信号 2：长时间无动作
+    if (noActionDays !== null && noActionDays >= 7 && status !== 'FINALIZED') {
+      list.push({
+        key: `idle-${student.id}`,
+        studentId: student.id,
+        name,
+        initial,
+        tag: '长时间无动作',
+        reason: `${noActionDays} 天未更新 · 当前${STATUS_LABELS[status] ?? '未知'}`,
+        priority: 500 + noActionDays,
+        severity: 'medium',
+        primaryAction: { label: '打开档案', href: `/teacher/students/${student.id}` },
+      });
+      return;
+    }
+
+    // 信号 3：低完整度（仅在采集阶段）
+    if (status === 'COLLECTING' && completeness < 60) {
+      list.push({
+        key: `incomplete-${student.id}`,
+        studentId: student.id,
+        name,
+        initial,
+        tag: '档案不完整',
+        reason: `完整度 ${completeness}%`,
+        priority: 200 + (60 - completeness),
+        severity: 'medium',
+        primaryAction: { label: '打开档案', href: `/teacher/students/${student.id}` },
+      });
+    }
+  });
+
+  // 信号 4：方案审核积压（>3 天未处理）
+  pendingPlans.forEach((plan) => {
+    const days = daysSince(plan.updatedAt, now);
+    if (days === null || days < 3) return;
+    const name = plan.studentName || '学生';
+    list.push({
+      key: `pending-${plan.id}`,
+      studentId: plan.studentId,
+      name,
+      initial: name.charAt(0),
+      tag: '审核积压',
+      reason: `方案提交 ${days} 天未处理`,
+      priority: 700 + days,
+      severity: 'high',
+      primaryAction: { label: '立即审核', href: `/teacher/plans/${plan.id}` },
+    });
+  });
+
+  return list.sort((a, b) => b.priority - a.priority);
 }
 
 export default function TeacherDashboardPage() {
+  const router = useRouter();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [searchInput, setSearchInput] = useState('');
+  // 客户端启动后再产生 now / updatedAt，避免 SSR / 客户端时间不一致导致 hydration 警告
+  const [clock, setClock] = useState<{ now: Date; updatedAt: Date } | null>(null);
 
-  const { data: studentsData, isLoading } = useQuery({
-    queryKey: ['teacher-students', refreshKey],
-    queryFn: () => studentApi.getList(),
+  useEffect(() => {
+    const stamp = new Date();
+    setClock({ now: stamp, updatedAt: stamp });
+  }, [refreshKey]);
+
+  const { data: studentsData, isLoading: studentsLoading } = useQuery({
+    queryKey: ['teacher-dashboard-students', refreshKey],
+    queryFn: () => studentApi.getList({ pageSize: 200 }),
   });
 
-  const students: StudentCard[] = studentsData?.data || [];
+  const { data: plansData, isLoading: plansLoading } = useQuery({
+    queryKey: ['teacher-dashboard-pending-plans', refreshKey],
+    queryFn: () => planApi.getTeacherPlans({ status: 'PENDING_REVIEW', pageSize: 100 }),
+  });
 
-  const stats = useMemo(() => {
-    const totalStudents = students.length;
-    const collecting = students.filter((student) => student.status === 'COLLECTING').length;
-    const reviewing = students.filter((student) => student.status === 'REVIEWING').length;
-    const finalized = students.filter((student) => student.status === 'FINALIZED').length;
-    const scored = students.map(getScore).filter((score): score is number => typeof score === 'number');
-    const avgScore = scored.length
-      ? Math.round(scored.reduce((sum, score) => sum + score, 0) / scored.length)
-      : null;
-    return { totalStudents, collecting, reviewing, finalized, avgScore };
-  }, [students]);
+  const isLoading = studentsLoading || plansLoading || clock === null;
 
-  const scoreBuckets = useMemo(() => {
-    const ranges = [
-      { label: '≥640', min: 640, max: Infinity },
-      { label: '600-639', min: 600, max: 639 },
-      { label: '560-599', min: 560, max: 599 },
-      { label: '520-559', min: 520, max: 559 },
-      { label: '<520', min: -Infinity, max: 519 },
-    ];
-    const scored = students.map(getScore).filter((score): score is number => typeof score === 'number');
-    return ranges.map((range) => {
-      const count = scored.filter((score) => score >= range.min && score <= range.max).length;
-      const percent = scored.length ? Math.max(4, Math.round((count / scored.length) * 100)) : 0;
-      return { ...range, count, percent };
+  // 接口返回结构两种都兼容（参考 students/page.tsx 现有写法）
+  const students: StudentCard[] = studentsData?.data?.data ?? studentsData?.data ?? [];
+  const pendingPlans: PendingPlan[] = plansData?.data?.data ?? plansData?.data ?? [];
+
+  const now = clock?.now ?? new Date(0);
+  const updatedAt = clock?.updatedAt ?? new Date(0);
+  const examDate = useMemo(() => new Date(EXAM_DATE), []);
+  const deadlineDate = useMemo(() => new Date(VOLUNTEER_DEADLINE), []);
+  const examDaysLeft = Math.max(0, daysUntil(examDate, now));
+  const deadlineDaysLeft = Math.max(0, daysUntil(deadlineDate, now));
+
+  // 各状态人数
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      COLLECTING: 0,
+      GENERATING: 0,
+      REVIEWING: 0,
+      FINALIZED: 0,
+      SUBMITTED: 0,
+    };
+    students.forEach((s) => {
+      const key = s.status && counts[s.status] !== undefined ? s.status : 'COLLECTING';
+      counts[key] += 1;
     });
+    return counts;
   }, [students]);
 
-  const attentionStudents = useMemo(
-    () =>
-      [...students]
-        .sort((a, b) => {
-          const aRisk = (a.status === 'COLLECTING' ? 2 : 0) + (getCompleteness(a) < 60 ? 1 : 0);
-          const bRisk = (b.status === 'COLLECTING' ? 2 : 0) + (getCompleteness(b) < 60 ? 1 : 0);
-          return bRisk - aRisk;
-        })
-        .slice(0, 5),
-    [students],
+  const totalStudents = students.length;
+  const finalizedCount = (statusCounts.FINALIZED ?? 0) + (statusCounts.SUBMITTED ?? 0);
+  const completionRatio = totalStudents > 0 ? Math.round((finalizedCount / totalStudents) * 100) : 0;
+
+  const avgScore = useMemo(() => {
+    const scored = students.map(getScore).filter((s): s is number => typeof s === 'number');
+    return scored.length ? Math.round(scored.reduce((sum, s) => sum + s, 0) / scored.length) : null;
+  }, [students]);
+
+  const avgCompleteness = useMemo(() => {
+    if (!students.length) return 0;
+    return Math.round(students.reduce((sum, s) => sum + getCompleteness(s), 0) / students.length);
+  }, [students]);
+
+  const risks = useMemo(
+    () => computeRisks(students, pendingPlans, now, deadlineDate),
+    [students, pendingPlans, now, deadlineDate],
   );
 
-  const kpis = [
-    { label: '学生总数', value: stats.totalStudents, suffix: '人', tone: 'border-l-primary' },
-    { label: '平均分', value: stats.avgScore ?? '--', suffix: stats.avgScore ? '分' : '', tone: 'border-l-accent' },
-    { label: '待审核方案', value: stats.reviewing, suffix: '项', tone: 'border-l-rush' },
-    { label: '已定稿', value: stats.finalized, suffix: '人', tone: 'border-l-safe' },
-  ];
+  // 临期未定稿的人数（用于顶部警告）
+  const deadlineRiskCount = useMemo(
+    () => risks.filter((r) => r.tag === '临期未定稿').length,
+    [risks],
+  );
+
+  // 瓶颈：找非终态节点中人数最多的
+  const bottleneck = useMemo(() => {
+    const candidates: Array<{ key: string; label: string }> = [
+      { key: 'COLLECTING', label: '待采集' },
+      { key: 'GENERATING', label: '待生成' },
+      { key: 'REVIEWING', label: '待审核' },
+    ];
+    return candidates.reduce(
+      (best, stage) => {
+        const count = statusCounts[stage.key] ?? 0;
+        return count > best.count ? { stage, count } : best;
+      },
+      { stage: candidates[0], count: 0 },
+    );
+  }, [statusCounts]);
+
+  const handleSearch = () => {
+    const keyword = searchInput.trim();
+    router.push(keyword ? `/teacher/students?keyword=${encodeURIComponent(keyword)}` : '/teacher/students');
+  };
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">
-            Teacher Console
-          </p>
-          <h1 className="font-serif text-3xl font-semibold text-text">看板 · Dashboard</h1>
-          <p className="mt-2 text-sm text-text-muted">
-            {stats.totalStudents} 名学生 · {stats.collecting} 人待采集 · {stats.reviewing} 份待审核
-          </p>
+    <div className="space-y-5">
+      {/* A 区：顶部 */}
+      <header className="space-y-4 rounded-2xl bg-surface px-6 py-5 shadow-card">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-text">看板</h1>
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-text-muted">
+              <span>{totalStudents} 名学生</span>
+              <span aria-hidden>·</span>
+              <span>平均分 {avgScore ?? '--'}</span>
+              <span aria-hidden>·</span>
+              <span>
+                数据更新于 {clock ? formatRelativeTime(updatedAt, now) : '--'}
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<ReloadOutlined />}
+                  onClick={() => setRefreshKey((k) => k + 1)}
+                  aria-label="刷新数据"
+                  className="ml-1"
+                />
+              </span>
+            </p>
+          </div>
+          <Input
+            placeholder="搜索学生姓名 / 学号 (回车跳转)"
+            prefix={<SearchOutlined className="text-text-muted" />}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onPressEnter={handleSearch}
+            className="lg:w-[320px]"
+            allowClear
+          />
         </div>
-        <div className="flex gap-2">
-          <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((key) => key + 1)}>
-            刷新
-          </Button>
-          <Link href="/teacher/students/create">
-            <Button type="primary" icon={<PlusOutlined />} className="border-0">
-              新建学生
+
+        {/* 倒计时 + 临期警告 */}
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-primary-fixed px-3 py-1.5 text-primary">
+            距高考 <strong className="text-base">{examDaysLeft}</strong> 天
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-accent-fixed px-3 py-1.5 text-accent">
+            距志愿填报截止 <strong className="text-base">{deadlineDaysLeft}</strong> 天
+            {VOLUNTEER_DEADLINE_IS_LAST_YEAR ? (
+              <span className="text-xs font-normal text-text-muted">(去年时间·仅供参考)</span>
+            ) : null}
+          </span>
+          {deadlineRiskCount > 0 ? (
+            <Link
+              href="/teacher/students?status=COLLECTING"
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#fee2e2] px-3 py-1.5 text-rush no-underline"
+            >
+              <WarningOutlined /> {deadlineRiskCount} 人定稿临期
+            </Link>
+          ) : null}
+        </div>
+
+        {/* 快捷操作 */}
+        <div className="flex flex-wrap gap-2">
+          <Link href="/teacher/plans?status=PENDING_REVIEW">
+            <Button type="primary" icon={<CheckCircleOutlined />} className="border-0">
+              处理 {pendingPlans.length} 份待审
             </Button>
+          </Link>
+          <Link href="/teacher/students/create">
+            <Button icon={<PlusOutlined />}>新建学生</Button>
+          </Link>
+          <Button icon={<UploadOutlined />} disabled title="批量导入功能待接入">
+            批量导入
+          </Button>
+          <Link href="/teacher/students">
+            <Button icon={<FileTextOutlined />}>班级清单</Button>
           </Link>
         </div>
       </header>
-
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className={`rounded-2xl border-l-[3px] ${kpi.tone} bg-surface px-5 py-4 shadow-card`}>
-            <p className="text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">{kpi.label}</p>
-            <p className="mt-2 font-serif text-3xl font-semibold text-text">
-              {kpi.value}
-              <span className="ml-1 text-sm font-normal text-text-muted">{kpi.suffix}</span>
-            </p>
-          </div>
-        ))}
-      </div>
 
       {isLoading ? (
         <div className="rounded-2xl bg-surface py-20 text-center shadow-card">
           <Spin size="large" />
         </div>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
-          <div className="space-y-5">
-            <section className="rounded-2xl bg-surface shadow-card">
-              <div className="flex items-center justify-between border-b border-border-subtle px-6 py-4">
-                <h2 className="font-serif text-lg font-semibold text-text">班级分数分布</h2>
-                <span className="text-xs text-text-muted">来自学生列表分数字段</span>
-              </div>
-              <div className="space-y-3 px-6 py-5">
-                {scoreBuckets.map((bucket, index) => (
-                  <div key={bucket.label} className="grid grid-cols-[64px_1fr_56px] items-center gap-3">
-                    <span className="text-xs font-medium text-text-muted">{bucket.label}</span>
-                    <div className="h-5 overflow-hidden rounded-md bg-bg">
-                      <div
-                        className={`h-full rounded-md ${
-                          index < 2 ? 'bg-gradient-to-r from-safe to-[#80c89c]' : index < 4 ? 'bg-gradient-to-r from-accent-light to-accent' : 'bg-gradient-to-r from-rush to-[#9a3412]'
-                        }`}
-                        style={{ width: `${bucket.percent}%` }}
-                      />
-                    </div>
-                    <span className="text-right font-serif text-sm font-semibold text-text">{bucket.count} 人</span>
-                  </div>
-                ))}
-              </div>
-            </section>
+        <>
+          {/* B 区：班级推进漏斗 */}
+          <FunnelSection
+            counts={statusCounts}
+            totalStudents={totalStudents}
+            completionRatio={completionRatio}
+            bottleneck={bottleneck}
+          />
 
-            <section className="rounded-2xl bg-surface shadow-card">
-              <div className="flex items-center justify-between border-b border-border-subtle px-6 py-4">
-                <h2 className="font-serif text-lg font-semibold text-text">
-                  需要关注的学生
-                  <span className="ml-2 text-sm font-semibold text-rush">{attentionStudents.length}</span>
-                </h2>
-                <Link href="/teacher/students" className="text-sm font-medium text-primary no-underline">
-                  全部学生 <RightOutlined className="text-[10px]" />
-                </Link>
-              </div>
-              {attentionStudents.length === 0 ? (
-                <div className="py-10">
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无学生数据" />
-                </div>
-              ) : (
-                <div className="divide-y divide-border-subtle">
-                  {attentionStudents.map((student) => {
-                    const score = getScore(student);
-                    const rank = getRank(student);
-                    const completeness = getCompleteness(student);
-                    const name = student.realName || student.username || '学生';
-                    return (
-                      <Link
-                        key={student.id}
-                        href={`/teacher/students/${student.id}`}
-                        className="grid grid-cols-[40px_1fr_90px_90px_90px_24px] items-center gap-4 px-6 py-4 text-text no-underline hover:bg-bg"
-                      >
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-light font-serif font-semibold text-white">
-                          {name.charAt(0)}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium">{name}</span>
-                          <span className="mt-0.5 block text-xs text-text-muted">
-                            {score ? `${score} 分` : '未录入分数'} · {rank ? `${formatNumber(rank)} 位` : '位次待计算'}
-                          </span>
-                        </span>
-                        <span>
-                          <span className="block text-[10px] uppercase tracking-[1.2px] text-text-muted">状态</span>
-                          <span className="font-serif text-sm font-semibold">{STATUS_LABELS[student.status || ''] || '未知'}</span>
-                        </span>
-                        <span>
-                          <span className="block text-[10px] uppercase tracking-[1.2px] text-text-muted">完整度</span>
-                          <span className="font-serif text-sm font-semibold">{completeness}%</span>
-                        </span>
-                        <span className={`rounded-md px-2 py-1 text-center text-[11px] font-semibold ${completeness < 60 ? 'bg-[#fee2e2] text-rush' : 'bg-accent-fixed text-accent'}`}>
-                          {completeness < 60 ? '需补档' : '跟进'}
-                        </span>
-                        <RightOutlined className="text-text-faint" />
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+          <div className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
+            {/* C 区：风险中心 */}
+            <RiskSection risks={risks} />
+
+            {/* D 区：关键指标卡 */}
+            <MetricsSection
+              totalStudents={totalStudents}
+              avgScore={avgScore}
+              riskCount={risks.length}
+              avgCompleteness={avgCompleteness}
+            />
           </div>
-
-          <div className="space-y-5">
-            <section className="rounded-2xl bg-surface shadow-card">
-              <div className="border-b border-border-subtle px-6 py-4">
-                <h2 className="font-serif text-lg font-semibold text-text">今日待办</h2>
-              </div>
-              <div className="divide-y divide-border-subtle">
-                {[
-                  [`审核 ${stats.reviewing} 份待审核方案`, stats.reviewing ? '高' : '低'],
-                  [`补齐 ${stats.collecting} 名学生档案`, stats.collecting ? '中' : '低'],
-                  ['生成本周班级跟进清单', '中'],
-                ].map(([title, urgency], index) => (
-                  <div key={title} className="grid grid-cols-[22px_1fr_auto] gap-3 px-6 py-4">
-                    <span className="mt-0.5 h-[18px] w-[18px] rounded-md border border-border bg-white" />
-                    <span>
-                      <span className="block text-sm font-medium text-text">{title}</span>
-                      <span className="mt-1 block text-xs text-text-muted">
-                        {index === 2 ? '当前没有独立待办接口，按学生状态生成提醒' : '来自学生状态统计'}
-                      </span>
-                    </span>
-                    <span className={`h-fit rounded px-2 py-0.5 text-[11px] font-semibold ${urgency === '高' ? 'bg-[#fee2e2] text-rush' : 'bg-accent-fixed text-accent'}`}>
-                      {urgency}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-2xl bg-surface shadow-card">
-              <div className="border-b border-border-subtle px-6 py-4">
-                <h2 className="font-serif text-lg font-semibold text-text">状态动态</h2>
-              </div>
-              <div className="px-6 py-3">
-                {attentionStudents.slice(0, 4).map((student) => {
-                  const name = student.realName || student.username || '学生';
-                  return (
-                    <Link
-                      key={student.id}
-                      href={`/teacher/students/${student.id}`}
-                      className="flex gap-3 border-b border-border-subtle py-3 text-text no-underline last:border-b-0"
-                    >
-                      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent-fixed font-serif text-xs font-semibold text-accent">
-                        {name.charAt(0)}
-                      </span>
-                      <span className="text-sm leading-6">
-                        <strong className="font-semibold">{name}</strong> 当前处于
-                        <strong className="mx-1 font-semibold">{STATUS_LABELS[student.status || ''] || '未知状态'}</strong>
-                        阶段
-                        <span className="block text-xs text-text-muted">点击查看档案与方案进度</span>
-                      </span>
-                    </Link>
-                  );
-                })}
-                {attentionStudents.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-text-muted">暂无动态</p>
-                ) : null}
-              </div>
-            </section>
-          </div>
-        </div>
+        </>
       )}
     </div>
+  );
+}
+
+// ── B 区：班级推进漏斗 ──
+function FunnelSection({
+  counts,
+  totalStudents,
+  completionRatio,
+  bottleneck,
+}: {
+  counts: Record<string, number>;
+  totalStudents: number;
+  completionRatio: number;
+  bottleneck: { stage: { key: string; label: string }; count: number };
+}) {
+  const stages = [
+    { key: 'COLLECTING', label: '待采集', barClass: 'bg-gradient-to-r from-[#dbe5e7] to-[#a5b5b8]' },
+    { key: 'GENERATING', label: '待生成', barClass: 'bg-gradient-to-r from-[#cbd5e8] to-[#8595c3]' },
+    { key: 'REVIEWING', label: '待审核', barClass: 'bg-gradient-to-r from-[#fde4c8] to-[#e8a86a]' },
+    { key: 'FINALIZED', label: '已定稿', barClass: 'bg-gradient-to-r from-[#cfe9d6] to-[#80c89c]' },
+    { key: 'SUBMITTED', label: '已填报', barClass: 'bg-gradient-to-r from-[#bce5e0] to-[#5fa9a1]' },
+  ];
+
+  const max = Math.max(1, ...stages.map((s) => counts[s.key] ?? 0));
+
+  return (
+    <section className="rounded-2xl bg-surface shadow-card">
+      <div className="flex items-center justify-between border-b border-border-subtle px-6 py-4">
+        <h2 className="text-lg font-semibold text-text">班级推进</h2>
+        <span className="text-sm text-text-muted">
+          <strong className="text-text">{completionRatio}%</strong> 已定稿 · 共 {totalStudents} 人
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 px-6 py-5 md:grid-cols-3 lg:grid-cols-5">
+        {stages.map((stage) => {
+          const count = counts[stage.key] ?? 0;
+          const percent = max > 0 ? Math.max(4, Math.round((count / max) * 100)) : 0;
+          return (
+            <Link
+              key={stage.key}
+              href={`/teacher/students?status=${stage.key}`}
+              className="group flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg/40 p-3 no-underline transition hover:border-primary hover:bg-surface hover:shadow-sm"
+            >
+              <span className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                {stage.label}
+              </span>
+              <span className="text-2xl font-semibold text-text">{count}</span>
+              <div className="h-1.5 overflow-hidden rounded-full bg-bg">
+                <div className={`h-full rounded-full ${stage.barClass}`} style={{ width: `${count > 0 ? percent : 0}%` }} />
+              </div>
+              <span className="text-[11px] text-text-faint group-hover:text-primary">点击查看 →</span>
+            </Link>
+          );
+        })}
+      </div>
+      {totalStudents > 0 && bottleneck.count > 0 ? (
+        <div className="border-t border-border-subtle bg-bg/40 px-6 py-3 text-sm text-text-muted">
+          <WarningOutlined className="mr-2 text-rush" />
+          瓶颈：<strong className="text-text">{bottleneck.count}</strong> 名学生卡在「{bottleneck.stage.label}」环节
+          <Link
+            href={`/teacher/students?status=${bottleneck.stage.key}`}
+            className="ml-2 font-medium text-primary no-underline"
+          >
+            优先处理 →
+          </Link>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+// ── C 区：风险中心 ──
+function RiskSection({ risks }: { risks: RiskItem[] }) {
+  const displayed = risks.slice(0, 6);
+  return (
+    <section className="rounded-2xl bg-surface shadow-card">
+      <div className="flex items-center justify-between border-b border-border-subtle px-6 py-4">
+        <h2 className="text-lg font-semibold text-text">
+          风险中心
+          {risks.length > 0 ? (
+            <span className="ml-2 text-base font-semibold text-rush">{risks.length}</span>
+          ) : null}
+        </h2>
+        <Link href="/teacher/students" className="text-sm font-medium text-primary no-underline">
+          全部学生 <RightOutlined className="text-[10px]" />
+        </Link>
+      </div>
+      {risks.length === 0 ? (
+        <div className="py-12">
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="目前没有需要紧急处理的学生" />
+        </div>
+      ) : (
+        <div className="divide-y divide-border-subtle">
+          {displayed.map((risk) => {
+            const tagClass =
+              risk.severity === 'high' ? 'bg-[#fee2e2] text-rush' : 'bg-accent-fixed text-accent';
+            return (
+              <div key={risk.key} className="grid grid-cols-[40px_1fr_auto] items-center gap-4 px-6 py-4">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-light text-sm font-semibold text-white">
+                  {risk.initial}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium text-text">{risk.name}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${tagClass}`}>
+                      {risk.tag}
+                    </span>
+                  </div>
+                  <span className="mt-0.5 block text-xs text-text-muted">{risk.reason}</span>
+                </div>
+                <Link href={risk.primaryAction.href}>
+                  <Button size="small" type="primary" ghost>
+                    {risk.primaryAction.label}
+                  </Button>
+                </Link>
+              </div>
+            );
+          })}
+          {risks.length > displayed.length ? (
+            <div className="bg-bg/30 px-6 py-3 text-center text-xs text-text-muted">
+              还有 {risks.length - displayed.length} 名学生有风险，
+              <Link href="/teacher/students" className="font-medium text-primary no-underline">
+                查看全部 →
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ── D 区：关键指标卡 ──
+function MetricsSection({
+  totalStudents,
+  avgScore,
+  riskCount,
+  avgCompleteness,
+}: {
+  totalStudents: number;
+  avgScore: number | null;
+  riskCount: number;
+  avgCompleteness: number;
+}) {
+  const items = [
+    { label: '学生总数', value: totalStudents, suffix: '人' },
+    { label: '平均分', value: avgScore ?? '--', suffix: avgScore !== null ? '分' : '' },
+    { label: '风险学生', value: riskCount, suffix: '人', emphasize: riskCount > 0 },
+    { label: '平均完整度', value: avgCompleteness, suffix: '%' },
+  ];
+  return (
+    <section className="rounded-2xl bg-surface shadow-card">
+      <div className="border-b border-border-subtle px-6 py-4">
+        <h2 className="text-lg font-semibold text-text">关键指标</h2>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-5 px-6 py-5">
+        {items.map((item) => (
+          <div key={item.label}>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">{item.label}</p>
+            <p className={`mt-1 text-2xl font-semibold ${item.emphasize ? 'text-rush' : 'text-text'}`}>
+              {item.value}
+              <span className="ml-1 text-sm font-normal text-text-muted">{item.suffix}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
