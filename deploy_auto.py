@@ -327,7 +327,7 @@ def deploy(ssh, run_enriched_import=False):
     print('\n[4/7] 安装服务器依赖...')
     run_remote(ssh, f'cd {REMOTE_PATH} && CI=true pnpm install --prod 2>&1 | tail -5')
     # ts-node 用于运行导入脚本，安装为全局或临时依赖
-    run_remote(ssh, f'cd {REMOTE_PATH} && pnpm add -D ts-node typescript 2>&1 | tail -3')
+    run_remote(ssh, f'cd {REMOTE_PATH} && pnpm add -Dw ts-node typescript 2>&1 | tail -3')
     run_remote(ssh, f'cd {REMOTE_PATH}/apps/server && npx prisma generate 2>&1 | tail -3')
 
     # 5. 运行数据库迁移

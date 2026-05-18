@@ -15,7 +15,7 @@ vault: E:\Soft\Cube
 
 ### 1.1 分工边界（Memory vs Vault）
 
-- **Claude Memory**（`.claude-proxy/.../memory/`）—— 偏好、红线规则、当前活跃任务/项目状态快照
+- **Claude Memory**（`旧 Claude memory 路径已移除`）—— 偏好、红线规则、当前活跃任务/项目状态快照
 - **Obsidian Vault**（`E:\Soft\Cube`）—— 长期知识、资源、想法、人物、服务器、个人背景
 - **交界处理**：模糊归属（如"项目现状"）走"Memory 短快照 + Vault 长档案"双存，相互引用；两者由 `vault-promote` skill 保证一致
 
