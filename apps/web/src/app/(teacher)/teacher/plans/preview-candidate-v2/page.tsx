@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Tooltip, Drawer, Checkbox } from 'antd';
+import { Tooltip, Drawer } from 'antd';
 import {
   ArrowLeftOutlined,
   ArrowUpOutlined,
@@ -1844,12 +1844,6 @@ const SORTED_CARDS = [...SAMPLE_CARDS].sort(
   (a, b) =>
     GRADE_ORDER.indexOf(a.gradeLabel as GradeKey) -
     GRADE_ORDER.indexOf(b.gradeLabel as GradeKey)
-);
-
-// 每个梯度桶的卡数量
-const BUCKET_COUNTS: Record<GradeKey, number> = GRADE_ORDER.reduce(
-  (acc, k) => ({ ...acc, [k]: SORTED_CARDS.filter((c) => c.gradeLabel === k).length }),
-  {} as Record<GradeKey, number>
 );
 
 // ============ 子组件：左侧梯度导航 ============
