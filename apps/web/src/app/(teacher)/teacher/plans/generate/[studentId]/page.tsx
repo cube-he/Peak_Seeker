@@ -543,14 +543,30 @@ function majorSectionTone(section: MajorDisplaySection, major: CandidateMajor) {
   return major.matchStatus === 'SOFT_FAIL' ? 'warn' : gradientTone(gradientTier(major));
 }
 
+function getRankingClass(ranking?: string | null): string {
+  if (!ranking) return '';
+  const norm = String(ranking).replace(/[\s+]/g, (m) => m === '+' ? '+' : '').trim();
+  if (norm === 'A+') return compareStyles.majorRankingAplus;
+  if (norm === 'A') return compareStyles.majorRankingA;
+  if (norm === 'B+') return compareStyles.majorRankingBplus;
+  if (norm === 'B') return compareStyles.majorRankingB;
+  return compareStyles.majorRankingC;
+}
+
 function CandidateMajorSection({
   title,
   section,
   majors,
+  group,
+  onAdd,
+  addingMajorKey,
 }: {
   title: string;
   section: MajorDisplaySection;
   majors: CandidateMajor[];
+  group?: CandidateGroup;
+  onAdd?: (group: CandidateGroup, major: CandidateMajor) => void;
+  addingMajorKey?: number | null;
 }) {
   if (!majors.length) return null;
   return (
@@ -560,30 +576,90 @@ function CandidateMajorSection({
         <em>{majors.length}</em>
       </div>
       <div className={styles.majorSectionRows}>
-        {majors.map((major) => (
-          <div
-            key={major.enrollmentPlanId}
-            className={cx(
-              styles.majorRow,
-              section === 'BACKUP' && styles.majorRowBackup,
-              section === 'RISK' && styles.majorRowRisk,
-            )}
-          >
-            <span className={styles.majorNameCell}>
-              <strong>{major.majorName}</strong>
-              {major.planNotes ? <NotesChip notes={major.planNotes} /> : null}
-              {major.displayReason ? <small>{major.displayReason}</small> : null}
-            </span>
-            <span className={styles.num}>{formatScoreRankValue(major.majorMinScore, major.majorMinRank)}</span>
-            <span>计划 {major.planCount ?? '-'}</span>
-            <span>{major.standardDuration || major.duration || '-'}</span>
-            <span>
-              <span className={tagClass(majorSectionTone(section, major))}>
-                {section === 'RISK' ? MAJOR_SECTION_LABEL.RISK : section === 'BACKUP' ? MAJOR_SECTION_LABEL.BACKUP : GRADIENT_LABEL[gradientTier(major)]}
-              </span>
-            </span>
-          </div>
-        ))}
+        {majors.map((major) => {
+          const starClass =
+            section === 'RECOMMENDED' ? compareStyles.majorStarRec :
+            section === 'RISK' ? compareStyles.majorStarRisk :
+            compareStyles.majorStarBak;
+
+          // 1 年涨跌（majorMinScore vs previousMajorMinScore）
+          const curr = major.majorMinScore;
+          const prev = major.previousMajorMinScore;
+          const trendArrow =
+            curr != null && prev != null
+              ? curr > prev
+                ? <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendUp}`}>↗</span>
+                : curr < prev
+                  ? <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendDown}`}>↘</span>
+                  : <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendFlat}`}>→</span>
+              : <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendFlat}`}>—</span>;
+
+          const isAdded = addingMajorKey === major.enrollmentPlanId;
+
+          return (
+            <div
+              key={major.enrollmentPlanId}
+              className={`${compareStyles.majorRowV2} ${section === 'RISK' ? compareStyles.majorRowV2Risk : ''}`}
+            >
+              <div className={`${compareStyles.majorStarV2} ${starClass}`}>★</div>
+
+              <div className={compareStyles.majorNameV2}>
+                <b>{major.majorName}</b>
+                {major.softRating ? (
+                  <span className={`${compareStyles.majorRankingChip} ${getRankingClass(major.softRating)}`}>
+                    {major.softRating}
+                  </span>
+                ) : null}
+                {major.isNationalFeature ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagNational}`}>国家特色</span> : null}
+                {major.isSinoForeign ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagSino}`}>中外</span> : null}
+                {major.planNotes ? <NotesChip notes={major.planNotes} /> : null}
+              </div>
+
+              <div className={compareStyles.majorScoreCell}>
+                <div className={compareStyles.scoreMain}>
+                  <span className={compareStyles.scoreMainValue}>{curr ?? '—'}</span>
+                  {curr != null && prev != null && curr !== prev ? (
+                    <span style={{
+                      fontSize: 11, fontWeight: 600,
+                      color: curr > prev ? '#c53030' : '#276749',
+                    }}>
+                      {curr > prev ? '+' : ''}{curr - prev}
+                    </span>
+                  ) : null}
+                </div>
+                <div className={compareStyles.scoreSub}>
+                  位次 {major.majorMinRank?.toLocaleString() ?? '—'}
+                </div>
+              </div>
+
+              <div className={compareStyles.degreePoints}>
+                <span className={major.localMasterPoint ? compareStyles.has : ''}>硕</span>
+                <span className={(major as any).localDoctoralPoint ? compareStyles.has : ''}>博</span>
+              </div>
+
+              {trendArrow}
+
+              <div className={compareStyles.majorPlanText}>
+                本专业 <b>{major.planCount ?? '—'}</b> 人
+              </div>
+
+              {group && onAdd ? (
+                <button
+                  type="button"
+                  className={`${compareStyles.majorRowAction} ${isAdded ? compareStyles.majorRowActionDone : ''}`}
+                  onClick={() => onAdd(group, major)}
+                  disabled={isAdded}
+                >
+                  {isAdded ? '✓ 已加入' : <><PlusOutlined /> 加入</>}
+                </button>
+              ) : (
+                <span className={tagClass(majorSectionTone(section, major))}>
+                  {section === 'RISK' ? MAJOR_SECTION_LABEL.RISK : section === 'BACKUP' ? MAJOR_SECTION_LABEL.BACKUP : GRADIENT_LABEL[gradientTier(major)]}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1428,11 +1504,17 @@ export default function GeneratePlanPage() {
                         ...(anchor?.matchReasons ?? []),
                       ].filter(Boolean);
                       const trendPoints = (trendType === 'filing' ? group.historyFiling3y : group.history3y) ?? [];
+                      const ms = group.matchScore ?? 0;
+                      const weightClass =
+                        ms >= 85 ? compareStyles.cardPrimary :
+                        ms > 0 && ms < 70 ? compareStyles.cardSecondary :
+                        '';
+                      const comparedClass = compareSet.has(group.groupKey) ? compareStyles.cardCompared : '';
                       const trendDelta = trendPoints.length >= 2
                         ? trendPoints[trendPoints.length - 1].score - trendPoints[0].score
                         : null;
                       return (
-                        <article key={group.groupKey} className={styles.candidateCard}>
+                        <article key={group.groupKey} className={`${styles.candidateCard} ${weightClass} ${comparedClass}`}>
                           <MatchHeader
                             matchScore={group.matchScore ?? 0}
                             matchReason={group.matchReason}
@@ -1600,6 +1682,9 @@ export default function GeneratePlanPage() {
                               title={MAJOR_SECTION_LABEL.RECOMMENDED}
                               section="RECOMMENDED"
                               majors={previewMajors}
+                              group={group}
+                              onAdd={addCandidateGroup}
+                              addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
                             />
                             {expanded ? (
                               <>
@@ -1607,11 +1692,17 @@ export default function GeneratePlanPage() {
                                   title={MAJOR_SECTION_LABEL.BACKUP}
                                   section="BACKUP"
                                   majors={majorSections.backup}
+                                  group={group}
+                                  onAdd={addCandidateGroup}
+                                  addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
                                 />
                                 <CandidateMajorSection
                                   title={MAJOR_SECTION_LABEL.RISK}
                                   section="RISK"
                                   majors={majorSections.risk}
+                                  group={group}
+                                  onAdd={addCandidateGroup}
+                                  addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
                                 />
                               </>
                             ) : null}
