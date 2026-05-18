@@ -39,7 +39,6 @@ import {
   findPlanForBatch,
   formatCandidateGroup,
   formatGroupPlanChange,
-  formatGroupScoreLine,
   formatRankGap,
   formatSubjectCombination,
   formatSupplementary,
@@ -493,12 +492,6 @@ function tagClass(tone: 'rush' | 'stable' | 'safe' | 'muted' | 'warn' | 'extreme
   return cx(styles.tag, toneClass);
 }
 
-function formatDynamicRank(detail?: DynamicGradientDetail | null) {
-  if (!detail?.adjustedMinRank) return '-';
-  const base = detail.baseMinRank ? `历史 ${detail.baseMinRank.toLocaleString()} 位` : '历史 -';
-  return `${base} / 修正 ${detail.adjustedMinRank.toLocaleString()} 位`;
-}
-
 function formatCompetition(group: CandidateGroup) {
   const current = group.competition?.currentCount;
   const previous = group.competition?.previousCount;
@@ -660,16 +653,6 @@ function riskReviewItems(group: CandidateGroup, major: CandidateMajor | undefine
         : formatSupplementary(group),
     },
   ];
-}
-
-function MetricTile({ label, value, note }: { label: string; value: ReactNode; note?: ReactNode }) {
-  return (
-    <div className={styles.signal}>
-      <div className={styles.label}>{label}</div>
-      <div className={styles.value}>{value}</div>
-      {note ? <div className={styles.sub}>{note}</div> : null}
-    </div>
-  );
 }
 
 function EvidenceItem({ label, children }: { label: string; children: ReactNode }) {
@@ -1533,6 +1516,15 @@ export default function GeneratePlanPage() {
                                 <span>{formatCandidateGroup(group)}</span>
                               </div>
                             </button>
+                            <div className={`${compareStyles.gradeBadge} ${
+                              gradientTone(gradientTier(group)) === 'rush' ? compareStyles.gradeBadgeRush :
+                              gradientTone(gradientTier(group)) === 'safe' ? compareStyles.gradeBadgeSafe :
+                              compareStyles.gradeBadgeStable
+                            }`}>
+                              <span className={compareStyles.gradeLabel}>梯度</span>
+                              <span className={compareStyles.gradeValue}>{GRADIENT_LABEL[gradientTier(group)]}</span>
+                              <span className={compareStyles.gradeNote}>{rankGap.text}</span>
+                            </div>
                             <div className={styles.cardActions}>
                               <button type="button" className={cx(styles.btn, styles.btnSmall)} onClick={() => anchor && setActiveDetail({ group, major: anchor })}>详情</button>
                               <button
@@ -1565,25 +1557,6 @@ export default function GeneratePlanPage() {
                             </div>
                           </div>
 
-                          <div className={styles.rankSummary}>
-                            <div className={styles.grade}>
-                              <span className={tagClass(gradientTone(gradientTier(group)))}>梯度：{GRADIENT_LABEL[gradientTier(group)]}</span>
-                              <span className={styles.collectionNote}>{formatSupplementary(group)}</span>
-                            </div>
-                            <div className={styles.diff}>
-                              与学生位次差 <strong>{rankGap.text}</strong>
-                              <br />
-                              学生 {formatRankValue(studentRankForDecision)} / 修正 {formatRankValue(adjustedRank)}
-                            </div>
-                          </div>
-
-                          <div className={styles.signalGrid}>
-                            <MetricTile label="组最低" value={formatScoreRankValue(group.groupMinScore, group.groupMinRank)} note={formatGroupScoreLine(group)} />
-                            <MetricTile label="修正位次" value={formatRankValue(adjustedRank)} note={formatDynamicRank(group.dynamicGradient)} />
-                            <MetricTile label="招生计划" value={planChange.text} note={planChange.tone === 'down' ? '缩招需复核' : '按后端年份口径'} />
-                            <MetricTile label="专业" value={`${group.majorCount} 个 / ${group.selectableMajorCount} 可选`} note={anchor?.majorName ?? '-'} />
-                          </div>
-
                           <MetricStrip
                             planCount={group.currentPlanCount}
                             planDelta={group.planCountChange}
@@ -1597,26 +1570,28 @@ export default function GeneratePlanPage() {
                             duration={anchor?.duration ?? anchor?.standardDuration ?? null}
                           />
 
-                          <div className={styles.dataEvidence}>
-                            <div className={styles.evidenceTitle}>数据依据</div>
-                            <div className={styles.evidenceGrid}>
-                              <EvidenceItem label="位次依据">
-                                排序位次 {formatRankValue(studentRankForDecision)}，修正位次 {formatRankValue(adjustedRank)}，{rankGap.text}。
-                              </EvidenceItem>
-                              <EvidenceItem label="计划变化">{planChange.text}</EvidenceItem>
-                              <EvidenceItem label="竞争变化">{formatCompetition(group)}；{formatSelectionCompetition(group)}</EvidenceItem>
-                              <EvidenceItem label="风险提示">
-                                {group.dynamicGradient?.reasons?.length
-                                  ? group.dynamicGradient.reasons.slice(0, 2).join('；')
-                                  : evidence.length ? evidence.slice(0, 2).join('；') : '按专业匹配排序'}
-                              </EvidenceItem>
-                            </div>
-                            {group.supplementary?.scope === 'UNIVERSITY_BATCH' ? (
-                              <div className={styles.noteRow}>
-                                <span className={styles.compareNote}>院校批次征集仅参考，不直接降低专业组风险</span>
+                          {expanded ? (
+                            <div className={styles.dataEvidence}>
+                              <div className={styles.evidenceTitle}>数据依据</div>
+                              <div className={styles.evidenceGrid}>
+                                <EvidenceItem label="位次依据">
+                                  排序位次 {formatRankValue(studentRankForDecision)}，修正位次 {formatRankValue(adjustedRank)}，{rankGap.text}。
+                                </EvidenceItem>
+                                <EvidenceItem label="计划变化">{planChange.text}</EvidenceItem>
+                                <EvidenceItem label="竞争变化">{formatCompetition(group)}；{formatSelectionCompetition(group)}</EvidenceItem>
+                                <EvidenceItem label="风险提示">
+                                  {group.dynamicGradient?.reasons?.length
+                                    ? group.dynamicGradient.reasons.slice(0, 2).join('；')
+                                    : evidence.length ? evidence.slice(0, 2).join('；') : '按专业匹配排序'}
+                                </EvidenceItem>
                               </div>
-                            ) : null}
-                          </div>
+                              {group.supplementary?.scope === 'UNIVERSITY_BATCH' ? (
+                                <div className={styles.noteRow}>
+                                  <span className={styles.compareNote}>院校批次征集仅参考，不直接降低专业组风险</span>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
 
                           <div className={styles.majorList}>
                             <CandidateMajorSection
