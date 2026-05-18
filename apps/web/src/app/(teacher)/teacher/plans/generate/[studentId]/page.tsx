@@ -1366,6 +1366,9 @@ export default function GeneratePlanPage() {
                         ...(anchor?.matchReasons ?? []),
                       ].filter(Boolean);
                       const trendPoints = (trendType === 'filing' ? group.historyFiling3y : group.history3y) ?? [];
+                      const trendDelta = trendPoints.length >= 2
+                        ? trendPoints[trendPoints.length - 1].score - trendPoints[0].score
+                        : null;
                       return (
                         <article key={group.groupKey} className={styles.candidateCard}>
                           <MatchHeader
@@ -1373,11 +1376,29 @@ export default function GeneratePlanPage() {
                             matchReason={group.matchReason}
                           />
                           {trendPoints.length > 0 ? (
-                            <div style={{ padding: '10px 16px', borderTop: '1px solid #f0eee6', borderBottom: '1px solid #f0eee6', background: '#faf9f5', display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: 12, alignItems: 'center' }}>
-                              <span style={{ fontSize: 11, color: '#6b6962', fontWeight: 600, letterSpacing: 0.4 }}>
+                            <div style={{ padding: '8px 16px', borderTop: '1px solid #f0eee6', borderBottom: '1px solid #f0eee6', background: '#faf9f5', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 11, color: '#6b6962', fontWeight: 600, letterSpacing: 0.4, whiteSpace: 'nowrap', flexShrink: 0 }}>
                                 {trendType === 'filing' ? '近 3 年投档线' : '近 3 年组最低分'}
                               </span>
-                              <TrendChart points={trendPoints} />
+                              <div style={{ width: 280, flexShrink: 0 }}>
+                                <TrendChart points={trendPoints} />
+                              </div>
+                              {trendDelta != null ? (
+                                <div style={{ fontSize: 12, color: '#6b6962', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                                  <span style={{ fontFamily: 'Georgia, "Noto Serif SC", SimSun, serif', fontWeight: 600, color: '#1a1a19' }}>
+                                    {trendPoints[0].score} → {trendPoints[trendPoints.length - 1].score}
+                                  </span>
+                                  <span style={{
+                                    fontSize: 11, fontWeight: 700,
+                                    padding: '2px 6px', borderRadius: 4,
+                                    background: trendDelta > 0 ? '#fef2f2' : trendDelta < 0 ? '#f0fff4' : '#f0eee6',
+                                    color: trendDelta > 0 ? '#c53030' : trendDelta < 0 ? '#276749' : '#6b6962',
+                                  }}>
+                                    {trendDelta > 0 ? '+' : ''}{trendDelta}
+                                  </span>
+                                  <span style={{ fontSize: 10, color: '#87867f' }}>{trendPoints.length} 年</span>
+                                </div>
+                              ) : null}
                             </div>
                           ) : null}
                           <div className={styles.candidateTop}>
