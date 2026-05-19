@@ -4,11 +4,11 @@
   color: #000;
 }
 
+/* 按钮内联浮在预览顶部，避免 absolute 定位浮出容器外（被 Collapse header 覆盖等） */
 .actions {
-  position: absolute;
-  top: -54px;
-  right: 0;
-  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0 12px;
 }
 
 .previewViewport {
