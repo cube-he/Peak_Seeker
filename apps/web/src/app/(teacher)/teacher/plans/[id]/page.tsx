@@ -7,6 +7,7 @@ import {
   Alert,
   Button,
   Card,
+  Collapse,
   Dropdown,
   Empty,
   Input,
@@ -28,6 +29,7 @@ import {
   EditOutlined,
   ExportOutlined,
   FileDoneOutlined,
+  FullscreenOutlined,
   MoreOutlined,
   PlayCircleOutlined,
   RollbackOutlined,
@@ -110,6 +112,8 @@ export default function PlanDetailPage() {
   const [reviewComment, setReviewComment] = useState('');
   // 教师对每个志愿的逐项批注：sequence -> annotation；提交审核时打包发送
   const [annotations, setAnnotations] = useState<Record<number, string>>({});
+  // 预案一览表默认折叠；用户可点击展开内联预览，或点全屏按钮弹 Modal
+  const [showPreparationFullscreen, setShowPreparationFullscreen] = useState(false);
   // 客户端启动后再产生 now，避免 SSR / 客户端时间不一致 hydration 警告
   const [now, setNow] = useState<Date | null>(null);
 
@@ -712,10 +716,46 @@ export default function PlanDetailPage() {
         )}
       </Card>
 
-      {/* 志愿填报预案一览表（打印用，保留） */}
-      <Card title="志愿填报预案一览表" className="rounded-2xl shadow-card">
+      {/* 志愿填报预案一览表（默认折叠 · 主要用于打印 / 填报对照） */}
+      <Collapse
+        className="rounded-2xl bg-surface shadow-card"
+        items={[
+          {
+            key: 'preparation',
+            label: (
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-text">志愿填报预案一览表</span>
+                <span className="text-xs text-text-muted">用于打印 / 填报对照，按需展开</span>
+              </div>
+            ),
+            extra: (
+              <Button
+                size="small"
+                icon={<FullscreenOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowPreparationFullscreen(true);
+                }}
+              >
+                全屏预览
+              </Button>
+            ),
+            children: <PlanPreparationTable plan={plan} items={items} />,
+          },
+        ]}
+      />
+
+      <Modal
+        title="志愿填报预案一览表"
+        open={showPreparationFullscreen}
+        onCancel={() => setShowPreparationFullscreen(false)}
+        footer={null}
+        width="92vw"
+        style={{ top: 24 }}
+        destroyOnClose
+      >
         <PlanPreparationTable plan={plan} items={items} />
-      </Card>
+      </Modal>
 
       {/* E · 审下一份 */}
       {isReviewing && reviewQueue.length > 0 ? (
