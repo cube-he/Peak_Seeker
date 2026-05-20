@@ -66,7 +66,7 @@ export class RankingBoardService {
     const items: RankedUniversity[] = universities.map((u, idx) => ({
       rank: idx + 1,
       ...u,
-      softRanking: u.softRanking as number,
+      softRanking: u.softRanking ?? 0,
       admissionMinRank: null,
       admissionMinScore: null,
     }));
