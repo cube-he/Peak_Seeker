@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
-import { BOARD_CONFIGS, BoardConfig } from './ranking-board.constants';
+import { BOARD_CONFIGS, BoardConfig, BoardLevel, RECRUIT_TYPE_BY_LEVEL } from './ranking-board.constants';
 
 export interface RankedUniversity {
   rank: number;
@@ -36,8 +36,8 @@ export class RankingBoardService {
     private redis: RedisService,
   ) {}
 
-  async getRankingBoard(): Promise<RankingBoard[]> {
-    return Promise.all(BOARD_CONFIGS.map((cfg) => this.buildBoard(cfg)));
+  async getRankingBoard(examType: string): Promise<RankingBoard[]> {
+    return Promise.all(BOARD_CONFIGS.map((cfg) => this.buildBoard(cfg, examType)));
   }
 
   private buildBoardWhere(cfg: BoardConfig): any {
@@ -52,7 +52,7 @@ export class RankingBoardService {
     return where;
   }
 
-  private async buildBoard(cfg: BoardConfig): Promise<RankingBoard> {
+  private async buildBoard(cfg: BoardConfig, examType: string): Promise<RankingBoard> {
     const universities = await this.prisma.university.findMany({
       where: this.buildBoardWhere(cfg),
       orderBy: { softRanking: 'asc' },
@@ -63,17 +63,52 @@ export class RankingBoardService {
       },
     });
 
+    const admissionMap = await this.fetchAdmissionRanks(
+      universities.map((u) => u.id), cfg.level, examType,
+    );
+
     const items: RankedUniversity[] = universities.map((u, idx) => ({
       rank: idx + 1,
       ...u,
       softRanking: u.softRanking ?? 0,
-      admissionMinRank: null,
-      admissionMinScore: null,
+      admissionMinRank: admissionMap.get(u.id)?.rank ?? null,
+      admissionMinScore: admissionMap.get(u.id)?.score ?? null,
     }));
 
     return {
       key: cfg.key, title: cfg.title, groupKey: cfg.groupKey,
       groupTitle: cfg.groupTitle, level: cfg.level, items,
     };
+  }
+
+  private async fetchAdmissionRanks(
+    universityIds: number[], level: BoardLevel, examType: string,
+  ): Promise<Map<number, { rank: number | null; score: number | null }>> {
+    const map = new Map<number, { rank: number | null; score: number | null }>();
+    if (universityIds.length === 0) return map;
+
+    // 录取数据年份：最近一年（与 university.service.ts findAll 口径一致）。
+    // 2025 为四川新高考首年，subjects 即物理/历史，与 examType 直接对应。
+    const dataYear = new Date().getFullYear() - 1;
+
+    const records = await this.prisma.admissionRecord.findMany({
+      where: {
+        universityId: { in: universityIds },
+        province: '四川',
+        year: dataYear,
+        recruitType: RECRUIT_TYPE_BY_LEVEL[level],
+        subjects: { contains: examType },
+      },
+      select: { universityId: true, universityMinRank: true, universityMinScore: true },
+      orderBy: { universityMinRank: 'desc' },
+    });
+
+    // 同一院校可能有多条批次记录；orderBy desc + 首条写入 = 取最宽松的录取门槛
+    for (const r of records) {
+      if (!map.has(r.universityId)) {
+        map.set(r.universityId, { rank: r.universityMinRank, score: r.universityMinScore });
+      }
+    }
+    return map;
   }
 }
