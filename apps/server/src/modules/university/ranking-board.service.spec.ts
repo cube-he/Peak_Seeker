@@ -90,6 +90,7 @@ describe('RankingBoardService admission rank enrichment', () => {
     expect(call.where.province).toBe('四川');
     expect(call.where.recruitType).toBe('普通类本科');
     expect(call.where.subjects).toEqual({ contains: '历史' });
+    expect(call.where.year).toBe(new Date().getFullYear() - 1);
   });
 
   it('leaves admission fields null when no record matches', async () => {
@@ -102,5 +103,16 @@ describe('RankingBoardService admission rank enrichment', () => {
 
     const board = (await svc.getRankingBoard('物理'))[0];
     expect(board.items[0].admissionMinRank).toBeNull();
+  });
+
+  it('returns an empty map and skips DB query when universityIds is empty', async () => {
+    const prisma = {
+      university: { findMany: jest.fn().mockResolvedValue([]) },
+      admissionRecord: { findMany: jest.fn() },
+    };
+    const redis = { getCache: jest.fn().mockResolvedValue(null), setCache: jest.fn() };
+    const svc = new RankingBoardService(prisma as any, redis as any);
+    await svc.getRankingBoard('物理');
+    expect(prisma.admissionRecord.findMany).not.toHaveBeenCalled();
   });
 });
