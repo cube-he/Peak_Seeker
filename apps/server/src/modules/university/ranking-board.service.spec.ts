@@ -116,3 +116,29 @@ describe('RankingBoardService admission rank enrichment', () => {
     expect(prisma.admissionRecord.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('RankingBoardService caching', () => {
+  it('returns cached boards without querying the database', async () => {
+    const prisma = {
+      university: { findMany: jest.fn() },
+      admissionRecord: { findMany: jest.fn() },
+    };
+    const redis = {
+      getCache: jest.fn().mockResolvedValue([{ key: 'cached' }]),
+      setCache: jest.fn(),
+    };
+    const svc = new RankingBoardService(prisma as any, redis as any);
+
+    const boards = await svc.getRankingBoard('物理');
+
+    expect(boards).toEqual([{ key: 'cached' }]);
+    expect(prisma.university.findMany).not.toHaveBeenCalled();
+    expect(redis.getCache).toHaveBeenCalledWith('ranking-board:物理');
+  });
+
+  it('caches freshly built boards keyed by exam type', async () => {
+    const { svc, redis } = makeService([uni()]);
+    await svc.getRankingBoard('历史');
+    expect(redis.setCache).toHaveBeenCalledWith('ranking-board:历史', expect.any(Array), 3600);
+  });
+});

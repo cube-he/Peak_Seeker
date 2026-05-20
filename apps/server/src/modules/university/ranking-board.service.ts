@@ -37,7 +37,16 @@ export class RankingBoardService {
   ) {}
 
   async getRankingBoard(examType: string): Promise<RankingBoard[]> {
-    return Promise.all(BOARD_CONFIGS.map((cfg) => this.buildBoard(cfg, examType)));
+    const cacheKey = `ranking-board:${examType}`;
+    const cached = await this.redis.getCache<RankingBoard[]>(cacheKey);
+    if (cached) return cached;
+
+    const boards = await Promise.all(
+      BOARD_CONFIGS.map((cfg) => this.buildBoard(cfg, examType)),
+    );
+
+    await this.redis.setCache(cacheKey, boards, 3600);
+    return boards;
   }
 
   private buildBoardWhere(cfg: BoardConfig): any {
