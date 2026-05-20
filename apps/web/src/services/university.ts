@@ -1,4 +1,31 @@
 import api from './api';
+import type { ExamType } from './score-segment';
+
+export interface RankedUniversity {
+  rank: number;
+  id: number;
+  name: string;
+  logoUrl: string | null;
+  province: string | null;
+  city: string | null;
+  type: string | null;
+  runningNature: string | null;
+  is985: boolean;
+  is211: boolean;
+  isDoubleFirstClass: boolean;
+  softRanking: number;
+  admissionMinRank: number | null;
+  admissionMinScore: number | null;
+}
+
+export interface RankingBoard {
+  key: string;
+  title: string;
+  groupKey: string;
+  groupTitle: string;
+  level: string;
+  items: RankedUniversity[];
+}
 
 export interface UniversityQueryParams {
   page?: number;
@@ -30,6 +57,8 @@ export const universityService = {
   getAdmissions: (id: number): Promise<any> => api.get(`/universities/${id}/admissions`) as any,
   getHot: (limit?: number): Promise<any> => api.get('/universities/hot', { params: { limit } }) as any,
   getFilters: (): Promise<any> => api.get('/universities/filters') as any,
+  getRankingBoard: (examType: ExamType): Promise<RankingBoard[]> =>
+    api.get('/universities/ranking-board', { params: { examType } }) as any,
   getCampusPois: (
     universityId: number,
     campusId: number,
