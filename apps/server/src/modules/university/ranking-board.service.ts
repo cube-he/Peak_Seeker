@@ -25,7 +25,7 @@ export interface RankingBoard {
   title: string;
   groupKey: string;
   groupTitle: string;
-  level: string;
+  level: BoardLevel;
   items: RankedUniversity[];
 }
 
@@ -37,7 +37,7 @@ export class RankingBoardService {
   ) {}
 
   async getRankingBoard(examType: string): Promise<RankingBoard[]> {
-    const cacheKey = `ranking-board:${examType}`;
+    const cacheKey = `university:ranking-board:${examType}`;
     const cached = await this.redis.getCache<RankingBoard[]>(cacheKey);
     if (cached) return cached;
 

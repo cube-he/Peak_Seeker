@@ -133,12 +133,12 @@ describe('RankingBoardService caching', () => {
 
     expect(boards).toEqual([{ key: 'cached' }]);
     expect(prisma.university.findMany).not.toHaveBeenCalled();
-    expect(redis.getCache).toHaveBeenCalledWith('ranking-board:物理');
+    expect(redis.getCache).toHaveBeenCalledWith('university:ranking-board:物理');
   });
 
   it('caches freshly built boards keyed by exam type', async () => {
     const { svc, redis } = makeService([uni()]);
     await svc.getRankingBoard('历史');
-    expect(redis.setCache).toHaveBeenCalledWith('ranking-board:历史', expect.any(Array), 3600);
+    expect(redis.setCache).toHaveBeenCalledWith('university:ranking-board:历史', expect.any(Array), 3600);
   });
 });
