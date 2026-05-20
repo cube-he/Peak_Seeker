@@ -23,7 +23,7 @@ export interface RankingBoard {
   title: string;
   groupKey: string;
   groupTitle: string;
-  level: string;
+  level: '本科' | '专科';
   items: RankedUniversity[];
 }
 

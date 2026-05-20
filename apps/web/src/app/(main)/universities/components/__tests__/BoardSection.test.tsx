@@ -35,5 +35,43 @@ describe('BoardSection', () => {
     render(<BoardSection group={group} />);
     await userEvent.click(screen.getByText('专科榜'));
     expect(screen.getByText('专科甲')).toBeInTheDocument();
+    expect(screen.queryByText('本科甲')).not.toBeInTheDocument();
+  });
+
+  it('hides toggle buttons when group has only one board', () => {
+    const singleGroup: BoardGroup = {
+      groupKey: 'national-elite', groupTitle: '全国名校榜',
+      boards: [
+        { key: 'national-elite', title: '全国名校榜', groupKey: 'national-elite', groupTitle: '全国名校榜', level: '本科', items: [] },
+      ],
+    };
+    render(<BoardSection group={singleGroup} />);
+    expect(screen.queryByText('本科榜')).not.toBeInTheDocument();
+    expect(screen.queryByText('专科榜')).not.toBeInTheDocument();
+  });
+
+  it('expands and collapses when board has more than 10 items', async () => {
+    const manyItems = Array.from({ length: 11 }, (_, i) => item(i + 1, `院校${i + 1}`));
+    const expandGroup: BoardGroup = {
+      groupKey: 'sichuan', groupTitle: '川内',
+      boards: [
+        { key: 'sichuan-undergrad', title: '川内本科榜', groupKey: 'sichuan', groupTitle: '川内', level: '本科', items: manyItems },
+      ],
+    };
+    render(<BoardSection group={expandGroup} />);
+
+    // 第 11 条初始不可见
+    expect(screen.queryByText('院校11')).not.toBeInTheDocument();
+
+    // 有「查看完整榜单」展开按钮
+    const expandBtn = screen.getByText(/查看完整榜单/);
+    expect(expandBtn).toBeInTheDocument();
+
+    // 点击展开
+    await userEvent.click(expandBtn);
+
+    // 第 11 条现在可见，按钮变「收起」
+    expect(screen.getByText('院校11')).toBeInTheDocument();
+    expect(screen.getByText(/收起/)).toBeInTheDocument();
   });
 });
