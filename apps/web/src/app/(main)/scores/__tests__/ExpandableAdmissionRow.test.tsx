@@ -28,7 +28,7 @@ function makeItem(id: number): AggregatedAdmissionListItem {
       id,
       name: '校' + id,
       code: 'C' + id,
-      province: '四川',
+      province: '北京',
       city: '成都',
       type: '综合',
       runningNature: '公办',

@@ -34,7 +34,8 @@ export function ExpandableAdmissionRow({ item, userRank }: ExpandableAdmissionRo
         groupCode: item.groupCode,
         batch: item.batch,
         recruitType: item.recruitType,
-        province: item.university.province,
+        // AdmissionRecord.province 存的是考生生源省（本数据集恒为四川），不是院校所在地
+        province: '四川',
         subjects: item.subjects,
       });
       setDetail(result);
