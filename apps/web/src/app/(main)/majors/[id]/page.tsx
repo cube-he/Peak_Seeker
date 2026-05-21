@@ -6,7 +6,6 @@ import { BankOutlined, HistoryOutlined, RocketOutlined } from '@ant-design/icons
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
-import { RankInput } from '@/components/score/RankInput';
 import { majorService } from '@/services/major';
 import CareerTab from '@/components/major/CareerTab';
 import AdmissionRow from '@/components/admission/AdmissionRow';
@@ -256,7 +255,6 @@ export default function MajorDetailPage() {
         </main>
 
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-          <RankInput variant="compact" className="!border-border !bg-surface" />
           <div className="rounded-xl bg-surface p-5 shadow-card">
             <h3 className="m-0 font-serif text-base font-semibold text-text">填报提示</h3>
             <p className="m-0 mt-2 text-sm leading-relaxed text-text-tertiary">

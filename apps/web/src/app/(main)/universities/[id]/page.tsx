@@ -12,7 +12,6 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
-import { RankInput } from '@/components/score/RankInput';
 import { universityService } from '@/services/university';
 import RankingCard from '@/components/university/RankingCard';
 import SatisfactionCard from '@/components/university/SatisfactionCard';
@@ -287,7 +286,6 @@ export default function UniversityDetailPage() {
         </main>
 
         <aside id="assist" className="space-y-4 lg:sticky lg:top-32 lg:self-start">
-          <RankInput variant="compact" className="!border-border !bg-surface" />
           <div className="rounded-xl bg-surface p-5 shadow-card">
             <HeroBanner
               university={{ is985: u.is985, is211: u.is211 }}

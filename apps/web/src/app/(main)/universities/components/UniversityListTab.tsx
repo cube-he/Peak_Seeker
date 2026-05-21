@@ -12,10 +12,8 @@ import {
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { RankInput } from '@/components/score/RankInput';
 import UniversityLogo from '@/components/university/UniversityLogo';
 import { universityService, type UniversityQueryParams } from '@/services/university';
-import { useStudentRank } from '@/stores/studentRankStore';
 
 const PROVINCES = [
   '北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '黑龙江',
@@ -39,28 +37,6 @@ type ActiveFilter = {
   key: keyof UniversityQueryParams;
   label: string;
 };
-
-function parseNumber(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value.replace(/,/g, ''));
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function estimateChance(studentRank: number | null, minRank: unknown) {
-  const threshold = parseNumber(minRank);
-  if (!studentRank || !threshold) {
-    return { label: '待估', percent: null, tone: 'unknown' as const };
-  }
-
-  const margin = threshold - studentRank;
-  if (margin < -8000) return { label: '冲刺', percent: 24, tone: 'rush' as const };
-  if (margin < 0) return { label: '冲刺', percent: 38, tone: 'rush' as const };
-  if (margin < 12000) return { label: '稳妥', percent: 62, tone: 'stable' as const };
-  return { label: '保底', percent: 84, tone: 'safe' as const };
-}
 
 function FilterGroup({
   title,
@@ -232,12 +208,10 @@ function AppliedFilterChips({
 
 function UniversityCard({
   uni,
-  studentRank,
   selected,
   onToggleSelect,
 }: {
   uni: any;
-  studentRank: number | null;
   selected: boolean;
   onToggleSelect: () => void;
 }) {
@@ -247,17 +221,10 @@ function UniversityCard({
   if (uni.isDoubleFirstClass) tags.push('双一流');
 
   const admission = uni.latestAdmission;
-  const chance = estimateChance(studentRank, admission?.minRank);
   const infoItems = [uni.type, uni.province, uni.city, uni.runningNature].filter(Boolean);
-  const toneClass = {
-    rush: 'text-rush bg-rush-fixed',
-    stable: 'text-stable bg-stable-fixed',
-    safe: 'text-safe bg-safe-fixed',
-    unknown: 'text-text-muted bg-surface-dim',
-  }[chance.tone];
 
   return (
-    <div className="grid gap-4 rounded-xl bg-surface px-4 py-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:px-5 lg:grid-cols-[64px_minmax(0,1fr)_140px_96px] lg:items-center">
+    <div className="grid gap-4 rounded-xl bg-surface px-4 py-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:px-5 lg:grid-cols-[64px_minmax(0,1fr)_140px_48px] lg:items-center">
       <Link href={`/universities/${uni.id}`} className="hidden no-underline lg:block">
         <UniversityLogo name={uni.name} logoUrl={uni.logoUrl} size={64} />
       </Link>
@@ -310,13 +277,7 @@ function UniversityCard({
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-3 lg:block lg:text-center">
-        <div>
-          <div className={`inline-flex min-w-[72px] justify-center rounded-lg px-3 py-2 font-serif text-[24px] font-bold leading-none tabular-nums ${toneClass}`}>
-            {chance.percent ? `${chance.percent}%` : '--'}
-          </div>
-          <div className="mt-1 text-[10px] uppercase tracking-[1.4px] text-text-muted">{chance.label}</div>
-        </div>
+      <div className="flex items-center justify-center">
         <button
           type="button"
           onClick={onToggleSelect}
@@ -384,7 +345,6 @@ export function UniversityListTab() {
     sortOrder: 'asc',
   });
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const studentRank = useStudentRank((state) => state.rank);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['universities', filters],
@@ -495,9 +455,6 @@ export function UniversityListTab() {
       <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <div className="space-y-4">
           <FilterPanel filters={filters} setFilters={setFilters} onClear={clearFilters} />
-          <div className="hidden lg:block">
-            <RankInput variant="compact" className="!border-border !bg-surface" />
-          </div>
         </div>
 
         <main className="min-w-0">
@@ -532,7 +489,6 @@ export function UniversityListTab() {
                 <UniversityCard
                   key={uni.id}
                   uni={uni}
-                  studentRank={studentRank}
                   selected={selectedIds.has(uni.id)}
                   onToggleSelect={() => toggleSelect(uni.id)}
                 />
@@ -569,7 +525,7 @@ export function UniversityListTab() {
               <span className="font-serif text-base font-semibold">数据说明</span>
             </div>
             <p className="m-0 text-sm leading-relaxed text-text-tertiary">
-              分数排序、地图视图和正式录取概率需要后端新增聚合接口。目前页面保留排序口径内的稳定功能，并基于你输入的位次做前端粗估展示。
+              分数排序和地图视图需要后端新增聚合接口。目前页面保留排序口径内的稳定功能。
             </p>
           </div>
           <HotUniversitiesSidebar />
