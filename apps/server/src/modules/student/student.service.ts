@@ -39,6 +39,44 @@ interface RankComputation {
   sourceYear: number;
 }
 
+export type WorkflowStatus =
+  | 'COLLECTING'
+  | 'GENERATING'
+  | 'REVIEWING'
+  | 'FINALIZED'
+  | 'SUBMITTED';
+
+/**
+ * 教师工作流状态派生
+ * 优先以最新方案状态为准，无方案则看资料采集状态。
+ * 见 student/page.tsx 和 dashboard/page.tsx 的状态使用方。
+ */
+export function deriveWorkflowStatus(
+  intakeStatus: string | null | undefined,
+  latestPlanStatus: string | null | undefined,
+): WorkflowStatus {
+  switch (latestPlanStatus) {
+    case 'PUBLISHED':
+      return 'SUBMITTED';
+    case 'FINALIZED':
+    case 'APPROVED':
+    case 'STUDENT_CONFIRMED':
+      return 'FINALIZED';
+    case 'PENDING_REVIEW':
+    case 'REVIEWING':
+      return 'REVIEWING';
+    case 'DRAFT':
+    case 'REJECTED':
+    case 'OUTDATED':
+      return 'GENERATING';
+    default:
+      break;
+  }
+  if (intakeStatus === 'SUBMITTED') return 'REVIEWING';
+  if (intakeStatus === 'VERIFIED') return 'GENERATING';
+  return 'COLLECTING';
+}
+
 @Injectable()
 export class StudentService {
   constructor(
@@ -262,6 +300,15 @@ export class StudentService {
               },
             },
           },
+          // 列表派生 workflowStatus / 「方案」列需要最新方案 + 总数
+          volunteerPlans: {
+            orderBy: { updatedAt: 'desc' },
+            take: 1,
+            select: { id: true, status: true, updatedAt: true, versionNo: true },
+          },
+          _count: {
+            select: { volunteerPlans: true },
+          },
         },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -271,16 +318,24 @@ export class StudentService {
     ]);
 
     // 列表也需要 progress 显示双进度列 + 筛选
-    const dataWithProgress = data.map((p) => ({
-      ...p,
-      progress: this.progressService.compute({
+    const dataWithProgress = data.map((p) => {
+      const latestPlan = p.volunteerPlans[0];
+      return {
         ...p,
-        realName: (p as any).user?.realName,
-        phone: (p as any).user?.phone,
-        gender: (p as any).user?.gender,
-        ethnicity: (p as any).user?.ethnicity,
-      }),
-    }));
+        progress: this.progressService.compute({
+          ...p,
+          realName: (p as any).user?.realName,
+          phone: (p as any).user?.phone,
+          gender: (p as any).user?.gender,
+          ethnicity: (p as any).user?.ethnicity,
+        }),
+        workflowStatus: deriveWorkflowStatus(p.intakeStatus, latestPlan?.status),
+        planCount: p._count.volunteerPlans,
+        latestPlanStatus: latestPlan?.status ?? null,
+        latestPlanId: latestPlan?.id ?? null,
+        latestPlanVersionNo: latestPlan?.versionNo ?? null,
+      };
+    });
 
     return { data: dataWithProgress, total, page, pageSize };
   }
@@ -314,6 +369,14 @@ export class StudentService {
             },
           },
         },
+        volunteerPlans: {
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+          select: { id: true, status: true, updatedAt: true, versionNo: true },
+        },
+        _count: {
+          select: { volunteerPlans: true },
+        },
       },
     });
 
@@ -332,7 +395,18 @@ export class StudentService {
 
     const rankCheck = await this.computeRankCheck(profile);
 
-    return { ...profile, progress, rankCheck };
+    const latestPlan = profile.volunteerPlans[0];
+
+    return {
+      ...profile,
+      progress,
+      rankCheck,
+      workflowStatus: deriveWorkflowStatus(profile.intakeStatus, latestPlan?.status),
+      planCount: profile._count.volunteerPlans,
+      latestPlanStatus: latestPlan?.status ?? null,
+      latestPlanId: latestPlan?.id ?? null,
+      latestPlanVersionNo: latestPlan?.versionNo ?? null,
+    };
   }
 
   /**

@@ -1,11 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Avatar, Button, Input, Progress, Select, Space, Table, Tag } from 'antd';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Avatar, Button, Input, Select, Space, Spin, Table, Tag, Tooltip } from 'antd';
 import {
-  EditOutlined,
   FileTextOutlined,
   PlusOutlined,
   SearchOutlined,
@@ -18,10 +17,22 @@ import { studentApi, type ProfileProgress } from '@/services/student-api';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   COLLECTING: { label: '待采集', color: 'default' },
-  GENERATING: { label: '待生成', color: 'blue' },
-  REVIEWING: { label: '待审核', color: 'orange' },
+  GENERATING: { label: '待生成', color: 'cyan' },
+  REVIEWING: { label: '待审核', color: 'gold' },
   FINALIZED: { label: '已定稿', color: 'green' },
-  SUBMITTED: { label: '已填报', color: 'cyan' },
+  SUBMITTED: { label: '已填报', color: 'success' },
+};
+
+const PLAN_STATUS_LABEL: Record<string, string> = {
+  DRAFT: '草稿',
+  PENDING_REVIEW: '待审',
+  REVIEWING: '审中',
+  APPROVED: '已通过',
+  STUDENT_CONFIRMED: '学生确认',
+  REJECTED: '已退回',
+  FINALIZED: '已定稿',
+  PUBLISHED: '已发布',
+  OUTDATED: '已过期',
 };
 
 interface Student {
@@ -29,83 +40,215 @@ interface Student {
   username: string;
   realName?: string;
   phone?: string;
+  workflowStatus?: string;
   status: string;
   user?: { realName?: string; phone?: string };
   totalScore?: number;
   provincialRank?: number;
   progress?: ProfileProgress;
   planCount?: number;
+  latestPlanStatus?: string | null;
+  latestPlanId?: number | null;
+  latestPlanVersionNo?: number | null;
+  updatedAt?: string;
   createdAt: string;
 }
 
 type ProgressFilter = 'all' | 'self_low' | 'self_mid' | 'teacher_pending' | 'recommendable';
+
+function getWorkflowStatus(student: Student): string {
+  return student.workflowStatus ?? 'COLLECTING';
+}
+
+function getDisplayName(student: Student): string {
+  return student.user?.realName || student.realName || student.username;
+}
 
 function formatNumber(value?: number | null) {
   if (value === null || value === undefined) return '--';
   return value.toLocaleString('zh-CN');
 }
 
+function daysSince(date: string | undefined, now: Date) {
+  if (!date) return null;
+  const past = new Date(date);
+  if (Number.isNaN(past.getTime())) return null;
+  return Math.floor((now.getTime() - past.getTime()) / 86_400_000);
+}
+
+function formatRelativeTime(date: Date, now: Date) {
+  const seconds = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
+  if (seconds < 60) return '刚刚';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)} 小时前`;
+  return `${Math.floor(seconds / 86_400)} 天前`;
+}
+
+function useDebouncedValue<T>(value: T, delay: number) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
+// 导出为带 UTF-8 BOM 的 CSV，Excel 直接打开不乱码
+function exportStudentsCSV(students: Student[], filename: string) {
+  const headers = ['姓名', '手机', '状态', '总分', '位次', '完整度%', '方案数', '最新方案', '最近更新'];
+  const rows = students.map((s) => [
+    getDisplayName(s),
+    s.user?.phone || s.phone || '',
+    STATUS_MAP[getWorkflowStatus(s)]?.label || '',
+    s.totalScore ?? '',
+    s.provincialRank ?? '',
+    s.progress?.overallCompleteness ?? '',
+    s.planCount ?? 0,
+    s.latestPlanStatus
+      ? `${s.latestPlanVersionNo ? `v${s.latestPlanVersionNo} ` : ''}${PLAN_STATUS_LABEL[s.latestPlanStatus] ?? s.latestPlanStatus}`
+      : '',
+    s.updatedAt ? new Date(s.updatedAt).toLocaleString('zh-CN') : '',
+  ]);
+  const csv = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export default function TeacherStudentsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-2xl bg-surface py-20 text-center shadow-card">
+          <Spin size="large" />
+        </div>
+      }
+    >
+      <TeacherStudentsPageInner />
+    </Suspense>
+  );
+}
+
+function TeacherStudentsPageInner() {
   const router = useRouter();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const searchParams = useSearchParams();
+
+  const [searchInput, setSearchInput] = useState(() => searchParams.get('keyword') ?? '');
+  const search = useDebouncedValue(searchInput, 300);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(
+    () => searchParams.get('workflowStatus') ?? searchParams.get('status') ?? undefined,
+  );
   const [progressFilter, setProgressFilter] = useState<ProgressFilter>('all');
+  // 顶部快捷 chip 引入的两个独立 flag（其他 chip 复用 statusFilter / progressFilter）
+  const [noPlanOnly, setNoPlanOnly] = useState(false);
+  const [highScoreOnly, setHighScoreOnly] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  // 客户端启动后再产生 now / updatedAt，避免 SSR 时间不一致 hydration 警告
+  const [clock, setClock] = useState<{ now: Date; updatedAt: Date } | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['teacher-students', search, statusFilter],
-    queryFn: () => studentApi.getList({ search, status: statusFilter }),
+    queryKey: ['teacher-students', search],
+    queryFn: () => studentApi.getList({ search, pageSize: 200 }),
   });
+
+  useEffect(() => {
+    if (data) {
+      const stamp = new Date();
+      setClock({ now: stamp, updatedAt: stamp });
+    }
+  }, [data]);
 
   const allStudents: Student[] = data?.data?.data ?? data?.data ?? [];
 
   const students = useMemo(() => {
-    if (progressFilter === 'all') return allStudents;
-    return allStudents.filter((student) => {
-      const progress = student.progress;
-      if (!progress) return progressFilter === 'self_low';
-      switch (progressFilter) {
-        case 'self_low':
-          return progress.studentSelfCompleteness < 50;
-        case 'self_mid':
-          return progress.studentSelfCompleteness >= 50 && progress.studentSelfCompleteness < 80;
-        case 'teacher_pending':
-          return progress.teacherDataCompleteness < 100;
-        case 'recommendable':
-          return progress.isRecommendable;
-        default:
-          return true;
-      }
-    });
-  }, [allStudents, progressFilter]);
+    let list = allStudents;
+    if (statusFilter) {
+      list = list.filter((s) => getWorkflowStatus(s) === statusFilter);
+    }
+    if (progressFilter !== 'all') {
+      list = list.filter((student) => {
+        const progress = student.progress;
+        if (!progress) return progressFilter === 'self_low';
+        switch (progressFilter) {
+          case 'self_low':
+            return progress.studentSelfCompleteness < 50;
+          case 'self_mid':
+            return progress.studentSelfCompleteness >= 50 && progress.studentSelfCompleteness < 80;
+          case 'teacher_pending':
+            return progress.teacherDataCompleteness < 100;
+          case 'recommendable':
+            return progress.isRecommendable;
+          default:
+            return true;
+        }
+      });
+    }
+    if (noPlanOnly) list = list.filter((s) => !s.planCount);
+    if (highScoreOnly) list = list.filter((s) => (s.totalScore ?? 0) >= 640);
+    return list;
+  }, [allStudents, statusFilter, progressFilter, noPlanOnly, highScoreOnly]);
 
   const counts = useMemo(
     () => ({
       all: allStudents.length,
-      attention: allStudents.filter((student) => (student.progress?.studentSelfCompleteness ?? 0) < 60).length,
-      noPlan: allStudents.filter((student) => !student.planCount).length,
-      reviewing: allStudents.filter((student) => student.status === 'REVIEWING').length,
-      highScore: allStudents.filter((student) => (student.totalScore ?? 0) >= 640).length,
+      attention: allStudents.filter((s) => (s.progress?.studentSelfCompleteness ?? 0) < 50).length,
+      noPlan: allStudents.filter((s) => !s.planCount).length,
+      reviewing: allStudents.filter((s) => getWorkflowStatus(s) === 'REVIEWING').length,
+      highScore: allStudents.filter((s) => (s.totalScore ?? 0) >= 640).length,
     }),
     [allStudents],
   );
 
-  const renderProgress = (percent: number | undefined) => {
-    const value = percent ?? 0;
-    const color = value >= 80 ? '#276749' : value >= 50 ? '#b8860b' : '#c53030';
-    return (
-      <div className="flex items-center gap-2">
-        <Progress percent={value} size="small" showInfo={false} strokeColor={color} className="flex-1" />
-        <span className="w-8 text-right text-xs text-text-muted">{value}%</span>
-      </div>
-    );
+  const noActiveFilter =
+    !statusFilter && progressFilter === 'all' && !noPlanOnly && !highScoreOnly;
+
+  const chipActive = {
+    all: noActiveFilter,
+    attention: progressFilter === 'self_low',
+    noPlan: noPlanOnly,
+    reviewing: statusFilter === 'REVIEWING',
+    highScore: highScoreOnly,
   };
+
+  function clearAllFilters() {
+    setStatusFilter(undefined);
+    setProgressFilter('all');
+    setNoPlanOnly(false);
+    setHighScoreOnly(false);
+  }
+
+  function clickChip(chip: keyof typeof chipActive) {
+    if (chip === 'all') {
+      clearAllFilters();
+      return;
+    }
+    if (chip === 'attention') {
+      setProgressFilter(chipActive.attention ? 'all' : 'self_low');
+    } else if (chip === 'noPlan') {
+      setNoPlanOnly(!noPlanOnly);
+    } else if (chip === 'reviewing') {
+      setStatusFilter(chipActive.reviewing ? undefined : 'REVIEWING');
+    } else if (chip === 'highScore') {
+      setHighScoreOnly(!highScoreOnly);
+    }
+  }
+
+  const now = clock?.now ?? new Date();
 
   const columns: ColumnsType<Student> = [
     {
       title: '学生',
       key: 'name',
       render: (_, record) => {
-        const name = record.user?.realName || record.realName || record.username;
+        const name = getDisplayName(record);
         const phone = record.user?.phone || record.phone;
         return (
           <div className="flex items-center gap-3">
@@ -122,18 +265,19 @@ export default function TeacherStudentsPage() {
     },
     {
       title: '状态',
-      dataIndex: 'status',
       key: 'status',
-      width: 100,
-      render: (status: string) => {
-        const state = STATUS_MAP[status] || { label: status, color: 'default' };
+      width: 90,
+      render: (_, record) => {
+        const ws = getWorkflowStatus(record);
+        const state = STATUS_MAP[ws] || { label: ws, color: 'default' };
         return <Tag color={state.color}>{state.label}</Tag>;
       },
     },
     {
       title: '分数/位次',
       key: 'scoreRank',
-      width: 140,
+      width: 130,
+      sorter: (a, b) => (a.totalScore ?? 0) - (b.totalScore ?? 0),
       render: (_, record) => (
         <div className="text-sm">
           {record.totalScore ? (
@@ -142,43 +286,106 @@ export default function TeacherStudentsPage() {
             <span className="text-text-faint">未填写</span>
           )}
           {record.provincialRank ? (
-            <span className="ml-1 text-xs text-text-muted">/ {formatNumber(record.provincialRank)} 位</span>
+            <div className="text-xs text-text-muted">{formatNumber(record.provincialRank)} 位</div>
           ) : null}
         </div>
       ),
     },
     {
-      title: '自填进度',
-      key: 'selfProgress',
-      width: 150,
-      sorter: (a, b) => (a.progress?.studentSelfCompleteness ?? 0) - (b.progress?.studentSelfCompleteness ?? 0),
-      render: (_, record) => renderProgress(record.progress?.studentSelfCompleteness),
+      title: '完整度',
+      key: 'completeness',
+      width: 140,
+      sorter: (a, b) => (a.progress?.overallCompleteness ?? 0) - (b.progress?.overallCompleteness ?? 0),
+      render: (_, record) => {
+        const self = record.progress?.studentSelfCompleteness ?? 0;
+        const teacher = record.progress?.teacherDataCompleteness ?? 0;
+        const overall = record.progress?.overallCompleteness ?? 0;
+        const isRecommendable = record.progress?.isRecommendable;
+        return (
+          <Tooltip
+            title={
+              <div className="text-xs">
+                <div>综合：{overall}%</div>
+                <div>学生自填：{self}%</div>
+                <div>教师录入：{teacher}%</div>
+                {isRecommendable ? <div className="mt-1 text-[#52c41a]">✓ 可推荐</div> : null}
+              </div>
+            }
+          >
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-bg">
+                  <div className="h-full bg-primary" style={{ width: `${self}%` }} />
+                </div>
+                <span className="w-7 text-right text-[10px] text-text-muted">{self}%</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-bg">
+                  <div className="h-full bg-accent" style={{ width: `${teacher}%` }} />
+                </div>
+                <span className="w-7 text-right text-[10px] text-text-muted">{teacher}%</span>
+              </div>
+            </div>
+          </Tooltip>
+        );
+      },
     },
     {
-      title: '录入进度',
-      key: 'teacherProgress',
-      width: 150,
-      sorter: (a, b) => (a.progress?.teacherDataCompleteness ?? 0) - (b.progress?.teacherDataCompleteness ?? 0),
-      render: (_, record) => renderProgress(record.progress?.teacherDataCompleteness),
+      title: '方案',
+      key: 'plan',
+      width: 110,
+      render: (_, record) => {
+        const count = record.planCount ?? 0;
+        if (count === 0) return <span className="text-xs text-text-faint">未生成</span>;
+        const label = record.latestPlanStatus
+          ? PLAN_STATUS_LABEL[record.latestPlanStatus] ?? record.latestPlanStatus
+          : '';
+        const version = record.latestPlanVersionNo ? `v${record.latestPlanVersionNo}` : '';
+        const content = (
+          <span className="text-sm">
+            <strong className="text-text">{version}</strong>
+            {version && label ? <span className="text-text-muted"> · {label}</span> : null}
+            {count > 1 ? <span className="ml-1 text-[10px] text-text-faint">({count} 份)</span> : null}
+          </span>
+        );
+        if (record.latestPlanId) {
+          return (
+            <Link
+              href={`/teacher/plans/${record.latestPlanId}`}
+              onClick={(e) => e.stopPropagation()}
+              className="no-underline hover:underline"
+            >
+              {content}
+            </Link>
+          );
+        }
+        return content;
+      },
     },
     {
-      title: '可推荐',
-      key: 'recommendable',
-      width: 90,
-      render: (_, record) =>
-        record.progress?.isRecommendable ? <Tag color="success">就绪</Tag> : <Tag color="default">未达</Tag>,
+      title: '最近更新',
+      key: 'updatedAt',
+      width: 100,
+      sorter: (a, b) => {
+        const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return aTime - bTime;
+      },
+      defaultSortOrder: 'descend',
+      render: (_, record) => {
+        if (!record.updatedAt) return <span className="text-xs text-text-faint">--</span>;
+        const days = daysSince(record.updatedAt, now);
+        const text = formatRelativeTime(new Date(record.updatedAt), now);
+        const isStale = days !== null && days > 7;
+        return <span className={`text-xs ${isStale ? 'font-medium text-rush' : 'text-text-muted'}`}>{text}</span>;
+      },
     },
     {
       title: '操作',
       key: 'actions',
-      width: 180,
+      width: 110,
       render: (_, record) => (
         <Space size="small" onClick={(event) => event.stopPropagation()}>
-          <Link href={`/teacher/students/${record.id}`}>
-            <Button type="text" size="small" icon={<EditOutlined />}>
-              详情
-            </Button>
-          </Link>
           <Link href={`/teacher/plans/generate/${record.id}`}>
             <Button type="text" size="small" icon={<FileTextOutlined />}>
               生成方案
@@ -189,18 +396,36 @@ export default function TeacherStudentsPage() {
     },
   ];
 
+  const selectedStudents = students.filter((s) => selectedRowKeys.includes(s.id));
+
+  function handleExportSelected() {
+    if (!selectedStudents.length) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    exportStudentsCSV(selectedStudents, `学生清单-${stamp}.csv`);
+  }
+
   return (
     <div className="space-y-5">
-      <header className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-        <div>
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">Class Roster</p>
-          <h1 className="font-serif text-3xl font-semibold text-text">学生管理</h1>
-          <p className="mt-2 text-sm text-text-muted">
-            {allStudents.length} 名学生 · {counts.attention} 名需要关注 · {counts.reviewing} 份待审核
+      {/* 顶部 header — 精简后 */}
+      <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold text-text">学生管理</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-text-muted">
+            <span>{allStudents.length} 名学生</span>
+            <span aria-hidden>·</span>
+            <span>{counts.attention} 名需要关注</span>
+            <span aria-hidden>·</span>
+            <span>{counts.reviewing} 份待审核</span>
+            <span aria-hidden>·</span>
+            <span>数据更新于 {clock ? formatRelativeTime(clock.updatedAt, clock.now) : '--'}</span>
           </p>
         </div>
         <Space wrap>
-          <Button icon={<UploadOutlined />}>批量导入</Button>
+          <Tooltip title="批量导入功能待接入">
+            <Button icon={<UploadOutlined />} disabled>
+              批量导入
+            </Button>
+          </Tooltip>
           <Link href="/teacher/students/create">
             <Button type="primary" icon={<PlusOutlined />} className="border-0">
               创建学生
@@ -209,13 +434,14 @@ export default function TeacherStudentsPage() {
         </Space>
       </header>
 
+      {/* 筛选条 */}
       <section className="rounded-2xl bg-surface px-4 py-4 shadow-card">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
           <Input
             placeholder="按姓名、学号或手机号搜索"
             prefix={<SearchOutlined className="text-text-muted" />}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
             className="xl:w-[300px]"
             allowClear
           />
@@ -230,9 +456,9 @@ export default function TeacherStudentsPage() {
           <Select<ProgressFilter>
             value={progressFilter}
             onChange={setProgressFilter}
-            className="xl:w-[220px]"
+            className="xl:w-[200px]"
             options={[
-              { value: 'all', label: '全部学生' },
+              { value: 'all', label: '全部完整度' },
               { value: 'self_low', label: '自填 < 50%' },
               { value: 'self_mid', label: '自填 50%~80%' },
               { value: 'teacher_pending', label: '老师录入未完成' },
@@ -245,39 +471,72 @@ export default function TeacherStudentsPage() {
         </div>
       </section>
 
+      {/* 快捷筛选 chip — 可点 */}
       <div className="flex flex-wrap gap-2">
-        {[
-          ['全部', counts.all, progressFilter === 'all'],
-          ['需关注', counts.attention, false],
-          ['未建方案', counts.noPlan, false],
-          ['待审核', counts.reviewing, statusFilter === 'REVIEWING'],
-          ['≥640 分', counts.highScore, false],
-        ].map(([label, count, active]) => (
-          <span
-            key={label as string}
-            className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
-              active ? 'border-primary bg-primary text-white' : 'border-border bg-surface text-text-secondary'
+        {(
+          [
+            ['all', '全部', counts.all],
+            ['attention', '需关注', counts.attention],
+            ['noPlan', '未建方案', counts.noPlan],
+            ['reviewing', '待审核', counts.reviewing],
+            ['highScore', '≥640 分', counts.highScore],
+          ] as const
+        ).map(([key, label, count]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => clickChip(key)}
+            className={`cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+              chipActive[key]
+                ? 'border-primary bg-primary text-white'
+                : 'border-border bg-surface text-text-secondary hover:border-primary hover:text-primary'
             }`}
           >
             {label} <span className="ml-1 opacity-70">{count}</span>
-          </span>
+          </button>
         ))}
-        <span className="rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-medium text-text-muted">
-          自定义筛选待接入
-        </span>
       </div>
+
+      {/* 批量操作栏 — 选中后浮现 */}
+      {selectedRowKeys.length > 0 ? (
+        <div className="sticky top-14 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-primary bg-primary-fixed px-4 py-3 shadow-card">
+          <span className="text-sm font-medium text-primary">
+            已选 {selectedRowKeys.length} 名学生
+          </span>
+          <Button size="small" type="primary" onClick={handleExportSelected}>
+            导出 CSV
+          </Button>
+          <Tooltip title="批量催更功能待接入">
+            <Button size="small" disabled>
+              批量催更
+            </Button>
+          </Tooltip>
+          <Button
+            size="small"
+            type="text"
+            className="ml-auto"
+            onClick={() => setSelectedRowKeys([])}
+          >
+            取消选择
+          </Button>
+        </div>
+      ) : null}
 
       <Table
         columns={columns}
         dataSource={students}
         loading={isLoading}
         rowKey="id"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys),
+        }}
         pagination={{
           pageSize: 20,
           showSizeChanger: true,
           showTotal: (total) => `共 ${total} 名学生`,
         }}
-        scroll={{ x: 900 }}
+        scroll={{ x: 980 }}
         className="rounded-2xl bg-surface shadow-card"
         onRow={(record) => ({
           className: 'cursor-pointer',

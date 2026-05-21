@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Button, Card, Empty, Input, Modal, Segmented, Select, Space, Spin, Table, Tag, message } from 'antd';
 import {
   AppstoreOutlined,
@@ -58,10 +59,31 @@ function formatDate(value?: string) {
 }
 
 export default function TeacherPlansPage() {
+  // useSearchParams 要求外层包 Suspense，否则 Next 14 build 会 prerender 失败
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-2xl bg-surface py-20 text-center shadow-card">
+          <Spin size="large" />
+        </div>
+      }
+    >
+      <TeacherPlansPageInner />
+    </Suspense>
+  );
+}
+
+function TeacherPlansPageInner() {
+  const searchParams = useSearchParams();
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
-  const [search, setSearch] = useState('');
-  const [batchFilter, setBatchFilter] = useState<string | undefined>();
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  // Dashboard 跳转过来时会带 ?status=PENDING_REVIEW 或 ?batch=xxx 作为初始 filter
+  const [search, setSearch] = useState(() => searchParams.get('keyword') ?? '');
+  const [batchFilter, setBatchFilter] = useState<string | undefined>(
+    () => searchParams.get('batch') ?? undefined,
+  );
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(
+    () => searchParams.get('status') ?? undefined,
+  );
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
