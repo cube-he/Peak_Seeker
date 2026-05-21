@@ -63,7 +63,7 @@ describe('RankingBoardService admission rank enrichment', () => {
       university: { findMany: jest.fn().mockResolvedValue([uni({ id: 7, softRanking: 3 })]) },
       admissionRecord: {
         findMany: jest.fn().mockResolvedValue([
-          { universityId: 7, universityMinRank: 8200, universityMinScore: 631 },
+          { universityId: 7, groupMinRank: 8200, majorMinRank: null, filingMinRank: null, groupMinScore: 631, majorMinScore: null, filingMinScore: null },
         ]),
       },
     };
@@ -74,6 +74,44 @@ describe('RankingBoardService admission rank enrichment', () => {
 
     expect(board.items[0].admissionMinRank).toBe(8200);
     expect(board.items[0].admissionMinScore).toBe(631);
+  });
+
+  it('takes the most lenient (largest) rank when one university has multiple records', async () => {
+    const prisma = {
+      university: { findMany: jest.fn().mockResolvedValue([uni({ id: 7 })]) },
+      admissionRecord: {
+        findMany: jest.fn().mockResolvedValue([
+          { universityId: 7, groupMinRank: 5000, majorMinRank: null, filingMinRank: null, groupMinScore: 600, majorMinScore: null, filingMinScore: null },
+          { universityId: 7, groupMinRank: 9000, majorMinRank: null, filingMinRank: null, groupMinScore: 560, majorMinScore: null, filingMinScore: null },
+          { universityId: 7, groupMinRank: 7000, majorMinRank: null, filingMinRank: null, groupMinScore: 580, majorMinScore: null, filingMinScore: null },
+        ]),
+      },
+    };
+    const redis = { getCache: jest.fn().mockResolvedValue(null), setCache: jest.fn() };
+    const svc = new RankingBoardService(prisma as any, redis as any);
+
+    const board = (await svc.getRankingBoard('物理'))[0];
+
+    expect(board.items[0].admissionMinRank).toBe(9000);
+    expect(board.items[0].admissionMinScore).toBe(560);
+  });
+
+  it('falls back to major then filing rank when group rank is null', async () => {
+    const prisma = {
+      university: { findMany: jest.fn().mockResolvedValue([uni({ id: 7 })]) },
+      admissionRecord: {
+        findMany: jest.fn().mockResolvedValue([
+          { universityId: 7, groupMinRank: null, majorMinRank: 4321, filingMinRank: 9999, groupMinScore: null, majorMinScore: 612, filingMinScore: 590 },
+        ]),
+      },
+    };
+    const redis = { getCache: jest.fn().mockResolvedValue(null), setCache: jest.fn() };
+    const svc = new RankingBoardService(prisma as any, redis as any);
+
+    const board = (await svc.getRankingBoard('物理'))[0];
+
+    expect(board.items[0].admissionMinRank).toBe(4321);
+    expect(board.items[0].admissionMinScore).toBe(612);
   });
 
   it('queries admission records by Sichuan, recruit type and exam type', async () => {

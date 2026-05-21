@@ -108,14 +108,24 @@ export class RankingBoardService {
         recruitType: RECRUIT_TYPE_BY_LEVEL[level],
         subjects: { contains: examType },
       },
-      select: { universityId: true, universityMinRank: true, universityMinScore: true },
-      orderBy: { universityMinRank: 'desc' },
+      select: {
+        universityId: true,
+        groupMinRank: true, majorMinRank: true, filingMinRank: true,
+        groupMinScore: true, majorMinScore: true, filingMinScore: true,
+      },
     });
 
-    // 同一院校可能有多条批次记录；orderBy desc + 首条写入 = 取最宽松的录取门槛
+    // 数据库院校级位次字段(universityMinRank)恒为空；改从专业组/专业/投档位次取值，
+    // 对一所院校取位次数最大的一条（= 门槛最宽松、最易进的专业组）作为院校最低录取位次。
     for (const r of records) {
-      if (!map.has(r.universityId)) {
-        map.set(r.universityId, { rank: r.universityMinRank, score: r.universityMinScore });
+      const rank = r.groupMinRank ?? r.majorMinRank ?? r.filingMinRank;
+      if (rank == null) continue;
+      const cur = map.get(r.universityId);
+      if (!cur || cur.rank == null || rank > cur.rank) {
+        map.set(r.universityId, {
+          rank,
+          score: r.groupMinScore ?? r.majorMinScore ?? r.filingMinScore ?? null,
+        });
       }
     }
     return map;
