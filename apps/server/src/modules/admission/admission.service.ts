@@ -180,8 +180,6 @@ export class AdmissionService {
       where,
       select: {
         universityId: true,
-        majorId: true,
-        year: true,
         majorCode: true,
         majorName: true,
         groupCode: true,
@@ -190,12 +188,8 @@ export class AdmissionService {
         recruitType: true,
         majorMinScore: true,
         majorMinRank: true,
-        majorAvgScore: true,
-        majorAvgRank: true,
-        majorAdmissionCount: true,
         groupMinScore: true,
         groupMinRank: true,
-        groupAdmissionCount: true,
         university: {
           select: {
             id: true,
