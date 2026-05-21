@@ -20,7 +20,7 @@ export default function EmploymentCard({
 
   return (
     <Card title="就业数据" size="small" className="mt-4">
-      <Descriptions column={2} size="small">
+      <Descriptions column={1} size="small">
         {employmentRate != null && (
           <Descriptions.Item label="就业率">{employmentRate}</Descriptions.Item>
         )}

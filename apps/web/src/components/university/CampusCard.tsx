@@ -18,7 +18,7 @@ export default function CampusCard(p: Props) {
 
   return (
     <Card title={<><EnvironmentOutlined className="mr-1" />校园生活</>} size="small">
-      <Descriptions column={{ xs: 1, sm: 2 }} size="small">
+      <Descriptions column={1} size="small">
         {items.map((it) => (
           <Descriptions.Item key={it.label} label={it.label}>
             {it.value}
