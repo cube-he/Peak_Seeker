@@ -155,3 +155,118 @@ describe('AdmissionService.findAggregated', () => {
     expect((result as unknown as Record<string, unknown>).pagination).toBeUndefined();
   });
 });
+
+describe('AdmissionService.findAggregatedDetail', () => {
+  function buildYearRecord(year: number, majorMinRank: number) {
+    return {
+      universityId: 1,
+      majorId: 10,
+      year,
+      majorCode: '080902',
+      majorName: '软件工程',
+      groupCode: '01',
+      batch: '本科一批',
+      subjects: '物理',
+      recruitType: '普通类',
+      majorMinScore: 600 + (2024 - year),
+      majorMinRank,
+      majorAvgScore: 610,
+      majorAvgRank: 10000,
+      majorAdmissionCount: 30,
+      groupMinScore: 598,
+      groupMinRank: majorMinRank + 500,
+      groupAdmissionCount: 90,
+    };
+  }
+
+  it('returns every available year, currentPlan and supplementary', async () => {
+    const records = [
+      buildYearRecord(2024, 12000),
+      buildYearRecord(2023, 13000),
+      buildYearRecord(2022, 14000),
+    ];
+    const mockPrisma = {
+      admissionRecord: { findMany: jest.fn().mockResolvedValue(records) },
+      enrollmentPlan: {
+        findFirst: jest.fn().mockResolvedValue({
+          planCount: 32,
+          tuition: 4900,
+          duration: '四年',
+          subjectRequirements: '物理必选',
+          disciplineEval: 'A',
+          majorRanking: '5',
+          majorHonor: '国家级一流专业',
+          localMasterPoint: '软件工程硕士点',
+          localDoctoralPoint: null,
+          isNew: false,
+          isSinoForeign: false,
+          planNotes: null,
+        }),
+      },
+      supplementarySummary: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new AdmissionService(mockPrisma as never);
+
+    const detail = await service.findAggregatedDetail({
+      universityId: 1,
+      majorCode: '080902',
+      groupCode: '01',
+      batch: '本科一批',
+      recruitType: '普通类',
+      province: '四川',
+      subjects: '物理',
+    });
+
+    expect(detail.yearlyData.map((y) => y.year)).toEqual([2024, 2023, 2022]);
+    expect(detail.yearlyData[0].majorMinRank).toBe(12000);
+    expect(detail.yearlyData[0].groupMinRank).toBe(12500);
+    expect(detail.currentPlan?.planCount).toBe(32);
+    expect(detail.currentPlan?.disciplineEval).toBe('A');
+    expect(detail.supplementary).toBeNull();
+    expect(mockPrisma.admissionRecord.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          universityId: 1,
+          majorCode: '080902',
+          groupCode: '01',
+          batch: '本科一批',
+          recruitType: '普通类',
+          province: '四川',
+          subjects: '物理',
+        }),
+      }),
+    );
+  });
+
+  it('maps supplementarySummary into the SupplementaryInfo shape', async () => {
+    const mockPrisma = {
+      admissionRecord: { findMany: jest.fn().mockResolvedValue([buildYearRecord(2024, 12000)]) },
+      enrollmentPlan: { findFirst: jest.fn().mockResolvedValue(null) },
+      supplementarySummary: {
+        findFirst: jest.fn().mockResolvedValue({
+          totalRounds: 2,
+          totalPlanCount: 15,
+          supplementaryRate: 3.5,
+        }),
+      },
+    };
+    const service = new AdmissionService(mockPrisma as never);
+
+    const detail = await service.findAggregatedDetail({
+      universityId: 1,
+      majorCode: '080902',
+      groupCode: '01',
+      batch: '本科一批',
+      recruitType: '普通类',
+      province: '四川',
+      subjects: '物理',
+    });
+
+    expect(detail.currentPlan).toBeNull();
+    expect(detail.supplementary).toEqual({
+      totalRounds: 2,
+      totalPlanCount: 15,
+      supplementaryRate: 3.5,
+    });
+  });
+});

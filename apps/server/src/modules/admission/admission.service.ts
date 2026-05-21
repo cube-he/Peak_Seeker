@@ -4,6 +4,10 @@ import type { FindAggregatedDto } from './dto/find-aggregated.dto';
 import type {
   AggregatedAdmissionResponse,
   AggregatedAdmissionListItem,
+  AggregatedAdmissionDetail,
+  YearlyAdmissionData,
+  CurrentEnrollmentPlan,
+  SupplementaryInfo,
 } from '@volunteer-helper/shared';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -331,6 +335,98 @@ export class AdmissionService {
     });
 
     return { data, total: data.length };
+  }
+
+  async findAggregatedDetail(query: {
+    universityId: number;
+    majorCode: string;
+    groupCode: string;
+    batch: string;
+    recruitType: string;
+    province: string;
+    subjects: string;
+  }): Promise<AggregatedAdmissionDetail> {
+    const { universityId, majorCode, groupCode, batch, recruitType, province, subjects } = query;
+
+    const records = await this.prisma.admissionRecord.findMany({
+      where: { universityId, majorCode, groupCode, batch, recruitType, province, subjects },
+      select: {
+        year: true,
+        majorMinScore: true,
+        majorMinRank: true,
+        majorAvgScore: true,
+        majorAvgRank: true,
+        majorAdmissionCount: true,
+        groupMinScore: true,
+        groupMinRank: true,
+        groupAdmissionCount: true,
+      },
+      orderBy: { year: 'desc' },
+    });
+
+    const yearlyData: YearlyAdmissionData[] = records.map((r) => ({
+      year: r.year,
+      majorMinScore: r.majorMinScore,
+      majorMinRank: r.majorMinRank,
+      majorAvgScore: r.majorAvgScore,
+      majorAvgRank: r.majorAvgRank,
+      majorAdmissionCount: r.majorAdmissionCount,
+      groupMinScore: r.groupMinScore,
+      groupMinRank: r.groupMinRank,
+      groupAdmissionCount: r.groupAdmissionCount,
+    }));
+
+    // 当年招生计划：取该组合最新年份一条
+    const planRow = await this.prisma.enrollmentPlan.findFirst({
+      where: { universityId, majorCode, groupCode, batch, recruitType, province, subjects },
+      orderBy: { year: 'desc' },
+      select: {
+        planCount: true,
+        tuition: true,
+        duration: true,
+        subjectRequirements: true,
+        disciplineEval: true,
+        majorRanking: true,
+        majorHonor: true,
+        localMasterPoint: true,
+        localDoctoralPoint: true,
+        isNew: true,
+        isSinoForeign: true,
+        planNotes: true,
+      },
+    });
+    const currentPlan: CurrentEnrollmentPlan | null = planRow ?? null;
+
+    // 征集志愿摘要：按 (university, batch) 维度取最新年份一条
+    const suppRow = await this.prisma.supplementarySummary.findFirst({
+      where: { universityId, province, batch },
+      orderBy: { year: 'desc' },
+      select: {
+        totalRounds: true,
+        totalPlanCount: true,
+        supplementaryRate: true,
+      },
+    });
+    const supplementary: SupplementaryInfo | null = suppRow
+      ? {
+          totalRounds: suppRow.totalRounds,
+          totalPlanCount: suppRow.totalPlanCount,
+          supplementaryRate:
+            suppRow.supplementaryRate != null ? Number(suppRow.supplementaryRate) : null,
+        }
+      : null;
+
+    return {
+      universityId,
+      majorCode,
+      groupCode,
+      batch,
+      recruitType,
+      subjects,
+      yearlyData,
+      currentPlan,
+      supplementary,
+    };
   }
 
   /**
