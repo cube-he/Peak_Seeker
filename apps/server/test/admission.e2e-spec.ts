@@ -1,8 +1,9 @@
 /**
- * Admission Aggregated Endpoint — predictedMinRank Field
+ * Admission Aggregated Endpoints (e2e)
  *
- * Verifies that GET /admissions/aggregated returns a `predictedMinRank` field
- * (either null or a populated PredictedMinRank shape) on each item.
+ * Verifies GET /admissions/aggregated returns lightweight items with a
+ * `predictedMinRank` field, and GET /admissions/aggregated/detail returns the
+ * full per-year payload for one combination.
  *
  * Skipped if DATABASE_URL is not set.
  */
@@ -14,7 +15,7 @@ import { hasDatabase, disconnectTestPrisma } from './setup';
 
 const describeIfDb = hasDatabase ? describe : describe.skip;
 
-describeIfDb('GET /admissions/aggregated — predictedMinRank field (e2e)', () => {
+describeIfDb('Admission aggregated endpoints (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -33,15 +34,23 @@ describeIfDb('GET /admissions/aggregated — predictedMinRank field (e2e)', () =
     await disconnectTestPrisma();
   });
 
-  it('returns predictedMinRank field (null or shape) on each item', async () => {
+  it('GET /admissions/aggregated returns lightweight items with predictedMinRank', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/admissions/aggregated')
-      .query({ province: '四川', score: 600, range: 20, pageSize: 5 })
+      .query({ province: '四川', rank: 12000, subjects: '物理', range: 30000 })
       .expect(200);
 
     expect(Array.isArray(res.body.data)).toBe(true);
+    expect(typeof res.body.total).toBe('number');
+    expect(res.body.pagination).toBeUndefined();
+
     for (const item of res.body.data) {
+      // lightweight: per-year payload must not be present
+      expect(item.yearlyData).toBeUndefined();
+      expect(item.currentPlan).toBeUndefined();
+      expect(item.supplementary).toBeUndefined();
       expect(item).toHaveProperty('predictedMinRank');
+      expect(item.subjects).toBe('物理');
       const p = item.predictedMinRank;
       if (p !== null) {
         expect(typeof p.point).toBe('number');
@@ -54,20 +63,54 @@ describeIfDb('GET /admissions/aggregated — predictedMinRank field (e2e)', () =
     }
   });
 
-  it('at least one item in a populated query has non-null predictedMinRank', async () => {
-    const res = await request(app.getHttpServer())
+  it('GET /admissions/aggregated/detail returns full yearly data for one combination', async () => {
+    // First fetch a real combination from the aggregated list.
+    const list = await request(app.getHttpServer())
       .get('/api/v1/admissions/aggregated')
-      .query({ province: '四川', score: 550, range: 50, pageSize: 50 })
+      .query({ province: '四川', rank: 12000, subjects: '物理', range: 30000 })
       .expect(200);
 
-    const items = res.body.data || [];
+    const items = list.body.data || [];
     if (items.length === 0) {
-      // No items in this score window — can't assert anything
-      console.warn('[admission e2e] No items returned for province=四川 score=550 range=50; skipping non-null assertion');
+      console.warn('[admission e2e] No items for province=四川 rank=12000; skipping detail assertion');
       return;
     }
-    const nonNull = items.filter((i: any) => i.predictedMinRank !== null);
-    // At least one item should have a prediction. If 0, ETL didn't run or no overlap with score window.
-    expect(nonNull.length).toBeGreaterThan(0);
+    const sample = items[0];
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/admissions/aggregated/detail')
+      .query({
+        universityId: sample.university.id,
+        majorCode: sample.majorCode,
+        groupCode: sample.groupCode,
+        batch: sample.batch,
+        recruitType: sample.recruitType,
+        province: '四川',
+        subjects: '物理',
+      })
+      .expect(200);
+
+    expect(Array.isArray(res.body.yearlyData)).toBe(true);
+    expect(res.body).toHaveProperty('currentPlan');
+    expect(res.body).toHaveProperty('supplementary');
+    for (const y of res.body.yearlyData) {
+      expect(typeof y.year).toBe('number');
+      expect(y).toHaveProperty('majorMinRank');
+      expect(y).toHaveProperty('groupMinRank');
+    }
+  });
+
+  it('GET /admissions/aggregated/detail rejects a missing subjects param', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/admissions/aggregated/detail')
+      .query({
+        universityId: 1,
+        majorCode: '080902',
+        groupCode: '01',
+        batch: '本科一批',
+        recruitType: '普通类',
+        province: '四川',
+      })
+      .expect(400);
   });
 });
