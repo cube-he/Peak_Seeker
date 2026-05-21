@@ -164,7 +164,7 @@ Expected: 输出 `coding-discipline`
 ### Task 4: 更新 MEMORY.md 索引
 
 **Files:**
-- Modify: `C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/MEMORY.md`
+- Modify: `<旧 Claude memory 路径已移除>/MEMORY.md`
 - Create: 同目录下新文件 `reference_coding_discipline.md`
 
 - [ ] **Step 1: 创建 memory 文件**
@@ -206,7 +206,7 @@ new_string：
 
 Run:
 ```bash
-grep -c "coding-discipline" "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/MEMORY.md"
+grep -c "coding-discipline" "<旧 Claude memory 路径已移除>/MEMORY.md"
 ```
 Expected: 输出 `1`
 

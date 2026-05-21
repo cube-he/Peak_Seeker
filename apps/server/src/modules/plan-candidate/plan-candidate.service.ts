@@ -215,6 +215,112 @@ function extractRankingScore(value: unknown) {
   return Math.max(0, 100 - rank);
 }
 
+// 学生 tuitionBudget 枚举 → 学费上限（元/年）
+const TUITION_CAP: Record<string, number> = {
+  LOW: 6000,
+  MEDIUM: 10000,
+  HIGH: 30000,
+  UNLIMITED: Number.POSITIVE_INFINITY,
+};
+
+interface PrefMatchResult {
+  province?: 'match' | 'mismatch';
+  tuition?: 'within' | 'over';
+  career?: 'strong' | 'weak';
+  subjects?: 'match';
+}
+
+// 学生偏好对比：candidate group 与 student preferences 的 4 维匹配
+function buildPrefMatch(params: {
+  studentProvince: string | null | undefined;
+  studentTuitionBudget: string | null | undefined;
+  studentCareerPlan: string | null | undefined;
+  universityProvince: string | null | undefined;
+  anchorTuition: number | null | undefined;
+  anchorHasMasterPoint: boolean;
+  anchorEmploymentRate: number | null | undefined;
+}): PrefMatchResult {
+  const result: PrefMatchResult = {};
+
+  // 1. 地域：本省 / 外省
+  if (params.studentProvince && params.universityProvince) {
+    result.province = params.studentProvince === params.universityProvince ? 'match' : 'mismatch';
+  }
+
+  // 2. 学费：是否在学生预算内（仅当 student 设了 tuitionBudget 且候选有 tuition）
+  if (params.studentTuitionBudget && params.anchorTuition != null) {
+    const cap = TUITION_CAP[params.studentTuitionBudget];
+    if (cap != null) {
+      result.tuition = params.anchorTuition <= cap ? 'within' : 'over';
+    }
+  }
+
+  // 3. 职业方向：考研 → 看硕士点；就业 → 看就业率；其他不评
+  if (params.studentCareerPlan === 'POSTGRADUATE') {
+    result.career = params.anchorHasMasterPoint ? 'strong' : 'weak';
+  } else if (params.studentCareerPlan === 'EMPLOYMENT') {
+    result.career =
+      params.anchorEmploymentRate != null && params.anchorEmploymentRate >= 90 ? 'strong' : 'weak';
+  }
+
+  // 4. 选科：候选池已按选科过滤，全部 match
+  result.subjects = 'match';
+
+  return result;
+}
+
+// 人话化 matchReason：地域 · 档次 · 梯度说明（最多 3 段，· 分隔）
+function buildMatchReason(params: {
+  universityProvince: string | null | undefined;
+  studentProvince: string | null | undefined;
+  is985: boolean;
+  is211: boolean;
+  isDoubleFirstClass: boolean;
+  runningNature: string | null | undefined;
+  gradient: string | null | undefined;
+}): string {
+  const parts: string[] = [];
+
+  // 1. 地域
+  if (params.universityProvince && params.studentProvince) {
+    parts.push(params.universityProvince === params.studentProvince ? '本省' : '外省');
+  }
+
+  // 2. 档次
+  if (params.is985) parts.push('985');
+  else if (params.is211) parts.push('211');
+  else if (params.isDoubleFirstClass) parts.push('双一流');
+  else if (params.runningNature === '民办') parts.push('民办');
+
+  // 3. 梯度说明
+  switch (params.gradient) {
+    case 'JI_CHONG':
+      parts.push('位次差距大');
+      break;
+    case 'CHONG':
+      parts.push('位次有挑战');
+      break;
+    case 'XIAO_CHONG':
+    case 'WEN':
+      parts.push('位次安全');
+      break;
+    case 'WEN_BAO':
+      parts.push('稳保兼具');
+      break;
+    case 'BAO':
+    case 'QIANG_BAO':
+      parts.push('保底稳');
+      break;
+    case 'DIBAO':
+      parts.push('适合兜底');
+      break;
+    default:
+      break;
+  }
+
+  return parts.length > 0 ? parts.join('·') : '常规候选';
+}
+
 const CANDIDATE_ENROLLMENT_PLAN_SELECT = {
   id: true,
   universityId: true,
@@ -258,6 +364,12 @@ const CANDIDATE_ENROLLMENT_PLAN_SELECT = {
       isDoubleFirstClass: true,
       softRanking: true,
       logoUrl: true,
+      postgradRate: true,
+      furtherStudyRate: true,
+      employmentRate: true,
+      avgSalary: true,
+      satisfactionOverall: true,
+      satisfactionCount: true,
     },
   },
   major: {
@@ -807,6 +919,40 @@ export class PlanCandidateService {
     });
   }
 
+  // 聚合 3 年组级历史：返回 history3y（组最低）+ historyFiling3y（投档线），按 year ASC 排
+  // 数据演进：早期记录只有 majorMin，2024 起有 groupMin，2025 起有 filing。
+  // 组最低 fallback 到 majorMin 以维持趋势连续；投档线不 fallback（保严谨）。
+  private pickGroupHistory(records: any[], sourceYear: number) {
+    const history3y: Array<{ year: number; score: number; rank: number }> = [];
+    const historyFiling3y: Array<{ year: number; score: number; rank: number }> = [];
+
+    for (let offset = 2; offset >= 0; offset--) {
+      const year = sourceYear - offset;
+      const yearRecords = records.filter((r) => r.year === year);
+      if (yearRecords.length === 0) continue;
+
+      // 组最低：优先 groupMin，缺失时 fallback majorMin（数据演进所致）
+      const groupScore =
+        bestNumber(yearRecords.map((r) => r.groupMinScore)) ??
+        bestNumber(yearRecords.map((r) => r.majorMinScore));
+      const groupRank =
+        bestNumber(yearRecords.map((r) => r.groupMinRank), 'max') ??
+        bestNumber(yearRecords.map((r) => r.majorMinRank), 'max');
+      if (groupScore !== null && groupRank !== null) {
+        history3y.push({ year, score: groupScore, rank: groupRank });
+      }
+
+      // 投档线不 fallback（投档分 ≠ 专业最低分，语义不同）
+      const filingScore = bestNumber(yearRecords.map((r) => r.filingMinScore));
+      const filingRank = bestNumber(yearRecords.map((r) => r.filingMinRank), 'max');
+      if (filingScore !== null && filingRank !== null) {
+        historyFiling3y.push({ year, score: filingScore, rank: filingRank });
+      }
+    }
+
+    return { history3y, historyFiling3y };
+  }
+
   private pickGroupScore(records: any[], sourceYear: number) {
     const current = records.filter((record) => record.year === sourceYear);
     const groupScore = bestNumber(current.map((record) => record.groupMinScore));
@@ -1051,7 +1197,8 @@ export class PlanCandidateService {
       this.prisma.healthRestriction.findMany(),
     ]);
     const rules = this.buildSoftRules(restrictions);
-    const years = [source.sourceYear, source.sourceYear - 1];
+    // 3 年历史：sourceYear / -1 / -2（前端 TrendChart 需要 3 点）
+    const years = [source.sourceYear, source.sourceYear - 1, source.sourceYear - 2];
     const adRecords = eps.length
       ? await this.prisma.admissionRecord.findMany({
           where: this.buildAdmissionRecordWhere(eps, province, years),
@@ -1170,8 +1317,10 @@ export class PlanCandidateService {
       const groupRecords = [
         ...(adByGroupYear.get(`${groupKey}|${source.sourceYear}`) ?? []),
         ...(adByGroupYear.get(`${groupKey}|${source.sourceYear - 1}`) ?? []),
+        ...(adByGroupYear.get(`${groupKey}|${source.sourceYear - 2}`) ?? []),
       ];
       const groupScore = this.pickGroupScore(groupRecords, source.sourceYear);
+      const groupHistory = this.pickGroupHistory(groupRecords, source.sourceYear);
       const first = rows[0];
       const currentPlanCount = this.planCountForGroup(rows);
       const previousPlanCount = this.planCountForGroup(previousByGroup.get(groupKey) ?? []);
@@ -1307,6 +1456,12 @@ export class PlanCandidateService {
           isDoubleFirstClass: first.university?.isDoubleFirstClass ?? false,
           softRanking: first.university?.softRanking ?? null,
           logoUrl: first.university?.logoUrl ?? null,
+          postgradRate: first.university?.postgradRate ?? null,
+          furtherStudyRate: first.university?.furtherStudyRate ?? null,
+          employmentRate: first.university?.employmentRate ?? null,
+          avgSalary: first.university?.avgSalary ?? null,
+          satisfactionOverall: first.university?.satisfactionOverall ?? null,
+          satisfactionCount: first.university?.satisfactionCount ?? null,
         },
         groupCode: first.groupCode,
         groupName: first.groupName,
@@ -1339,6 +1494,29 @@ export class PlanCandidateService {
         softFailCount: majorSections.risk.filter((major) => major.matchStatus === 'SOFT_FAIL').length,
         matchScore: recommendedAnchor?.matchScore ?? -999,
         matchReasons: recommendedAnchor?.matchReasons ?? [],
+        matchReason: buildMatchReason({
+          universityProvince: first.university?.province,
+          studentProvince: student.province,
+          is985: first.university?.is985 ?? false,
+          is211: first.university?.is211 ?? false,
+          isDoubleFirstClass: first.university?.isDoubleFirstClass ?? false,
+          runningNature: first.university?.runningNature,
+          gradient: dynamicGradient.gradient,
+        }),
+        prefMatch: buildPrefMatch({
+          studentProvince: student.province,
+          studentTuitionBudget: (student as any).tuitionBudget ?? null,
+          studentCareerPlan: (student as any).careerPlan ?? null,
+          universityProvince: first.university?.province,
+          anchorTuition: first.tuition,
+          anchorHasMasterPoint: first.major?.localMasterPoint ?? false,
+          anchorEmploymentRate:
+            typeof first.major?.employmentRate === 'number'
+              ? first.major.employmentRate
+              : null,
+        }),
+        history3y: groupHistory.history3y,
+        historyFiling3y: groupHistory.historyFiling3y,
         recommendedAnchorEnrollmentPlanId: recommendedAnchor?.enrollmentPlanId ?? null,
         majors: orderedMajors,
         majorSections,
@@ -1346,6 +1524,23 @@ export class PlanCandidateService {
     }))).filter((group): group is any => Boolean(group));
 
     this.sortCandidateGroups(resultGroups, q.sort ?? 'MAJOR_MATCH', studentRank);
+
+    // matchScore 归一化：原 scoreMajorMatch 算法理论 0-196，实际多数 0-30。
+    // 前端 MatchHeader 按 0-100 制着色（≥85 绿/70-84 蓝/<70 橙），导致几乎所有候选
+    // 都显示低匹配。这里按本批最高分拉伸到 0-100，让色阶有意义。
+    // 保留原始相对排序（单调变换不改变顺序）；原始分保留在 matchScoreRaw。
+    if (resultGroups.length > 0) {
+      const rawScores = (resultGroups as any[]).map((g) => {
+        const n = Number(g.matchScore);
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      });
+      const rawMax = Math.max(0, ...rawScores);
+      for (let i = 0; i < resultGroups.length; i++) {
+        const g = resultGroups[i] as any;
+        g.matchScoreRaw = Number.isFinite(Number(g.matchScore)) ? Number(g.matchScore) : null;
+        g.matchScore = rawMax > 0 ? Math.round((rawScores[i] / rawMax) * 100) : 0;
+      }
+    }
 
     const fullResult: CandidateGroupFullResult = {
       total: resultGroups.length,

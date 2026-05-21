@@ -85,12 +85,17 @@ export default function MainLayout({ children, maxWidth, noPadding, hideMobileBo
                 <button className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-0 bg-surface-dim text-text-tertiary transition-colors duration-200 hover:text-primary">
                   <BellOutlined className="text-base" />
                 </button>
-                <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-                  <Space className="cursor-pointer">
+                <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
+                  <button
+                    type="button"
+                    aria-label="用户菜单"
+                    aria-haspopup="menu"
+                    className="flex cursor-pointer items-center border-0 bg-transparent p-0"
+                  >
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[13px] font-medium text-white">
                       {user?.username?.charAt(0) || <UserOutlined />}
                     </span>
-                  </Space>
+                  </button>
                 </Dropdown>
               </>
             ) : (

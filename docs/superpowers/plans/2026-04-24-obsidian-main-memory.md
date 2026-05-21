@@ -33,7 +33,7 @@
 - `欢迎.md`、`创建链接.md`、`LocalOCR.md`（根目录）、`About Me.md`（迁入 Personal 后）
 - `Templates/项目笔记.md`（被 project.md 替代）
 
-### Memory 目录 `C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/`
+### Memory 目录 `<旧 Claude memory 路径已移除>/`
 
 **修改（改指针）：** `user_company_brand.md`、`project_brand_decision.md`、`project_user_roles.md`、`project_teacher_workflow.md`、`project_student_scope.md`、`project_rbac_design.md`、`project_recruitment_plan_rules.md`
 
@@ -738,7 +738,7 @@
 
   ## 执行步骤
 
-  1. **识别 Memory 源文件**：`C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/<name>.md`
+  1. **识别 Memory 源文件**：`<旧 Claude memory 路径已移除>/<name>.md`
   2. **确定 Vault 目标路径**：按 `vault-write` 的落位规则
   3. **Write Vault 目标文件**：按对应模板的 front-matter 结构，把 Memory 正文内容迁入（可适当扩展细节）
   4. **更新原 Memory 文件**为指针：
@@ -1061,11 +1061,11 @@
 
 **Files:**
 - Create: `E:/Soft/Cube/20-Areas/Personal/company.md`
-- Modify: `C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/user_company_brand.md`
+- Modify: `<旧 Claude memory 路径已移除>/user_company_brand.md`
 
 - [ ] **Step 1: 读 Memory 源内容**
 
-  Run: `cat "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/user_company_brand.md"`
+  Run: `cat "<旧 Claude memory 路径已移除>/user_company_brand.md"`
 
 - [ ] **Step 2: 写 `20-Areas/Personal/company.md`**
 
@@ -1105,11 +1105,11 @@
 
 **Files:**
 - Create: `E:/Soft/Cube/10-Projects/VolunteerHelper/brand/smart-wish-home.md`
-- Modify: `C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/project_brand_decision.md`
+- Modify: `<旧 Claude memory 路径已移除>/project_brand_decision.md`
 
 - [ ] **Step 1: 读 Memory 源**
 
-  Run: `cat "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/project_brand_decision.md"`
+  Run: `cat "<旧 Claude memory 路径已移除>/project_brand_decision.md"`
 
 - [ ] **Step 2: 写 Vault 文件**
 
@@ -1162,7 +1162,7 @@
 
 - [ ] **Step 1: 读源**
 
-  Run: `cat "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/project_user_roles.md"`
+  Run: `cat "<旧 Claude memory 路径已移除>/project_user_roles.md"`
 
 - [ ] **Step 2: 写 Vault 文件**
 
@@ -1209,7 +1209,7 @@
 
 - [ ] **Step 1: 读源**
 
-  Run: `cat "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/project_teacher_workflow.md"`
+  Run: `cat "<旧 Claude memory 路径已移除>/project_teacher_workflow.md"`
 
 - [ ] **Step 2: 写 Vault 文件**
 
@@ -1262,7 +1262,7 @@
 
 - [ ] **Step 1: 读源**
 
-  Run: `cat "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/project_student_scope.md"`
+  Run: `cat "<旧 Claude memory 路径已移除>/project_student_scope.md"`
 
 - [ ] **Step 2: 写 Vault 文件**
 
@@ -1311,7 +1311,7 @@
 
 - [ ] **Step 1: 读源**
 
-  Run: `cat "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/project_rbac_design.md"`
+  Run: `cat "<旧 Claude memory 路径已移除>/project_rbac_design.md"`
 
 - [ ] **Step 2: 写 Vault 文件（用 decision 模板结构）**
 
@@ -1369,7 +1369,7 @@
 
 - [ ] **Step 1: 读源**
 
-  Run: `cat "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/project_recruitment_plan_rules.md"`
+  Run: `cat "<旧 Claude memory 路径已移除>/project_recruitment_plan_rules.md"`
 
 - [ ] **Step 2: 写 Vault 文件**
 
@@ -1481,11 +1481,11 @@
 ### Task 29: 更新 MEMORY.md 索引
 
 **Files:**
-- Modify: `C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/MEMORY.md`
+- Modify: `<旧 Claude memory 路径已移除>/MEMORY.md`
 
 - [ ] **Step 1: 读当前 MEMORY.md**
 
-  Run: `cat "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/MEMORY.md"`
+  Run: `cat "<旧 Claude memory 路径已移除>/MEMORY.md"`
 
 - [ ] **Step 2: 把 7 条已迁移条目的 hook 改为"指针，详见 Vault"**
 
@@ -1510,7 +1510,7 @@
 
 - [ ] **Step 4: 验证 MEMORY.md 行数未超 200**
 
-  Run: `wc -l "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/MEMORY.md"`
+  Run: `wc -l "<旧 Claude memory 路径已移除>/MEMORY.md"`
   Expected: < 200 行
 
 ### Task 30: 最终验收 + Phase 4 提交
@@ -1524,7 +1524,7 @@
 
   Run:
   ```bash
-  grep -l "指针" "C:/Users/Administrator/.claude-proxy/cli/.claude/projects/C--Users-Administrator-Documents-VolunteerHelper/memory/"*.md
+  grep -l "指针" "<旧 Claude memory 路径已移除>/"*.md
   ```
   Expected: 列出 7 个迁移过的 `.md` 文件
 
