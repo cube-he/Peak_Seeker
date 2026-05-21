@@ -232,3 +232,53 @@ describe('getPickerOptions', () => {
     expect(result.map(r => r.name)).toEqual(['安庆师范大学', '北京大学', '清华大学']);
   });
 });
+
+describe('UniversityService.findAll latestAdmission', () => {
+  const setup = (universities: any[], latestYear: number | null = 2025) => {
+    const prisma = {
+      university: {
+        findMany: jest.fn().mockResolvedValue(universities),
+        count: jest.fn().mockResolvedValue(universities.length),
+      },
+      admissionRecord: {
+        findFirst: jest.fn().mockResolvedValue(
+          latestYear == null ? null : { year: latestYear },
+        ),
+      },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const svc = new UniversityService(prisma as any, redis as any, admissionService as any);
+    return { svc, prisma };
+  };
+
+  it('aggregates latestAdmission to the lowest admission score across the year records', async () => {
+    // 院校最低分 = 该年度全部专业组里最低的一条，而不是任取第一条
+    const { svc } = setup([
+      {
+        id: 1, name: 'X',
+        admissionRecords: [
+          { year: 2025, majorMinScore: null, majorMinRank: null, groupMinScore: 520, groupMinRank: 30000 },
+          { year: 2025, majorMinScore: null, majorMinRank: null, groupMinScore: 480, groupMinRank: 55000 },
+          { year: 2025, majorMinScore: null, majorMinRank: null, groupMinScore: 510, groupMinRank: 38000 },
+        ],
+      },
+    ]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20 } as any);
+    expect(result.data[0].latestAdmission).toEqual({ year: 2025, minScore: 480, minRank: 55000 });
+    expect(result.data[0].admissionRecords).toBeUndefined();
+  });
+
+  it('selects admission records for the max year in the DB, not a hardcoded calendar year', async () => {
+    const { svc, prisma } = setup([{ id: 1, name: 'X', admissionRecords: [] }], 2099);
+    await svc.findAll({ page: 1, pageSize: 20 } as any);
+    const include = prisma.university.findMany.mock.calls[0][0].include;
+    expect(include.admissionRecords.where.year).toBe(2099);
+  });
+
+  it('returns latestAdmission null when the university has no admission records', async () => {
+    const { svc } = setup([{ id: 1, name: 'X', admissionRecords: [] }]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20 } as any);
+    expect(result.data[0].latestAdmission).toBeNull();
+  });
+});

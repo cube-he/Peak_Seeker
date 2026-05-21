@@ -49,6 +49,14 @@ export class UniversityService {
     if (is985 !== undefined) where.is985 = is985;
     if (is211 !== undefined) where.is211 = is211;
 
+    // 院校最低分按"库内最新年份"聚合，而不是硬编码 currentYear-1：
+    // 后者在新一年数据尚未导入时会让整列分数全空。
+    const latestYearRow = await this.prisma.admissionRecord.findFirst({
+      orderBy: { year: 'desc' },
+      select: { year: true },
+    });
+    const latestYear = latestYearRow?.year ?? null;
+
     const [data, total] = await Promise.all([
       this.prisma.university.findMany({
         where,
@@ -57,9 +65,7 @@ export class UniversityService {
         orderBy: { [sortBy]: sortOrder },
         include: {
           admissionRecords: {
-            where: { year: new Date().getFullYear() - 1 },
-            take: 1,
-            orderBy: { year: 'desc' },
+            where: { year: latestYear ?? -1 },
           },
         },
       }),
@@ -69,7 +75,7 @@ export class UniversityService {
     return {
       data: data.map((u) => ({
         ...u,
-        latestAdmission: u.admissionRecords[0] || null,
+        latestAdmission: this.aggregateLatestAdmission(u.admissionRecords, latestYear),
         admissionRecords: undefined,
       })),
       pagination: {
@@ -79,6 +85,29 @@ export class UniversityService {
         totalPages: Math.ceil(total / pageSize),
       },
     };
+  }
+
+  /**
+   * 院校口径"最近一年最低分"：取该年度全部专业组里分数最低的一条。
+   * 单条记录 majorMinScore 优先、groupMinScore 兜底（与 AdmissionService.getBestScore 同口径）。
+   */
+  private aggregateLatestAdmission(
+    records: Array<{
+      majorMinScore: number | null;
+      majorMinRank: number | null;
+      groupMinScore: number | null;
+      groupMinRank: number | null;
+    }>,
+    year: number | null,
+  ): { year: number | null; minScore: number; minRank: number | null } | null {
+    let best: { score: number; rank: number | null } | null = null;
+    for (const r of records) {
+      const score = r.majorMinScore ?? r.groupMinScore;
+      if (score == null) continue;
+      const rank = r.majorMinScore != null ? r.majorMinRank : r.groupMinRank;
+      if (best == null || score < best.score) best = { score, rank };
+    }
+    return best == null ? null : { year, minScore: best.score, minRank: best.rank };
   }
 
   async findById(id: number, subject?: string) {
