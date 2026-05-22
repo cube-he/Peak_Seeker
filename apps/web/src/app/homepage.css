@@ -88,27 +88,6 @@
 }
 .hero-h1 .rest { color: var(--text); }
 .hero-h1 .pause { display: inline-block; width: .6em; }
-.hero-h1 .accent-word {
-  font-style: italic;
-  font-weight: 600;
-  color: var(--primary);
-  padding: 0 0.04em;
-}
-.hero-h1 .brand-word {
-  font-style: italic;
-  background: linear-gradient(110deg, var(--accent) 0%, var(--accent-light) 60%, var(--accent) 100%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  padding: 0 0.04em;
-}
-.hero-h1 .punct {
-  color: var(--text-muted);
-  font-weight: 500;
-  font-size: .72em;
-  letter-spacing: -.06em;
-  margin: 0 .02em;
-  position: relative;
-  top: -.12em;
-}
 
 .hero-sub {
   margin: 28px 0 0; max-width: 580px;

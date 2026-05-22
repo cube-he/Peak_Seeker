@@ -36,7 +36,10 @@ export function buildHeroTimeline(events: TimelineEvent[]): HeroTimelineNode[] {
 
 /**
  * 距高考剩余天数。优先用后端 gaokao 节点,缺失则用兜底日期。
- * 高考已开始返回 null。
+ * 高考当天返回 0,高考已过(目标日之后的日期)返回 null。
+ *
+ * 按北京时间(UTC+8)的日期差算——把 now 和目标日都归一化到当天 0 点再相减,
+ * 避免同一天上午和深夜因时刻不同算出差 1 天的问题。
  */
 export function daysUntilGaokao(
   events: TimelineEvent[],
@@ -45,8 +48,18 @@ export function daysUntilGaokao(
   const gaokaoDef = HERO_NODES.find((d) => d.key === 'gaokao')!;
   const event = events.find((e) => e.key === 'gaokao');
   const iso = event?.startDate ?? gaokaoDef.fallbackIso;
-  const diff = new Date(iso).getTime() - now.getTime();
-  if (diff <= 0) return null;
-  // Math.floor: 以整天为粒度(不足一整天不进位),与"距高考还有 N 天"的自然语义一致
-  return Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  // UTC+8 偏移量(毫秒)
+  const UTC8_OFFSET = 8 * 60 * 60 * 1000;
+
+  // 将时间戳按 UTC+8 归一化到当天 0 点:先加偏移使其"对齐北京时间",再取整天
+  const toBeijingDayStart = (ts: number) =>
+    Math.floor((ts + UTC8_OFFSET) / (1000 * 60 * 60 * 24)) * (1000 * 60 * 60 * 24);
+
+  const targetDay = toBeijingDayStart(new Date(iso).getTime());
+  const nowDay = toBeijingDayStart(now.getTime());
+
+  const diffDays = (targetDay - nowDay) / (1000 * 60 * 60 * 24);
+  if (diffDays < 0) return null;
+  return diffDays; // 0 = 当天,正整数 = 剩余天数
 }

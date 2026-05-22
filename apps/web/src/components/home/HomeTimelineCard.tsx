@@ -25,12 +25,13 @@ function formatTargetDate(iso: string): string {
  */
 export default function HomeTimelineCard() {
   const currentYear = useMemo(() => new Date().getFullYear(), []);
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['timeline', currentYear],
     queryFn: () => timelineApi.getTimeline(currentYear),
     staleTime: 60 * 60 * 1000,
   });
 
+  // 请求完成前不用 fallback 渲染,避免首屏倒计时数字闪变
   const events = data?.events ?? [];
   const nodes = buildHeroTimeline(events);
   const days = daysUntilGaokao(events);
@@ -50,7 +51,27 @@ export default function HomeTimelineCard() {
         <span className="yr">{examYear} 高考</span>
       </div>
 
-      {days === null ? (
+      {isLoading ? (
+        // 数据未到时显示占位,不用 fallback 常量渲染,避免数据到达后产生闪变
+        <>
+          <div className="countdown-hero">
+            <span className="countdown-prefix">距</span>
+            <span className="countdown-num" aria-busy="true">—</span>
+            <span className="countdown-suffix">天</span>
+          </div>
+          <div className="timeline">
+            <div className="lbl">志愿填报路径</div>
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="tl-node pending">
+                <div className="row1">
+                  <span className="ttl" style={{ opacity: 0.3 }}>···</span>
+                  <span className="date" style={{ opacity: 0.3 }}>···</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : days === null ? (
         // daysUntilGaokao 返回 null:高考已结束
         <div className="countdown-note">{examYear} 高考已结束</div>
       ) : days === 0 ? (
@@ -73,26 +94,28 @@ export default function HomeTimelineCard() {
         </>
       )}
 
-      <div className="timeline">
-        <div className="lbl">志愿填报路径</div>
-        {nodes.map((node, index) => {
-          // activeIndex 为 -1 表示所有节点都已过期 → 全部标记为 done
-          const state =
-            activeIndex === -1 || index < activeIndex
-              ? 'done'
-              : index === activeIndex
-                ? 'active'
-                : 'pending';
-          return (
-            <div key={node.key} className={`tl-node ${state}`}>
-              <div className="row1">
-                <span className="ttl">{node.label}</span>
-                <span className="date">{formatNodeDate(node.iso)}</span>
+      {!isLoading && (
+        <div className="timeline">
+          <div className="lbl">志愿填报路径</div>
+          {nodes.map((node, index) => {
+            // activeIndex 为 -1 表示所有节点都已过期 → 全部标记为 done
+            const state =
+              activeIndex === -1 || index < activeIndex
+                ? 'done'
+                : index === activeIndex
+                  ? 'active'
+                  : 'pending';
+            return (
+              <div key={node.key} className={`tl-node ${state}`}>
+                <div className="row1">
+                  <span className="ttl">{node.label}</span>
+                  <span className="date">{formatNodeDate(node.iso)}</span>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </aside>
   );
 }

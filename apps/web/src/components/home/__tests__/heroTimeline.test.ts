@@ -46,4 +46,9 @@ describe('daysUntilGaokao', () => {
   it('高考已过返回 null', () => {
     expect(daysUntilGaokao([], new Date('2026-07-01T00:00:00+08:00'))).toBeNull();
   });
+
+  it('同一天深夜看,结果与当天 0 点一致(不应差 1 天)', () => {
+    // 2026-05-21 23:30 北京时间,距 2026-06-07 仍是 17 天整,不应变成 16
+    expect(daysUntilGaokao([], new Date('2026-05-21T23:30:00+08:00'))).toBe(17);
+  });
 });
