@@ -15,6 +15,10 @@ import UniversityLogo from '@/components/university/UniversityLogo';
 import { universityService, type UniversityQueryParams } from '@/services/university';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useStudentRank } from '@/stores/studentRankStore';
+import { classifyRank, getTier } from '@/utils/classify-rank';
+import RankTierBadge from '@/components/admission/RankTierBadge';
+import RankDistance from '@/components/admission/RankDistance';
+import type { UniversityListItem } from '@/services/university';
 
 const SORTS: Array<{ label: string; value?: Pick<UniversityQueryParams, 'sortBy' | 'sortOrder'>; disabled?: boolean }> = [
   { label: '综合排序', value: { sortBy: 'name', sortOrder: 'asc' } },
@@ -209,7 +213,15 @@ function AppliedFilterChips({
   );
 }
 
-function UniversityCard({ uni }: { uni: any }) {
+function UniversityCard({
+  uni,
+  userRank,
+  examType,
+}: {
+  uni: UniversityListItem;
+  userRank: number | null;
+  examType: '物理' | '历史';
+}) {
   const tags: string[] = [];
   if (uni.is985) tags.push('985');
   if (uni.is211) tags.push('211');
@@ -217,6 +229,16 @@ function UniversityCard({ uni }: { uni: any }) {
 
   const admission = uni.latestAdmission;
   const infoItems = [uni.type, uni.province, uni.city, uni.runningNature].filter(Boolean);
+
+  const tier = getTier({ is985: uni.is985, is211: uni.is211, batch: uni.level ?? '' });
+  const verdict =
+    userRank != null
+      ? classifyRank(userRank, uni.predictedMinRank, tier, examType === '历史')
+      : null;
+  const rankDiff =
+    userRank != null && uni.predictedMinRank != null
+      ? uni.predictedMinRank - userRank
+      : null;
 
   return (
     <div className="grid gap-4 rounded-xl bg-surface px-4 py-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:px-5 lg:grid-cols-[64px_minmax(0,1fr)_140px] lg:items-center">
@@ -242,6 +264,7 @@ function UniversityCard({ uni }: { uni: any }) {
                   {tag}
                 </span>
               ))}
+              {verdict && <RankTierBadge tier={verdict} />}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {infoItems.map((item) => (
@@ -264,14 +287,20 @@ function UniversityCard({ uni }: { uni: any }) {
 
       <div className="rounded-lg bg-bg px-3 py-3 text-left lg:text-right">
         <span className="block font-serif text-[24px] font-semibold leading-none text-text tabular-nums">
-          {admission?.minScore || '-'}
+          {admission?.minScore ?? '-'}
         </span>
-        <span className="mt-1 block text-[11px] text-text-muted">最近一年最低分</span>
+        <span className="mt-1 block text-[11px] text-text-muted">
+          {examType}类 · 最近一年最低分
+        </span>
         <span className="mt-1 block text-[11px] text-text-tertiary tabular-nums">
-          位次 {admission?.minRank || '-'}
+          位次 {admission?.minRank ?? '-'}
         </span>
+        {rankDiff != null && verdict && (
+          <span className="mt-1 block text-[11px] text-text-muted">
+            距你 <RankDistance diff={rankDiff} tier={verdict} />
+          </span>
+        )}
       </div>
-
     </div>
   );
 }
@@ -484,8 +513,9 @@ export function UniversityListTab() {
             </div>
           ) : universities.length > 0 ? (
             <div className="space-y-3">
-              {universities.map((uni: any) => (
-                <UniversityCard key={uni.id} uni={uni} />
+              {universities.map((uni: UniversityListItem) => (
+                // UI 只提供 '物理'/'历史' 两个选项，断言类型安全
+                <UniversityCard key={uni.id} uni={uni} userRank={studentRank} examType={examType as '物理' | '历史'} />
               ))}
             </div>
           ) : (
