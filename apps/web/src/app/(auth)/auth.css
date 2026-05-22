@@ -1,0 +1,607 @@
+/* ============================================================
+   智愿家 · 登录 / 注册共用样式
+   Transcribed from WillNest Design System / auth/auth.css.
+   Reset block omitted: box-sizing + body base come from globals.css.
+   CSS var(--*) tokens are defined in globals.css :root.
+   ============================================================ */
+
+/* Scoped resets — the design source applied these globally; scope them
+   to the auth shell so app-wide <a> / form-control defaults stay intact. */
+.auth-page { position: relative; }
+.auth-page a { color: inherit; text-decoration: none; }
+.auth-page button,
+.auth-page input,
+.auth-page select { font-family: inherit; }
+.auth-page input { color: inherit; }
+
+/* ==========================================================================
+   Top bar — minimal, sits on top of left panel on desktop, hidden on mobile
+   ========================================================================== */
+.auth-topbar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 5;
+  height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px;
+  pointer-events: none;
+}
+.auth-topbar > * { pointer-events: auto; }
+.auth-topbar .home-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: rgba(255,255,255,.72);
+  transition: color var(--dur) var(--ease);
+  margin-left: auto;
+}
+.auth-topbar .home-back:hover { color: var(--accent-light); }
+.auth-topbar .home-back svg { width: 14px; height: 14px; }
+@media (max-width: 980px) {
+  .auth-topbar { display: none; }
+}
+
+/* ==========================================================================
+   Shell — 2 col grid
+   ========================================================================== */
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+}
+@media (max-width: 980px) {
+  .auth-shell { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================================
+   LEFT — marketing panel (dark navy)
+   ========================================================================== */
+.auth-left {
+  position: relative;
+  overflow: hidden;
+  background: #14213a;
+  color: #fff;
+  padding: 96px 64px 56px;
+  display: flex; flex-direction: column;
+  isolation: isolate;
+}
+.auth-left-bg { position: absolute; inset: 0; z-index: -2; overflow: hidden; }
+.auth-left-bg img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  opacity: .78;
+}
+/* Vertical scrim — keeps brand at top + marketing block at bottom legible.
+   Tuned for cream-dominant illustrations (register gate); darker images
+   (login corridor) tolerate the same scrim without going muddy. */
+.auth-left::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background:
+    linear-gradient(180deg,
+      rgba(20, 33, 58, .72) 0%,
+      rgba(20, 33, 58, .35) 14%,
+      rgba(20, 33, 58, .10) 28%,
+      rgba(20, 33, 58, .10) 42%,
+      rgba(20, 33, 58, .55) 60%,
+      rgba(20, 33, 58, .86) 80%,
+      rgba(20, 33, 58, .95) 100%);
+}
+/* Warm atmospheric highlight + barely-there paper-noise dots */
+.auth-left::after {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background:
+    radial-gradient(820px 540px at 88% 18%, rgba(184,134,11,.10), transparent 62%),
+    radial-gradient(680px 580px at 12% 92%, rgba(44,82,130,.18), transparent 65%),
+    radial-gradient(circle at 22% 28%, rgba(255,255,255,.020) 0, transparent 45%),
+    radial-gradient(circle at 78% 72%, rgba(255,255,255,.020) 0, transparent 45%);
+}
+@media (max-width: 1280px) {
+  .auth-left { padding: 88px 48px 48px; }
+}
+@media (max-width: 980px) {
+  .auth-left {
+    padding: 28px 24px 32px;
+    min-height: auto;
+  }
+  .auth-left-bg img { opacity: .22; }
+}
+
+/* Brand mark on left panel */
+.auth-brand {
+  display: inline-flex; align-items: center; gap: 12px;
+  line-height: 1;
+  position: relative; z-index: 1;
+}
+.auth-brand-mark {
+  width: 44px; height: 44px;
+  flex: 0 0 auto;
+  filter: brightness(0) invert(1)
+          drop-shadow(0 1px 2px rgba(0,0,0,.45))
+          drop-shadow(0 2px 6px rgba(0,0,0,.35));
+  opacity: .96;
+}
+.auth-brand-text { display: flex; flex-direction: column; gap: 4px; }
+.auth-brand-zh {
+  font-family: var(--font-heading);
+  font-weight: 600; font-size: 19px;
+  color: #fff; line-height: 1.1;
+  text-shadow: 0 1px 3px rgba(0,0,0,.55), 0 2px 12px rgba(0,0,0,.35);
+}
+.auth-brand-en {
+  font-size: 9px; letter-spacing: 1.6px; text-transform: uppercase;
+  color: rgba(255,255,255,.72); line-height: 1.1;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+}
+
+/* Mobile brand — sits in left panel header, simplified */
+@media (max-width: 980px) {
+  .auth-brand-mark { width: 36px; height: 36px; }
+  .auth-brand-zh { font-size: 17px; }
+}
+
+/* Marketing content block */
+.auth-marketing {
+  margin-top: auto;
+  max-width: 480px;
+  position: relative; z-index: 1;
+  /* Safety text-shadow on the whole block — bumps contrast on any
+     illustration regardless of luminance. Cheap insurance. */
+  text-shadow: 0 1px 3px rgba(0,0,0,.55), 0 2px 14px rgba(0,0,0,.35);
+}
+.auth-marketing .eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(20, 33, 58, .55);
+  border: 1px solid rgba(184,134,11,.32);
+  font-size: 10.5px; font-weight: 500; letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--accent-light);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  text-shadow: none;
+}
+.auth-marketing .eyebrow .dot {
+  width: 5px; height: 5px; border-radius: 999px;
+  background: var(--accent-light);
+  box-shadow: 0 0 0 3px rgba(212,168,67,.18);
+}
+
+.auth-marketing h1 {
+  margin: 22px 0 0;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: clamp(28px, 3.4vw, 40px);
+  line-height: 1.22;
+  letter-spacing: -.008em;
+  color: #fff;
+  text-wrap: pretty;
+}
+.auth-marketing h1 em {
+  font-style: italic;
+  color: var(--accent-light);
+  font-weight: 600;
+  /* Layered shadow halo — keeps the gold accent readable on any
+     brightness, including the warm window-light spots in the corridor
+     illustration. Stronger than the parent block's safety shadow. */
+  text-shadow:
+    0 0 1px rgba(20, 33, 58, .9),
+    0 1px 2px rgba(20, 33, 58, .85),
+    0 2px 10px rgba(20, 33, 58, .55),
+    0 0 24px rgba(20, 33, 58, .35);
+}
+.auth-marketing .sub {
+  margin: 18px 0 0;
+  max-width: 460px;
+  font-size: 15px; line-height: 1.7;
+  color: rgba(255,255,255,.72);
+}
+
+/* Stats — 3 cells */
+.auth-stats {
+  margin-top: 40px;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  padding: 22px 0;
+  border-top: 1px solid rgba(255,255,255,.10);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+.auth-stats .cell {
+  padding: 0 22px;
+  border-right: 1px solid rgba(255,255,255,.08);
+}
+.auth-stats .cell:first-child { padding-left: 0; }
+.auth-stats .cell:last-child { padding-right: 0; border-right: 0; }
+.auth-stats .num {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 28px; line-height: 1;
+  color: var(--accent-light);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.005em;
+  display: flex; align-items: baseline; gap: 3px;
+}
+.auth-stats .num .unit {
+  font-size: 12px;
+  color: rgba(255,255,255,.55);
+  font-weight: 500; margin-left: 2px;
+  letter-spacing: 0;
+}
+.auth-stats .lbl {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: rgba(255,255,255,.55);
+  line-height: 1.4;
+}
+.auth-stats .sb {
+  margin-top: 3px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: rgba(255,255,255,.40);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Feature bullets */
+.auth-features {
+  margin-top: 32px;
+  display: flex; flex-direction: column;
+  gap: 16px;
+  list-style: none;
+  padding: 0;
+}
+.auth-features .feat {
+  display: flex; align-items: flex-start; gap: 14px;
+  font-size: 14px; line-height: 1.55;
+  color: rgba(255,255,255,.80);
+}
+.auth-features .feat .ic {
+  width: 22px; height: 22px;
+  border-radius: 999px;
+  background: rgba(184,134,11,.18);
+  border: 1px solid rgba(184,134,11,.36);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.auth-features .feat .ic svg {
+  width: 11px; height: 11px;
+  stroke: var(--accent-light); stroke-width: 2.5;
+  fill: none; stroke-linecap: round; stroke-linejoin: round;
+}
+.auth-features .feat strong {
+  font-weight: 600; color: #fff;
+  margin-right: 6px;
+}
+
+/* Mobile compaction — drop stats + features, keep heading & subtitle */
+@media (max-width: 980px) {
+  .auth-marketing { margin-top: 18px; max-width: none; }
+  .auth-marketing h1 { font-size: clamp(20px, 5vw, 24px); margin-top: 14px; }
+  .auth-marketing .sub { margin-top: 10px; font-size: 13.5px; line-height: 1.6; max-width: none; }
+  .auth-stats, .auth-features { display: none; }
+}
+
+/* ==========================================================================
+   RIGHT — form panel (cream)
+   ========================================================================== */
+.auth-right {
+  display: flex; align-items: stretch; justify-content: center;
+  background: var(--bg);
+  padding: 64px 48px;
+  position: relative;
+}
+.auth-right::before {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(900px 600px at 100% 0%, rgba(184,134,11,.06), transparent 60%),
+    radial-gradient(700px 500px at 0% 100%, rgba(30,58,95,.05), transparent 60%);
+  pointer-events: none;
+}
+@media (max-width: 980px) {
+  .auth-right { padding: 32px 20px 56px; }
+}
+
+.auth-form-wrap {
+  width: 100%;
+  max-width: 420px;
+  margin: auto;
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+}
+
+/* Top: switch link */
+.auth-switch {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-bottom: 36px;
+}
+.auth-switch a {
+  font-weight: 500;
+  color: var(--primary);
+  display: inline-flex; align-items: center; gap: 4px;
+  transition: color var(--dur) var(--ease), gap var(--dur) var(--ease);
+}
+.auth-switch a:hover { color: var(--primary-light); gap: 7px; }
+@media (max-width: 980px) {
+  .auth-switch { margin-bottom: 24px; }
+}
+
+/* Title block */
+.auth-title { margin-bottom: 32px; }
+.auth-title .eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 2.2px;
+  color: var(--accent);
+}
+.auth-title h1 {
+  margin: 10px 0 0;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 32px; line-height: 1.2;
+  color: var(--text);
+  letter-spacing: -.005em;
+}
+.auth-title .sub {
+  margin: 12px 0 0;
+  font-size: 14px; line-height: 1.65;
+  color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   Form fields (cream input bg)
+   ========================================================================== */
+.field { margin-bottom: 18px; }
+.field-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  letter-spacing: .02em;
+}
+.field-label .opt {
+  font-size: 10.5px; color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+
+.input-wrap {
+  position: relative;
+  display: flex; align-items: center;
+  background: var(--surface-dim);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.input-wrap:hover { background: #ece9de; }
+.input-wrap:focus-within {
+  background: #fff;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(30,58,95,.10);
+}
+.input-wrap .prefix {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 100%;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  transition: color var(--dur) var(--ease);
+}
+.input-wrap:focus-within .prefix { color: var(--primary); }
+.input-wrap .prefix svg { width: 16px; height: 16px; }
+.input-wrap input {
+  flex: 1; min-width: 0;
+  border: 0; background: transparent;
+  padding: 12px 14px 12px 0;
+  font-size: 14.5px;
+  color: var(--text);
+  outline: none;
+  letter-spacing: .01em;
+  height: 44px;
+}
+.input-wrap input::placeholder { color: var(--text-muted); font-size: 14px; }
+.input-wrap .suffix {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 100%;
+  flex: 0 0 auto;
+  background: transparent;
+  border: 0; cursor: pointer;
+  color: var(--text-muted);
+  transition: color var(--dur) var(--ease);
+}
+.input-wrap .suffix:hover { color: var(--primary); }
+.input-wrap .suffix svg { width: 16px; height: 16px; }
+
+.field-hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  letter-spacing: .01em;
+}
+.field-hint.is-error { color: var(--rush); }
+.field-hint.is-ok { color: var(--safe); }
+
+/* Password strength meter (register only) */
+.strength {
+  margin-top: 8px;
+  display: flex; align-items: center; gap: 10px;
+}
+.strength-bars {
+  display: flex; gap: 4px; flex: 1;
+}
+.strength-bars span {
+  flex: 1; height: 3px; border-radius: 999px;
+  background: var(--border);
+  transition: background var(--dur) var(--ease);
+}
+.strength-bars[data-level="1"] span:nth-child(-n+1),
+.strength-bars[data-level="2"] span:nth-child(-n+2),
+.strength-bars[data-level="3"] span:nth-child(-n+3),
+.strength-bars[data-level="4"] span:nth-child(-n+4) {
+  background: var(--accent);
+}
+.strength-bars[data-level="3"] span:nth-child(-n+3),
+.strength-bars[data-level="4"] span:nth-child(-n+4) {
+  background: var(--safe);
+}
+.strength-bars[data-level="1"] span:nth-child(-n+1) { background: var(--rush); }
+.strength-label {
+  font-size: 11px; color: var(--text-muted);
+  font-weight: 500; letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+  min-width: 40px; text-align: right;
+}
+
+/* Row: checkbox + helper text */
+.field-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  margin: 22px 0 24px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  flex-wrap: wrap;
+}
+.cbx {
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+.cbx input { position: absolute; opacity: 0; pointer-events: none; }
+.cbx .box {
+  width: 16px; height: 16px;
+  border-radius: 4px;
+  background: var(--surface-dim);
+  border: 1px solid var(--ring);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+  transition: all var(--dur) var(--ease);
+}
+.cbx .box svg {
+  width: 10px; height: 10px;
+  stroke: #fff; stroke-width: 3;
+  fill: none; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+.cbx input:checked ~ .box {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.cbx input:checked ~ .box svg { opacity: 1; }
+.cbx input:focus-visible ~ .box {
+  box-shadow: 0 0 0 3px rgba(30,58,95,.18);
+}
+.cbx:hover .box { border-color: var(--primary); }
+
+.field-row .hint-link {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* Submit button */
+.btn-submit {
+  width: 100%;
+  height: 48px;
+  border: 0; border-radius: var(--radius-lg);
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  font-size: 15px; font-weight: 600;
+  letter-spacing: .02em;
+  box-shadow: var(--shadow-glow-primary);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.btn-submit:hover { transform: translateY(-1px); box-shadow: var(--shadow-glow-primary-lg); }
+.btn-submit:active { transform: translateY(0); }
+.btn-submit:disabled { cursor: not-allowed; opacity: .7; }
+.btn-submit:disabled:hover { transform: none; box-shadow: var(--shadow-glow-primary); }
+.btn-submit .arrow {
+  font-size: 16px; line-height: 1; transition: transform var(--dur) var(--ease);
+}
+.btn-submit:hover:not(:disabled) .arrow { transform: translateX(3px); }
+
+/* Bottom legal text */
+.auth-legal {
+  margin-top: 28px;
+  font-size: 12px; line-height: 1.65;
+  color: var(--text-muted);
+  text-align: center;
+}
+.auth-legal a, .auth-legal .lk {
+  color: var(--text-tertiary);
+  transition: color var(--dur) var(--ease);
+  border-bottom: 1px dotted rgba(107,105,98,.35);
+  padding-bottom: 1px;
+}
+.auth-legal a:hover, .auth-legal .lk:hover {
+  color: var(--primary);
+  border-bottom-color: rgba(30,58,95,.4);
+}
+.auth-legal .faint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+/* Divider line above legal */
+.auth-divider {
+  margin: 28px 0 0;
+  display: flex; align-items: center; gap: 14px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+
+/* Trust strip — sits at bottom of right panel below the form on desktop */
+.auth-trust {
+  margin-top: 32px;
+  display: flex; align-items: center; justify-content: center;
+  gap: 18px;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+.auth-trust .pp { display: inline-flex; align-items: center; gap: 6px; }
+.auth-trust .pp::before {
+  content: "✓";
+  color: var(--accent);
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   Motion — subtle reveal
+   ========================================================================== */
+.fade-up {
+  animation: fadeUp 600ms var(--ease) both;
+}
+.fade-up.d1 { animation-delay: 60ms; }
+.fade-up.d2 { animation-delay: 140ms; }
+.fade-up.d3 { animation-delay: 220ms; }
+.fade-up.d4 { animation-delay: 300ms; }
+.fade-up.d5 { animation-delay: 380ms; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up { animation: none; }
+}

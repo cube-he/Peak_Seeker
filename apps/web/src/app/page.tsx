@@ -90,7 +90,7 @@ export default function HomePage() {
       <section className="hero">
         <div className="hero-bg" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/bg-hero-home-v2.webp" alt="" />
+          <img src="/images/bg-hero-campus-distant.webp" alt="" />
         </div>
 
         <div className="container hero-grid">
@@ -381,7 +381,7 @@ export default function HomePage() {
       <section className="cta">
         <div className="cta-bg" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/bg-cta-home-v2.webp" alt="" />
+          <img src="/images/bg-cta-campus-approach.webp" alt="" />
         </div>
 
         <div className="container cta-inner">

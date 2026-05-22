@@ -78,6 +78,8 @@ html, body {
   --dur-fast: 150ms;
   --dur: 200ms;
   --dur-slow: 300ms;
+  --radius: 8px;
+  --radius-lg: 10px;
 }
 
 body {
