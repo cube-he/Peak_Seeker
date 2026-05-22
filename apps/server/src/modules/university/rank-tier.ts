@@ -1,20 +1,31 @@
-// 注意：后端 apps/server/src/modules/university/rank-tier.ts 是本文件的独立副本，
-// 修改分档逻辑或 admission-thresholds.ts 阈值时必须同步两处。
-import {
-  TIER_THRESHOLDS,
-  HISTORY_SCIENCE_MULTIPLIER,
-  RATIO_THRESHOLDS,
-  type Tier,
-} from './admission-thresholds';
+/**
+ * 院校录取概率分档（冲/稳/保/垫）。
+ * 本文件是前端 apps/web/src/utils/classify-rank.ts + admission-thresholds.ts 的独立副本——
+ * 修改分档逻辑或阈值时，必须同步前端那两个文件。
+ */
 
+export type Tier = '985' | '211' | '普通本科' | '专科';
 export type RankTier = 'rush' | 'stable' | 'safe' | 'elite' | 'unknown';
+
+interface TierThresholds {
+  stable: number;
+  safe: number;
+  elite: number;
+}
+
+const TIER_THRESHOLDS: Record<Tier, TierThresholds> = {
+  '985': { stable: 1500, safe: 5000, elite: 15000 },
+  '211': { stable: 4000, safe: 12000, elite: 30000 },
+  '普通本科': { stable: 10000, safe: 30000, elite: 80000 },
+  '专科': { stable: 20000, safe: 60000, elite: 150000 },
+};
+
+const HISTORY_SCIENCE_MULTIPLIER = 1.5;
+
+const RATIO_THRESHOLDS = { rushMax: -0.10, stableMax: 0.15, safeMax: 0.50 };
 
 const RISK_ORDER: RankTier[] = ['rush', 'stable', 'safe', 'elite'];
 
-/**
- * Derive university tier for a given (university flags, batch) row.
- * Order: 985 > 211 > 专科 > 普通本科.
- */
 export function getTier(input: {
   is985: boolean;
   is211: boolean;
@@ -26,19 +37,10 @@ export function getTier(input: {
   return '普通本科';
 }
 
-/** True if the subject string represents history/arts track. */
 export function isHistorical(subjects: string): boolean {
   return /历史|文科/.test(subjects);
 }
 
-/**
- * Classify a (userRank, predictedRank) into 4 tiers + unknown.
- *
- * Dual-criterion: absolute diff vs tier thresholds, AND relative ratio vs RATIO_THRESHOLDS.
- * Take the risker tier (rush > stable > safe > elite by RISK_ORDER index).
- *
- * Returns 'unknown' when predictedRank is null (insufficient model data).
- */
 export function classifyRank(
   userRank: number,
   predictedRank: number | null,
