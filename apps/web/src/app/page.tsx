@@ -4,15 +4,9 @@ import { Fragment } from 'react';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import HomeTimelineCard from '@/components/home/HomeTimelineCard';
+import HeroStats from '@/components/home/HeroStats';
+import { useHomeMotion } from '@/components/home/useHomeMotion';
 import './homepage.css';
-
-// Hero 左侧统计 — 真实数据,组件内常量
-const heroStats = [
-  { num: '2,237', unit: '所', label: '在川招生院校' },
-  { num: '14.4', unit: '万 条', label: '录取记录' },
-  { num: '1,434', unit: '个', label: '招生专业' },
-  { num: '4', unit: '年', label: '数据纵深', accent: true },
-];
 
 // 产品能力区 — 三步流程
 const flowSteps = [
@@ -84,6 +78,10 @@ const sampleRows = [
 ];
 
 export default function HomePage() {
+  // 滚动动效:reveal / 冲稳保 count-up / 进度条填充 / AI 卡片光晕
+  // 完整复刻 landing.html 的内联 script(Hero 4 统计的 count-up 由 HeroStats 自管)
+  useHomeMotion();
+
   return (
     <MainLayout noPadding hideMobileBottomNav>
       {/* ============================================================
@@ -92,7 +90,7 @@ export default function HomePage() {
       <section className="hero">
         <div className="hero-bg" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/bg-hero-home.webp" alt="" />
+          <img src="/images/bg-hero-home-v2.webp" alt="" />
         </div>
 
         <div className="container hero-grid">
@@ -138,21 +136,8 @@ export default function HomePage() {
               </Link>
             </div>
 
-            <div className="hero-stats" role="list">
-              {heroStats.map((stat) => (
-                <div
-                  key={stat.label}
-                  className={`cell${stat.accent ? ' accent' : ''}`}
-                  role="listitem"
-                >
-                  <div className="num">
-                    <span className="num-val">{stat.num}</span>
-                    <span className="unit">{stat.unit}</span>
-                  </div>
-                  <div className="lbl">{stat.label}</div>
-                </div>
-              ))}
-            </div>
+            {/* 4 统计 — 接 GET /stats/homepage,数字 count-up 到真实值 */}
+            <HeroStats />
           </div>
 
           {/* RIGHT — Countdown + Timeline card */}
@@ -165,7 +150,7 @@ export default function HomePage() {
           ============================================================ */}
       <section className="sec tone-dim" id="capability">
         <div className="container">
-          <div className="sec-head">
+          <div className="sec-head" data-reveal>
             <span className="eyebrow-pill">
               <span className="dot" />
               产品能力
@@ -175,7 +160,7 @@ export default function HomePage() {
           </div>
 
           {/* Flow line */}
-          <div className="flow" role="list">
+          <div className="flow" role="list" data-reveal>
             {flowSteps.map((step, index) => (
               <Fragment key={step.n}>
                 <div className="flow-step" role="listitem">
@@ -188,7 +173,7 @@ export default function HomePage() {
           </div>
 
           {/* 5 capability cards */}
-          <div className="cap-grid">
+          <div className="cap-grid" data-reveal-stagger>
             <Link className="cap-card c1" href="/universities">
               <div className="cap-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -272,7 +257,7 @@ export default function HomePage() {
           ============================================================ */}
       <section className="sec sample-section" id="sample">
         <div className="container">
-          <div className="sec-head">
+          <div className="sec-head" data-reveal>
             <span className="eyebrow-pill">
               <span className="dot" />
               方案示例
@@ -281,14 +266,14 @@ export default function HomePage() {
             <p className="lead">下面是智愿家为示例考生生成的方案样式——结构、信息密度、决策线索一目了然。</p>
           </div>
 
-          <div className="sample-disclaim">
+          <div className="sample-disclaim" data-reveal>
             <span className="badge">示例 Demo</span>
             <span>
               以下为示例演示，注册后将基于<strong>你的真实分数和偏好</strong>生成。
             </span>
           </div>
 
-          <div className="sample-frame">
+          <div className="sample-frame" data-reveal>
             {/* Sample student head */}
             <div className="sample-head">
               <div>
@@ -311,8 +296,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 冲 / 稳 / 保 distribution */}
-            <div className="sample-dist">
+            {/* 冲 / 稳 / 保 distribution — 数字 count-up,由 useHomeMotion 驱动 */}
+            <div className="sample-dist" data-anim-dist>
               {sampleDist.map((cell) => (
                 <div key={cell.type} className={`dist-cell ${cell.type}`}>
                   <div className="lhs">
@@ -320,7 +305,10 @@ export default function HomePage() {
                     <span className="name">{cell.name}</span>
                   </div>
                   <span className="desc">{cell.desc}</span>
-                  <span className="cnt">{cell.cnt}</span>
+                  {/* 初值 0,data-target 为终值;进入视口后 tween 到终值 */}
+                  <span className="cnt" data-target={cell.cnt}>
+                    0
+                  </span>
                 </div>
               ))}
             </div>
@@ -365,7 +353,13 @@ export default function HomePage() {
                   <div className={`prob ${row.tier}`}>
                     <div className="v">{row.prob}%</div>
                     <div className="bar">
-                      <div className="fill" style={{ width: `${row.prob}%` }} />
+                      {/* 初始 width 0%,data-target 为终值;由 useHomeMotion 填充 */}
+                      <div
+                        className="fill"
+                        data-bar-fill
+                        data-target={row.prob}
+                        style={{ width: '0%' }}
+                      />
                     </div>
                     <span className="sb">示例</span>
                   </div>
@@ -387,7 +381,7 @@ export default function HomePage() {
       <section className="cta">
         <div className="cta-bg" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/bg-cta-home.webp" alt="" />
+          <img src="/images/bg-cta-home-v2.webp" alt="" />
         </div>
 
         <div className="container cta-inner">
