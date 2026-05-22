@@ -69,9 +69,9 @@ export class QueryUniversityDto {
   @IsBoolean()
   is211?: boolean;
 
-  @ApiPropertyOptional({ description: '排序字段', enum: ['name', 'province', 'type', 'minRank', 'tier'] })
+  @ApiPropertyOptional({ description: '排序字段', enum: ['name', 'province', 'type', 'minRank', 'tier', 'softRank'] })
   @IsOptional()
-  @IsIn(['name', 'province', 'type', 'minRank', 'tier'])
+  @IsIn(['name', 'province', 'type', 'minRank', 'tier', 'softRank'])
   sortBy?: string = 'name';
 
   @ApiPropertyOptional({ description: '排序方向', enum: ['asc', 'desc'] })

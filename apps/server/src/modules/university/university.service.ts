@@ -56,9 +56,12 @@ export class UniversityService {
     const minRankField = isHistory ? 'minRankHistory' : 'minRankPhysics';
     const predRankField = isHistory ? 'predRankHistory' : 'predRankPhysics';
 
-    // minRank / tier 排序映射到科类冗余字段；其余沿用 university 标量字段
+    // minRank / tier 排序映射到科类冗余字段；softRank 映射到 softRanking 列；其余沿用 university 标量字段
     const orderByField =
-      sortBy === 'minRank' ? minRankField : sortBy === 'tier' ? predRankField : sortBy;
+      sortBy === 'minRank' ? minRankField
+      : sortBy === 'tier' ? predRankField
+      : sortBy === 'softRank' ? 'softRanking'
+      : sortBy;
 
     // 单条 university 行 -> 列表响应项：注入科类相关 latestAdmission / predictedMinRank，
     // 并剥掉 6 个原始冗余列，避免泄漏到响应。
