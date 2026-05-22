@@ -123,6 +123,7 @@ function FilterPanel({
   const { data: options } = useQuery({
     queryKey: ['university-filters'],
     queryFn: () => universityService.getFilters(),
+    staleTime: Infinity,
   });
 
   return (
@@ -145,6 +146,14 @@ function FilterPanel({
         value={filters.province}
         onChange={(province) => setFilters({ ...filters, province, city: undefined, page: 1 })}
       />
+      {filters.province && (
+        <FilterGroup
+          title="城市"
+          items={(options?.cities ?? []).filter((c) => c.province === filters.province)}
+          value={filters.city}
+          onChange={(city) => setFilters({ ...filters, city, page: 1 })}
+        />
+      )}
       <FilterGroup
         title="学校类型"
         items={options?.types ?? []}
