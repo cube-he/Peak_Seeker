@@ -112,4 +112,21 @@ describe('UniversityListTab header', () => {
     await screen.findByText('测试大学');
     expect(screen.queryByText('稳')).not.toBeInTheDocument();
   });
+
+  it('shows soft ranking and category rank on the card', async () => {
+    mockedService.getList.mockResolvedValue({
+      data: [{
+        id: 9, name: '某财经大学', code: null, province: '上海', city: '上海',
+        type: '财经', level: '本科', runningNature: '公办',
+        is985: false, is211: true, isDoubleFirstClass: true, ranking: null, logoUrl: null,
+        latestAdmission: null, predictedMinRank: null,
+        softRanking: 66, softRankList: '本科', softRankYear: 2026,
+        softCategory: '财经类', softCategoryRank: 5,
+      }],
+      pagination: { page: 1, pageSize: 12, total: 1, totalPages: 1 },
+    });
+    renderTab();
+    expect(await screen.findByText(/软科2026/)).toBeInTheDocument();
+    expect(screen.getByText(/财经类 #5/)).toBeInTheDocument();
+  });
 });

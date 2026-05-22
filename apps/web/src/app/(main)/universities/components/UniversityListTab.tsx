@@ -27,6 +27,7 @@ const SORTS: Array<{
 }> = [
   { label: '默认排序', value: { sortBy: 'name', sortOrder: 'asc' } },
   { label: '位次排序', value: { sortBy: 'minRank', sortOrder: 'asc' } },
+  { label: '软科排名', value: { sortBy: 'softRank', sortOrder: 'asc' } },
   { label: '冲稳保排序', value: { sortBy: 'tier', sortOrder: 'asc' }, needsRank: true },
   { label: '按省份', value: { sortBy: 'province', sortOrder: 'asc' } },
   { label: '按类型', value: { sortBy: 'type', sortOrder: 'asc' } },
@@ -333,7 +334,14 @@ function UniversityCard({
                 <EnvironmentOutlined />
                 {uni.province || '-'} {uni.city || ''}
               </span>
-              {uni.ranking && <span>综合排名 {uni.ranking}</span>}
+              {uni.softRanking != null && (
+                <span>
+                  软科{uni.softRankYear ?? ''} {uni.softRankList ?? ''}#{uni.softRanking}
+                </span>
+              )}
+              {uni.softCategory && uni.softCategoryRank != null && (
+                <span>{uni.softCategory} #{uni.softCategoryRank}</span>
+              )}
               {uni.code && <span>院校代码 {uni.code}</span>}
             </div>
           </div>
