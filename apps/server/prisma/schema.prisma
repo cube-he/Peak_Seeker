@@ -248,6 +248,10 @@ model University {
   // 软科排名
   softRating  String? @map("soft_rating") @db.VarChar(50)
   softRanking Int?    @map("soft_ranking")
+  softRankList     String? @map("soft_rank_list") @db.VarChar(20)
+  softCategory     String? @map("soft_category") @db.VarChar(50)
+  softCategoryRank Int?    @map("soft_category_rank")
+  softRankYear     Int?    @map("soft_rank_year") @db.SmallInt
 
   // 人口统计
   maleRatio   Int?    @map("male_ratio")
@@ -316,6 +320,7 @@ model University {
   @@index([minRankHistory])
   @@index([predRankPhysics])
   @@index([predRankHistory])
+  @@index([softRanking])
   @@map("universities")
 }
 
