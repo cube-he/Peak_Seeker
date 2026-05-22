@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Empty, Input, Pagination, Spin } from 'antd';
 import {
   AppstoreOutlined,
@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import UniversityLogo from '@/components/university/UniversityLogo';
 import { universityService, type UniversityQueryParams } from '@/services/university';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 const PROVINCES = [
   '北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '黑龙江',
@@ -322,6 +323,14 @@ export function UniversityListTab() {
     sortBy: 'name',
     sortOrder: 'asc',
   });
+  const [keywordInput, setKeywordInput] = useState('');
+  const debouncedKeyword = useDebouncedValue(keywordInput, 300);
+
+  // 防抖后才写入 filters，避免每次击键都触发请求
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, keyword: debouncedKeyword || undefined, page: 1 }));
+  }, [debouncedKeyword]);
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['universities', filters],
     queryFn: () => universityService.getList(filters),
@@ -377,8 +386,8 @@ export function UniversityListTab() {
           <Input
             placeholder="搜索学校名 / 城市 / 关键词，例如“上海”“医科”"
             prefix={<SearchOutlined className="text-text-muted" />}
-            value={filters.keyword}
-            onChange={(e) => setFilters({ ...filters, keyword: e.target.value, page: 1 })}
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
             allowClear
             className="min-w-0 flex-1"
             size="large"
