@@ -39,7 +39,7 @@ describe('UniversityListTab header', () => {
     });
     mockedService.getHot.mockResolvedValue([]);
     mockedService.getFilters.mockResolvedValue({
-      provinces: [], types: [], cities: [], levels: [], grades: [],
+      provinces: [], types: [], cities: [], levels: [], grades: [], natures: [],
     });
   });
 

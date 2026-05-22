@@ -15,17 +15,6 @@ import UniversityLogo from '@/components/university/UniversityLogo';
 import { universityService, type UniversityQueryParams } from '@/services/university';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
-const PROVINCES = [
-  '北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '黑龙江',
-  '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', '湖北', '湖南',
-  '广东', '广西', '海南', '四川', '贵州', '云南', '陕西', '甘肃', '青海',
-  '内蒙古', '西藏', '宁夏', '新疆', '香港', '澳门',
-];
-
-const TYPES = ['综合', '理工', '农林', '医药', '师范', '语言', '财经', '政法', '体育', '艺术', '民族', '军事'];
-const NATURES = ['公办', '民办'];
-const LEVELS = ['本科', '专科'];
-
 const SORTS: Array<{ label: string; value?: Pick<UniversityQueryParams, 'sortBy' | 'sortOrder'>; disabled?: boolean }> = [
   { label: '综合排序', value: { sortBy: 'name', sortOrder: 'asc' } },
   { label: '按省份', value: { sortBy: 'province', sortOrder: 'asc' } },
@@ -45,7 +34,7 @@ function FilterGroup({
   onChange,
 }: {
   title: string;
-  items: string[];
+  items: Array<{ value: string; count: number }>;
   value?: string;
   onChange: (value: string | undefined) => void;
 }) {
@@ -67,15 +56,15 @@ function FilterGroup({
         </button>
         {items.map((item) => (
           <button
-            key={item}
+            key={item.value}
             type="button"
-            onClick={() => onChange(value === item ? undefined : item)}
+            onClick={() => onChange(value === item.value ? undefined : item.value)}
             className={`flex w-full items-center justify-between rounded-md border-0 px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-              value === item ? 'bg-primary-fixed font-medium text-primary' : 'text-text-secondary hover:bg-surface-dim hover:text-text'
+              value === item.value ? 'bg-primary-fixed font-medium text-primary' : 'text-text-secondary hover:bg-surface-dim hover:text-text'
             }`}
           >
-            <span>{item}</span>
-            <span className="text-[11px] text-text-faint">{value === item ? 'ON' : ''}</span>
+            <span>{item.value}</span>
+            <span className="text-[11px] text-text-faint">{item.count}</span>
           </button>
         ))}
       </div>
@@ -131,6 +120,11 @@ function FilterPanel({
   setFilters: (filters: UniversityQueryParams) => void;
   onClear: () => void;
 }) {
+  const { data: options } = useQuery({
+    queryKey: ['university-filters'],
+    queryFn: () => universityService.getFilters(),
+  });
+
   return (
     <aside className="rounded-xl bg-surface p-4 shadow-card lg:sticky lg:top-20">
       <div className="flex items-center justify-between">
@@ -147,25 +141,25 @@ function FilterPanel({
       <FeatureFilters filters={filters} setFilters={setFilters} />
       <FilterGroup
         title="所在地"
-        items={PROVINCES.slice(0, 12)}
+        items={options?.provinces ?? []}
         value={filters.province}
         onChange={(province) => setFilters({ ...filters, province, city: undefined, page: 1 })}
       />
       <FilterGroup
         title="学校类型"
-        items={TYPES.slice(0, 8)}
+        items={options?.types ?? []}
         value={filters.type}
         onChange={(type) => setFilters({ ...filters, type, page: 1 })}
       />
       <FilterGroup
         title="办学性质"
-        items={NATURES}
+        items={options?.natures ?? []}
         value={filters.nature}
         onChange={(nature) => setFilters({ ...filters, nature, page: 1 })}
       />
       <FilterGroup
         title="办学层次"
-        items={LEVELS}
+        items={options?.levels ?? []}
         value={filters.level}
         onChange={(level) => setFilters({ ...filters, level, page: 1 })}
       />

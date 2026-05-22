@@ -44,6 +44,24 @@ export interface UniversityQueryParams {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface FilterOption {
+  value: string;
+  count: number;
+}
+
+export interface CityFilterOption extends FilterOption {
+  province: string;
+}
+
+export interface UniversityFilters {
+  provinces: FilterOption[];
+  types: FilterOption[];
+  levels: FilterOption[];
+  cities: CityFilterOption[];
+  grades: FilterOption[];
+  natures: FilterOption[];
+}
+
 export interface CampusPoiQueryParams {
   category: 'subway' | 'mall' | 'airport';
   limit?: number;
@@ -56,7 +74,7 @@ export const universityService = {
     api.get(`/universities/${id}/majors`, { params: { year } }) as any,
   getAdmissions: (id: number): Promise<any> => api.get(`/universities/${id}/admissions`) as any,
   getHot: (limit?: number): Promise<any> => api.get('/universities/hot', { params: { limit } }) as any,
-  getFilters: (): Promise<any> => api.get('/universities/filters') as any,
+  getFilters: (): Promise<UniversityFilters> => api.get('/universities/filters'),
   getRankingBoard: (examType: ExamType): Promise<RankingBoard[]> =>
     api.get('/universities/ranking-board', { params: { examType } }) as any,
   getCampusPois: (
