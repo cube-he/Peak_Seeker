@@ -319,32 +319,24 @@ export class UniversityService {
     const cached = await this.redis.getCache(cacheKey);
     if (cached) return cached;
 
-    const [provinces, types, levels, cities, grades] = await Promise.all([
+    const [provinces, types, levels, cities, grades, natures] = await Promise.all([
       this.prisma.university.groupBy({
-        by: ['province'],
-        _count: true,
-        where: { province: { not: null } },
+        by: ['province'], _count: true, where: { province: { not: null } },
       }),
       this.prisma.university.groupBy({
-        by: ['type'],
-        _count: true,
-        where: { type: { not: null } },
+        by: ['type'], _count: true, where: { type: { not: null } },
       }),
       this.prisma.university.groupBy({
-        by: ['level'],
-        _count: true,
-        where: { level: { not: null } },
+        by: ['level'], _count: true, where: { level: { not: null } },
       }),
       this.prisma.university.groupBy({
-        by: ['city'],
-        _count: true,
-        where: { city: { not: null } },
-        orderBy: { _count: { city: 'desc' } },
+        by: ['province', 'city'], _count: true, where: { city: { not: null } },
       }),
       this.prisma.university.groupBy({
-        by: ['grade'],
-        _count: true,
-        where: { grade: { not: null } },
+        by: ['grade'], _count: true, where: { grade: { not: null } },
+      }),
+      this.prisma.university.groupBy({
+        by: ['runningNature'], _count: true, where: { runningNature: { not: null } },
       }),
     ]);
 
@@ -352,8 +344,9 @@ export class UniversityService {
       provinces: provinces.map((p) => ({ value: p.province, count: p._count })),
       types: types.map((t) => ({ value: t.type, count: t._count })),
       levels: levels.map((l) => ({ value: l.level, count: l._count })),
-      cities: cities.map((c) => ({ value: c.city, count: c._count })),
+      cities: cities.map((c) => ({ value: c.city, count: c._count, province: c.province })),
       grades: grades.map((g) => ({ value: g.grade, count: g._count })),
+      natures: natures.map((n) => ({ value: n.runningNature, count: n._count })),
     };
 
     await this.redis.setCache(cacheKey, filters, 86400);

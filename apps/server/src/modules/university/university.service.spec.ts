@@ -282,3 +282,35 @@ describe('UniversityService.findAll latestAdmission', () => {
     expect(result.data[0].latestAdmission).toBeNull();
   });
 });
+
+describe('UniversityService.getFilters', () => {
+  const buildService = () => {
+    const prisma = {
+      university: {
+        groupBy: jest.fn()
+          .mockResolvedValueOnce([{ province: '四川', _count: 100 }])            // provinces
+          .mockResolvedValueOnce([{ type: '综合', _count: 50 }])                 // types
+          .mockResolvedValueOnce([{ level: '本科', _count: 200 }])               // levels
+          .mockResolvedValueOnce([{ province: '四川', city: '成都', _count: 80 }]) // cities
+          .mockResolvedValueOnce([{ grade: '一线城市', _count: 10 }])             // grades
+          .mockResolvedValueOnce([{ runningNature: '公办', _count: 150 }]),       // natures
+      },
+    };
+    const redis = { getCache: jest.fn().mockResolvedValue(null), setCache: jest.fn().mockResolvedValue(undefined) };
+    const admissionService = { getTargetYear: jest.fn() };
+    const svc = new UniversityService(prisma as any, redis as any, admissionService as any);
+    return { svc };
+  };
+
+  it('tags each city with its province', async () => {
+    const { svc } = buildService();
+    const filters: any = await svc.getFilters();
+    expect(filters.cities[0]).toEqual({ value: '成都', count: 80, province: '四川' });
+  });
+
+  it('exposes natures from runningNature groupBy', async () => {
+    const { svc } = buildService();
+    const filters: any = await svc.getFilters();
+    expect(filters.natures[0]).toEqual({ value: '公办', count: 150 });
+  });
+});
