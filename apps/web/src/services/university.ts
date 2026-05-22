@@ -63,6 +63,11 @@ export interface UniversityListItem {
   logoUrl: string | null;
   latestAdmission: { minScore: number; minRank: number | null } | null;
   predictedMinRank: number | null;
+  softRanking: number | null;
+  softRankList: string | null;
+  softCategory: string | null;
+  softCategoryRank: number | null;
+  softRankYear: number | null;
 }
 
 export interface UniversityListResponse {

@@ -281,6 +281,12 @@ describe('UniversityService.findAll', () => {
     expect(prisma.university.findMany.mock.calls[0][0].orderBy).toEqual({ minRankPhysics: 'asc' });
   });
 
+  it('sortBy=softRank orders by the softRanking column', async () => {
+    const { svc, prisma } = setup([uni()]);
+    await svc.findAll({ page: 1, pageSize: 20, sortBy: 'softRank', sortOrder: 'asc' } as any);
+    expect(prisma.university.findMany.mock.calls[0][0].orderBy).toEqual({ softRanking: 'asc' });
+  });
+
   it('does not leak raw redundancy columns into the response', async () => {
     const { svc } = setup([uni()]);
     const result: any = await svc.findAll({ page: 1, pageSize: 20 } as any);
