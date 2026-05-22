@@ -121,6 +121,12 @@ function FeatureFilters({
   );
 }
 
+const TIER_ITEMS: Array<{ key: 'rush' | 'stable' | 'safe'; label: string }> = [
+  { key: 'rush', label: '冲' },
+  { key: 'stable', label: '稳' },
+  { key: 'safe', label: '保' },
+];
+
 function TierFilterGroup({
   value,
   rankAvailable,
@@ -130,11 +136,6 @@ function TierFilterGroup({
   rankAvailable: boolean;
   onChange: (v: 'rush' | 'stable' | 'safe' | undefined) => void;
 }) {
-  const items: Array<{ key: 'rush' | 'stable' | 'safe'; label: string }> = [
-    { key: 'rush', label: '冲' },
-    { key: 'stable', label: '稳' },
-    { key: 'safe', label: '保' },
-  ];
   return (
     <div className="border-b border-border-subtle py-4 last:border-b-0">
       <div className="mb-3 text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">
@@ -142,7 +143,7 @@ function TierFilterGroup({
       </div>
       {rankAvailable ? (
         <div className="space-y-1">
-          {items.map((item) => (
+          {TIER_ITEMS.map((item) => (
             <button
               key={item.key}
               type="button"
@@ -416,6 +417,20 @@ export function UniversityListTab() {
   const setExamType = useStudentRank((s) => s.setExamType);
   const studentRank = useStudentRank((s) => s.rank);
 
+  // 位次被清空时，将依赖位次的排序/筛选重置，避免向后端发语义错误的请求
+  useEffect(() => {
+    if (studentRank != null) return;
+    setFilters((prev) => {
+      if (prev.sortBy !== 'tier' && prev.tierFilter == null) return prev;
+      return {
+        ...prev,
+        sortBy: prev.sortBy === 'tier' ? 'name' : prev.sortBy,
+        sortOrder: prev.sortBy === 'tier' ? 'asc' : prev.sortOrder,
+        tierFilter: undefined,
+      };
+    });
+  }, [studentRank]);
+
   // 防抖后才写入 filters，避免每次击键都触发请求
   useEffect(() => {
     setFilters((prev) => ({ ...prev, keyword: debouncedKeyword || undefined, page: 1 }));
@@ -614,7 +629,7 @@ export function UniversityListTab() {
               <span className="font-serif text-base font-semibold">数据说明</span>
             </div>
             <p className="m-0 text-sm leading-relaxed text-text-tertiary">
-              分数排序和地图视图需要后端新增聚合接口。目前页面保留排序口径内的稳定功能。
+              地图视图等扩展功能待后端接口接入。
             </p>
           </div>
           <HotUniversitiesSidebar />

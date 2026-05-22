@@ -89,6 +89,13 @@ describe('UniversityListTab header', () => {
     expect(screen.getByRole('button', { name: '冲' })).toBeInTheDocument();
   });
 
+  it('disables tier sort when no rank is set', async () => {
+    // afterEach 已把 rank 重置为 null
+    renderTab();
+    expect(await screen.findByRole('button', { name: '冲稳保排序' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '位次排序' })).toBeEnabled();
+  });
+
   it('does not show a rank-tier badge when no student rank is set', async () => {
     // afterEach 已把 rank 重置为 null，此用例不 setState rank
     mockedService.getList.mockResolvedValue({
