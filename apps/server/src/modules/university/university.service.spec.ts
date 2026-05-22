@@ -233,17 +233,12 @@ describe('getPickerOptions', () => {
   });
 });
 
-describe('UniversityService.findAll latestAdmission', () => {
-  const setup = (universities: any[], latestYear: number | null = 2025) => {
+describe('UniversityService.findAll', () => {
+  const setup = (universities: any[]) => {
     const prisma = {
       university: {
         findMany: jest.fn().mockResolvedValue(universities),
         count: jest.fn().mockResolvedValue(universities.length),
-      },
-      admissionRecord: {
-        findFirst: jest.fn().mockResolvedValue(
-          latestYear == null ? null : { year: latestYear },
-        ),
       },
     };
     const redis = { getCache: jest.fn(), setCache: jest.fn() };
@@ -252,34 +247,62 @@ describe('UniversityService.findAll latestAdmission', () => {
     return { svc, prisma };
   };
 
-  it('aggregates latestAdmission to the lowest admission score across the year records', async () => {
-    // 院校最低分 = 该年度全部专业组里最低的一条，而不是任取第一条
-    const { svc } = setup([
-      {
-        id: 1, name: 'X',
-        admissionRecords: [
-          { year: 2025, majorMinScore: null, majorMinRank: null, groupMinScore: 520, groupMinRank: 30000 },
-          { year: 2025, majorMinScore: null, majorMinRank: null, groupMinScore: 480, groupMinRank: 55000 },
-          { year: 2025, majorMinScore: null, majorMinRank: null, groupMinScore: 510, groupMinRank: 38000 },
-        ],
-      },
-    ]);
+  const uni = (over: any = {}) => ({
+    id: 1, name: 'X', is985: false, is211: false, level: '本科',
+    minScorePhysics: 600, minRankPhysics: 12000,
+    minScoreHistory: 560, minRankHistory: 8000,
+    predRankPhysics: 11000, predRankHistory: 7500,
+    ...over,
+  });
+
+  it('builds latestAdmission and predictedMinRank from physics columns by default', async () => {
+    const { svc } = setup([uni()]);
     const result: any = await svc.findAll({ page: 1, pageSize: 20 } as any);
-    expect(result.data[0].latestAdmission).toEqual({ year: 2025, minScore: 480, minRank: 55000 });
-    expect(result.data[0].admissionRecords).toBeUndefined();
+    expect(result.data[0].latestAdmission).toEqual({ minScore: 600, minRank: 12000 });
+    expect(result.data[0].predictedMinRank).toBe(11000);
   });
 
-  it('selects admission records for the max year in the DB, not a hardcoded calendar year', async () => {
-    const { svc, prisma } = setup([{ id: 1, name: 'X', admissionRecords: [] }], 2099);
-    await svc.findAll({ page: 1, pageSize: 20 } as any);
-    const include = prisma.university.findMany.mock.calls[0][0].include;
-    expect(include.admissionRecords.where.year).toBe(2099);
+  it('uses history columns when examType is 历史', async () => {
+    const { svc } = setup([uni()]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20, examType: '历史' } as any);
+    expect(result.data[0].latestAdmission).toEqual({ minScore: 560, minRank: 8000 });
+    expect(result.data[0].predictedMinRank).toBe(7500);
   });
 
-  it('returns latestAdmission null when the university has no admission records', async () => {
-    const { svc } = setup([{ id: 1, name: 'X', admissionRecords: [] }]);
+  it('latestAdmission is null when the exam-type score column is null', async () => {
+    const { svc } = setup([uni({ minScorePhysics: null, minRankPhysics: null })]);
     const result: any = await svc.findAll({ page: 1, pageSize: 20 } as any);
     expect(result.data[0].latestAdmission).toBeNull();
+  });
+
+  it('sortBy=minRank orders by the exam-type rank column', async () => {
+    const { svc, prisma } = setup([uni()]);
+    await svc.findAll({ page: 1, pageSize: 20, sortBy: 'minRank', sortOrder: 'asc' } as any);
+    expect(prisma.university.findMany.mock.calls[0][0].orderBy).toEqual({ minRankPhysics: 'asc' });
+  });
+
+  it('does not leak raw redundancy columns into the response', async () => {
+    const { svc } = setup([uni()]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20 } as any);
+    expect(result.data[0].minRankPhysics).toBeUndefined();
+    expect(result.data[0].predRankPhysics).toBeUndefined();
+  });
+
+  it('tierFilter classifies in memory and returns only the matched tier', async () => {
+    // 985 校 stable 阈值 1500；userRank 12000：
+    //   id1 predRank 11000 → diff -1000 → stable
+    //   id2 predRank 3000  → diff -9000 → rush
+    const { svc, prisma } = setup([
+      uni({ id: 1, is985: true, predRankPhysics: 11000 }),
+      uni({ id: 2, is985: true, predRankPhysics: 3000 }),
+    ]);
+    const result: any = await svc.findAll({
+      page: 1, pageSize: 20, tierFilter: 'stable', userRank: 12000,
+    } as any);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].id).toBe(1);
+    expect(result.pagination.total).toBe(1);
+    expect(prisma.university.findMany.mock.calls[0][0].skip).toBeUndefined();
   });
 });
 
