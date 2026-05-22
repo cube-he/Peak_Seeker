@@ -47,7 +47,15 @@ describe('UniversityListTab header', () => {
     renderTab();
     // 等待 h1 内容反映接口返回的 total（接口异步返回前 total=0，之后更新）
     const heading = screen.getByRole('heading', { level: 1 });
-    await waitFor(() => expect(heading).toHaveTextContent(/1,?893/));
-    expect(heading).not.toHaveTextContent(/2,237/);
+    await waitFor(() => {
+      expect(heading).toHaveTextContent(/1,?893/);
+      expect(heading).not.toHaveTextContent(/2,237/);
+    });
+  });
+
+  it('renders 物理/历史 exam-type toggle', async () => {
+    renderTab();
+    expect(await screen.findByRole('button', { name: '物理类' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '历史类' })).toBeInTheDocument();
   });
 });

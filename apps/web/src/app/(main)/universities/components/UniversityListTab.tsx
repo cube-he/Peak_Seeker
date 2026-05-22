@@ -14,6 +14,7 @@ import Link from 'next/link';
 import UniversityLogo from '@/components/university/UniversityLogo';
 import { universityService, type UniversityQueryParams } from '@/services/university';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useStudentRank } from '@/stores/studentRankStore';
 
 const SORTS: Array<{ label: string; value?: Pick<UniversityQueryParams, 'sortBy' | 'sortOrder'>; disabled?: boolean }> = [
   { label: '综合排序', value: { sortBy: 'name', sortOrder: 'asc' } },
@@ -328,6 +329,9 @@ export function UniversityListTab() {
   });
   const [keywordInput, setKeywordInput] = useState('');
   const debouncedKeyword = useDebouncedValue(keywordInput, 300);
+  const examType = useStudentRank((s) => s.examType);
+  const setExamType = useStudentRank((s) => s.setExamType);
+  const studentRank = useStudentRank((s) => s.rank);
 
   // 防抖后才写入 filters，避免每次击键都触发请求
   useEffect(() => {
@@ -335,8 +339,14 @@ export function UniversityListTab() {
   }, [debouncedKeyword]);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['universities', filters],
-    queryFn: () => universityService.getList(filters),
+    queryKey: ['universities', filters, examType, studentRank],
+    queryFn: () => universityService.getList({
+      ...filters,
+      // ExamType 包含 '理科'/'文科'，但 UniversityQueryParams 只接受 '物理'/'历史'
+      // UI 只提供 '物理'/'历史' 两个选项，断言类型安全
+      examType: examType as '物理' | '历史',
+      userRank: studentRank ?? undefined,
+    }),
   });
 
   const universities = data?.data || [];
@@ -388,6 +398,23 @@ export function UniversityListTab() {
       </div>
 
       <div className="mb-5 rounded-xl bg-surface p-4 shadow-card">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-sm text-text-muted">科类</span>
+          {(['物理', '历史'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setExamType(t)}
+              className={`rounded-full border px-3.5 py-1 text-[13px] transition-colors ${
+                examType === t
+                  ? 'border-primary bg-primary-fixed font-medium text-primary'
+                  : 'border-border bg-surface text-text-tertiary hover:text-primary'
+              }`}
+            >
+              {t}类
+            </button>
+          ))}
+        </div>
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
           <Input
             placeholder="搜索学校名 / 城市 / 关键词，例如“上海”“医科”"
