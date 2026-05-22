@@ -13,7 +13,7 @@ export interface HeroTimelineNode {
  */
 export const HERO_NODES: { key: string; label: string; fallbackIso: string }[] = [
   { key: 'gaokao', label: '高考', fallbackIso: '2026-06-07' },
-  { key: 'score_query', label: '出分 · 一分一段表', fallbackIso: '2026-06-23' },
+  { key: 'score_query', label: '出分 · 一分一段表', fallbackIso: '2026-06-22' },
   { key: 'volunteer_deadline_early', label: '本科提前批志愿截止', fallbackIso: '2026-06-28T17:00:00+08:00' },
   { key: 'volunteer_deadline_regular', label: '本科批志愿截止', fallbackIso: '2026-07-01T17:00:00+08:00' },
   { key: 'volunteer_deadline_vocational', label: '专科批志愿截止', fallbackIso: '2026-07-05T17:00:00+08:00' },
