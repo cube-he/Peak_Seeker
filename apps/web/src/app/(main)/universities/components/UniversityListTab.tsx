@@ -89,10 +89,10 @@ function FeatureFilters({
   filters: UniversityQueryParams;
   setFilters: (filters: UniversityQueryParams) => void;
 }) {
-  const featureItems: Array<{ key: 'is985' | 'is211' | 'isDoubleFirstClass'; label: string; count: string }> = [
-    { key: 'is985', label: '985 工程', count: '39' },
-    { key: 'is211', label: '211 工程', count: '116' },
-    { key: 'isDoubleFirstClass', label: '双一流', count: '147' },
+  const featureItems: Array<{ key: 'is985' | 'is211' | 'isDoubleFirstClass'; label: string }> = [
+    { key: 'is985', label: '985 工程' },
+    { key: 'is211', label: '211 工程' },
+    { key: 'isDoubleFirstClass', label: '双一流' },
   ];
 
   return (
@@ -113,7 +113,6 @@ function FeatureFilters({
               }`}
             >
               <span>{item.label}</span>
-              <span className="text-[11px] text-text-faint">{item.count}</span>
             </button>
           );
         })}
@@ -365,10 +364,10 @@ export function UniversityListTab() {
             University Directory · 院校库
           </div>
           <h1 className="m-0 font-serif text-[32px] font-semibold leading-tight text-text sm:text-[36px]">
-            2,237 所院校 · 在川招生
+            {total.toLocaleString()} 所院校 · 在川招生
           </h1>
           <p className="mt-2 text-sm text-text-tertiary">
-            覆盖 2022-2025 录取数据，按省份、类型、层次筛出更值得关注的学校。
+            按省份、类型、层次筛选，结合录取位次找到更值得关注的学校。
           </p>
         </div>
       </div>
