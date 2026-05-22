@@ -42,6 +42,32 @@ export interface UniversityQueryParams {
   is211?: boolean;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  examType?: '物理' | '历史';
+  tierFilter?: 'rush' | 'stable' | 'safe';
+  userRank?: number;
+}
+
+export interface UniversityListItem {
+  id: number;
+  name: string;
+  code: string | null;
+  province: string | null;
+  city: string | null;
+  type: string | null;
+  level: string | null;
+  runningNature: string | null;
+  is985: boolean;
+  is211: boolean;
+  isDoubleFirstClass: boolean;
+  ranking: string | null;
+  logoUrl: string | null;
+  latestAdmission: { minScore: number; minRank: number | null } | null;
+  predictedMinRank: number | null;
+}
+
+export interface UniversityListResponse {
+  data: UniversityListItem[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
 }
 
 export interface FilterOption {
@@ -68,7 +94,8 @@ export interface CampusPoiQueryParams {
 }
 
 export const universityService = {
-  getList: (params: UniversityQueryParams): Promise<any> => api.get('/universities', { params }) as any,
+  getList: (params: UniversityQueryParams): Promise<UniversityListResponse> =>
+    api.get('/universities', { params }),
   getById: (id: number, subject?: string): Promise<any> => api.get(`/universities/${id}`, { params: subject ? { subject } : undefined }) as any,
   getMajors: (id: number, year?: number): Promise<any> =>
     api.get(`/universities/${id}/majors`, { params: { year } }) as any,
