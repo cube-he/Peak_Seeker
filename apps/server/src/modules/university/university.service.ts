@@ -344,7 +344,9 @@ export class UniversityService {
       provinces: provinces.map((p) => ({ value: p.province, count: p._count })),
       types: types.map((t) => ({ value: t.type, count: t._count })),
       levels: levels.map((l) => ({ value: l.level, count: l._count })),
-      cities: cities.map((c) => ({ value: c.city, count: c._count, province: c.province })),
+      cities: cities
+        .map((c) => ({ value: c.city!, count: c._count, province: c.province }))
+        .sort((a, b) => a.value.localeCompare(b.value, 'zh-CN')),
       grades: grades.map((g) => ({ value: g.grade, count: g._count })),
       natures: natures.map((n) => ({ value: n.runningNature, count: n._count })),
     };
