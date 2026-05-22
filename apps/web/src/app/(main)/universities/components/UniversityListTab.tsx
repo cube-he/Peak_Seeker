@@ -345,6 +345,7 @@ export function UniversityListTab() {
   const activeFilters = useMemo<ActiveFilter[]>(() => {
     const items: ActiveFilter[] = [];
     if (filters.province) items.push({ key: 'province', label: filters.province });
+    if (filters.city) items.push({ key: 'city', label: filters.city });
     if (filters.type) items.push({ key: 'type', label: filters.type });
     if (filters.nature) items.push({ key: 'nature', label: filters.nature });
     if (filters.level) items.push({ key: 'level', label: filters.level });
@@ -365,7 +366,9 @@ export function UniversityListTab() {
   };
 
   const removeFilter = (key: keyof UniversityQueryParams) => {
-    setFilters({ ...filters, [key]: undefined, page: 1 });
+    const next: UniversityQueryParams = { ...filters, [key]: undefined, page: 1 };
+    if (key === 'province') next.city = undefined;
+    setFilters(next);
   };
 
   return (
