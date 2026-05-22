@@ -8,7 +8,6 @@ import {
   EnvironmentOutlined,
   FireOutlined,
   SearchOutlined,
-  StarOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -206,15 +205,7 @@ function AppliedFilterChips({
   );
 }
 
-function UniversityCard({
-  uni,
-  selected,
-  onToggleSelect,
-}: {
-  uni: any;
-  selected: boolean;
-  onToggleSelect: () => void;
-}) {
+function UniversityCard({ uni }: { uni: any }) {
   const tags: string[] = [];
   if (uni.is985) tags.push('985');
   if (uni.is211) tags.push('211');
@@ -224,7 +215,7 @@ function UniversityCard({
   const infoItems = [uni.type, uni.province, uni.city, uni.runningNature].filter(Boolean);
 
   return (
-    <div className="grid gap-4 rounded-xl bg-surface px-4 py-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:px-5 lg:grid-cols-[64px_minmax(0,1fr)_140px_48px] lg:items-center">
+    <div className="grid gap-4 rounded-xl bg-surface px-4 py-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:px-5 lg:grid-cols-[64px_minmax(0,1fr)_140px] lg:items-center">
       <Link href={`/universities/${uni.id}`} className="hidden no-underline lg:block">
         <UniversityLogo name={uni.name} logoUrl={uni.logoUrl} size={64} />
       </Link>
@@ -277,18 +268,6 @@ function UniversityCard({
         </span>
       </div>
 
-      <div className="flex items-center justify-center">
-        <button
-          type="button"
-          onClick={onToggleSelect}
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border-0 transition-colors ${
-            selected ? 'bg-accent text-white' : 'bg-surface-dim text-accent hover:bg-accent-fixed'
-          }`}
-          aria-label={selected ? '取消对比' : '加入对比'}
-        >
-          <StarOutlined />
-        </button>
-      </div>
     </div>
   );
 }
@@ -344,8 +323,6 @@ export function UniversityListTab() {
     sortBy: 'name',
     sortOrder: 'asc',
   });
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['universities', filters],
     queryFn: () => universityService.getList(filters),
@@ -380,18 +357,6 @@ export function UniversityListTab() {
     setFilters({ ...filters, [key]: undefined, page: 1 });
   };
 
-  const toggleSelect = (id: number) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else if (next.size < 3) {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
   return (
     <div className="pb-12">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -406,13 +371,6 @@ export function UniversityListTab() {
             覆盖 2022-2025 录取数据，按省份、类型、层次筛出更值得关注的学校。
           </p>
         </div>
-        <button
-          type="button"
-          className="inline-flex items-center justify-center rounded-lg border-0 bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(184,134,11,0.2)] transition-colors hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={selectedIds.size === 0}
-        >
-          对比已选 ({selectedIds.size}/3)
-        </button>
       </div>
 
       <div className="mb-5 rounded-xl bg-surface p-4 shadow-card">
@@ -486,12 +444,7 @@ export function UniversityListTab() {
           ) : universities.length > 0 ? (
             <div className="space-y-3">
               {universities.map((uni: any) => (
-                <UniversityCard
-                  key={uni.id}
-                  uni={uni}
-                  selected={selectedIds.has(uni.id)}
-                  onToggleSelect={() => toggleSelect(uni.id)}
-                />
+                <UniversityCard key={uni.id} uni={uni} />
               ))}
             </div>
           ) : (
