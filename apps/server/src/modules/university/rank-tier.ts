@@ -10,6 +10,7 @@ export type RankTier = 'rush' | 'stable' | 'safe' | 'elite' | 'unknown';
 interface TierThresholds {
   stable: number;
   safe: number;
+  /** 存储但未在 classifyRank 内显式比较；elite 区间由 else 分支隐含。 */
   elite: number;
 }
 
