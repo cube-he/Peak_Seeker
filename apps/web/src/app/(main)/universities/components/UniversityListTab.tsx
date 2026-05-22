@@ -469,8 +469,12 @@ export function UniversityListTab() {
                 total={total}
                 showSizeChanger
                 showQuickJumper
+                pageSizeOptions={['12', '24', '48']}
                 showTotal={(count) => `共 ${count} 所院校`}
-                onChange={(page, pageSize) => setFilters({ ...filters, page, pageSize })}
+                onChange={(page, pageSize) => {
+                  setFilters((prev) => ({ ...prev, page, pageSize }));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               />
             </div>
           )}
