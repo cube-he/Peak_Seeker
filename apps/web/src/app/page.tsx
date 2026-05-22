@@ -37,9 +37,9 @@ const sampleRows = [
     crest: '同',
     name: '同济大学',
     tags: [
-      { text: '985', elite: true },
-      { text: '211', elite: true },
-      { text: '双一流', elite: false },
+      { text: '985', elite: true, stable: false },
+      { text: '211', elite: true, stable: false },
+      { text: '双一流', elite: false, stable: false },
     ],
     major: '土木类',
     majorSub: '含土木工程 · 测绘 · 交通',
@@ -92,7 +92,7 @@ export default function HomePage() {
       <section className="hero">
         <div className="hero-bg" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/bg-hero-home.png" alt="" />
+          <img src="/images/bg-hero-home.webp" alt="" />
         </div>
 
         <div className="container hero-grid">
@@ -387,7 +387,7 @@ export default function HomePage() {
       <section className="cta">
         <div className="cta-bg" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/bg-cta-home.png" alt="" />
+          <img src="/images/bg-cta-home.webp" alt="" />
         </div>
 
         <div className="container cta-inner">
