@@ -45,6 +45,7 @@ function toText(value: unknown): string {
 
 function toNumber(value: unknown): number | null {
   const text = toText(value).replace(/,/g, '').trim();
+  if (!text) return null;
   const match = text.match(/-?\d+(?:\.\d+)?/);
   if (!match) return null;
   const n = Number(match[0]);
@@ -113,6 +114,7 @@ async function main(): Promise<void> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(file);
   const { main: mainRows, category: categoryRows } = parseWorkbook(workbook);
+  console.log(`xlsx 解析：主榜 ${mainRows.length} 行，类别榜 ${categoryRows.length} 行`);
 
   const prisma = new PrismaClient({ adapter: new PrismaMariaDb(process.env.DATABASE_URL!) });
   try {
@@ -132,10 +134,17 @@ async function main(): Promise<void> {
     let mainMatched = 0;
     let categoryMatched = 0;
     let unmatched = 0;
+    let unmatchedCategory = 0;
+    const unmatchedMainNames: string[] = [];
+    const unmatchedCategoryNames: string[] = [];
 
     for (const row of mainRows) {
       const ids = byName.get(normalizeUniversityName(row.name));
-      if (!ids) { unmatched++; continue; }
+      if (!ids) {
+        unmatched++;
+        if (unmatchedMainNames.length < 20) unmatchedMainNames.push(row.name);
+        continue;
+      }
       for (const id of ids) {
         addUpdate(id, { softRankList: row.list, softRanking: row.rank, softRankYear: row.year });
       }
@@ -143,7 +152,11 @@ async function main(): Promise<void> {
     }
     for (const row of categoryRows) {
       const ids = byName.get(normalizeUniversityName(row.name));
-      if (!ids) continue;
+      if (!ids) {
+        unmatchedCategory++;
+        if (unmatchedCategoryNames.length < 20) unmatchedCategoryNames.push(row.name);
+        continue;
+      }
       for (const id of ids) {
         addUpdate(id, { softCategory: row.category, softCategoryRank: row.rank });
       }
@@ -153,7 +166,9 @@ async function main(): Promise<void> {
     console.log(JSON.stringify({
       file, dryRun,
       mainRows: mainRows.length, categoryRows: categoryRows.length,
-      mainMatched, categoryMatched, unmatchedMainRows: unmatched,
+      mainMatched, categoryMatched,
+      unmatchedMainRows: unmatched, unmatchedCategoryRows: unmatchedCategory,
+      unmatchedMainNames, unmatchedCategoryNames,
       universitiesToUpdate: updates.size,
     }, null, 2));
 
