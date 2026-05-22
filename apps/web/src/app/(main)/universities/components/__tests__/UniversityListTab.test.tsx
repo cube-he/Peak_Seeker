@@ -44,6 +44,10 @@ describe('UniversityListTab header', () => {
     });
   });
 
+  afterEach(() => {
+    useStudentRank.setState({ rank: null, examType: '物理' });
+  });
+
   it('shows a rank-tier badge on the card when the student rank is set', async () => {
     // 985 校 stable 阈值 1500；userRank 12000、predictedMinRank 11000 → diff -1000 → 稳
     useStudentRank.setState({ rank: 12000, examType: '物理' });
@@ -75,5 +79,30 @@ describe('UniversityListTab header', () => {
     renderTab();
     expect(await screen.findByRole('button', { name: '物理类' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '历史类' })).toBeInTheDocument();
+  });
+
+  it('enables rank/tier sorting and shows the tier filter when a rank is set', async () => {
+    useStudentRank.setState({ rank: 12000, examType: '物理' });
+    renderTab();
+    expect(await screen.findByRole('button', { name: '位次排序' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '冲稳保排序' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '冲' })).toBeInTheDocument();
+  });
+
+  it('does not show a rank-tier badge when no student rank is set', async () => {
+    // afterEach 已把 rank 重置为 null，此用例不 setState rank
+    mockedService.getList.mockResolvedValue({
+      data: [{
+        id: 7, name: '测试大学', code: null, province: '四川', city: '成都',
+        type: '综合', level: '本科', runningNature: '公办',
+        is985: true, is211: true, isDoubleFirstClass: true, ranking: null, logoUrl: null,
+        latestAdmission: { minScore: 640, minRank: 11800 },
+        predictedMinRank: 11000,
+      }],
+      pagination: { page: 1, pageSize: 12, total: 1, totalPages: 1 },
+    });
+    renderTab();
+    await screen.findByText('测试大学');
+    expect(screen.queryByText('稳')).not.toBeInTheDocument();
   });
 });

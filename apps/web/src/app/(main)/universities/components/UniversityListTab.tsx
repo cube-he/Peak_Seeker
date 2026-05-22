@@ -20,11 +20,16 @@ import RankTierBadge from '@/components/admission/RankTierBadge';
 import RankDistance from '@/components/admission/RankDistance';
 import type { UniversityListItem } from '@/services/university';
 
-const SORTS: Array<{ label: string; value?: Pick<UniversityQueryParams, 'sortBy' | 'sortOrder'>; disabled?: boolean }> = [
-  { label: '综合排序', value: { sortBy: 'name', sortOrder: 'asc' } },
+const SORTS: Array<{
+  label: string;
+  value: Pick<UniversityQueryParams, 'sortBy' | 'sortOrder'>;
+  needsRank?: boolean;
+}> = [
+  { label: '默认排序', value: { sortBy: 'name', sortOrder: 'asc' } },
+  { label: '位次排序', value: { sortBy: 'minRank', sortOrder: 'asc' } },
+  { label: '冲稳保排序', value: { sortBy: 'tier', sortOrder: 'asc' }, needsRank: true },
   { label: '按省份', value: { sortBy: 'province', sortOrder: 'asc' } },
   { label: '按类型', value: { sortBy: 'type', sortOrder: 'asc' } },
-  { label: '分数排序待接入', disabled: true },
 ];
 
 type ActiveFilter = {
@@ -116,6 +121,49 @@ function FeatureFilters({
   );
 }
 
+function TierFilterGroup({
+  value,
+  rankAvailable,
+  onChange,
+}: {
+  value?: 'rush' | 'stable' | 'safe';
+  rankAvailable: boolean;
+  onChange: (v: 'rush' | 'stable' | 'safe' | undefined) => void;
+}) {
+  const items: Array<{ key: 'rush' | 'stable' | 'safe'; label: string }> = [
+    { key: 'rush', label: '冲' },
+    { key: 'stable', label: '稳' },
+    { key: 'safe', label: '保' },
+  ];
+  return (
+    <div className="border-b border-border-subtle py-4 last:border-b-0">
+      <div className="mb-3 text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">
+        录取概率
+      </div>
+      {rankAvailable ? (
+        <div className="space-y-1">
+          {items.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onChange(value === item.key ? undefined : item.key)}
+              className={`flex w-full items-center rounded-md border-0 px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                value === item.key
+                  ? 'bg-primary-fixed font-medium text-primary'
+                  : 'text-text-secondary hover:bg-surface-dim hover:text-text'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="text-[12px] text-text-faint">先在成绩页录入位次后可用</div>
+      )}
+    </div>
+  );
+}
+
 function FilterPanel({
   filters,
   setFilters,
@@ -130,6 +178,7 @@ function FilterPanel({
     queryFn: () => universityService.getFilters(),
     staleTime: Infinity,
   });
+  const studentRank = useStudentRank((s) => s.rank);
 
   return (
     <aside className="rounded-xl bg-surface p-4 shadow-card lg:sticky lg:top-20">
@@ -176,6 +225,11 @@ function FilterPanel({
         items={options?.levels ?? []}
         value={filters.level}
         onChange={(level) => setFilters({ ...filters, level, page: 1 })}
+      />
+      <TierFilterGroup
+        value={filters.tierFilter}
+        rankAvailable={studentRank != null}
+        onChange={(tierFilter) => setFilters({ ...filters, tierFilter, page: 1 })}
       />
     </aside>
   );
@@ -391,6 +445,10 @@ export function UniversityListTab() {
     if (filters.is985) items.push({ key: 'is985', label: '985' });
     if (filters.is211) items.push({ key: 'is211', label: '211' });
     if (filters.isDoubleFirstClass) items.push({ key: 'isDoubleFirstClass', label: '双一流' });
+    if (filters.tierFilter) {
+      const label = { rush: '冲', stable: '稳', safe: '保' }[filters.tierFilter];
+      items.push({ key: 'tierFilter', label: `录取概率：${label}` });
+    }
     return items;
   }, [filters]);
 
@@ -457,17 +515,20 @@ export function UniversityListTab() {
 
           <div className="flex flex-wrap gap-2">
             {SORTS.map((sort) => {
-              const active = sort.value && filters.sortBy === sort.value.sortBy && filters.sortOrder === sort.value.sortOrder;
+              const active =
+                filters.sortBy === sort.value.sortBy && filters.sortOrder === sort.value.sortOrder;
+              const disabled = sort.needsRank === true && studentRank == null;
               return (
                 <button
                   key={sort.label}
                   type="button"
-                  disabled={sort.disabled}
-                  onClick={() => sort.value && setFilters({ ...filters, ...sort.value, page: 1 })}
+                  disabled={disabled}
+                  title={disabled ? '先在成绩页录入位次' : undefined}
+                  onClick={() => setFilters({ ...filters, ...sort.value, page: 1 })}
                   className={`rounded-md border-0 px-3.5 py-2 text-[13px] transition-colors ${
                     active
                       ? 'bg-surface-high text-text shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                      : sort.disabled
+                      : disabled
                         ? 'cursor-not-allowed bg-bg text-text-faint'
                         : 'bg-bg text-text-tertiary hover:text-primary'
                   }`}
