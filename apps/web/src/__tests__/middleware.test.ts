@@ -25,6 +25,14 @@ describe('middleware — 首页登录态重定向', () => {
     expect(res.headers.get('location')).toContain('/teacher/dashboard');
   });
 
+  it('已登录 ADMIN 访问 / 重定向到 /admin/dashboard', () => {
+    const req = new NextRequest('http://localhost/', {
+      headers: { cookie: `access_token=${tokenWithRole('ADMIN')}` },
+    });
+    const res = middleware(req);
+    expect(res.headers.get('location')).toContain('/admin/dashboard');
+  });
+
   it('未登录访客访问 / 放行(看 landing,无重定向)', () => {
     const req = new NextRequest('http://localhost/');
     const res = middleware(req);
