@@ -275,16 +275,24 @@ describe('UniversityService.findAll', () => {
     expect(result.data[0].latestAdmission).toBeNull();
   });
 
-  it('sortBy=minRank orders by the exam-type rank column', async () => {
-    const { svc, prisma } = setup([uni()]);
-    await svc.findAll({ page: 1, pageSize: 20, sortBy: 'minRank', sortOrder: 'asc' } as any);
-    expect(prisma.university.findMany.mock.calls[0][0].orderBy).toEqual({ minRankPhysics: 'asc' });
+  it('sortBy=minRank sorts by exam-type rank, nulls last', async () => {
+    const { svc } = setup([
+      uni({ id: 1, minRankPhysics: 12000 }),
+      uni({ id: 2, minRankPhysics: null }),
+      uni({ id: 3, minRankPhysics: 5000 }),
+    ]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20, sortBy: 'minRank', sortOrder: 'asc' } as any);
+    expect(result.data.map((u: any) => u.id)).toEqual([3, 1, 2]);
   });
 
-  it('sortBy=softRank orders by the softRanking column', async () => {
-    const { svc, prisma } = setup([uni()]);
-    await svc.findAll({ page: 1, pageSize: 20, sortBy: 'softRank', sortOrder: 'asc' } as any);
-    expect(prisma.university.findMany.mock.calls[0][0].orderBy).toEqual({ softRanking: 'asc' });
+  it('sortBy=softRank sorts by softRanking, nulls last', async () => {
+    const { svc } = setup([
+      uni({ id: 1, softRanking: 50 }),
+      uni({ id: 2, softRanking: null }),
+      uni({ id: 3, softRanking: 10 }),
+    ]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20, sortBy: 'softRank', sortOrder: 'asc' } as any);
+    expect(result.data.map((u: any) => u.id)).toEqual([3, 1, 2]);
   });
 
   it('does not leak raw redundancy columns into the response', async () => {

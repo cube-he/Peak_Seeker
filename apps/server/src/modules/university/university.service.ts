@@ -5,6 +5,23 @@ import { QueryUniversityDto } from './dto/query-university.dto';
 import { AdmissionService } from '../admission/admission.service';
 import { getTier, classifyRank } from './rank-tier';
 
+/**
+ * 内存排序：NULL 恒沉底（不论升降序）。数值按大小比较，字符串按 zh-CN locale。
+ * 用于 findAll 的可空排序列（minRank/tier/softRank），规避 MariaDB 升序 NULL 排首。
+ */
+function sortRows<T>(rows: T[], field: string, order: 'asc' | 'desc'): T[] {
+  const dir = order === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const av = (a as any)[field];
+    const bv = (b as any)[field];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv), 'zh-CN') * dir;
+  });
+}
+
 @Injectable()
 export class UniversityService {
   constructor(
@@ -84,27 +101,30 @@ export class UniversityService {
       };
     };
 
-    // 冲稳保筛选：分档依赖每校不同的 tier 阈值 + 请求传入的 userRank，无法纯 DB 完成，
-    // 走内存路径——取全部匹配院校（单表、轻量），JS 分档筛选后再分页。
-    if (tierFilter && userRank != null) {
-      const all = await this.prisma.university.findMany({
-        where,
-        orderBy: { [orderByField]: sortOrder },
-      });
-      const matched = all.filter((u: any) => {
-        const tier = getTier({ is985: u.is985, is211: u.is211, batch: u.level ?? '' });
-        const verdict = classifyRank(userRank, u[predRankField], tier, isHistory);
-        return verdict === tierFilter;
-      });
-      const total = matched.length;
-      const pageRows = matched.slice((page - 1) * pageSize, page * pageSize);
+    // minRank/tier/softRank 对应可空列，MariaDB 升序下 NULL 排首；
+    // 这些排序与 tierFilter 一起走内存路径，用 sortRows 让 NULL 恒沉底。
+    const needsMemoryPath =
+      (tierFilter != null && userRank != null) ||
+      sortBy === 'minRank' || sortBy === 'tier' || sortBy === 'softRank';
+
+    if (needsMemoryPath) {
+      let rows = await this.prisma.university.findMany({ where });
+      if (tierFilter != null && userRank != null) {
+        rows = rows.filter((u: any) => {
+          const tier = getTier({ is985: u.is985, is211: u.is211, batch: u.level ?? '' });
+          return classifyRank(userRank, u[predRankField], tier, isHistory) === tierFilter;
+        });
+      }
+      rows = sortRows(rows, orderByField, sortOrder);
+      const total = rows.length;
+      const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
       return {
         data: pageRows.map(shape),
         pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
       };
     }
 
-    // 常规路径：DB 排序 + 分页
+    // 常规路径：DB 排序 + 分页（仅用于 name/province/type 等非可空字段）
     const [data, total] = await Promise.all([
       this.prisma.university.findMany({
         where,
@@ -117,12 +137,7 @@ export class UniversityService {
 
     return {
       data: data.map(shape),
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
     };
   }
 
