@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Empty, Input, Pagination, Spin } from 'antd';
 import {
   AppstoreOutlined,
@@ -8,29 +8,28 @@ import {
   EnvironmentOutlined,
   FireOutlined,
   SearchOutlined,
-  StarOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import UniversityLogo from '@/components/university/UniversityLogo';
 import { universityService, type UniversityQueryParams } from '@/services/university';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useStudentRank } from '@/stores/studentRankStore';
+import { classifyRank, getTier } from '@/utils/classify-rank';
+import RankTierBadge from '@/components/admission/RankTierBadge';
+import RankDistance from '@/components/admission/RankDistance';
+import type { UniversityListItem } from '@/services/university';
 
-const PROVINCES = [
-  '北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '黑龙江',
-  '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', '湖北', '湖南',
-  '广东', '广西', '海南', '四川', '贵州', '云南', '陕西', '甘肃', '青海',
-  '内蒙古', '西藏', '宁夏', '新疆', '香港', '澳门',
-];
-
-const TYPES = ['综合', '理工', '农林', '医药', '师范', '语言', '财经', '政法', '体育', '艺术', '民族', '军事'];
-const NATURES = ['公办', '民办'];
-const LEVELS = ['本科', '专科'];
-
-const SORTS: Array<{ label: string; value?: Pick<UniversityQueryParams, 'sortBy' | 'sortOrder'>; disabled?: boolean }> = [
-  { label: '综合排序', value: { sortBy: 'name', sortOrder: 'asc' } },
+const SORTS: Array<{
+  label: string;
+  value: Pick<UniversityQueryParams, 'sortBy' | 'sortOrder'>;
+  needsRank?: boolean;
+}> = [
+  { label: '默认排序', value: { sortBy: 'name', sortOrder: 'asc' } },
+  { label: '位次排序', value: { sortBy: 'minRank', sortOrder: 'asc' } },
+  { label: '冲稳保排序', value: { sortBy: 'tier', sortOrder: 'asc' }, needsRank: true },
   { label: '按省份', value: { sortBy: 'province', sortOrder: 'asc' } },
   { label: '按类型', value: { sortBy: 'type', sortOrder: 'asc' } },
-  { label: '分数排序待接入', disabled: true },
 ];
 
 type ActiveFilter = {
@@ -45,7 +44,7 @@ function FilterGroup({
   onChange,
 }: {
   title: string;
-  items: string[];
+  items: Array<{ value: string; count: number }>;
   value?: string;
   onChange: (value: string | undefined) => void;
 }) {
@@ -67,15 +66,15 @@ function FilterGroup({
         </button>
         {items.map((item) => (
           <button
-            key={item}
+            key={item.value}
             type="button"
-            onClick={() => onChange(value === item ? undefined : item)}
+            onClick={() => onChange(value === item.value ? undefined : item.value)}
             className={`flex w-full items-center justify-between rounded-md border-0 px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-              value === item ? 'bg-primary-fixed font-medium text-primary' : 'text-text-secondary hover:bg-surface-dim hover:text-text'
+              value === item.value ? 'bg-primary-fixed font-medium text-primary' : 'text-text-secondary hover:bg-surface-dim hover:text-text'
             }`}
           >
-            <span>{item}</span>
-            <span className="text-[11px] text-text-faint">{value === item ? 'ON' : ''}</span>
+            <span>{item.value}</span>
+            <span className="text-[11px] text-text-faint">{item.count}</span>
           </button>
         ))}
       </div>
@@ -90,10 +89,10 @@ function FeatureFilters({
   filters: UniversityQueryParams;
   setFilters: (filters: UniversityQueryParams) => void;
 }) {
-  const featureItems: Array<{ key: 'is985' | 'is211' | 'isDoubleFirstClass'; label: string; count: string }> = [
-    { key: 'is985', label: '985 工程', count: '39' },
-    { key: 'is211', label: '211 工程', count: '116' },
-    { key: 'isDoubleFirstClass', label: '双一流', count: '147' },
+  const featureItems: Array<{ key: 'is985' | 'is211' | 'isDoubleFirstClass'; label: string }> = [
+    { key: 'is985', label: '985 工程' },
+    { key: 'is211', label: '211 工程' },
+    { key: 'isDoubleFirstClass', label: '双一流' },
   ];
 
   return (
@@ -114,11 +113,54 @@ function FeatureFilters({
               }`}
             >
               <span>{item.label}</span>
-              <span className="text-[11px] text-text-faint">{item.count}</span>
             </button>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+const TIER_ITEMS: Array<{ key: 'rush' | 'stable' | 'safe'; label: string }> = [
+  { key: 'rush', label: '冲' },
+  { key: 'stable', label: '稳' },
+  { key: 'safe', label: '保' },
+];
+
+function TierFilterGroup({
+  value,
+  rankAvailable,
+  onChange,
+}: {
+  value?: 'rush' | 'stable' | 'safe';
+  rankAvailable: boolean;
+  onChange: (v: 'rush' | 'stable' | 'safe' | undefined) => void;
+}) {
+  return (
+    <div className="border-b border-border-subtle py-4 last:border-b-0">
+      <div className="mb-3 text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">
+        录取概率
+      </div>
+      {rankAvailable ? (
+        <div className="space-y-1">
+          {TIER_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onChange(value === item.key ? undefined : item.key)}
+              className={`flex w-full items-center rounded-md border-0 px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                value === item.key
+                  ? 'bg-primary-fixed font-medium text-primary'
+                  : 'text-text-secondary hover:bg-surface-dim hover:text-text'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="text-[12px] text-text-faint">先在成绩页录入位次后可用</div>
+      )}
     </div>
   );
 }
@@ -132,6 +174,13 @@ function FilterPanel({
   setFilters: (filters: UniversityQueryParams) => void;
   onClear: () => void;
 }) {
+  const { data: options } = useQuery({
+    queryKey: ['university-filters'],
+    queryFn: () => universityService.getFilters(),
+    staleTime: Infinity,
+  });
+  const studentRank = useStudentRank((s) => s.rank);
+
   return (
     <aside className="rounded-xl bg-surface p-4 shadow-card lg:sticky lg:top-20">
       <div className="flex items-center justify-between">
@@ -148,27 +197,40 @@ function FilterPanel({
       <FeatureFilters filters={filters} setFilters={setFilters} />
       <FilterGroup
         title="所在地"
-        items={PROVINCES.slice(0, 12)}
+        items={options?.provinces ?? []}
         value={filters.province}
         onChange={(province) => setFilters({ ...filters, province, city: undefined, page: 1 })}
       />
+      {filters.province && (
+        <FilterGroup
+          title="城市"
+          items={(options?.cities ?? []).filter((c) => c.province === filters.province)}
+          value={filters.city}
+          onChange={(city) => setFilters({ ...filters, city, page: 1 })}
+        />
+      )}
       <FilterGroup
         title="学校类型"
-        items={TYPES.slice(0, 8)}
+        items={options?.types ?? []}
         value={filters.type}
         onChange={(type) => setFilters({ ...filters, type, page: 1 })}
       />
       <FilterGroup
         title="办学性质"
-        items={NATURES}
+        items={options?.natures ?? []}
         value={filters.nature}
         onChange={(nature) => setFilters({ ...filters, nature, page: 1 })}
       />
       <FilterGroup
         title="办学层次"
-        items={LEVELS}
+        items={options?.levels ?? []}
         value={filters.level}
         onChange={(level) => setFilters({ ...filters, level, page: 1 })}
+      />
+      <TierFilterGroup
+        value={filters.tierFilter}
+        rankAvailable={studentRank != null}
+        onChange={(tierFilter) => setFilters({ ...filters, tierFilter, page: 1 })}
       />
     </aside>
   );
@@ -208,12 +270,12 @@ function AppliedFilterChips({
 
 function UniversityCard({
   uni,
-  selected,
-  onToggleSelect,
+  userRank,
+  examType,
 }: {
-  uni: any;
-  selected: boolean;
-  onToggleSelect: () => void;
+  uni: UniversityListItem;
+  userRank: number | null;
+  examType: '物理' | '历史';
 }) {
   const tags: string[] = [];
   if (uni.is985) tags.push('985');
@@ -223,8 +285,18 @@ function UniversityCard({
   const admission = uni.latestAdmission;
   const infoItems = [uni.type, uni.province, uni.city, uni.runningNature].filter(Boolean);
 
+  const tier = getTier({ is985: uni.is985, is211: uni.is211, batch: uni.level ?? '' });
+  const verdict =
+    userRank != null
+      ? classifyRank(userRank, uni.predictedMinRank, tier, examType === '历史')
+      : null;
+  const rankDiff =
+    userRank != null && uni.predictedMinRank != null
+      ? uni.predictedMinRank - userRank
+      : null;
+
   return (
-    <div className="grid gap-4 rounded-xl bg-surface px-4 py-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:px-5 lg:grid-cols-[64px_minmax(0,1fr)_140px_48px] lg:items-center">
+    <div className="grid gap-4 rounded-xl bg-surface px-4 py-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:px-5 lg:grid-cols-[64px_minmax(0,1fr)_140px] lg:items-center">
       <Link href={`/universities/${uni.id}`} className="hidden no-underline lg:block">
         <UniversityLogo name={uni.name} logoUrl={uni.logoUrl} size={64} />
       </Link>
@@ -247,6 +319,7 @@ function UniversityCard({
                   {tag}
                 </span>
               ))}
+              {verdict && <RankTierBadge tier={verdict} />}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {infoItems.map((item) => (
@@ -269,25 +342,19 @@ function UniversityCard({
 
       <div className="rounded-lg bg-bg px-3 py-3 text-left lg:text-right">
         <span className="block font-serif text-[24px] font-semibold leading-none text-text tabular-nums">
-          {admission?.minScore || '-'}
+          {admission?.minScore ?? '-'}
         </span>
-        <span className="mt-1 block text-[11px] text-text-muted">最近一年最低分</span>
+        <span className="mt-1 block text-[11px] text-text-muted">
+          {examType}类 · 最近一年最低分
+        </span>
         <span className="mt-1 block text-[11px] text-text-tertiary tabular-nums">
-          位次 {admission?.minRank || '-'}
+          位次 {admission?.minRank ?? '-'}
         </span>
-      </div>
-
-      <div className="flex items-center justify-center">
-        <button
-          type="button"
-          onClick={onToggleSelect}
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border-0 transition-colors ${
-            selected ? 'bg-accent text-white' : 'bg-surface-dim text-accent hover:bg-accent-fixed'
-          }`}
-          aria-label={selected ? '取消对比' : '加入对比'}
-        >
-          <StarOutlined />
-        </button>
+        {rankDiff != null && verdict && (
+          <span className="mt-1 block text-[11px] text-text-muted">
+            距你 <RankDistance diff={rankDiff} tier={verdict} />
+          </span>
+        )}
       </div>
     </div>
   );
@@ -344,11 +411,40 @@ export function UniversityListTab() {
     sortBy: 'name',
     sortOrder: 'asc',
   });
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [keywordInput, setKeywordInput] = useState('');
+  const debouncedKeyword = useDebouncedValue(keywordInput, 300);
+  const examType = useStudentRank((s) => s.examType);
+  const setExamType = useStudentRank((s) => s.setExamType);
+  const studentRank = useStudentRank((s) => s.rank);
+
+  // 位次被清空时，将依赖位次的排序/筛选重置，避免向后端发语义错误的请求
+  useEffect(() => {
+    if (studentRank != null) return;
+    setFilters((prev) => {
+      if (prev.sortBy !== 'tier' && prev.tierFilter == null) return prev;
+      return {
+        ...prev,
+        sortBy: prev.sortBy === 'tier' ? 'name' : prev.sortBy,
+        sortOrder: prev.sortBy === 'tier' ? 'asc' : prev.sortOrder,
+        tierFilter: undefined,
+      };
+    });
+  }, [studentRank]);
+
+  // 防抖后才写入 filters，避免每次击键都触发请求
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, keyword: debouncedKeyword || undefined, page: 1 }));
+  }, [debouncedKeyword]);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['universities', filters],
-    queryFn: () => universityService.getList(filters),
+    queryKey: ['universities', filters, examType, studentRank],
+    queryFn: () => universityService.getList({
+      ...filters,
+      // ExamType 包含 '理科'/'文科'，但 UniversityQueryParams 只接受 '物理'/'历史'
+      // UI 只提供 '物理'/'历史' 两个选项，断言类型安全
+      examType: examType as '物理' | '历史',
+      userRank: studentRank ?? undefined,
+    }),
   });
 
   const universities = data?.data || [];
@@ -357,12 +453,17 @@ export function UniversityListTab() {
   const activeFilters = useMemo<ActiveFilter[]>(() => {
     const items: ActiveFilter[] = [];
     if (filters.province) items.push({ key: 'province', label: filters.province });
+    if (filters.city) items.push({ key: 'city', label: filters.city });
     if (filters.type) items.push({ key: 'type', label: filters.type });
     if (filters.nature) items.push({ key: 'nature', label: filters.nature });
     if (filters.level) items.push({ key: 'level', label: filters.level });
     if (filters.is985) items.push({ key: 'is985', label: '985' });
     if (filters.is211) items.push({ key: 'is211', label: '211' });
     if (filters.isDoubleFirstClass) items.push({ key: 'isDoubleFirstClass', label: '双一流' });
+    if (filters.tierFilter) {
+      const label = { rush: '冲', stable: '稳', safe: '保' }[filters.tierFilter];
+      items.push({ key: 'tierFilter', label: `录取概率：${label}` });
+    }
     return items;
   }, [filters]);
 
@@ -377,19 +478,9 @@ export function UniversityListTab() {
   };
 
   const removeFilter = (key: keyof UniversityQueryParams) => {
-    setFilters({ ...filters, [key]: undefined, page: 1 });
-  };
-
-  const toggleSelect = (id: number) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else if (next.size < 3) {
-        next.add(id);
-      }
-      return next;
-    });
+    const next: UniversityQueryParams = { ...filters, [key]: undefined, page: 1 };
+    if (key === 'province') next.city = undefined;
+    setFilters(next);
   };
 
   return (
@@ -400,28 +491,38 @@ export function UniversityListTab() {
             University Directory · 院校库
           </div>
           <h1 className="m-0 font-serif text-[32px] font-semibold leading-tight text-text sm:text-[36px]">
-            2,237 所院校 · 在川招生
+            {total.toLocaleString()} 所院校 · 在川招生
           </h1>
           <p className="mt-2 text-sm text-text-tertiary">
-            覆盖 2022-2025 录取数据，按省份、类型、层次筛出更值得关注的学校。
+            按省份、类型、层次筛选，结合录取位次找到更值得关注的学校。
           </p>
         </div>
-        <button
-          type="button"
-          className="inline-flex items-center justify-center rounded-lg border-0 bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(184,134,11,0.2)] transition-colors hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={selectedIds.size === 0}
-        >
-          对比已选 ({selectedIds.size}/3)
-        </button>
       </div>
 
       <div className="mb-5 rounded-xl bg-surface p-4 shadow-card">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-sm text-text-muted">科类</span>
+          {(['物理', '历史'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setExamType(t)}
+              className={`rounded-full border px-3.5 py-1 text-[13px] transition-colors ${
+                examType === t
+                  ? 'border-primary bg-primary-fixed font-medium text-primary'
+                  : 'border-border bg-surface text-text-tertiary hover:text-primary'
+              }`}
+            >
+              {t}类
+            </button>
+          ))}
+        </div>
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
           <Input
             placeholder="搜索学校名 / 城市 / 关键词，例如“上海”“医科”"
             prefix={<SearchOutlined className="text-text-muted" />}
-            value={filters.keyword}
-            onChange={(e) => setFilters({ ...filters, keyword: e.target.value, page: 1 })}
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
             allowClear
             className="min-w-0 flex-1"
             size="large"
@@ -429,17 +530,20 @@ export function UniversityListTab() {
 
           <div className="flex flex-wrap gap-2">
             {SORTS.map((sort) => {
-              const active = sort.value && filters.sortBy === sort.value.sortBy && filters.sortOrder === sort.value.sortOrder;
+              const active =
+                filters.sortBy === sort.value.sortBy && filters.sortOrder === sort.value.sortOrder;
+              const disabled = sort.needsRank === true && studentRank == null;
               return (
                 <button
                   key={sort.label}
                   type="button"
-                  disabled={sort.disabled}
-                  onClick={() => sort.value && setFilters({ ...filters, ...sort.value, page: 1 })}
+                  disabled={disabled}
+                  title={disabled ? '先在成绩页录入位次' : undefined}
+                  onClick={() => setFilters({ ...filters, ...sort.value, page: 1 })}
                   className={`rounded-md border-0 px-3.5 py-2 text-[13px] transition-colors ${
                     active
                       ? 'bg-surface-high text-text shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                      : sort.disabled
+                      : disabled
                         ? 'cursor-not-allowed bg-bg text-text-faint'
                         : 'bg-bg text-text-tertiary hover:text-primary'
                   }`}
@@ -485,13 +589,9 @@ export function UniversityListTab() {
             </div>
           ) : universities.length > 0 ? (
             <div className="space-y-3">
-              {universities.map((uni: any) => (
-                <UniversityCard
-                  key={uni.id}
-                  uni={uni}
-                  selected={selectedIds.has(uni.id)}
-                  onToggleSelect={() => toggleSelect(uni.id)}
-                />
+              {universities.map((uni: UniversityListItem) => (
+                // UI 只提供 '物理'/'历史' 两个选项，断言类型安全
+                <UniversityCard key={uni.id} uni={uni} userRank={studentRank} examType={examType as '物理' | '历史'} />
               ))}
             </div>
           ) : (
@@ -508,8 +608,12 @@ export function UniversityListTab() {
                 total={total}
                 showSizeChanger
                 showQuickJumper
+                pageSizeOptions={['12', '24', '48']}
                 showTotal={(count) => `共 ${count} 所院校`}
-                onChange={(page, pageSize) => setFilters({ ...filters, page, pageSize })}
+                onChange={(page, pageSize) => {
+                  setFilters((prev) => ({ ...prev, page, pageSize }));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               />
             </div>
           )}
@@ -525,7 +629,7 @@ export function UniversityListTab() {
               <span className="font-serif text-base font-semibold">数据说明</span>
             </div>
             <p className="m-0 text-sm leading-relaxed text-text-tertiary">
-              分数排序和地图视图需要后端新增聚合接口。目前页面保留排序口径内的稳定功能。
+              地图视图等扩展功能待后端接口接入。
             </p>
           </div>
           <HotUniversitiesSidebar />

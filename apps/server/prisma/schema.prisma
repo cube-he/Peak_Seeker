@@ -289,6 +289,14 @@ model University {
   geoSource    String?   @map("geo_source") @db.VarChar(50)
   geoUpdatedAt DateTime? @map("geo_updated_at")
 
+  // 院校位次冗余字段（科类拆分，由 apps/server/scripts/backfill-university-ranks.ts 回填）
+  minScorePhysics Int? @map("min_score_physics")
+  minRankPhysics  Int? @map("min_rank_physics")
+  minScoreHistory Int? @map("min_score_history")
+  minRankHistory  Int? @map("min_rank_history")
+  predRankPhysics Int? @map("pred_rank_physics")
+  predRankHistory Int? @map("pred_rank_history")
+
   campuses  UniversityCampus[]
   geoIssues UniversityGeoIssue[]
 
@@ -304,6 +312,10 @@ model University {
   @@index([isDoubleFirstClass])
   @@index([is985])
   @@index([is211])
+  @@index([minRankPhysics])
+  @@index([minRankHistory])
+  @@index([predRankPhysics])
+  @@index([predRankHistory])
   @@map("universities")
 }
 
