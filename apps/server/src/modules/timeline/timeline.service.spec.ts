@@ -14,6 +14,7 @@ describe('TimelineService', () => {
         updateMany: jest.fn(),
         count: jest.fn(),
         createMany: jest.fn(),
+        upsert: jest.fn(),
       },
     };
     service = new TimelineService(prisma as unknown as PrismaService);
@@ -73,34 +74,32 @@ describe('TimelineService', () => {
   });
 
   describe('seedYear', () => {
-    it('should skip if data already exists', async () => {
-      prisma.timelineEvent.count.mockResolvedValue(10);
+    it('should upsert 13 events including the 3 volunteer-deadline nodes', async () => {
+      prisma.timelineEvent.upsert.mockResolvedValue({});
 
       await service.seedYear(2026);
 
-      expect(prisma.timelineEvent.createMany).not.toHaveBeenCalled();
+      expect(prisma.timelineEvent.upsert).toHaveBeenCalledTimes(13);
+      const keys = prisma.timelineEvent.upsert.mock.calls.map(
+        (c: any[]) => c[0].where.key_year.key,
+      );
+      expect(keys).toEqual(
+        expect.arrayContaining([
+          'volunteer_deadline_early',
+          'volunteer_deadline_regular',
+          'volunteer_deadline_vocational',
+        ]),
+      );
     });
 
-    it('should create 10 events for a new year', async () => {
-      prisma.timelineEvent.count.mockResolvedValue(0);
-      prisma.timelineEvent.createMany.mockResolvedValue({ count: 10 });
+    it('should not overwrite status on existing events (update payload omits status)', async () => {
+      prisma.timelineEvent.upsert.mockResolvedValue({});
 
       await service.seedYear(2026);
 
-      expect(prisma.timelineEvent.createMany).toHaveBeenCalledWith({
-        data: expect.arrayContaining([
-          expect.objectContaining({ key: 'gaokao', status: 'countdown', sortOrder: 1 }),
-          expect.objectContaining({ key: 'early_batch_a', sortOrder: 4 }),
-          expect.objectContaining({ key: 'early_batch_b', sortOrder: 5 }),
-          expect.objectContaining({ key: 'regular_batch_a', sortOrder: 6 }),
-          expect.objectContaining({ key: 'regular_batch_b', sortOrder: 7 }),
-          expect.objectContaining({ key: 'vocational_early', sortOrder: 8 }),
-          expect.objectContaining({ key: 'vocational_batch', sortOrder: 9 }),
-          expect.objectContaining({ key: 'admission_end', sortOrder: 10 }),
-        ]),
-      });
-      const callArg = prisma.timelineEvent.createMany.mock.calls[0][0];
-      expect(callArg.data).toHaveLength(10);
+      for (const call of prisma.timelineEvent.upsert.mock.calls) {
+        expect(call[0].update).not.toHaveProperty('status');
+      }
     });
   });
 });
