@@ -14,7 +14,9 @@
 
 ## 关于 Task 4(视觉落地)的特别说明
 
-Task 1–3 是标准 TDD 任务,每步含完整代码。**Task 4 是设计驱动任务**:landing 各区块的 JSX/Tailwind 由 claude-design 工具产出(用户已确认 claude-design 直接出前端代码),无法在计划阶段预写死。Task 4 给出的是:落地文件、claude-design 的输入依据(spec 第 5 节)、必须满足的硬性约束、对照 spec 的验收清单。执行 Task 4 时按 claude-design 的产出落地,并用验收清单逐项核对。
+Task 1–3 是标准 TDD 任务,每步含完整代码。**Task 4 是设计稿转写任务**:claude-design 已产出首页设计稿 `landing.html`(单文件 HTML 原型),Task 4 把它转写落地为 Next.js 的 `page.tsx`。本计划给出转写规则、硬性约束与验收清单;JSX 的具体内容以 `landing.html` 为准,不在计划里重写。
+
+**设计稿路径:** `C:\Users\17697\Documents\VolunteerHelper\WillNest Design System (智愿家) (1)\homepage\landing.html`(设计系统说明见同目录 `README.md`)。
 
 ---
 
@@ -32,6 +34,9 @@ Task 1–3 是标准 TDD 任务,每步含完整代码。**Task 4 是设计驱动
 
 **前端 — 视觉(Task 4)**
 - Create `apps/web/src/components/home/HomeTimelineCard.tsx` — Hero 右侧志愿填报时间线卡(新组件)
+- Create `apps/web/src/app/homepage.css` — landing 区块样式(来自 landing.html 的 `<style>` 块)
+- Create `apps/web/public/images/bg-hero-home.png`、`bg-cta-home.png` — Hero / CTA 背景图
+- Modify `apps/web/src/app/globals.css` — 补 `--dur` 等 motion 变量(landing.html 用到、globals.css 暂缺)
 - Modify `apps/web/src/app/page.tsx` — 重写为 5 区块 landing
 
 ---
@@ -416,18 +421,20 @@ git commit -m "feat(web): add hero timeline data logic with fallback"
 
 ---
 
-## Task 4: 前端 — landing 视觉落地(claude-design 驱动)
+## Task 4: 前端 — landing 视觉落地(landing.html 转写)
 
 **Files:**
 - Create: `apps/web/src/components/home/HomeTimelineCard.tsx`
 - Modify: `apps/web/src/app/page.tsx`
 
-**性质:** 设计驱动任务(见文档开头说明)。视觉代码由 claude-design 产出,本任务给出落地约束与验收清单。
+**性质:** 设计稿转写任务(见文档开头说明)。claude-design 已产出 `landing.html`,本任务把它转写落地为 `page.tsx`。
 
-- [ ] **Step 1: 用 claude-design 产出 landing 5 区块视觉代码**
+- [ ] **Step 1: 转写准备 — 提取样式与资源**
 
-输入依据:spec(`docs/superpowers/specs/2026-05-21-homepage-redesign-design.md`)第 5 节"各区块详细设计"。要求 claude-design 产出 5 个区块的 React + Tailwind 代码:
-1. Hero 区　2. 产品能力区　3. 方案示例区　4. 结尾 CTA 区　5. 数据来源条(底部)
+claude-design 的产出是单文件 HTML 原型 `landing.html`(路径见文档开头)。落地前先做 3 件准备:
+1. 把 `landing.html` 的整个 `<style>` 块复制到新文件 `apps/web/src/app/homepage.css`;`page.tsx` 顶部 `import './homepage.css'`。CSS 里的 `var(--*)` 变量项目 `globals.css` 已具备(下一条补齐缺失的)。
+2. 把设计系统目录的 `assets/bg-hero-home.png`、`assets/bg-cta-home.png` 复制到 `apps/web/public/images/`。
+3. 在 `globals.css` 的 `:root` 补 landing.html 用到、当前缺失的 motion 变量:`--dur-fast: 150ms;` `--dur: 200ms;` `--dur-slow: 300ms;`
 
 - [ ] **Step 2: 落地 HomeTimelineCard 组件**
 
@@ -440,7 +447,7 @@ git commit -m "feat(web): add hero timeline data logic with fallback"
 
 - [ ] **Step 3: 重写 page.tsx 为 5 区块 landing**
 
-按 claude-design 产出落地 `apps/web/src/app/page.tsx`。**必须删除以下假数据 / 冗余**(行号基于当前 page.tsx):
+照 `landing.html` 的 `<body>` 转写 `apps/web/src/app/page.tsx`:`class`→`className`、inline `style` 转 JSX 对象、SVG 属性转驼峰、inline `<svg>` 图标直接保留、`<a href>`→`next/link` 的 `<Link>`、Hero 右侧 `.countdown-card` 换成 `<HomeTimelineCard>`。landing.html 自带的顶部 nav 与底部 legal band **不移植**——`page.tsx` 用 `<MainLayout>` 包裹 5 区块(导航 / 页脚由 MainLayout 提供)。同时**删除当前 page.tsx 的以下假数据 / 冗余**(行号基于当前 page.tsx):
 - `import { CountdownBadge }`(L7)及其使用(L178)——去掉 Hero 左上小徽章
 - `sampleRows` 假志愿数组(L68-75)
 - `fallbackTimeline` 数组(L77-120)——独立时间线 section 删除
@@ -453,7 +460,7 @@ git commit -m "feat(web): add hero timeline data logic with fallback"
 
 **必须满足的硬性约束:**
 1. 区块顺序:Hero → 产品能力区 → 方案示例区 → 结尾 CTA → 数据来源条(最底部)
-2. Hero 主标题文案 = 「懂数据,是专家;够贴心,像一家;填志愿,智愿家」
+2. Hero 主标题 = 藏头联「智者明察 洞见四方 / 愿展宏图 扶摇直上 / 家有良师 伴你远航」,首字"智 / 愿 / 家"金色 + 着重号(以 landing.html 为准)
 3. Hero 左侧保留 4 个统计(2,237 / 14.4 万 / 1,434 / 4 年)——真实数据,常量
 4. 产品能力区 = 三步流程 + 5 个功能卡(院校库 / 专业库 / 查分系统 / AI 推荐 / 方案编辑器),无"数据安全"卡
 5. 方案示例区:标题不出现"真实案例"字样,顶部标注"以下为示例演示,注册后将基于你的真实分数和偏好生成"
