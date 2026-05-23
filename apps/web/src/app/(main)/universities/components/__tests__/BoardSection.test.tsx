@@ -36,6 +36,22 @@ describe('BoardSection', () => {
     expect(screen.getByText('专科甲')).toBeInTheDocument();
   });
 
+  it('when boards share the same level (e.g. category boards), labels use board.title for disambiguation', () => {
+    // 7 个类别榜全是本科,level 标签会退化成 7 个 "本科榜"——不能区分;改用 board.title
+    const categoryGroup: BoardGroup = {
+      groupKey: 'category', groupTitle: '行业特色院校',
+      boards: [
+        { key: 'category-财经类', title: '财经类榜', groupKey: 'category', groupTitle: '行业特色院校', level: '本科', items: [item(1, '某财经')] },
+        { key: 'category-医药类', title: '医药类榜', groupKey: 'category', groupTitle: '行业特色院校', level: '本科', items: [item(2, '某医药')] },
+      ],
+    };
+    render(<BoardSection group={categoryGroup} />);
+    expect(screen.getByText('财经类榜')).toBeInTheDocument();
+    expect(screen.getByText('医药类榜')).toBeInTheDocument();
+    // 不应再显示 degenerate 的 "本科榜" 标签
+    expect(screen.queryByText('本科榜')).not.toBeInTheDocument();
+  });
+
   it('renders a one-board group without column labels', () => {
     const singleGroup: BoardGroup = {
       groupKey: 'national-elite', groupTitle: '全国名校榜',
