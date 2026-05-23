@@ -20,13 +20,54 @@ const uni = (over: Partial<any> = {}) => ({
 });
 
 describe('RankingBoardService.getRankingBoard', () => {
-  it('returns 7 boards with the configured keys', async () => {
+  it('returns 16 boards: existing 7 + 7 category + 民办 + 高职', async () => {
     const { svc } = makeService([uni()]);
     const boards = await svc.getRankingBoard('物理');
     expect(boards.map((b) => b.key)).toEqual([
       'sichuan-undergrad', 'sichuan-college', 'neighbor-undergrad',
       'neighbor-college', 'developed-undergrad', 'developed-college', 'national-elite',
+      'category-财经类', 'category-医药类', 'category-中医药类',
+      'category-语言类', 'category-政法类', 'category-民族类', 'category-体育类',
+      'private-undergrad', 'national-college',
     ]);
+  });
+
+  it('category board filters by softCategory and orders by softCategoryRank', async () => {
+    const { svc, prisma } = makeService([uni()]);
+    await svc.getRankingBoard('物理');
+    // 索引 7 = category-财经类（紧跟在原有 7 张榜之后）
+    const call = prisma.university.findMany.mock.calls[7][0];
+    expect(call.where.softCategory).toBe('财经类');
+    expect(call.where.softCategoryRank).toEqual({ gt: 0 });
+    expect(call.where.level).toBe('本科');
+    expect(call.orderBy).toEqual({ softCategoryRank: 'asc' });
+  });
+
+  it('民办 board filters by softRankList=民办 and orders by softRanking', async () => {
+    const { svc, prisma } = makeService([uni()]);
+    await svc.getRankingBoard('物理');
+    // 索引 14 = private-undergrad
+    const call = prisma.university.findMany.mock.calls[14][0];
+    expect(call.where.softRankList).toBe('民办');
+    expect(call.where.level).toBe('本科');
+    expect(call.where.softRanking).toEqual({ gt: 0 });
+    expect(call.orderBy).toEqual({ softRanking: 'asc' });
+  });
+
+  it('全国高职 board filters by softRankList=高职 and level=专科', async () => {
+    const { svc, prisma } = makeService([uni()]);
+    await svc.getRankingBoard('物理');
+    // 索引 15 = national-college
+    const call = prisma.university.findMany.mock.calls[15][0];
+    expect(call.where.softRankList).toBe('高职');
+    expect(call.where.level).toBe('专科');
+    expect(call.orderBy).toEqual({ softRanking: 'asc' });
+  });
+
+  it('exposes softRankList on each item so the frontend can label the rank source', async () => {
+    const { svc } = makeService([uni({ id: 9, softRanking: 7, softRankList: '民办' })]);
+    const boards = await svc.getRankingBoard('物理');
+    expect(boards[0].items[0].softRankList).toBe('民办');
   });
 
   it('numbers items by descending soft ranking strength (rank starts at 1)', async () => {

@@ -137,6 +137,8 @@ describe('UniversityListTab header', () => {
         type: '综合', level: '本科', runningNature: '公办',
         is985: false, is211: false, isDoubleFirstClass: false, ranking: null, logoUrl: null,
         latestAdmission: null, predictedMinRank: null,
+        softRanking: null, softRankList: null, softCategory: null,
+        softCategoryRank: null, softRankYear: null,
       }],
       pagination: { page: 1, pageSize: 12, total: 1, totalPages: 1 },
     });

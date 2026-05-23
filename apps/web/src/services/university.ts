@@ -14,6 +14,8 @@ export interface RankedUniversity {
   is211: boolean;
   isDoubleFirstClass: boolean;
   softRanking: number;
+  /** 软科主榜体系标签（本科/民办/高职）；缺则显示无 list 的 fallback */
+  softRankList: string | null;
   admissionMinRank: number | null;
   admissionMinScore: number | null;
 }
