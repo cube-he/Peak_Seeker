@@ -44,12 +44,13 @@ export const BOARD_CONFIGS: BoardConfig[] = [
   { key: 'developed-undergrad', title: '发达城市本科榜', groupKey: 'developed', groupTitle: '发达城市', level: '本科', region: { kind: 'city', values: DEVELOPED_CITIES } },
   { key: 'developed-college', title: '发达城市专科榜', groupKey: 'developed', groupTitle: '发达城市', level: '专科', region: { kind: 'city', values: DEVELOPED_CITIES } },
   { key: 'national-elite', title: '全国名校榜', groupKey: 'elite', groupTitle: '全国名校榜', level: '本科', region: { kind: 'elite' } },
-  // 7 个软科类别榜，统一归到 group="category"「专门类院校」
+  // 7 个软科类别榜，统一归到 group="category"「行业特色院校」
+  // 与行业绑定（财经/医药/政法/民族/体育等）的院校，区别于"综合/理工"主榜
   ...SOFT_CATEGORIES.map((category) => ({
     key: `category-${category}`,
     title: `${category}榜`,
     groupKey: 'category',
-    groupTitle: '专门类院校',
+    groupTitle: '行业特色院校',
     level: '本科' as const,
     region: { kind: 'category' as const, value: category },
   })),
