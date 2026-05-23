@@ -86,7 +86,18 @@ export default function UniversityDetailPage() {
     { label: '最近最低分', value: latestAdmission?.majorMinScore || latestAdmission?.minScore || '-', sub: latestAdmission?.year ? `${latestAdmission.year} 年录取` : '等待录取数据' },
     { label: '最近最低位次', value: latestAdmission?.majorMinRank || latestAdmission?.minRank || '-', sub: userSubject ? `${userSubject} 类参考` : '按已选科类参考' },
     { label: '招生专业', value: majors?.length || '-', sub: '当前可查计划数' },
-    { label: '综合排名', value: u.rankingSoft || u.ranking || '-', sub: '软科/综合口径' },
+    {
+      label: '软科排名',
+      // 之前读 u.rankingSoft 字段已不存在（恒 undefined）会回落到 u.ranking 字符串；
+      // 现统一走新的 softRanking + softRankList + softRankYear 口径，与列表页一致
+      value: u.softRanking != null ? `#${u.softRanking}` : '-',
+      sub:
+        u.softRanking != null
+          ? ['软科', u.softRankYear, u.softRankList ? u.softRankList + '榜' : null]
+              .filter(Boolean)
+              .join(' ')
+          : '尚无软科数据',
+    },
     { label: '建校时间', value: u.createdYear || '-', sub: u.campusArea ? `校园面积 ${u.campusArea} 亩` : '基础信息' },
   ];
 
@@ -133,7 +144,11 @@ export default function UniversityDetailPage() {
               militaryTrainingDuration={u.militaryTrainingDuration ?? null}
             />
             <RankingCard
-              rankingSoft={u.rankingSoft ?? null}
+              softRanking={u.softRanking ?? null}
+              softRankList={u.softRankList ?? null}
+              softRankYear={u.softRankYear ?? null}
+              softCategory={u.softCategory ?? null}
+              softCategoryRank={u.softCategoryRank ?? null}
               rankingAlumni={u.rankingAlumni ?? null}
               rankingQS={u.rankingQS ?? null}
               rankingUSNews={u.rankingUSNews ?? null}

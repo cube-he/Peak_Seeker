@@ -284,7 +284,10 @@ function UniversityCard({
   if (uni.isDoubleFirstClass) tags.push('双一流');
 
   const admission = uni.latestAdmission;
-  const infoItems = [uni.type, uni.province, uni.city, uni.runningNature].filter(Boolean);
+  // 直辖市 province === city：用 Set 去重，避免同值 chip 触发 React 重复 key 警告
+  const infoItems = Array.from(
+    new Set([uni.type, uni.province, uni.city, uni.runningNature].filter(Boolean)),
+  );
 
   const tier = getTier({ is985: uni.is985, is211: uni.is211, batch: uni.level ?? '' });
   const verdict =
