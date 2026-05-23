@@ -129,4 +129,20 @@ describe('UniversityListTab header', () => {
     expect(await screen.findByText(/软科2026/)).toBeInTheDocument();
     expect(screen.getByText(/财经类 #5/)).toBeInTheDocument();
   });
+
+  it('renders only one location chip for 直辖市 (province === city)', async () => {
+    mockedService.getList.mockResolvedValue({
+      data: [{
+        id: 10, name: '上海某大学', code: null, province: '上海', city: '上海',
+        type: '综合', level: '本科', runningNature: '公办',
+        is985: false, is211: false, isDoubleFirstClass: false, ranking: null, logoUrl: null,
+        latestAdmission: null, predictedMinRank: null,
+      }],
+      pagination: { page: 1, pageSize: 12, total: 1, totalPages: 1 },
+    });
+    renderTab();
+    await screen.findByText('上海某大学');
+    // 直辖市：province === city；info chip 区域应只渲染一个 '上海'（消除 React 重复 key 警告）
+    expect(screen.getAllByText('上海')).toHaveLength(1);
+  });
 });
