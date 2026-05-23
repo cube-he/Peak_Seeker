@@ -13,7 +13,8 @@ jest.mock('@/components/university/UniversityLogo', () => ({
 const item = (id: number, name: string): RankedUniversity => ({
   rank: id, id, name, logoUrl: null, province: '四川', city: '成都',
   type: '综合', runningNature: '公办', is985: false, is211: false,
-  isDoubleFirstClass: false, softRanking: id, admissionMinRank: 1000 + id, admissionMinScore: 600,
+  isDoubleFirstClass: false, softRanking: id, softRankList: '本科',
+  admissionMinRank: 1000 + id, admissionMinScore: 600,
 });
 
 const group: BoardGroup = {

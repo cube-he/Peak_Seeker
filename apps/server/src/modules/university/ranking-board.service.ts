@@ -16,6 +16,8 @@ export interface RankedUniversity {
   is211: boolean;
   isDoubleFirstClass: boolean;
   softRanking: number;
+  /** 软科主榜体系（本科/民办/高职）：让前端 caption 准确显示"软科{list} #N"而非误写"全国" */
+  softRankList: string | null;
   admissionMinRank: number | null;
   admissionMinScore: number | null;
 }
@@ -50,25 +52,39 @@ export class RankingBoardService {
   }
 
   private buildBoardWhere(cfg: BoardConfig): any {
-    const where: any = { level: cfg.level, softRanking: { gt: 0 } };
+    const where: any = { level: cfg.level };
     if (cfg.region.kind === 'province') {
       where.province = { in: cfg.region.values };
+      where.softRanking = { gt: 0 };
     } else if (cfg.region.kind === 'city') {
       where.city = { in: cfg.region.values };
-    } else {
+      where.softRanking = { gt: 0 };
+    } else if (cfg.region.kind === 'elite') {
       where.OR = [{ is985: true }, { is211: true }, { isDoubleFirstClass: true }];
+      where.softRanking = { gt: 0 };
+    } else if (cfg.region.kind === 'category') {
+      // 类别榜按 softCategory 过滤（财经/医药/...），用 softCategoryRank 排
+      where.softCategory = cfg.region.value;
+      where.softCategoryRank = { gt: 0 };
+    } else if (cfg.region.kind === 'list') {
+      // 民办/高职：按 softRankList 过滤；这两类的 softRanking 就是该榜单内名次
+      where.softRankList = cfg.region.value;
+      where.softRanking = { gt: 0 };
     }
     return where;
   }
 
   private async buildBoard(cfg: BoardConfig, examType: string): Promise<RankingBoard> {
+    // 类别榜按 softCategoryRank 排（榜单内名次），其余榜按 softRanking 排
+    const orderField = cfg.region.kind === 'category' ? 'softCategoryRank' : 'softRanking';
+
     const universities = await this.prisma.university.findMany({
       where: this.buildBoardWhere(cfg),
-      orderBy: { softRanking: 'asc' },
+      orderBy: { [orderField]: 'asc' },
       select: {
         id: true, name: true, logoUrl: true, province: true, city: true,
         type: true, runningNature: true, is985: true, is211: true,
-        isDoubleFirstClass: true, softRanking: true,
+        isDoubleFirstClass: true, softRanking: true, softRankList: true,
       },
     });
 
@@ -80,6 +96,7 @@ export class RankingBoardService {
       rank: idx + 1,
       ...u,
       softRanking: u.softRanking ?? 0,
+      softRankList: u.softRankList ?? null,
       admissionMinRank: admissionMap.get(u.id)?.rank ?? null,
       admissionMinScore: admissionMap.get(u.id)?.score ?? null,
     }));

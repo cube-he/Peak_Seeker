@@ -43,7 +43,10 @@ export function RankRow({ item }: { item: RankedUniversity }) {
         </div>
         <div className="mt-1 text-[11px] text-text-muted">
           {meta}
-          {item.softRanking ? ` · 软科全国 #${item.softRanking}` : ''}
+          {item.softRanking
+            ? // 软科主榜体系决定 caption：本科/民办/高职 各自的榜单内名次
+              ` · 软科${item.softRankList ?? ''} #${item.softRanking}`
+            : ''}
         </div>
       </div>
       <div className="shrink-0 text-right">
