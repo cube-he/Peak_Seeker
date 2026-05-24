@@ -6,7 +6,6 @@ import { Tabs, Space, Spin } from 'antd';
 import {
   BankOutlined,
   BookOutlined,
-  HistoryOutlined,
   EnvironmentOutlined,
   TrophyOutlined,
 } from '@ant-design/icons';
@@ -24,8 +23,7 @@ import CharterCard from '@/components/university/CharterCard';
 import QiangjiTable from '@/components/university/QiangjiTable';
 import CampusLocationTab from '@/components/university/campus-location/CampusLocationTab';
 import UniversityLogo from '@/components/university/UniversityLogo';
-import PlanPivotTable from '@/components/university/PlanPivotTable';
-import AdmissionPivotTable from '@/components/university/AdmissionPivotTable';
+import AdmissionDetailTab from '@/components/university/admission-detail/AdmissionDetailTab';
 import { useUserStore } from '@/stores/userStore';
 
 export default function UniversityDetailPage() {
@@ -39,12 +37,6 @@ export default function UniversityDetailPage() {
   const { data: university, isLoading } = useQuery({
     queryKey: ['university', id, userSubject],
     queryFn: () => universityService.getById(id, userSubject),
-    enabled: !!id,
-  });
-
-  const { data: majors } = useQuery({
-    queryKey: ['university-majors', id],
-    queryFn: () => universityService.getMajors(id),
     enabled: !!id,
   });
 
@@ -86,7 +78,7 @@ export default function UniversityDetailPage() {
     { label: '院校代码', value: u.code || '-', sub: u.department || '主管部门待补充' },
     { label: '最近最低分', value: latestAdmission?.majorMinScore || latestAdmission?.minScore || '-', sub: latestAdmission?.year ? `${latestAdmission.year} 年录取` : '等待录取数据' },
     { label: '最近最低位次', value: latestAdmission?.majorMinRank || latestAdmission?.minRank || '-', sub: userSubject ? `${userSubject} 类参考` : '按已选科类参考' },
-    { label: '招生专业', value: majors?.length || '-', sub: '当前可查计划数' },
+    { label: '招生专业', value: '-', sub: '当前可查计划数' },
     {
       label: '软科排名',
       // 之前读 u.rankingSoft 字段已不存在（恒 undefined）会回落到 u.ranking 字符串；
@@ -175,14 +167,21 @@ export default function UniversityDetailPage() {
       ),
     },
     {
-      key: 'plans',
-      label: <span><BookOutlined className="mr-1" />招生计划 ({majors?.length || 0})</span>,
-      children: <PlanPivotTable data={majors} />,
-    },
-    {
-      key: 'admissions',
-      label: <span><HistoryOutlined className="mr-1" />历年录取 ({admissions?.length || 0})</span>,
-      children: <AdmissionPivotTable data={admissions} />,
+      key: 'admission-detail',
+      label: <span><BookOutlined className="mr-1" />招录详情</span>,
+      children: (
+        <AdmissionDetailTab
+          universityId={u.id}
+          universityFlags={{ is985: u.is985, is211: u.is211 }}
+          rawAdmissions={admissions ?? []}
+          universityScores={{
+            minScorePhysics: u.minScorePhysics ?? null,
+            minRankPhysics:  u.minRankPhysics  ?? null,
+            minScoreHistory: u.minScoreHistory ?? null,
+            minRankHistory:  u.minRankHistory  ?? null,
+          }}
+        />
+      ),
     },
     // Only show the tab when there is qiangji data
     ...(u.qiangjiAdmissions?.length > 0
@@ -269,8 +268,7 @@ export default function UniversityDetailPage() {
         <div className="mx-auto flex max-w-[1200px] gap-7 overflow-x-auto px-4 sm:px-6 lg:px-12">
           {[
             ['info', '概览'],
-            ['plans', '招生计划'],
-            ['admissions', '历年录取'],
+            ['admission-detail', '招录详情'],
           ].map(([key, label]) => (
             <button
               key={key}
