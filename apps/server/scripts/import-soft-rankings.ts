@@ -8,6 +8,7 @@ import * as ExcelJS from 'exceljs';
 import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { parseArgs } from './lib/cli-utils';
+import { parseMainRank } from '../src/scripts/soft-rankings/parse-main-rank';
 
 // 主榜：sheet 名 -> 体系 + 年份
 const MAIN_SHEETS: Record<string, { list: string; year: number }> = {
@@ -27,7 +28,10 @@ const CATEGORY_SHEETS: Record<string, string> = {
   '中国体育类大学排名_26': '体育类',
 };
 
-interface MainRankRow { name: string; rank: number; list: string; year: number; }
+// rank 可为 null:主榜 sheet 里专门类院校的"医1/财1/..."前缀编号会被
+// parseMainRank 标为 null,触发对该院校 softRanking 的显式清空(覆盖旧
+// import 留下的污染值),让它们的真实名次回到 softCategoryRank 统一兜底
+interface MainRankRow { name: string; rank: number | null; list: string; year: number; }
 interface CategoryRankRow { name: string; rank: number; category: string; }
 
 function toText(value: unknown): string {
@@ -80,8 +84,11 @@ function parseWorkbook(workbook: ExcelJS.Workbook): {
     for (let r = 2; r <= sheet.rowCount; r++) {
       const row = sheet.getRow(r);
       const name = toText(row.getCell(nameCol).value);
-      const rank = toNumber(row.getCell(rankCol).value);
-      if (!name || rank == null) continue;
+      if (!name) continue;
+      // parseMainRank 只接受纯数字;"医1/财1/..."等前缀编号返回 null,
+      // 但仍要 push,让 addUpdate 把 softRanking 显式清空(否则旧 import
+      // 把 toNumber("医1")=1 污染过来的值会一直留着)
+      const rank = parseMainRank(row.getCell(rankCol).value);
       main.push({ name, rank, list: cfg.list, year: cfg.year });
     }
   }
