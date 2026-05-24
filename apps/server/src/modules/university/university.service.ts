@@ -258,13 +258,39 @@ export class UniversityService {
       where.year = { in: years };
     }
 
-    return this.prisma.admissionRecord.findMany({
+    const admissions = await this.prisma.admissionRecord.findMany({
       where,
-      include: {
-        major: true,
-      },
+      include: { major: true },
       orderBy: [{ year: 'desc' }, { majorMinRank: 'asc' }],
     });
+
+    // Fetch enrollment plan chip fields (majorRanking, disciplineEval, isNationalFeature)
+    // for each distinct majorId. We order by year desc so the first entry per major
+    // is the latest-year plan — used as the canonical chip source regardless of
+    // which admission year the caller is viewing.
+    const majorIds = Array.from(new Set(admissions.map((a: any) => a.majorId).filter(Boolean)));
+    const plans = majorIds.length > 0
+      ? await this.prisma.enrollmentPlan.findMany({
+          where: { universityId: id, majorId: { in: majorIds } },
+          orderBy: { year: 'desc' },
+        })
+      : [];
+
+    const latestPlanByMajor = new Map<number, typeof plans[0]>();
+    for (const p of plans) {
+      if (!latestPlanByMajor.has(p.majorId)) {
+        latestPlanByMajor.set(p.majorId, p);
+      }
+    }
+
+    return admissions.map((a: any) => ({
+      ...a,
+      extras: {
+        majorRanking: latestPlanByMajor.get(a.majorId)?.majorRanking ?? null,
+        disciplineEval: latestPlanByMajor.get(a.majorId)?.disciplineEval ?? null,
+        isNationalFeature: latestPlanByMajor.get(a.majorId)?.isNationalFeature ?? false,
+      },
+    }));
   }
 
   async getHotUniversities(limit?: number) {
