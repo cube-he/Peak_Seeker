@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Tabs, Space, Spin } from 'antd';
 import {
@@ -25,7 +26,6 @@ import CampusLocationTab from '@/components/university/campus-location/CampusLoc
 import UniversityLogo from '@/components/university/UniversityLogo';
 import PlanPivotTable from '@/components/university/PlanPivotTable';
 import AdmissionPivotTable from '@/components/university/AdmissionPivotTable';
-import HeroBanner from '@/components/admission/HeroBanner';
 import { useUserStore } from '@/stores/userStore';
 
 export default function UniversityDetailPage() {
@@ -34,6 +34,7 @@ export default function UniversityDetailPage() {
 
   const { examInfo } = useUserStore();
   const userSubject = examInfo.subjects?.[0];
+  const [activeTab, setActiveTab] = useState('info');
 
   const { data: university, isLoading } = useQuery({
     queryKey: ['university', id, userSubject],
@@ -270,21 +271,26 @@ export default function UniversityDetailPage() {
             ['info', '概览'],
             ['plans', '招生计划'],
             ['admissions', '历年录取'],
-            ['assist', '位次辅助'],
-          ].map(([href, label]) => (
-            <a
-              key={href}
-              href={`#${href}`}
-              className="whitespace-nowrap border-b-2 border-transparent py-3 text-sm text-text-tertiary no-underline transition-colors hover:text-primary"
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setActiveTab(key);
+                document.getElementById('info')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              className={`whitespace-nowrap cursor-pointer border-0 border-b-2 bg-transparent py-3 text-sm transition-colors hover:text-primary ${
+                activeTab === key ? 'border-primary text-primary' : 'border-transparent text-text-tertiary'
+              }`}
             >
               {label}
-            </a>
+            </button>
           ))}
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-[1200px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-12">
-        <main className="min-w-0">
+      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6 lg:px-12">
+        <main>
           <section className="mb-6 rounded-2xl bg-surface p-5 shadow-card sm:p-7">
             <div className="mb-2 text-[11px] uppercase tracking-[1.5px] text-accent">Overview · 院校概览</div>
             <h2 className="m-0 font-serif text-[24px] font-semibold text-text">
@@ -295,26 +301,10 @@ export default function UniversityDetailPage() {
             </p>
           </section>
 
-          <section id="info" className="rounded-2xl bg-surface p-2 shadow-card">
-            <Tabs items={tabItems} style={{ padding: '0 18px' }} />
+          <section id="info" className="rounded-2xl bg-surface p-2 shadow-card scroll-mt-32">
+            <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} style={{ padding: '0 18px' }} />
           </section>
         </main>
-
-        <aside id="assist" className="space-y-4 lg:sticky lg:top-32 lg:self-start">
-          <div className="rounded-xl bg-surface p-5 shadow-card">
-            <HeroBanner
-              university={{ is985: u.is985, is211: u.is211 }}
-              prediction={u.bestPrediction ?? null}
-              userRank={examInfo.rank}
-            />
-          </div>
-          <div className="rounded-xl bg-surface p-5 shadow-card">
-            <h3 className="m-0 font-serif text-base font-semibold text-text">下一步</h3>
-            <p className="m-0 mt-2 text-sm leading-relaxed text-text-tertiary">
-              详情页设计稿里的“相似院校”和“问答社区”需要额外接口；当前先保留院校已有数据模块，后续接入接口后再展开。
-            </p>
-          </div>
-        </aside>
       </div>
     </MainLayout>
   );
