@@ -20,7 +20,7 @@ const uni = (over: Partial<any> = {}) => ({
 });
 
 describe('RankingBoardService.getRankingBoard', () => {
-  it('returns 16 boards: existing 7 + 7 category + 民办 + 高职', async () => {
+  it('returns 24 boards: 7 existing + 7 本科类别 + 民办本科 + 9 高职类别', async () => {
     const { svc } = makeService([uni()]);
     const boards = await svc.getRankingBoard('物理');
     expect(boards.map((b) => b.key)).toEqual([
@@ -28,18 +28,34 @@ describe('RankingBoardService.getRankingBoard', () => {
       'neighbor-college', 'developed-undergrad', 'developed-college', 'national-elite',
       'category-财经类', 'category-医药类', 'category-中医药类',
       'category-语言类', 'category-政法类', 'category-民族类', 'category-体育类',
-      'private-undergrad', 'national-college',
+      'private-undergrad',
+      'vocational-综合类', 'vocational-理工类', 'vocational-师范类',
+      'vocational-农林类', 'vocational-医药类', 'vocational-财经类',
+      'vocational-政法类', 'vocational-体育类', 'vocational-文艺类',
     ]);
   });
 
-  it('category board filters by softCategory and orders by softCategoryRank', async () => {
+  it('本科 category board filters by softCategory + softRankList=本科 (disambiguate from 高职 categories)', async () => {
     const { svc, prisma } = makeService([uni()]);
     await svc.getRankingBoard('物理');
-    // 索引 7 = category-财经类（紧跟在原有 7 张榜之后）
+    // 索引 7 = category-财经类(本科)
     const call = prisma.university.findMany.mock.calls[7][0];
     expect(call.where.softCategory).toBe('财经类');
     expect(call.where.softCategoryRank).toEqual({ gt: 0 });
+    expect(call.where.softRankList).toBe('本科');
     expect(call.where.level).toBe('本科');
+    expect(call.orderBy).toEqual({ softCategoryRank: 'asc' });
+  });
+
+  it('高职 category board filters by softCategory + softRankList=高职', async () => {
+    const { svc, prisma } = makeService([uni()]);
+    await svc.getRankingBoard('物理');
+    // 索引 15 = vocational-综合类
+    const call = prisma.university.findMany.mock.calls[15][0];
+    expect(call.where.softCategory).toBe('综合类');
+    expect(call.where.softCategoryRank).toEqual({ gt: 0 });
+    expect(call.where.softRankList).toBe('高职');
+    expect(call.where.level).toBe('专科');
     expect(call.orderBy).toEqual({ softCategoryRank: 'asc' });
   });
 
@@ -51,16 +67,6 @@ describe('RankingBoardService.getRankingBoard', () => {
     expect(call.where.softRankList).toBe('民办');
     expect(call.where.level).toBe('本科');
     expect(call.where.softRanking).toEqual({ gt: 0 });
-    expect(call.orderBy).toEqual({ softRanking: 'asc' });
-  });
-
-  it('全国高职 board filters by softRankList=高职 and level=专科', async () => {
-    const { svc, prisma } = makeService([uni()]);
-    await svc.getRankingBoard('物理');
-    // 索引 15 = national-college
-    const call = prisma.university.findMany.mock.calls[15][0];
-    expect(call.where.softRankList).toBe('高职');
-    expect(call.where.level).toBe('专科');
     expect(call.orderBy).toEqual({ softRanking: 'asc' });
   });
 

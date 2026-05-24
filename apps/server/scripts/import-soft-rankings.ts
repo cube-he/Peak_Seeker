@@ -33,11 +33,33 @@ const CATEGORY_SHEETS: Record<string, string> = {
   '中国体育类大学排名_26': '体育类',
 };
 
+// 单 sheet 内多 sub-board 的类别榜：sheet 名 -> (子榜「榜单名称」-> 类别名)
+// 高职 sheet 内含 9 个分类子榜（综合类/理工类/师范类/...各从 1 计数,数据干净）,
+// 写到 softCategory + softCategoryRank。靠 buildBoardWhere 加 softRankList='高职'
+// 跟本科类别榜区分(例如本科"财经类"=上海财经,高职"财经类"=浙江金融职业学院,
+// 都用 softCategory='财经类'存储,不冲突)。
+const CATEGORY_SUB_BOARDS: Record<string, Record<string, string>> = {
+  '中国高职院校排名_2025': {
+    '综合类高职专科院校排名': '综合类',
+    '理工类高职专科院校排名': '理工类',
+    '师范类高职专科院校排名': '师范类',
+    '农林类高职专科院校排名': '农林类',
+    '医药类高职专科院校排名': '医药类',
+    '财经类高职专科院校排名': '财经类',
+    '政法类高职专科院校排名': '政法类',
+    '体育类高职专科院校排名': '体育类',
+    '文艺类高职专科院校排名': '文艺类',
+  },
+};
+
 // rank 可为 null:主榜 sheet 里专门类院校的"医1/财1/..."前缀编号会被
 // parseMainRank 标为 null,触发对该院校 softRanking 的显式清空(覆盖旧
 // import 留下的污染值),让它们的真实名次回到 softCategoryRank 统一兜底
 interface MainRankRow { name: string; rank: number | null; list: string; year: number; }
-interface CategoryRankRow { name: string; rank: number; category: string; }
+// list: 当 category 来自专科子榜时填 '高职',让 update loop 同时设置
+// softRankList='高职',避免「只在分类子榜出现、不在高职总榜」的 uni 缺 softRankList
+// 而被高职类别 board 的 buildBoardWhere(filter softRankList='高职')排除
+interface CategoryRankRow { name: string; rank: number; category: string; list?: string; }
 
 function toText(value: unknown): string {
   if (value == null) return '';
@@ -115,9 +137,32 @@ function parseWorkbook(workbook: ExcelJS.Workbook): {
     for (let r = 2; r <= sheet.rowCount; r++) {
       const row = sheet.getRow(r);
       const name = toText(row.getCell(nameCol).value);
-      const rank = toNumber(row.getCell(rankCol).value);
+      const rank = parseMainRank(row.getCell(rankCol).value);
       if (!name || rank == null) continue;
       category.push({ name, rank, category: categoryName });
+    }
+  }
+
+  // 单 sheet 内多 sub-board 的处理（高职分类子榜）
+  for (const [sheetName, subBoardMap] of Object.entries(CATEGORY_SUB_BOARDS)) {
+    const sheet = workbook.getWorksheet(sheetName);
+    if (!sheet) continue;
+    const idx = colIndexes(sheet);
+    const nameCol = idx.get('学校中文名');
+    const rankCol = idx.get('排名');
+    const subBoardCol = idx.get('榜单名称');
+    if (!nameCol || !rankCol || !subBoardCol) continue;
+    for (let r = 2; r <= sheet.rowCount; r++) {
+      const row = sheet.getRow(r);
+      const sub = toText(row.getCell(subBoardCol).value).trim();
+      const categoryName = subBoardMap[sub];
+      if (!categoryName) continue;
+      const name = toText(row.getCell(nameCol).value);
+      const rank = parseMainRank(row.getCell(rankCol).value);
+      // 高职分类子榜含 "242+/114+/..." 后段并列标记,parseMainRank 会返回 null;
+      // 跳过这些只取有清晰序号的 unis,避免后段并列污染榜单
+      if (!name || rank == null) continue;
+      category.push({ name, rank, category: categoryName, list: '高职' });
     }
   }
 
@@ -176,8 +221,15 @@ async function main(): Promise<void> {
         if (unmatchedCategoryNames.length < 20) unmatchedCategoryNames.push(row.name);
         continue;
       }
+      const patch: Record<string, unknown> = {
+        softCategory: row.category, softCategoryRank: row.rank,
+      };
+      // 高职分类子榜带 list 标记,顺手把 softRankList='高职' 也写上,
+      // 让纯在分类子榜出现、不在高职总榜的 uni 也能匹配 buildBoardWhere 的
+      // softRankList='高职' filter
+      if (row.list) patch.softRankList = row.list;
       for (const id of ids) {
-        addUpdate(id, { softCategory: row.category, softCategoryRank: row.rank });
+        addUpdate(id, patch);
       }
       categoryMatched++;
     }
