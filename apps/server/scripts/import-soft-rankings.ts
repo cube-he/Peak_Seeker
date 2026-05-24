@@ -10,11 +10,16 @@ import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { parseArgs } from './lib/cli-utils';
 import { parseMainRank } from '../src/scripts/soft-rankings/parse-main-rank';
 
-// 主榜：sheet 名 -> 体系 + 年份
-const MAIN_SHEETS: Record<string, { list: string; year: number }> = {
+// 主榜：sheet 名 -> 体系 + 年份 + (可选)子榜名过滤
+// subBoard:当 sheet 含多个独立子榜单（每个从 1 重新计数）时,只取指定子榜避免污染。
+// 高职 sheet 内有 13 个子榜（综合类/理工类/师范类/...各从 1 计数 + 中国职业技术大学排名
+// + 中国高职专科院校排名（总榜））——只「总榜」是真正的全国统一排序,其余是分类榜,
+// 不能混入 softRanking 否则会出现「13 个学校并列 #1」的乱象。
+// 本科/民办 sheet 都是单榜单（只用类别前缀编号区分专门类）,不需要 subBoard。
+const MAIN_SHEETS: Record<string, { list: string; year: number; subBoard?: string }> = {
   '中国大学排名（总榜）_10': { list: '本科', year: 2026 },
   '中国民办高校排名（总榜）_-15': { list: '民办', year: 2026 },
-  '中国高职院校排名_2025': { list: '高职', year: 2025 },
+  '中国高职院校排名_2025': { list: '高职', year: 2025, subBoard: '中国高职专科院校排名（总榜）' },
 };
 
 // 类别榜：sheet 名 -> 类别名（仅公办本科专门类别榜）
@@ -80,9 +85,16 @@ function parseWorkbook(workbook: ExcelJS.Workbook): {
     const idx = colIndexes(sheet);
     const nameCol = idx.get('学校中文名');
     const rankCol = idx.get('排名');
+    const subBoardCol = cfg.subBoard ? idx.get('榜单名称') : undefined;
     if (!nameCol || !rankCol) continue;
+    if (cfg.subBoard && !subBoardCol) continue;
     for (let r = 2; r <= sheet.rowCount; r++) {
       const row = sheet.getRow(r);
+      // 多子榜 sheet（高职）按「榜单名称」过滤,只取「中国高职专科院校排名（总榜）」
+      if (cfg.subBoard && subBoardCol) {
+        const sub = toText(row.getCell(subBoardCol).value).trim();
+        if (sub !== cfg.subBoard) continue;
+      }
       const name = toText(row.getCell(nameCol).value);
       if (!name) continue;
       // parseMainRank 只接受纯数字;"医1/财1/..."等前缀编号返回 null,

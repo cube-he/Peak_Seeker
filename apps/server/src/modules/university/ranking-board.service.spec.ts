@@ -88,6 +88,29 @@ describe('RankingBoardService.getRankingBoard', () => {
     expect(firstCall.orderBy).toEqual({ softRanking: 'asc' });
   });
 
+  it('province 本科 boards filter softRankList=本科 to exclude 民办 universities', async () => {
+    // 民办本科 uni 的 softRanking 是民办榜内名次(从 1 开始),会污染"川内本科榜"等综合榜的排序
+    const { svc, prisma } = makeService([uni()]);
+    await svc.getRankingBoard('物理');
+    // 索引 0 = sichuan-undergrad
+    expect(prisma.university.findMany.mock.calls[0][0].where.softRankList).toBe('本科');
+    // 索引 2 = neighbor-undergrad
+    expect(prisma.university.findMany.mock.calls[2][0].where.softRankList).toBe('本科');
+    // 索引 4 = developed-undergrad
+    expect(prisma.university.findMany.mock.calls[4][0].where.softRankList).toBe('本科');
+    // 索引 6 = national-elite
+    expect(prisma.university.findMany.mock.calls[6][0].where.softRankList).toBe('本科');
+  });
+
+  it('province 专科 boards filter softRankList=高职 (匹配高职榜口径)', async () => {
+    const { svc, prisma } = makeService([uni()]);
+    await svc.getRankingBoard('物理');
+    // 索引 1 = sichuan-college,3 = neighbor-college,5 = developed-college
+    expect(prisma.university.findMany.mock.calls[1][0].where.softRankList).toBe('高职');
+    expect(prisma.university.findMany.mock.calls[3][0].where.softRankList).toBe('高职');
+    expect(prisma.university.findMany.mock.calls[5][0].where.softRankList).toBe('高职');
+  });
+
   it('uses an OR of 985/211/双一流 for the national elite board', async () => {
     const { svc, prisma } = makeService([uni()]);
     await svc.getRankingBoard('物理');
