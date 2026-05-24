@@ -53,15 +53,22 @@ export class RankingBoardService {
 
   private buildBoardWhere(cfg: BoardConfig): any {
     const where: any = { level: cfg.level };
+    // 按区域/精英筛选的榜（川内/周边/发达/全国名校）的 softRanking 必须来自同一个榜单
+    // 才能可比——本科 boards 限定 softRankList='本科'（排除民办本科混入,因为民办院校的
+    // softRanking 是民办榜内名次,从 1 重新计数,跟综合本科榜不可比）；专科 boards 同理
+    // 限定 '高职'。list/category kind 自己已经限制了 softRankList/softCategory,不需要。
     if (cfg.region.kind === 'province') {
       where.province = { in: cfg.region.values };
       where.softRanking = { gt: 0 };
+      where.softRankList = cfg.level === '本科' ? '本科' : '高职';
     } else if (cfg.region.kind === 'city') {
       where.city = { in: cfg.region.values };
       where.softRanking = { gt: 0 };
+      where.softRankList = cfg.level === '本科' ? '本科' : '高职';
     } else if (cfg.region.kind === 'elite') {
       where.OR = [{ is985: true }, { is211: true }, { isDoubleFirstClass: true }];
       where.softRanking = { gt: 0 };
+      where.softRankList = cfg.level === '本科' ? '本科' : '高职';
     } else if (cfg.region.kind === 'category') {
       // 类别榜按 softCategory 过滤（财经/医药/...），用 softCategoryRank 排
       where.softCategory = cfg.region.value;
