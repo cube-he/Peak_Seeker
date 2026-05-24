@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { QueryUniversityDto } from './dto/query-university.dto';
@@ -258,13 +259,47 @@ export class UniversityService {
       where.year = { in: years };
     }
 
-    return this.prisma.admissionRecord.findMany({
-      where,
-      include: {
-        major: true,
+    const admissions: Array<Prisma.AdmissionRecordGetPayload<{ include: { major: true } }>> =
+      await this.prisma.admissionRecord.findMany({
+        where,
+        include: { major: true },
+        orderBy: [{ year: 'desc' }, { majorMinRank: 'asc' }],
+      });
+
+    // Fetch enrollment plan chip fields (majorRanking, disciplineEval, isNationalFeature)
+    // for each distinct majorId. We order by year desc so the first entry per major
+    // is the latest-year plan — used as the canonical chip source regardless of
+    // which admission year the caller is viewing.
+    const majorIds = Array.from(new Set(admissions.map((a) => a.majorId).filter(Boolean)));
+    const plans = majorIds.length > 0
+      ? await this.prisma.enrollmentPlan.findMany({
+          where: { universityId: id, majorId: { in: majorIds } },
+          orderBy: { year: 'desc' },
+          select: {
+            majorId: true,
+            year: true,
+            majorRanking: true,
+            disciplineEval: true,
+            isNationalFeature: true,
+          },
+        })
+      : [];
+
+    const latestPlanByMajor = new Map<number, typeof plans[0]>();
+    for (const p of plans) {
+      if (!latestPlanByMajor.has(p.majorId)) {
+        latestPlanByMajor.set(p.majorId, p);
+      }
+    }
+
+    return admissions.map((a) => ({
+      ...a,
+      extras: {
+        majorRanking: latestPlanByMajor.get(a.majorId)?.majorRanking ?? null,
+        disciplineEval: latestPlanByMajor.get(a.majorId)?.disciplineEval ?? null,
+        isNationalFeature: latestPlanByMajor.get(a.majorId)?.isNationalFeature ?? false,
       },
-      orderBy: [{ year: 'desc' }, { majorMinRank: 'asc' }],
-    });
+    }));
   }
 
   async getHotUniversities(limit?: number) {
