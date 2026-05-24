@@ -19,7 +19,13 @@ export function RankingBoardTab() {
     queryFn: () => universityService.getRankingBoard(examType),
   });
 
-  const groups = data ? groupBoards(data) : [];
+  // 把 boards 按 level 拆两段后再各自 group:
+  // - 本科榜单(13 张): 川内本科、周边本科、发达城市本科、全国名校榜、行业特色院校(7)、民办本科
+  // - 专科榜单(12 张): 川内专科、周边专科、发达城市专科、高职分类(9)
+  // 川内/周边/发达 在两段各出现一次,各自只渲染对应 level 的单 board(BoardSection 自适应)
+  const undergradGroups = data ? groupBoards(data.filter((b) => b.level === '本科')) : [];
+  const collegeGroups = data ? groupBoards(data.filter((b) => b.level === '专科')) : [];
+  const hasAny = undergradGroups.length > 0 || collegeGroups.length > 0;
 
   return (
     <div className="pb-12">
@@ -49,11 +55,28 @@ export function RankingBoardTab() {
         <div className="rounded-xl bg-surface p-6 shadow-card">
           <Alert type="error" showIcon message="排行榜加载失败" description="请稍后刷新重试。" />
         </div>
-      ) : groups.length > 0 ? (
-        <div className="space-y-6">
-          {groups.map((g) => (
-            <BoardSection key={g.groupKey} group={g} />
-          ))}
+      ) : hasAny ? (
+        <div className="space-y-10">
+          {undergradGroups.length > 0 && (
+            <section>
+              <h2 className="m-0 mb-4 font-serif text-xl font-semibold text-text">本科榜单</h2>
+              <div className="space-y-6">
+                {undergradGroups.map((g) => (
+                  <BoardSection key={g.groupKey} group={g} />
+                ))}
+              </div>
+            </section>
+          )}
+          {collegeGroups.length > 0 && (
+            <section>
+              <h2 className="m-0 mb-4 font-serif text-xl font-semibold text-text">专科榜单</h2>
+              <div className="space-y-6">
+                {collegeGroups.map((g) => (
+                  <BoardSection key={g.groupKey} group={g} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       ) : (
         <div className="rounded-xl bg-surface p-8 shadow-card">

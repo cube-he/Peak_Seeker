@@ -70,9 +70,13 @@ export class RankingBoardService {
       where.softRanking = { gt: 0 };
       where.softRankList = cfg.level === '本科' ? '本科' : '高职';
     } else if (cfg.region.kind === 'category') {
-      // 类别榜按 softCategory 过滤（财经/医药/...），用 softCategoryRank 排
+      // 类别榜按 softCategory 过滤（财经/医药/...），用 softCategoryRank 排。
+      // 同 softCategory 值在本科/高职体系下分别存在（如本科"财经类"=上海财经,
+      // 高职"财经类"=浙江金融职业学院），必须加 softRankList 过滤区分,否则
+      // 财经类榜会把本科 + 高职财经类院校混在一起。
       where.softCategory = cfg.region.value;
       where.softCategoryRank = { gt: 0 };
+      where.softRankList = cfg.level === '本科' ? '本科' : '高职';
     } else if (cfg.region.kind === 'list') {
       // 民办/高职：按 softRankList 过滤；这两类的 softRanking 就是该榜单内名次
       where.softRankList = cfg.region.value;

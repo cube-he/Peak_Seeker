@@ -36,6 +36,15 @@ export const SOFT_CATEGORIES = [
   '财经类', '医药类', '中医药类', '语言类', '政法类', '民族类', '体育类',
 ] as const;
 
+// 软科高职分类榜:综合/理工/师范/农林/医药/财经/政法/体育/文艺
+// 跟本科类别榜复用 softCategory 字段,靠 softRankList='高职' vs '本科' 区分。
+// 软科「中国高职专科院校排名（总榜）」是分档并列结构(rank=1 对应 9 个学校),
+// 不可线性排序;但这 9 个分类子榜各自数据干净(uniquePure 接近 pure 数),
+// 是 frontend 真正可信的高职榜来源。顺序锁定为 spec 里 mock.calls[15..23]。
+export const HIGH_VOCATIONAL_CATEGORIES = [
+  '综合类', '理工类', '师范类', '农林类', '医药类', '财经类', '政法类', '体育类', '文艺类',
+] as const;
+
 export const BOARD_CONFIGS: BoardConfig[] = [
   { key: 'sichuan-undergrad', title: '川内本科榜', groupKey: 'sichuan', groupTitle: '川内', level: '本科', region: { kind: 'province', values: ['四川'] } },
   { key: 'sichuan-college', title: '川内专科榜', groupKey: 'sichuan', groupTitle: '川内', level: '专科', region: { kind: 'province', values: ['四川'] } },
@@ -56,6 +65,14 @@ export const BOARD_CONFIGS: BoardConfig[] = [
   })),
   // 民办本科榜（独立 group）
   { key: 'private-undergrad', title: '民办本科榜', groupKey: 'private', groupTitle: '民办本科', level: '本科', region: { kind: 'list', value: '民办' } },
-  // 全国高职榜（独立 group）
-  { key: 'national-college', title: '全国高职榜', groupKey: 'national-college', groupTitle: '全国高职', level: '专科', region: { kind: 'list', value: '高职' } },
+  // 9 个软科高职分类榜,归到 group="vocational"「高职分类」
+  // 取消原「全国高职榜」(softRankList='高职' 的 softRanking 全是分档并列,不可靠)
+  ...HIGH_VOCATIONAL_CATEGORIES.map((category) => ({
+    key: `vocational-${category}`,
+    title: `${category}高职榜`,
+    groupKey: 'vocational',
+    groupTitle: '高职分类',
+    level: '专科' as const,
+    region: { kind: 'category' as const, value: category },
+  })),
 ];
