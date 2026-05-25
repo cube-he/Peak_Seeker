@@ -72,12 +72,19 @@ function aggregateForSubLevel(
   return m;
 }
 
-/** 选出当前 path 范围内的所有院校(只在 district 叶子或子级空时调用)。
- *  限定 province + (可选 city,直辖市可能缺) + (可选 district) */
+/** 选出当前 path 范围内的所有院校。
+ *  从 path 末尾向前找每个 level 的 name(防御性:path 万一有重复项时,
+ *  取最后那个才是当前位置;比 path.find(首个匹配)更鲁棒)。 */
 function pickUnisInScope(unis: MapUniversity[], path: PathNode[]): MapUniversity[] {
-  const province = path.find((n) => n.level === 'province')?.name;
-  const city = path.find((n) => n.level === 'city')?.name;
-  const district = path.find((n) => n.level === 'district')?.name;
+  let province: string | undefined;
+  let city: string | undefined;
+  let district: string | undefined;
+  for (let i = path.length - 1; i >= 0; i--) {
+    const n = path[i];
+    if (n.level === 'district' && district === undefined) district = n.name;
+    else if (n.level === 'city' && city === undefined) city = n.name;
+    else if (n.level === 'province' && province === undefined) province = n.name;
+  }
   if (!province) return [];
   return unis.filter((u) => {
     if (u.province !== province) return false;
@@ -85,6 +92,16 @@ function pickUnisInScope(unis: MapUniversity[], path: PathNode[]): MapUniversity
     if (district && u.district !== district) return false;
     return true;
   });
+}
+
+/** dispatch 下钻:已在 path 中的 area 走 slice 回退;否则 push。
+ *  防御 user 反复点同名 polygon 把 path 撑长(每次只 dedup 末项的旧逻辑漏过) */
+function buildDrillUpdater(adcode: number, name: string, level: PathNode['level']) {
+  return (prev: PathNode[]) => {
+    const existing = prev.findIndex((n) => n.adcode === adcode);
+    if (existing >= 0) return prev.slice(0, existing + 1);
+    return [...prev, { adcode, name, level }];
+  };
 }
 
 function buildCountLabel(name: string, count: number): string {
@@ -217,15 +234,13 @@ export function MapTab() {
           closeWhenClickMap: true,
         });
 
-        // polygon 点击 → 下钻一级(province/city/district 都可点,district 是叶子)
+        // polygon 点击 → 下钻一级。dedup 走整条 path:已存在的 adcode → slice 回退,
+        // 否则 push。避免点同名 area 把 path 撑长出"四川/.../四川/.../"那种乱序。
         explorerRef.current.on('featureClick', (_e: any, feature: any) => {
           const level: PathNode['level'] = feature.properties.level;
           const adcode: number = feature.properties.adcode;
           const shortName = normalizeAreaName(feature.properties.name, level);
-          setCurrentPath((prev) => {
-            if (prev[prev.length - 1]?.adcode === adcode) return prev;
-            return [...prev, { adcode, name: shortName, level }];
-          });
+          setCurrentPath(buildDrillUpdater(adcode, shortName, level));
         });
 
         setMapReady(true);
@@ -306,6 +321,29 @@ export function MapTab() {
       const showMarkers = current.level === 'district' || subs.length === 0;
 
       if (showMarkers) {
+        // district view 时把当前 district 的 polygon 边界也画出来——用户提到的
+        // "点击区/县后也要显示边界"。做法:重新 renderSubFeatures 父级(市)的
+        // 所有 districts,但只把当前 district 高亮,其他淡化。
+        // 同步从 explorer 拿父级 areaNode(city view 时已 loadAreaNode 缓存过)。
+        if (current.level === 'district' && currentPath.length >= 2) {
+          const parentNode = currentPath[currentPath.length - 2];
+          const parentArea = explorer.getAreaNodeByAdcode?.(parentNode.adcode);
+          if (parentArea) {
+            explorer.renderSubFeatures(parentArea, (feature: any) => {
+              const isCurrent = feature.properties.adcode === current.adcode;
+              return {
+                cursor: 'default',
+                bubble: true,
+                strokeColor: isCurrent ? '#2563eb' : '#94a3b8',
+                strokeWeight: isCurrent ? 2 : 1,
+                strokeOpacity: isCurrent ? 0.95 : 0.4,
+                fillColor: isCurrent ? '#dbeafe' : '#cbd5e1',
+                fillOpacity: isCurrent ? 0.35 : 0.08,
+              };
+            });
+          }
+        }
+
         const scopeUnis = pickUnisInScope(universities, currentPath);
         scopeUnis.forEach((u) => {
           const marker = new AMap.Marker({
@@ -314,6 +352,7 @@ export function MapTab() {
             offset: new AMap.Pixel(-8, -8),
             anchor: 'top-left',
             cursor: 'pointer',
+            zIndex: 300, // 在 polygon 上面
           });
           marker.on('click', () => {
             if (!infoWindowRef.current) return;
@@ -366,10 +405,7 @@ export function MapTab() {
           zIndex: 200,
         });
         marker.on('click', () => {
-          setCurrentPath((prev) => {
-            if (prev[prev.length - 1]?.adcode === fAdcode) return prev;
-            return [...prev, { adcode: fAdcode, name: shortName, level: fLevel }];
-          });
+          setCurrentPath(buildDrillUpdater(fAdcode, shortName, fLevel));
         });
         map.add(marker);
         countMarkersRef.current.push(marker);
