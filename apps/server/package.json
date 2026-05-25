@@ -21,7 +21,13 @@
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
     "backfill:ranks": "ts-node -r tsconfig-paths/register scripts/backfill-university-ranks.ts",
-    "import:soft-rankings": "ts-node -r tsconfig-paths/register scripts/import-soft-rankings.ts"
+    "import:soft-rankings": "ts-node -r tsconfig-paths/register scripts/import-soft-rankings.ts",
+    "import:university-basic": "ts-node scripts/import-university-basic.ts",
+    "import:university-details": "ts-node scripts/import-university-details.ts",
+    "import:university-rankings": "ts-node scripts/import-university-rankings.ts",
+    "import:university-satisfaction": "ts-node scripts/import-university-satisfaction.ts",
+    "import:university-charters": "ts-node scripts/import-university-charters.ts",
+    "import:university-employment": "ts-node scripts/import-university-employment.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.17.0",
