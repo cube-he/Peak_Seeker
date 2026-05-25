@@ -395,3 +395,51 @@ describe('UniversityService.getFilters', () => {
     expect(filters.natures[0]).toEqual({ value: '公办', count: 150 });
   });
 });
+
+describe('findAll: extended sortBy mapping', () => {
+  const buildService = () => {
+    const prisma = {
+      university: {
+        findMany: jest.fn(),
+        count: jest.fn(),
+      },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const service = new UniversityService(prisma as any, redis as any, admissionService as any);
+    return { service, prisma };
+  };
+
+  it.each([
+    'rankingAlumni',
+    'rankingQS',
+    'rankingUSNews',
+    'rankingTimes',
+    'aClassDisciplineCount',
+    'campusArea',
+    'createdYear',
+    'heatScore',
+  ])('sortBy=%s goes through memory path (nullable field)', async (sortBy) => {
+    const { service, prisma } = buildService();
+    prisma.university.findMany.mockResolvedValue([
+      { id: 1, name: '北大', is985: true, is211: true, [sortBy]: 1 },
+      { id: 2, name: '清华', is985: true, is211: true, [sortBy]: null },
+    ]);
+    prisma.university.count.mockResolvedValue(2);
+    await service.findAll({ sortBy, sortOrder: 'asc' } as any);
+    const call = prisma.university.findMany.mock.calls[0]?.[0] ?? {};
+    expect(call.skip).toBeUndefined();
+    expect(call.take).toBeUndefined();
+  });
+
+  it('sortBy=name goes through DB path (not in NULLABLE set)', async () => {
+    const { service, prisma } = buildService();
+    prisma.university.findMany.mockResolvedValue([]);
+    prisma.university.count.mockResolvedValue(0);
+    await service.findAll({ sortBy: 'name', sortOrder: 'asc', page: 1, pageSize: 20 } as any);
+    const call = prisma.university.findMany.mock.calls[0]?.[0] ?? {};
+    expect(call.skip).toBe(0);
+    expect(call.take).toBe(20);
+    expect(call.orderBy).toEqual({ name: 'asc' });
+  });
+});
