@@ -84,16 +84,16 @@ describe('UniversityListTab header', () => {
   it('enables rank/tier sorting and shows the tier filter when a rank is set', async () => {
     useStudentRank.setState({ rank: 12000, examType: '物理' });
     renderTab();
-    expect(await screen.findByRole('button', { name: '位次排序' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: '冲稳保排序' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: /位次/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '冲稳保' })).toBeEnabled();
     expect(screen.getByRole('button', { name: '冲' })).toBeInTheDocument();
   });
 
   it('disables tier sort when no rank is set', async () => {
     // afterEach 已把 rank 重置为 null
     renderTab();
-    expect(await screen.findByRole('button', { name: '冲稳保排序' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '位次排序' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: '冲稳保' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /位次/ })).toBeEnabled();
   });
 
   it('does not show a rank-tier badge when no student rank is set', async () => {
