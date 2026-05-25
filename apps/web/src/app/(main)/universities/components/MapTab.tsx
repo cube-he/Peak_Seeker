@@ -89,6 +89,7 @@ function pickUnisInScope(unis: MapUniversity[], path: PathNode[]): MapUniversity
 
 function buildCountLabel(name: string, count: number): string {
   const dim = count === 0 ? 'opacity:0.5;' : '';
+  // 不能 pointer-events:none — 这个 label 自己要接 click 触发下钻
   return `<div style="
     padding:4px 10px;
     border-radius:14px;
@@ -99,7 +100,8 @@ function buildCountLabel(name: string, count: number): string {
     white-space:nowrap;
     box-shadow:0 2px 6px rgba(0,0,0,0.25);
     border:1px solid rgba(255,255,255,0.12);
-    pointer-events:none;
+    cursor:pointer;
+    user-select:none;
     ${dim}
   ">
     <span>${name}</span>
@@ -350,14 +352,24 @@ export function MapTab() {
         const center = feature.properties.center || feature.properties.centroid;
         if (!center) return;
 
+        // label 自己可点,而不是靠"事件穿透到 polygon"——AMap.Marker 即便
+        // clickable:false + 内联 pointer-events:none 仍会吃掉点击,导致
+        // featureClick 不触发。直接给 label 绑 click handler dispatch 下钻。
+        const fAdcode: number = feature.properties.adcode;
         const marker = new AMap.Marker({
           position: center,
           content: buildCountLabel(shortName, count),
           offset: new AMap.Pixel(-40, -12),
           anchor: 'top-left',
-          clickable: false,
-          bubble: true,
+          clickable: true,
+          cursor: 'pointer',
           zIndex: 200,
+        });
+        marker.on('click', () => {
+          setCurrentPath((prev) => {
+            if (prev[prev.length - 1]?.adcode === fAdcode) return prev;
+            return [...prev, { adcode: fAdcode, name: shortName, level: fLevel }];
+          });
         });
         map.add(marker);
         countMarkersRef.current.push(marker);
