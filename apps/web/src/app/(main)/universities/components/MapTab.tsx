@@ -197,6 +197,10 @@ export function MapTab() {
   // 程序化 zoom 窗口:setBounds/setZoomAndCenter 期间 zoomend 会 fire 多次,
   // 期间 zoom 可能临时低于当前层级阈值。窗口里跳过 zoomend handler 防误 pop。
   const programmaticZoomUntilRef = useRef<number>(0);
+  // 记录用户最后一次 mousewheel 时的 zoom。zoomend 后只在 zoom 比 wheel 时降低
+  // 才算"用户主动缩小",再触发 auto-pop。否则忽略——彻底防 setBounds/setZoom
+  // 等程序化 zoom 误触发 pop 造成 cascade。
+  const zoomAtUserWheelRef = useRef<number | null>(null);
 
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<Error | null>(null);
@@ -241,16 +245,26 @@ export function MapTab() {
     };
     const handler = () => {
       // 跳过程序化 zoom 窗口期间的 zoomend(setBounds 动画中 zoom 临时低于
-      // 当前层级阈值会被误 pop,典型现象:点省 → 程序 zoom 4→7 平滑过渡,
-      // 4.X 时 < province 阈值 5 触发 pop → 路径乱跳 / cascade)
+      // 当前层级阈值会被误 pop)
       if (Date.now() < programmaticZoomUntilRef.current) return;
+      // 只在"用户最近一次滚轮 zoom 且 zoom 在减少"时才 pop。
+      // 绕过所有程序化 zoom 触发的 zoomend(setBounds 完成 → 6.25 stable → 后续
+      // 某些事件让 zoom 又跳 4.89 等莫名扰动,这些都不该触发 pop)。
+      const wheelZoom = zoomAtUserWheelRef.current;
+      if (wheelZoom == null) return;
       const z = map.getZoom();
+      if (z >= wheelZoom) {
+        // zoom 没减少 OR 反而增加,清掉记录 + 不 pop
+        zoomAtUserWheelRef.current = null;
+        return;
+      }
+      zoomAtUserWheelRef.current = null; // 消费掉
       setCurrentPath((prev) => {
         if (prev.length <= 1) return prev;
         const current = prev[prev.length - 1];
         const min = MIN_ZOOM[current.level];
         if (z < min) {
-          console.log(`[map] zoom ${z.toFixed(2)} < ${min} for ${current.level} → pop`);
+          console.log(`[map] zoom ${z.toFixed(2)} < ${min} for ${current.level} → pop (user wheel)`);
           return prev.slice(0, -1);
         }
         return prev;
@@ -280,6 +294,12 @@ export function MapTab() {
         infoWindowRef.current = new AMap.InfoWindow({
           offset: new AMap.Pixel(0, -12),
           closeWhenClickMap: true,
+        });
+
+        // user mousewheel:记录滚轮发生时的 zoom。zoomend handler 用它判断
+        // 是否是用户主动 zoom out。绕过 setBounds 等程序化 zoom 引发的 zoomend。
+        mapRef.current.on('mousewheel', () => {
+          zoomAtUserWheelRef.current = mapRef.current.getZoom();
         });
 
         // polygon 点击 → 下钻一级。dedup 走整条 path:已存在的 adcode → slice 回退,
@@ -493,7 +513,14 @@ export function MapTab() {
           cursor: 'pointer',
           zIndex: 200,
         });
-        marker.on('click', () => {
+        marker.on('click', (e: any) => {
+          // 过滤 AMap 在 marker re-create 时偶发 fire 的 synthetic click(没有
+          // originalEvent)。这种 synthetic click 会让 path 在 Effect 2 重渲后
+          // 莫名自动 push 一级,造成 cascade。只接受真实 user click(有 DOM event)。
+          if (!e?.originalEvent) {
+            console.log('[map] skip synthetic label click', { adcode: fAdcode, name: shortName });
+            return;
+          }
           console.log('[map] label click', { adcode: fAdcode, level: fLevel, name: shortName });
           setCurrentPath(buildDrillUpdater(fAdcode, shortName, fLevel));
         });
