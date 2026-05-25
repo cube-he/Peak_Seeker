@@ -16,10 +16,13 @@ import { parseMainRank } from '../src/scripts/soft-rankings/parse-main-rank';
 // + 中国高职专科院校排名（总榜））——只「总榜」是真正的全国统一排序,其余是分类榜,
 // 不能混入 softRanking 否则会出现「13 个学校并列 #1」的乱象。
 // 本科/民办 sheet 都是单榜单（只用类别前缀编号区分专门类）,不需要 subBoard。
-const MAIN_SHEETS: Record<string, { list: string; year: number; subBoard?: string }> = {
-  '中国大学排名（总榜）_10': { list: '本科', year: 2026 },
-  '中国民办高校排名（总榜）_-15': { list: '民办', year: 2026 },
-  '中国高职院校排名_2025': { list: '高职', year: 2025, subBoard: '中国高职专科院校排名（总榜）' },
+// rankCol：本科总榜用「办学层次」（含全院校的真实全国名次,综合类填数字「16」、
+// 专门类填全国数字「66」而非前缀编号「财5」,这样财经/医药等院校才有 softRanking;
+// 民办总榜的「办学层次」列虽存在但全空,只能用「排名」;高职 sheet 没有该列,用「排名」。
+const MAIN_SHEETS: Record<string, { list: string; year: number; subBoard?: string; rankCol: string }> = {
+  '中国大学排名（总榜）_10': { list: '本科', year: 2026, rankCol: '办学层次' },
+  '中国民办高校排名（总榜）_-15': { list: '民办', year: 2026, rankCol: '排名' },
+  '中国高职院校排名_2025': { list: '高职', year: 2025, subBoard: '中国高职专科院校排名（总榜）', rankCol: '排名' },
 };
 
 // 类别榜：sheet 名 -> 类别名（仅公办本科专门类别榜）
@@ -106,7 +109,7 @@ function parseWorkbook(workbook: ExcelJS.Workbook): {
     if (!sheet) continue;
     const idx = colIndexes(sheet);
     const nameCol = idx.get('学校中文名');
-    const rankCol = idx.get('排名');
+    const rankCol = idx.get(cfg.rankCol);
     const subBoardCol = cfg.subBoard ? idx.get('榜单名称') : undefined;
     if (!nameCol || !rankCol) continue;
     if (cfg.subBoard && !subBoardCol) continue;
