@@ -110,7 +110,9 @@ describe('UniversityListTab header', () => {
     });
     renderTab();
     await screen.findByText('测试大学');
-    expect(screen.queryByText('稳')).not.toBeInTheDocument();
+    // TopFilterBar 总是渲染 冲/稳/保 按钮，但无 rank 时是 disabled
+    const stableBtn = screen.getByRole('button', { name: '稳' });
+    expect(stableBtn).toBeDisabled();
   });
 
   it('shows soft ranking and category rank on the card', async () => {
