@@ -12,6 +12,7 @@ import {
   useUniversityFilters,
   pickMapFilters,
 } from '@/stores/universityFilterStore';
+import { MapFilterBar } from './MapFilterBar';
 
 /**
  * 院校地图 Tab(4 层下钻:全国 → 省 → 市 → 区县 → 学校 markers):
@@ -134,35 +135,12 @@ function getDotColor(uni: MapUniversity): string {
   return '#64748b';
 }
 
-/** 学校 marker:左边色点 + 右边校名,横向排列。
- *  anchor:'middle-left' + offset(-7, 0) 让色点中心落在经纬度上 */
-function buildSchoolMarkerHtml(uni: MapUniversity): string {
-  const color = getDotColor(uni);
-  return `<div style="
-    display:inline-flex;
-    align-items:center;
-    gap:5px;
-    cursor:pointer;
-    user-select:none;
-  ">
-    <span style="
-      width:10px;height:10px;border-radius:50%;
-      background:${color};
-      border:2px solid #fff;
-      box-shadow:0 1px 3px rgba(0,0,0,0.35);
-      flex-shrink:0;
-    "></span>
-    <span style="
-      padding:2px 6px;
-      background:rgba(255,255,255,0.92);
-      border-radius:3px;
-      font-size:11px;
-      font-weight:500;
-      color:#0f172a;
-      box-shadow:0 1px 2px rgba(0,0,0,0.15);
-      white-space:nowrap;
-    ">${escapeHtml(uni.name)}</span>
-  </div>`;
+/** 院校 marker 的色点 icon(给 AMap.LabelMarker 用)。返回 SVG data URI,
+ *  12x12 圆点 + 2px 白边。AMap.LabelMarker icon.image 需要 URL 形式。 */
+function dotIconUrl(color: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><circle cx="6" cy="6" r="5" fill="${color}" stroke="white" stroke-width="2"/></svg>`;
+  // 用 utf8 编码(btoa 对中文不安全;这里 svg 是纯 ASCII 但保险起见用 utf8)
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
 function escapeHtml(s: string): string {
@@ -212,7 +190,9 @@ export function MapTab() {
   const amapRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
   const countMarkersRef = useRef<any[]>([]);
-  const uniMarkersRef = useRef<any[]>([]);
+  // labelsLayer 装所有院校的 LabelMarker(自带 collision avoidance,
+  // 多个 label 邻近时自动避让/隐藏,代替逐个 AMap.Marker)
+  const labelsLayerRef = useRef<any>(null);
   const universitiesRef = useRef<MapUniversity[]>([]);
 
   const [mapReady, setMapReady] = useState(false);
@@ -284,10 +264,10 @@ export function MapTab() {
         try { m?.remove(marker); } catch { /* noop */ }
       });
       countMarkersRef.current = [];
-      uniMarkersRef.current.forEach((marker) => {
-        try { m?.remove(marker); } catch { /* noop */ }
-      });
-      uniMarkersRef.current = [];
+      if (labelsLayerRef.current) {
+        try { m?.remove(labelsLayerRef.current); } catch { /* noop */ }
+        labelsLayerRef.current = null;
+      }
       if (explorerRef.current) {
         try { explorerRef.current.clearFeaturePolygons(); } catch { /* noop */ }
       }
@@ -308,7 +288,7 @@ export function MapTab() {
 
     const current = currentPath[currentPath.length - 1];
 
-    // 公共清理:每次重渲都先把 polygon + 数字标签 + 单 markers 清掉。
+    // 公共清理:每次重渲都先把 polygon + 数字标签 + labelsLayer 清掉。
     // 注:marker.setMap(null) 在 AMap 2.0 + DistrictExplorer 组合下可能静默失败,
     // 用 map.remove(marker) 才稳。
     const clearAll = () => {
@@ -317,10 +297,10 @@ export function MapTab() {
         try { map.remove(m); } catch { /* noop */ }
       });
       countMarkersRef.current = [];
-      uniMarkersRef.current.forEach((m) => {
-        try { map.remove(m); } catch { /* noop */ }
-      });
-      uniMarkersRef.current = [];
+      if (labelsLayerRef.current) {
+        try { map.remove(labelsLayerRef.current); } catch { /* noop */ }
+        labelsLayerRef.current = null;
+      }
       try { infoWindowRef.current?.close(); } catch { /* noop */ }
     };
 
@@ -372,25 +352,61 @@ export function MapTab() {
         }
 
         const scopeUnis = pickUnisInScope(universities, currentPath);
-        console.log(`[map] district view ${current.name}: rendering ${scopeUnis.length} school markers`);
+        console.log(`[map] district view ${current.name}: rendering ${scopeUnis.length} school labels`);
+
+        // 用 AMap.LabelsLayer + LabelMarker:collision:true 让 labels 自动避让,
+        // 校名默认都显示,邻近的会智能隐藏部分以免互相遮挡。
+        // 比逐个 AMap.Marker + 自己写碰撞检测简单稳定。
+        const labelsLayer = new AMap.LabelsLayer({
+          zooms: [3, 20],
+          zIndex: 1000,
+          collision: true,
+          animation: false,
+          allowCollision: false,
+        });
+
+        // 985 优先级最高,211 次之,双一流 再次,这样空间挤的时候保留更重要的
+        const rankOf = (u: MapUniversity): number =>
+          u.is985 ? 4 : u.is211 ? 3 : u.isDoubleFirstClass ? 2 : 1;
+
         scopeUnis.forEach((u) => {
-          const marker = new AMap.Marker({
+          const color = getDotColor(u);
+          const labelMarker = new AMap.LabelMarker({
             position: [u.lng, u.lat],
-            content: buildSchoolMarkerHtml(u),
-            // 色点中心(从左 7px:2px border + 5px ~半径)落在经纬度上,校名向右延伸
-            offset: new AMap.Pixel(-7, 0),
-            anchor: 'middle-left',
-            cursor: 'pointer',
-            zIndex: 300,
+            rank: rankOf(u), // collision avoidance 按 rank 保留高优先级
+            icon: {
+              type: 'image',
+              image: dotIconUrl(color),
+              size: [12, 12],
+              anchor: 'center',
+            },
+            text: {
+              content: u.name,
+              direction: 'right',
+              offset: [6, 0],
+              style: {
+                fontSize: 11,
+                fontWeight: 'normal',
+                fillColor: '#0f172a',
+                strokeColor: '#ffffff',
+                strokeWidth: 2,
+                padding: [2, 6, 2, 6],
+                backgroundColor: 'rgba(255,255,255,0.95)',
+                borderColor: '#cbd5e1',
+                borderWidth: 1,
+              },
+            },
           });
-          marker.on('click', () => {
+          labelMarker.on('click', () => {
             if (!infoWindowRef.current) return;
             infoWindowRef.current.setContent(buildInfoHtml(u));
             infoWindowRef.current.open(map, [u.lng, u.lat]);
           });
-          map.add(marker);
-          uniMarkersRef.current.push(marker);
+          labelsLayer.add(labelMarker);
         });
+
+        map.add(labelsLayer);
+        labelsLayerRef.current = labelsLayer;
         try {
           map.setBounds(areaNode.getBounds(), false, [60, 60, 60, 60]);
         } catch (e) {
@@ -471,6 +487,9 @@ export function MapTab() {
 
   return (
     <div className="pb-12">
+      {/* 共享 filter store 跟「全部院校」tab 同步:这里改 filter,list tab 重新分页;
+          list 改 filter,这里 map 重 fetch */}
+      <MapFilterBar />
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm">
         {/* 面包屑导航:点任一级回到该层 */}
         <div className="flex items-center gap-2">

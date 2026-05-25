@@ -53,7 +53,9 @@ export function loadAMap(): Promise<typeof AMap> {
     mod.default.load({
       key,
       version: '2.0',
-      plugins: ['AMap.MarkerCluster', 'AMap.HeatMap'],
+      // AMap.LabelsLayer + AMap.LabelMarker:LabelsLayer 自带 collision avoidance,
+      // 院校名 labels 多了时自动避让/隐藏不显示重叠,符合"显示校名但不互相遮挡"。
+      plugins: ['AMap.MarkerCluster', 'AMap.HeatMap', 'AMap.LabelsLayer'],
     }),
   );
   return loadPromise;
