@@ -25,7 +25,8 @@
     "import:university-basic": "ts-node scripts/import-university-basic.ts",
     "import:university-details": "ts-node scripts/import-university-details.ts",
     "import:university-rankings": "ts-node scripts/import-university-rankings.ts",
-    "import:university-satisfaction": "ts-node scripts/import-university-satisfaction.ts"
+    "import:university-satisfaction": "ts-node scripts/import-university-satisfaction.ts",
+    "import:university-charters": "ts-node scripts/import-university-charters.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.17.0",
