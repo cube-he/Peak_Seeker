@@ -121,6 +121,50 @@ export interface PredictedMinRank {
   targetYear: number;
 }
 
+/**
+ * Lightweight aggregated admission list item.
+ * Returned by GET /admissions/aggregated. Deliberately omits yearlyData /
+ * currentPlan / supplementary — those are fetched per-row via the detail endpoint.
+ */
+export interface AggregatedAdmissionListItem {
+  university: UniversitySummary;
+  major: MajorSummary;
+  majorCode: string;
+  majorName: string;
+  groupCode: string;
+  batch: string;
+  subjects: string;
+  recruitType: string;
+  predictedMinRank: PredictedMinRank | null;
+}
+
+/**
+ * Full detail for a single aggregated combination.
+ * Returned by GET /admissions/aggregated/detail. Carries every available year.
+ */
+export interface AggregatedAdmissionDetail {
+  universityId: number;
+  majorCode: string;
+  groupCode: string;
+  batch: string;
+  recruitType: string;
+  subjects: string;
+  yearlyData: YearlyAdmissionData[];
+  currentPlan: CurrentEnrollmentPlan | null;
+  supplementary: SupplementaryInfo | null;
+}
+
+/** Query params for GET /admissions/aggregated/detail. */
+export interface AggregatedAdmissionDetailQuery {
+  universityId: number;
+  majorCode: string;
+  groupCode: string;
+  batch: string;
+  recruitType: string;
+  province: string;
+  subjects: string;
+}
+
 // 聚合录取结果 — 一条 = 一个"院校+专业"组合的完整画像
 export interface AggregatedAdmissionItem {
   university: UniversitySummary;
@@ -153,14 +197,10 @@ export interface AggregatedAdmissionQuery {
   pageSize?: number;
 }
 
-// 聚合查询响应
+// 聚合查询响应（轻量列表项，不分页）
 export interface AggregatedAdmissionResponse {
-  data: AggregatedAdmissionItem[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    total: number;
-  };
+  data: AggregatedAdmissionListItem[];
+  total: number;
 }
 
 // 批量查 prediction 的请求

@@ -248,6 +248,10 @@ model University {
   // 软科排名
   softRating  String? @map("soft_rating") @db.VarChar(50)
   softRanking Int?    @map("soft_ranking")
+  softRankList     String? @map("soft_rank_list") @db.VarChar(20)
+  softCategory     String? @map("soft_category") @db.VarChar(50)
+  softCategoryRank Int?    @map("soft_category_rank")
+  softRankYear     Int?    @map("soft_rank_year") @db.SmallInt
 
   // 人口统计
   maleRatio   Int?    @map("male_ratio")
@@ -289,6 +293,14 @@ model University {
   geoSource    String?   @map("geo_source") @db.VarChar(50)
   geoUpdatedAt DateTime? @map("geo_updated_at")
 
+  // 院校位次冗余字段（科类拆分，由 apps/server/scripts/backfill-university-ranks.ts 回填）
+  minScorePhysics Int? @map("min_score_physics")
+  minRankPhysics  Int? @map("min_rank_physics")
+  minScoreHistory Int? @map("min_score_history")
+  minRankHistory  Int? @map("min_rank_history")
+  predRankPhysics Int? @map("pred_rank_physics")
+  predRankHistory Int? @map("pred_rank_history")
+
   campuses  UniversityCampus[]
   geoIssues UniversityGeoIssue[]
 
@@ -304,6 +316,11 @@ model University {
   @@index([isDoubleFirstClass])
   @@index([is985])
   @@index([is211])
+  @@index([minRankPhysics])
+  @@index([minRankHistory])
+  @@index([predRankPhysics])
+  @@index([predRankHistory])
+  @@index([softRanking])
   @@map("universities")
 }
 

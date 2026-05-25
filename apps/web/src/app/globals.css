@@ -75,6 +75,11 @@ html, body {
   --shadow-glow-primary-lg: 0 12px 32px rgba(30, 58, 95, 0.25);
   --shadow-glow-accent: 0 8px 24px rgba(184, 134, 11, 0.2);
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur: 200ms;
+  --dur-slow: 300ms;
+  --radius: 8px;
+  --radius-lg: 10px;
 }
 
 body {

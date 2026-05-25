@@ -1,92 +1,125 @@
-'use client';
+import Link from 'next/link';
+import '../../app/(auth)/auth.css';
 
-import BrandLogo from './BrandLogo';
+interface AuthFeature {
+  /** Bold lead-in phrase. */
+  strong: string;
+  /** Remaining sentence after the bold phrase (include any leading separator). */
+  text: string;
+}
 
 interface AuthLayoutProps {
   children: React.ReactNode;
-  heroTitle: string;
-  heroSubtitle: string;
-  features?: { title: string; description: string }[];
-  socialProof?: string;
-  eyebrow?: string;
+  /** Left-panel background image (cover). */
+  bgImage: string;
+  /** Uppercase eyebrow label above the marketing heading. */
+  eyebrow: string;
+  /** Marketing heading — may contain <em> and <br />. */
+  title: React.ReactNode;
+  /** Marketing sub-paragraph. */
+  subtitle: React.ReactNode;
+  /** Three feature bullets. */
+  features: AuthFeature[];
 }
 
 export default function AuthLayout({
   children,
-  heroTitle,
-  heroSubtitle,
+  bgImage,
+  eyebrow,
+  title,
+  subtitle,
   features,
-  socialProof,
-  eyebrow = '每一个志愿，都值得被认真对待',
 }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen bg-bg lg:grid lg:grid-cols-[1.05fr_1fr]">
-      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-primary to-[#15212e] px-12 py-12 text-white lg:flex lg:flex-col lg:justify-between">
-        <div
-          className="absolute inset-0 opacity-45"
-          style={{
-            backgroundImage: `url('/images/bg-auth-panel.webp')`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/35 to-[#15212e]/90" />
+    <div className="auth-page">
+      <header className="auth-topbar">
+        <span />
+        <Link className="home-back" href="/">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
+          <span>返回首页</span>
+        </Link>
+      </header>
 
-        <div className="relative z-10">
-          <BrandLogo variant="reverse" size="md" />
-        </div>
-
-        <div className="relative z-10 mx-auto max-w-[480px]">
-          <div className="mb-4 text-[11px] font-medium uppercase tracking-[2px] text-accent-light">
-            {eyebrow}
+      <main className="auth-shell">
+        {/* LEFT — marketing panel */}
+        <aside className="auth-left">
+          <div className="auth-left-bg" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={bgImage} alt="" />
           </div>
-          <h1 className="m-0 font-serif text-[42px] font-semibold leading-tight tracking-normal text-white">
-            {heroTitle}
-          </h1>
-          <p className="mt-5 text-base leading-relaxed text-white/75">
-            {heroSubtitle}
-          </p>
-          <div className="mt-8 grid grid-cols-3 gap-5 border-t border-white/15 pt-6">
-            {[
-              ['2,237', '在川招生院校'],
-              ['14.4 万', '录取记录'],
-              ['4 年', '数据纵深'],
-            ].map(([value, label]) => (
-              <div key={label}>
-                <div className="font-serif text-[26px] font-bold leading-none text-accent-light tabular-nums">
-                  {value}
+
+          <Link className="auth-brand fade-up" href="/" aria-label="返回智愿家首页">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="auth-brand-mark" src="/images/brand-mark.png" alt="" aria-hidden="true" />
+            <span className="auth-brand-text">
+              <span className="auth-brand-zh">智愿家</span>
+              <span className="auth-brand-en">Zhiyuanjia · WillNest</span>
+            </span>
+          </Link>
+
+          <div className="auth-marketing">
+            <span className="eyebrow fade-up d1">
+              <span className="dot" />
+              {eyebrow}
+            </span>
+
+            <h1 className="fade-up d2">{title}</h1>
+            <p className="sub fade-up d3">{subtitle}</p>
+
+            <div className="auth-stats fade-up d4" role="list">
+              <div className="cell" role="listitem">
+                <div className="num">
+                  2,237<span className="unit">所</span>
                 </div>
-                <div className="mt-2 text-[11px] uppercase tracking-[1.4px] text-white/50">{label}</div>
+                <div className="lbl">在川招生院校</div>
               </div>
-            ))}
-          </div>
-          {features && features.length > 0 && (
-            <div className="mt-8 space-y-4">
-              {features.map((feat) => (
-                <div key={feat.title} className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-accent/25 text-xs text-accent-light">
-                    ✓
-                  </span>
-                  <div>
-                    <div className="text-sm font-semibold text-white/90">{feat.title}</div>
-                    <p className="m-0 mt-1 text-xs leading-relaxed text-white/55">{feat.description}</p>
-                  </div>
+              <div className="cell" role="listitem">
+                <div className="num">
+                  14.4<span className="unit">万 条</span>
                 </div>
-              ))}
+                <div className="lbl">录取记录</div>
+              </div>
+              <div className="cell" role="listitem">
+                <div className="num">
+                  4<span className="unit">年</span>
+                </div>
+                <div className="lbl">数据纵深</div>
+                <div className="sb">2022 — 2025</div>
+              </div>
             </div>
-          )}
-        </div>
 
-        <div className="relative z-10 flex justify-between gap-6 text-[11px] uppercase tracking-[1.2px] text-white/40">
-          <span>{socialProof || '2026 高考志愿决策'}</span>
-          <span>四川省教育考试院数据口径</span>
-        </div>
-      </aside>
+            <ul className="auth-features fade-up d5" role="list">
+              {features.map((feat) => (
+                <li className="feat" key={feat.strong}>
+                  <span className="ic" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
+                  <span>
+                    <strong>{feat.strong}</strong>
+                    {feat.text}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
 
-      <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-8 sm:px-8 lg:min-h-0 lg:px-12 lg:py-12">
-        <div className="w-full max-w-[420px]">
-          {children}
-        </div>
+        {/* RIGHT — form panel */}
+        <section className="auth-right">
+          <div className="auth-form-wrap">{children}</div>
+        </section>
       </main>
     </div>
   );

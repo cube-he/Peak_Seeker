@@ -10,14 +10,19 @@ import {
 import { ApiTags, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { UniversityPickerOptionDto } from './dto/picker-option.dto';
 import { UniversityService } from './university.service';
+import { RankingBoardService } from './ranking-board.service';
 import { QueryUniversityDto } from './dto/query-university.dto';
 import { PoiQueryDto } from './dto/poi-query.dto';
+import { RankingBoardQueryDto } from './dto/ranking-board-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('院校')
 @Controller('universities')
 export class UniversityController {
-  constructor(private universityService: UniversityService) {}
+  constructor(
+    private universityService: UniversityService,
+    private rankingBoardService: RankingBoardService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: '查询院校列表' })
@@ -45,6 +50,13 @@ export class UniversityController {
   @Header('Cache-Control', 'private, max-age=86400')
   async getPickerOptions(): Promise<UniversityPickerOptionDto[]> {
     return this.universityService.getPickerOptions();
+  }
+
+  @Get('ranking-board')
+  @ApiOperation({ summary: '院校地域排行榜' })
+  @ApiQuery({ name: 'examType', required: false, enum: ['物理', '历史'] })
+  async getRankingBoard(@Query() query: RankingBoardQueryDto) {
+    return this.rankingBoardService.getRankingBoard(query.examType ?? '物理');
   }
 
   @Get(':id')

@@ -16,7 +16,8 @@ interface Props {
   transferDifficulty: string | null;
 }
 
-const has = (v: any) => v != null && v !== '';
+// "/" 是数据源里表示「无数据」的占位符，视同空值——否则专科院校会只剩一条"考研率 /"撑住空卡片
+const has = (v: any) => v != null && v !== '' && v !== '/';
 const toList = (v: any): string[] =>
   Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
 
@@ -55,7 +56,7 @@ export default function DisciplineCard(p: Props) {
   return (
     <Card title={<><BookOutlined className="mr-1" />学科建设</>} size="small">
       {items.length > 0 && (
-        <Descriptions column={{ xs: 1, sm: 2 }} size="small">
+        <Descriptions column={1} size="small">
           {items.map((it) => (
             <Descriptions.Item key={it.label} label={it.label}>
               {it.value}

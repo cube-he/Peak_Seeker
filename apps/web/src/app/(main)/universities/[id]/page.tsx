@@ -1,18 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Tabs, Space, Spin } from 'antd';
 import {
   BankOutlined,
   BookOutlined,
-  HistoryOutlined,
   EnvironmentOutlined,
   TrophyOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
-import { RankInput } from '@/components/score/RankInput';
 import { universityService } from '@/services/university';
 import RankingCard from '@/components/university/RankingCard';
 import SatisfactionCard from '@/components/university/SatisfactionCard';
@@ -24,9 +23,7 @@ import CharterCard from '@/components/university/CharterCard';
 import QiangjiTable from '@/components/university/QiangjiTable';
 import CampusLocationTab from '@/components/university/campus-location/CampusLocationTab';
 import UniversityLogo from '@/components/university/UniversityLogo';
-import PlanPivotTable from '@/components/university/PlanPivotTable';
-import AdmissionPivotTable from '@/components/university/AdmissionPivotTable';
-import HeroBanner from '@/components/admission/HeroBanner';
+import AdmissionDetailTab from '@/components/university/admission-detail/AdmissionDetailTab';
 import { useUserStore } from '@/stores/userStore';
 
 export default function UniversityDetailPage() {
@@ -35,16 +32,11 @@ export default function UniversityDetailPage() {
 
   const { examInfo } = useUserStore();
   const userSubject = examInfo.subjects?.[0];
+  const [activeTab, setActiveTab] = useState('info');
 
   const { data: university, isLoading } = useQuery({
     queryKey: ['university', id, userSubject],
     queryFn: () => universityService.getById(id, userSubject),
-    enabled: !!id,
-  });
-
-  const { data: majors } = useQuery({
-    queryKey: ['university-majors', id],
-    queryFn: () => universityService.getMajors(id),
     enabled: !!id,
   });
 
@@ -86,8 +78,19 @@ export default function UniversityDetailPage() {
     { label: '院校代码', value: u.code || '-', sub: u.department || '主管部门待补充' },
     { label: '最近最低分', value: latestAdmission?.majorMinScore || latestAdmission?.minScore || '-', sub: latestAdmission?.year ? `${latestAdmission.year} 年录取` : '等待录取数据' },
     { label: '最近最低位次', value: latestAdmission?.majorMinRank || latestAdmission?.minRank || '-', sub: userSubject ? `${userSubject} 类参考` : '按已选科类参考' },
-    { label: '招生专业', value: majors?.length || '-', sub: '当前可查计划数' },
-    { label: '综合排名', value: u.rankingSoft || u.ranking || '-', sub: '软科/综合口径' },
+    { label: '招生专业', value: '-', sub: '当前可查计划数' },
+    {
+      label: '软科排名',
+      // 之前读 u.rankingSoft 字段已不存在（恒 undefined）会回落到 u.ranking 字符串；
+      // 现统一走新的 softRanking + softRankList + softRankYear 口径，与列表页一致
+      value: u.softRanking != null ? `#${u.softRanking}` : '-',
+      sub:
+        u.softRanking != null
+          ? ['软科', u.softRankYear, u.softRankList ? u.softRankList + '榜' : null]
+              .filter(Boolean)
+              .join(' ')
+          : '尚无软科数据',
+    },
     { label: '建校时间', value: u.createdYear || '-', sub: u.campusArea ? `校园面积 ${u.campusArea} 亩` : '基础信息' },
   ];
 
@@ -134,7 +137,11 @@ export default function UniversityDetailPage() {
               militaryTrainingDuration={u.militaryTrainingDuration ?? null}
             />
             <RankingCard
-              rankingSoft={u.rankingSoft ?? null}
+              softRanking={u.softRanking ?? null}
+              softRankList={u.softRankList ?? null}
+              softRankYear={u.softRankYear ?? null}
+              softCategory={u.softCategory ?? null}
+              softCategoryRank={u.softCategoryRank ?? null}
               rankingAlumni={u.rankingAlumni ?? null}
               rankingQS={u.rankingQS ?? null}
               rankingUSNews={u.rankingUSNews ?? null}
@@ -160,14 +167,21 @@ export default function UniversityDetailPage() {
       ),
     },
     {
-      key: 'plans',
-      label: <span><BookOutlined className="mr-1" />招生计划 ({majors?.length || 0})</span>,
-      children: <PlanPivotTable data={majors} />,
-    },
-    {
-      key: 'admissions',
-      label: <span><HistoryOutlined className="mr-1" />历年录取 ({admissions?.length || 0})</span>,
-      children: <AdmissionPivotTable data={admissions} />,
+      key: 'admission-detail',
+      label: <span><BookOutlined className="mr-1" />招录详情</span>,
+      children: (
+        <AdmissionDetailTab
+          universityId={u.id}
+          universityFlags={{ is985: u.is985, is211: u.is211 }}
+          rawAdmissions={admissions ?? []}
+          universityScores={{
+            minScorePhysics: u.minScorePhysics ?? null,
+            minRankPhysics:  u.minRankPhysics  ?? null,
+            minScoreHistory: u.minScoreHistory ?? null,
+            minRankHistory:  u.minRankHistory  ?? null,
+          }}
+        />
+      ),
     },
     // Only show the tab when there is qiangji data
     ...(u.qiangjiAdmissions?.length > 0
@@ -254,23 +268,27 @@ export default function UniversityDetailPage() {
         <div className="mx-auto flex max-w-[1200px] gap-7 overflow-x-auto px-4 sm:px-6 lg:px-12">
           {[
             ['info', '概览'],
-            ['plans', '招生计划'],
-            ['admissions', '历年录取'],
-            ['assist', '位次辅助'],
-          ].map(([href, label]) => (
-            <a
-              key={href}
-              href={`#${href}`}
-              className="whitespace-nowrap border-b-2 border-transparent py-3 text-sm text-text-tertiary no-underline transition-colors hover:text-primary"
+            ['admission-detail', '招录详情'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setActiveTab(key);
+                document.getElementById('info')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              className={`whitespace-nowrap cursor-pointer border-0 border-b-2 bg-transparent py-3 text-sm transition-colors hover:text-primary ${
+                activeTab === key ? 'border-primary text-primary' : 'border-transparent text-text-tertiary'
+              }`}
             >
               {label}
-            </a>
+            </button>
           ))}
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-[1200px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-12">
-        <main className="min-w-0">
+      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6 lg:px-12">
+        <main>
           <section className="mb-6 rounded-2xl bg-surface p-5 shadow-card sm:p-7">
             <div className="mb-2 text-[11px] uppercase tracking-[1.5px] text-accent">Overview · 院校概览</div>
             <h2 className="m-0 font-serif text-[24px] font-semibold text-text">
@@ -281,27 +299,10 @@ export default function UniversityDetailPage() {
             </p>
           </section>
 
-          <section id="info" className="rounded-2xl bg-surface p-2 shadow-card">
-            <Tabs items={tabItems} style={{ padding: '0 18px' }} />
+          <section id="info" className="rounded-2xl bg-surface p-2 shadow-card scroll-mt-32">
+            <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} style={{ padding: '0 18px' }} />
           </section>
         </main>
-
-        <aside id="assist" className="space-y-4 lg:sticky lg:top-32 lg:self-start">
-          <RankInput variant="compact" className="!border-border !bg-surface" />
-          <div className="rounded-xl bg-surface p-5 shadow-card">
-            <HeroBanner
-              university={{ is985: u.is985, is211: u.is211 }}
-              prediction={u.bestPrediction ?? null}
-              userRank={examInfo.rank}
-            />
-          </div>
-          <div className="rounded-xl bg-surface p-5 shadow-card">
-            <h3 className="m-0 font-serif text-base font-semibold text-text">下一步</h3>
-            <p className="m-0 mt-2 text-sm leading-relaxed text-text-tertiary">
-              详情页设计稿里的“相似院校”和“问答社区”需要额外接口；当前先保留院校已有数据模块，后续接入接口后再展开。
-            </p>
-          </div>
-        </aside>
       </div>
     </MainLayout>
   );

@@ -1,3 +1,5 @@
+// 注意：后端 apps/server/src/modules/university/rank-tier.ts 是本文件的独立副本，
+// 修改分档逻辑或 admission-thresholds.ts 阈值时必须同步两处。
 import {
   TIER_THRESHOLDS,
   HISTORY_SCIENCE_MULTIPLIER,

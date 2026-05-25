@@ -30,9 +30,10 @@ export default function AdmissionPivotTable({ data }: Props) {
       recruitType: a.recruitType ?? '',
       subjects: a.subjects ?? '',
       majorId: a.majorId,
-      majorMinScore: a.majorMinScore,
-      majorMinRank: a.majorMinRank,
-      majorAdmissionCount: a.majorAdmissionCount,
+      // 专科按「专业组」投档，专业级分数/位次/人数常为空，依次兜底到专业组、投档值
+      majorMinScore: a.majorMinScore ?? a.groupMinScore ?? a.filingMinScore,
+      majorMinRank: a.majorMinRank ?? a.groupMinRank ?? a.filingMinRank,
+      majorAdmissionCount: a.majorAdmissionCount ?? a.groupAdmissionCount,
     }));
     return pivotByYear<RawAdm, AdmissionField>(normalized, {
       fields: ['majorMinScore', 'majorMinRank', 'majorAdmissionCount'],

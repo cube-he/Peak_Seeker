@@ -909,4 +909,347 @@ describe('PlanCandidateService', () => {
     expect(group.supplementary.totalPlanCount).toBe(8);
     expect(group.supplementary.scope).toBe('UNIVERSITY_BATCH');
   });
+
+  it('暴露 University 升学/就业/满意度字段到 group.university', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: [], preferredMajorCategories: [],
+      excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 1 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 100, universityId: 1, majorId: 11,
+          university: {
+            id: 1, name: 'Alpha University', code: 'A01',
+            province: 'Sichuan', city: 'Chengdu', type: 'Comprehensive', runningNature: 'Public',
+            is985: true, is211: true, isDoubleFirstClass: true,
+            softRanking: 28, logoUrl: null,
+            postgradRate: '18.5%',
+            furtherStudyRate: '38.2%',
+            employmentRate: '96.4%',
+            avgSalary: '12.8k',
+            satisfactionOverall: 4.6,
+            satisfactionCount: 8420,
+          },
+          major: {
+            id: 11, name: 'Computer Science', code: '080901',
+            category: 'Engineering', discipline: 'Computer', softRating: 'A', notes: '',
+            description: null, careerDirections: null, postgraduateDirections: null,
+            coreCourses: null, employmentRate: null, avgSalary: null,
+            degree: 'Bachelor', standardDuration: '4 years', satisfactionScore: null,
+            localMasterPoint: true, localDoctoralPoint: false,
+          },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000, duration: '4 years',
+          majorCode: '080901', majorName: 'Computer Science', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: 'Physics group', groupPlanCount: 10, subjectRequirements: 'Physics required',
+          planCount: 10, disciplineEval: null, isNationalFeature: false, majorRanking: null, majorHonor: null,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      {
+        universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G1', majorCode: '080901', majorName: 'Computer Science', year: 2025,
+        groupMinRank: 9500, groupMinScore: 610, groupAdmissionCount: 10,
+        filingMinScore: 609, filingMinRank: 9600,
+        majorMinRank: 9500, majorMinScore: 615, majorAdmissionCount: 10,
+      },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH',
+    });
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].university).toEqual(expect.objectContaining({
+      postgradRate: '18.5%',
+      furtherStudyRate: '38.2%',
+      employmentRate: '96.4%',
+      avgSalary: '12.8k',
+      satisfactionOverall: 4.6,
+      satisfactionCount: 8420,
+    }));
+  });
+
+  it('candidate group 含 matchReason 人话化总结字符串', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: [], preferredMajorCategories: [],
+      excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 1 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 100, universityId: 1, majorId: 11,
+          university: {
+            id: 1, name: '四川大学', code: 'SCU',
+            province: 'Sichuan', city: '成都', type: '综合', runningNature: '公办',
+            is985: true, is211: true, isDoubleFirstClass: true,
+            softRanking: 28, logoUrl: null,
+          },
+          major: {
+            id: 11, name: '计算机科学', code: '080901',
+            category: '工学', discipline: '计算机', softRating: 'A', notes: '',
+            description: null, careerDirections: null, postgraduateDirections: null,
+            coreCourses: null, employmentRate: null, avgSalary: null,
+            degree: 'Bachelor', standardDuration: '4 年', satisfactionScore: null,
+            localMasterPoint: true, localDoctoralPoint: false,
+          },
+          recruitType: '统招', isSinoForeign: false, planNotes: '', tuition: 6000, duration: '4 年',
+          majorCode: '080901', majorName: '计算机科学', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: '计算机类', groupPlanCount: 10, subjectRequirements: 'Physics required',
+          planCount: 10,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      {
+        universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: '统招',
+        groupCode: 'G1', majorCode: '080901', majorName: '计算机科学', year: 2025,
+        groupMinRank: 9500, groupMinScore: 610, groupAdmissionCount: 10,
+        filingMinScore: 609, filingMinRank: 9600,
+        majorMinRank: 9500, majorMinScore: 615, majorAdmissionCount: 10,
+      },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH',
+    });
+
+    expect(result.groups).toHaveLength(1);
+    const matchReason = result.groups[0].matchReason;
+    expect(typeof matchReason).toBe('string');
+    expect(matchReason.length).toBeGreaterThan(0);
+    // 本省 985 应该出现这些关键词
+    expect(matchReason).toMatch(/本省|985|211|双一流/);
+  });
+
+  it('candidate group 含 history3y 和 historyFiling3y 3 年历史聚合', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: [], preferredMajorCategories: [],
+      excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 1 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 100, universityId: 1, majorId: 11,
+          university: {
+            id: 1, name: '四川大学', code: 'SCU',
+            province: 'Sichuan', city: '成都', type: '综合', runningNature: '公办',
+            is985: true, is211: true, isDoubleFirstClass: true,
+            softRanking: 28, logoUrl: null,
+          },
+          major: {
+            id: 11, name: '计算机科学', code: '080901',
+            category: '工学', discipline: '计算机', softRating: 'A', notes: '',
+            description: null, careerDirections: null, postgraduateDirections: null,
+            coreCourses: null, employmentRate: null, avgSalary: null,
+            degree: 'Bachelor', standardDuration: '4 年', satisfactionScore: null,
+            localMasterPoint: true, localDoctoralPoint: false,
+          },
+          recruitType: '统招', isSinoForeign: false, planNotes: '', tuition: 6000, duration: '4 年',
+          majorCode: '080901', majorName: '计算机科学', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: '计算机类', groupPlanCount: 10, subjectRequirements: 'Physics required',
+          planCount: 10,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    // 3 年历史：2023 / 2024 / 2025
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      {
+        universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: '统招',
+        groupCode: 'G1', majorCode: '080901', majorName: '计算机科学', year: 2025,
+        groupMinRank: 9500, groupMinScore: 624, groupAdmissionCount: 10,
+        filingMinScore: 629, filingMinRank: 9200,
+        majorMinRank: 9500, majorMinScore: 624, majorAdmissionCount: 10,
+      },
+      {
+        universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: '统招',
+        groupCode: 'G1', majorCode: '080901', majorName: '计算机科学', year: 2024,
+        groupMinRank: 10800, groupMinScore: 622, groupAdmissionCount: 10,
+        filingMinScore: 627, filingMinRank: 10300,
+        majorMinRank: 10800, majorMinScore: 622, majorAdmissionCount: 10,
+      },
+      {
+        universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: '统招',
+        groupCode: 'G1', majorCode: '080901', majorName: '计算机科学', year: 2023,
+        groupMinRank: 12200, groupMinScore: 619, groupAdmissionCount: 10,
+        filingMinScore: 624, filingMinRank: 11700,
+        majorMinRank: 12200, majorMinScore: 619, majorAdmissionCount: 10,
+      },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH',
+    });
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].history3y).toEqual([
+      { year: 2023, score: 619, rank: 12200 },
+      { year: 2024, score: 622, rank: 10800 },
+      { year: 2025, score: 624, rank: 9500 },
+    ]);
+    expect(result.groups[0].historyFiling3y).toEqual([
+      { year: 2023, score: 624, rank: 11700 },
+      { year: 2024, score: 627, rank: 10300 },
+      { year: 2025, score: 629, rank: 9200 },
+    ]);
+  });
+
+  it('candidate group 含 prefMatch 偏好对比（本省 985 + 学费 + 考研方向 + 选科）', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      stayPreference: 'PREFER_LOCAL',
+      tuitionBudget: 'MEDIUM',          // ≤10000 算 within
+      careerPlan: 'POSTGRADUATE',
+      preferredMajors: [], preferredMajorCategories: [],
+      excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 1 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 100, universityId: 1, majorId: 11,
+          university: {
+            id: 1, name: '四川大学', code: 'SCU',
+            province: 'Sichuan',                  // 与学生 province 相同 → match
+            city: '成都', type: '综合', runningNature: '公办',
+            is985: true, is211: true, isDoubleFirstClass: true,
+            softRanking: 28, logoUrl: null,
+          },
+          major: {
+            id: 11, name: '计算机科学', code: '080901',
+            category: '工学', discipline: '计算机', softRating: 'A', notes: '',
+            description: null, careerDirections: null, postgraduateDirections: null,
+            coreCourses: null, employmentRate: null, avgSalary: null,
+            degree: 'Bachelor', standardDuration: '4 年', satisfactionScore: null,
+            localMasterPoint: true,               // 有硕士点 → 考研方向 strong
+            localDoctoralPoint: false,
+          },
+          recruitType: '统招', isSinoForeign: false, planNotes: '',
+          tuition: 6000,                          // 在 MEDIUM 预算内 → within
+          duration: '4 年',
+          majorCode: '080901', majorName: '计算机科学', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: '计算机类', groupPlanCount: 10, subjectRequirements: 'Physics required',
+          planCount: 10,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      {
+        universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: '统招',
+        groupCode: 'G1', majorCode: '080901', majorName: '计算机科学', year: 2025,
+        groupMinRank: 9500, groupMinScore: 610, groupAdmissionCount: 10,
+        filingMinScore: 609, filingMinRank: 9600,
+        majorMinRank: 9500, majorMinScore: 615, majorAdmissionCount: 10,
+      },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH',
+    });
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].prefMatch).toEqual({
+      province: 'match',
+      tuition: 'within',
+      career: 'strong',
+      subjects: 'match',
+    });
+  });
+
+  it('matchScore 归一化到 0-100：本批最高分映射为 100', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: ['计算机科学与技术'], preferredMajorCategories: [],
+      excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 2 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 100, universityId: 1, majorId: 11,
+          university: { id: 1, name: 'A', code: 'A', is985: true, is211: true, isDoubleFirstClass: true, softRanking: 10 },
+          // preferredMajors 命中 → +100，应该是 maxRaw
+          major: { id: 11, name: '计算机科学与技术', code: '080901', category: 'Engineering', notes: '', localMasterPoint: true },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000, duration: '4 年',
+          majorCode: '080901', majorName: '计算机科学与技术', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupPlanCount: 10, planCount: 10,
+        },
+        {
+          id: 200, universityId: 2, majorId: 12,
+          university: { id: 2, name: 'B', code: 'B', is985: false, is211: false, isDoubleFirstClass: false, softRanking: 200 },
+          // 普通专业（没 preferredMajors 命中）→ 极低分
+          major: { id: 12, name: '园林学', code: '090501', category: 'Agronomy', notes: '', localMasterPoint: false },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5500, duration: '4 年',
+          majorCode: '090501', majorName: '园林学', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G9', groupPlanCount: 8, planCount: 8,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      {
+        universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G1', majorCode: '080901', majorName: '计算机科学与技术', year: 2025,
+        groupMinRank: 9500, groupMinScore: 610, groupAdmissionCount: 10,
+        filingMinScore: 609, filingMinRank: 9600,
+        majorMinRank: 9500, majorMinScore: 615, majorAdmissionCount: 10,
+      },
+      {
+        universityId: 2, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G9', majorCode: '090501', majorName: '园林学', year: 2025,
+        groupMinRank: 12000, groupMinScore: 580, groupAdmissionCount: 8,
+        filingMinScore: 579, filingMinRank: 12100,
+        majorMinRank: 12000, majorMinScore: 580, majorAdmissionCount: 8,
+      },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH',
+    });
+
+    expect(result.groups.length).toBeGreaterThan(0);
+    // 归一化后所有 matchScore ∈ [0, 100]
+    for (const g of result.groups) {
+      expect(g.matchScore).toBeLessThanOrEqual(100);
+      expect(g.matchScore).toBeGreaterThanOrEqual(0);
+      // matchScoreRaw 字段被设置（值可能是原始正分或 -999 占位）
+      expect(g).toHaveProperty('matchScoreRaw');
+    }
+  });
 });

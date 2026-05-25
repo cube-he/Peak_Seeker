@@ -13,7 +13,6 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
-import { RankInput } from '@/components/score/RankInput';
 import { majorService, type MajorQueryParams } from '@/services/major';
 
 const CATEGORIES = [
@@ -301,9 +300,6 @@ export default function MajorsPage() {
               onSelect={(category) => setFilters({ ...filters, category, page: 1 })}
               counts={categoryCounts}
             />
-            <div className="hidden lg:block">
-              <RankInput variant="compact" className="!border-border !bg-surface" />
-            </div>
           </div>
 
           <main className="min-w-0">
