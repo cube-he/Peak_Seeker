@@ -51,6 +51,16 @@ const ROOT: PathNode = { adcode: 100000, name: '全国', level: 'country' };
 const ROOT_CENTER: [number, number] = [104, 36];
 const ROOT_ZOOM = 4;
 
+// 各层级目标 zoom(经验值,覆盖大省、中等市、小区县)。比 setBounds 自动算更稳定:
+// 经验上 setBounds 在 renderSubFeatures 刚完成时 AMap 内部 layout 还在收敛,
+// 自动 zoom 经常算偏低导致视野过广;固定 zoom + setZoomAndCenter 更可控。
+const TARGET_ZOOM: Record<PathNode['level'], number> = {
+  country: 4,
+  province: 7,
+  city: 10,
+  district: 12,
+};
+
 function aggregateForSubLevel(
   unis: MapUniversity[],
   parent: PathNode,
@@ -469,12 +479,17 @@ export function MapTab() {
 
         map.add(labelsLayer);
         labelsLayerRef.current = labelsLayer;
+        // 用 areaNode 的 center + 固定 zoom,稳定可控(比 setBounds 在 layout
+        // 收敛中容易算偏)
         try {
-          // 800ms 窗口:setBounds 动画通常 300-500ms,加余量防 zoomend handler 误 pop
-          programmaticZoomUntilRef.current = Date.now() + 800;
-          map.setBounds(areaNode.getBounds(), false, [60, 60, 60, 60]);
+          const props = areaNode.getProps?.();
+          const center = props?.center ?? props?.centroid;
+          if (center) {
+            programmaticZoomUntilRef.current = Date.now() + 800;
+            map.setZoomAndCenter(TARGET_ZOOM[current.level], center, false);
+          }
         } catch (e) {
-          console.warn('setBounds failed (markers)', current, e);
+          console.warn('setZoomAndCenter failed (markers)', current, e);
         }
         return;
       }
@@ -529,18 +544,21 @@ export function MapTab() {
       });
 
       // 视野控制:
-      //   - 全国:即时还原 zoom+center(无动画),让点"全国"面包屑能"直接还原"
-      //   - 省/市:平滑 fly to 该层 bounds(setBounds 动画期间标记
-      //     programmaticZoomUntilRef 防 zoomend 误 pop)
+      //   - 全国:即时还原 zoom+center(无动画)
+      //   - 省/市:平滑 fly to (固定 zoom + areaNode center,比 setBounds 稳)
       if (current.level === 'country') {
         programmaticZoomUntilRef.current = Date.now() + 200;
         map.setZoomAndCenter(ROOT_ZOOM, ROOT_CENTER, true);
       } else {
         try {
-          programmaticZoomUntilRef.current = Date.now() + 800;
-          map.setBounds(areaNode.getBounds(), false, [60, 60, 60, 60]);
+          const props = areaNode.getProps?.();
+          const center = props?.center ?? props?.centroid;
+          if (center) {
+            programmaticZoomUntilRef.current = Date.now() + 800;
+            map.setZoomAndCenter(TARGET_ZOOM[current.level], center, false);
+          }
         } catch (e) {
-          console.warn('setBounds failed (polygon)', current, e);
+          console.warn('setZoomAndCenter failed (polygon)', current, e);
         }
       }
     });
