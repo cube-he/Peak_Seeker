@@ -74,12 +74,15 @@ export class UniversityService {
     const minRankField = isHistory ? 'minRankHistory' : 'minRankPhysics';
     const predRankField = isHistory ? 'predRankHistory' : 'predRankPhysics';
 
-    // minRank / tier 排序映射到科类冗余字段；softRank 映射到 softRanking 列；其余沿用 university 标量字段
-    const orderByField =
-      sortBy === 'minRank' ? minRankField
-      : sortBy === 'tier' ? predRankField
-      : sortBy === 'softRank' ? 'softRanking'
-      : sortBy;
+    // 把外部 sortBy 值映射到 prisma university 模型的实际字段名。
+    // minRank/tier 跟随 examType 选物/史字段；softRank 是固定 softRanking 别名；
+    // 其他都是 1:1 直接映射（已经是 prisma 字段名）。
+    const orderByField = (() => {
+      if (sortBy === 'minRank') return minRankField;
+      if (sortBy === 'tier') return predRankField;
+      if (sortBy === 'softRank') return 'softRanking';
+      return sortBy;
+    })();
 
     // 单条 university 行 -> 列表响应项：注入科类相关 latestAdmission / predictedMinRank，
     // 并剥掉 6 个原始冗余列，避免泄漏到响应。
@@ -102,11 +105,19 @@ export class UniversityService {
       };
     };
 
-    // minRank/tier/softRank 对应可空列，MariaDB 升序下 NULL 排首；
-    // 这些排序与 tierFilter 一起走内存路径，用 sortRows 让 NULL 恒沉底。
+    // 所有可空字段排序都走内存路径，用 sortRows 让 NULL 沉底
+    // （MariaDB ASC 默认 NULL 在前，DB 路径无法 NULL-last）
+    const NULLABLE_SORT_BYS = new Set([
+      'minRank', 'tier', 'softRank',
+      'rankingAlumni', 'rankingQS', 'rankingUSNews', 'rankingTimes',
+      'aClassDisciplineCount', 'firstClassDisciplineCount',
+      'employmentRate', 'avgSalary', 'furtherStudyRate',
+      'satisfactionOverall', 'satisfactionLife', 'satisfactionEnviron',
+      'campusArea', 'createdYear', 'heatScore',
+    ]);
     const needsMemoryPath =
       (tierFilter != null && userRank != null) ||
-      sortBy === 'minRank' || sortBy === 'tier' || sortBy === 'softRank';
+      NULLABLE_SORT_BYS.has(sortBy);
 
     if (needsMemoryPath) {
       let rows = await this.prisma.university.findMany({ where });

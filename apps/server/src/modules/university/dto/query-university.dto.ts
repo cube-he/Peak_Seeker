@@ -69,10 +69,29 @@ export class QueryUniversityDto {
   @IsBoolean()
   is211?: boolean;
 
-  @ApiPropertyOptional({ description: '排序字段', enum: ['name', 'province', 'type', 'minRank', 'tier', 'softRank'] })
+  @ApiPropertyOptional({
+    description: '排序字段',
+    enum: [
+      'name', 'province', 'type',
+      'minRank', 'tier', 'softRank',
+      'rankingAlumni', 'rankingQS', 'rankingUSNews', 'rankingTimes',
+      'aClassDisciplineCount', 'firstClassDisciplineCount',
+      'employmentRate', 'avgSalary', 'furtherStudyRate',
+      'satisfactionOverall', 'satisfactionLife', 'satisfactionEnviron',
+      'campusArea', 'createdYear', 'heatScore', 'isFeatured',
+    ],
+  })
   @IsOptional()
-  @IsIn(['name', 'province', 'type', 'minRank', 'tier', 'softRank'])
-  sortBy?: string = 'name';
+  @IsIn([
+    'name', 'province', 'type',
+    'minRank', 'tier', 'softRank',
+    'rankingAlumni', 'rankingQS', 'rankingUSNews', 'rankingTimes',
+    'aClassDisciplineCount', 'firstClassDisciplineCount',
+    'employmentRate', 'avgSalary', 'furtherStudyRate',
+    'satisfactionOverall', 'satisfactionLife', 'satisfactionEnviron',
+    'campusArea', 'createdYear', 'heatScore', 'isFeatured',
+  ])
+  sortBy?: string = 'softRank';
 
   @ApiPropertyOptional({ description: '排序方向', enum: ['asc', 'desc'] })
   @IsOptional()

@@ -19,19 +19,9 @@ import { classifyRank, getTier } from '@/utils/classify-rank';
 import RankTierBadge from '@/components/admission/RankTierBadge';
 import RankDistance from '@/components/admission/RankDistance';
 import type { UniversityListItem } from '@/services/university';
-
-const SORTS: Array<{
-  label: string;
-  value: Pick<UniversityQueryParams, 'sortBy' | 'sortOrder'>;
-  needsRank?: boolean;
-}> = [
-  { label: '默认排序', value: { sortBy: 'name', sortOrder: 'asc' } },
-  { label: '位次排序', value: { sortBy: 'minRank', sortOrder: 'asc' } },
-  { label: '软科排名', value: { sortBy: 'softRank', sortOrder: 'asc' } },
-  { label: '冲稳保排序', value: { sortBy: 'tier', sortOrder: 'asc' }, needsRank: true },
-  { label: '按省份', value: { sortBy: 'province', sortOrder: 'asc' } },
-  { label: '按类型', value: { sortBy: 'type', sortOrder: 'asc' } },
-];
+import { SORT_OPTIONS, type SortDirection } from './sort/sort-options';
+import SortButton from './sort/SortButton';
+import SortMorePopover from './sort/SortMorePopover';
 
 type ActiveFilter = {
   key: keyof UniversityQueryParams;
@@ -419,7 +409,7 @@ export function UniversityListTab() {
   const [filters, setFilters] = useState<UniversityQueryParams>({
     page: 1,
     pageSize: 12,
-    sortBy: 'name',
+    sortBy: 'softRank',
     sortOrder: 'asc',
   });
   const [keywordInput, setKeywordInput] = useState('');
@@ -539,30 +529,47 @@ export function UniversityListTab() {
             size="large"
           />
 
-          <div className="flex flex-wrap gap-2">
-            {SORTS.map((sort) => {
-              const active =
-                filters.sortBy === sort.value.sortBy && filters.sortOrder === sort.value.sortOrder;
-              const disabled = sort.needsRank === true && studentRank == null;
+          <div className="flex flex-wrap gap-2 items-center">
+            {SORT_OPTIONS.filter((o) => o.group === 'hot').map((o, idx) => {
+              const disabled =
+                !!(o.requiresExamType && !examType) ||
+                !!(o.requiresUserRank && studentRank == null);
               return (
-                <button
-                  key={sort.label}
-                  type="button"
+                <SortButton
+                  key={`${o.group}-${o.key}-${idx}`}
+                  option={o}
+                  current={{
+                    key: filters.sortBy ?? 'softRank',
+                    direction: (filters.sortOrder ?? 'asc') as SortDirection,
+                  }}
                   disabled={disabled}
-                  title={disabled ? '先在成绩页录入位次' : undefined}
-                  onClick={() => setFilters({ ...filters, ...sort.value, page: 1 })}
-                  className={`rounded-md border-0 px-3.5 py-2 text-[13px] transition-colors ${
-                    active
-                      ? 'bg-surface-high text-text shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                      : disabled
-                        ? 'cursor-not-allowed bg-bg text-text-faint'
-                        : 'bg-bg text-text-tertiary hover:text-primary'
-                  }`}
-                >
-                  {sort.label}
-                </button>
+                  onChange={(key, dir) => {
+                    setFilters({
+                      ...filters,
+                      sortBy: key ?? 'softRank',
+                      sortOrder: dir ?? 'asc',
+                      page: 1,
+                    });
+                  }}
+                />
               );
             })}
+            <SortMorePopover
+              options={SORT_OPTIONS.filter((o) => o.group !== 'hot')}
+              current={{
+                key: filters.sortBy ?? 'softRank',
+                direction: (filters.sortOrder ?? 'asc') as SortDirection,
+              }}
+              disabled={false}
+              onChange={(key, dir) => {
+                setFilters({
+                  ...filters,
+                  sortBy: key ?? 'softRank',
+                  sortOrder: dir ?? 'asc',
+                  page: 1,
+                });
+              }}
+            />
           </div>
         </div>
       </div>
