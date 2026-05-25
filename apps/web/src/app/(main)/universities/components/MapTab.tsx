@@ -134,14 +134,35 @@ function getDotColor(uni: MapUniversity): string {
   return '#64748b';
 }
 
-function buildDotHtml(color: string): string {
+/** 学校 marker:左边色点 + 右边校名,横向排列。
+ *  anchor:'middle-left' + offset(-7, 0) 让色点中心落在经纬度上 */
+function buildSchoolMarkerHtml(uni: MapUniversity): string {
+  const color = getDotColor(uni);
   return `<div style="
-    width:12px;height:12px;border-radius:50%;
-    background:${color};
-    border:2px solid #fff;
-    box-shadow:0 1px 3px rgba(0,0,0,0.35);
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
     cursor:pointer;
-  "></div>`;
+    user-select:none;
+  ">
+    <span style="
+      width:10px;height:10px;border-radius:50%;
+      background:${color};
+      border:2px solid #fff;
+      box-shadow:0 1px 3px rgba(0,0,0,0.35);
+      flex-shrink:0;
+    "></span>
+    <span style="
+      padding:2px 6px;
+      background:rgba(255,255,255,0.92);
+      border-radius:3px;
+      font-size:11px;
+      font-weight:500;
+      color:#0f172a;
+      box-shadow:0 1px 2px rgba(0,0,0,0.15);
+      white-space:nowrap;
+    ">${escapeHtml(uni.name)}</span>
+  </div>`;
 }
 
 function escapeHtml(s: string): string {
@@ -212,6 +233,11 @@ export function MapTab() {
     if (universities) universitiesRef.current = universities;
   }, [universities]);
 
+  // 诊断:每次 path 变化 log 一下,方便排查"点一次回全国"等异常 slice
+  useEffect(() => {
+    console.log('[map] path =', currentPath.map((n) => `${n.name}(${n.level})`).join(' / '));
+  }, [currentPath]);
+
   // Effect 1: 初始化地图 + DistrictExplorer + click handler(仅一次)
   useEffect(() => {
     let cancelled = false;
@@ -240,6 +266,7 @@ export function MapTab() {
           const level: PathNode['level'] = feature.properties.level;
           const adcode: number = feature.properties.adcode;
           const shortName = normalizeAreaName(feature.properties.name, level);
+          console.log('[map] featureClick (polygon)', { adcode, level, name: shortName });
           setCurrentPath(buildDrillUpdater(adcode, shortName, level));
         });
 
@@ -345,14 +372,16 @@ export function MapTab() {
         }
 
         const scopeUnis = pickUnisInScope(universities, currentPath);
+        console.log(`[map] district view ${current.name}: rendering ${scopeUnis.length} school markers`);
         scopeUnis.forEach((u) => {
           const marker = new AMap.Marker({
             position: [u.lng, u.lat],
-            content: buildDotHtml(getDotColor(u)),
-            offset: new AMap.Pixel(-8, -8),
-            anchor: 'top-left',
+            content: buildSchoolMarkerHtml(u),
+            // 色点中心(从左 7px:2px border + 5px ~半径)落在经纬度上,校名向右延伸
+            offset: new AMap.Pixel(-7, 0),
+            anchor: 'middle-left',
             cursor: 'pointer',
-            zIndex: 300, // 在 polygon 上面
+            zIndex: 300,
           });
           marker.on('click', () => {
             if (!infoWindowRef.current) return;
@@ -405,6 +434,7 @@ export function MapTab() {
           zIndex: 200,
         });
         marker.on('click', () => {
+          console.log('[map] label click', { adcode: fAdcode, level: fLevel, name: shortName });
           setCurrentPath(buildDrillUpdater(fAdcode, shortName, fLevel));
         });
         map.add(marker);
