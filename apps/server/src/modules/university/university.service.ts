@@ -127,18 +127,23 @@ export class UniversityService {
           return classifyRank(userRank, u[predRankField], tier, isHistory) === tierFilter;
         });
       }
-      // 默认排序（sortBy=softRank）走"先本科、后专科,各自按软科排名 ASC NULLS LAST"的复合排序,
-      // 让财经/医药等专门类专科院校不混进本科榜首。其余 sortBy 走通用 sortRows 单字段排序。
+      // 默认排序（sortBy=softRank）的分层逻辑:
+      // - 软科主榜(softRankList='本科')、民办榜(='民办')、高职榜(='高职')
+      //   各自从 1 重新计数,softRanking 跨榜不可比 → 必须按榜分层。
+      // - 综合本科 → 民办本科 → 其他本科 → 职业本科 → 专科 → 其他
+      // 同分层内 softRanking ASC NULLS LAST。
       if (sortBy === 'softRank') {
-        const levelPriority = (lv: string | null | undefined): number => {
-          if (lv === '本科') return 0;
-          if (lv === '职业本科') return 1;
-          return 2;  // 专科 / null / 其他
+        const priority = (u: any): number => {
+          if (u.level === '本科' && u.softRankList === '本科') return 0;
+          if (u.level === '本科' && u.softRankList === '民办') return 1;
+          if (u.level === '本科') return 2;
+          if (u.level === '职业本科') return 3;
+          if (u.level === '专科') return 4;
+          return 5;
         };
         rows = [...rows].sort((a: any, b: any) => {
-          const lp = levelPriority(a.level) - levelPriority(b.level);
+          const lp = priority(a) - priority(b);
           if (lp !== 0) return lp;
-          // 同层级内按 softRanking ASC NULLS LAST
           const av = a.softRanking;
           const bv = b.softRanking;
           if (av == null && bv == null) return 0;
