@@ -294,9 +294,26 @@ export default function UniversityDetailPage() {
             <h2 className="m-0 font-serif text-[24px] font-semibold text-text">
               {u.name} 的核心信息
             </h2>
-            <p className="m-0 mt-3 text-sm leading-relaxed text-text-tertiary">
-              {u.description || '该院校的介绍信息暂未补充，当前页面优先展示已接入的院校基本信息、招生计划、历年录取、校区位置和评价数据。'}
-            </p>
+            {(() => {
+              const raw = u.description as string | null | undefined;
+              if (!raw) {
+                return (
+                  <p className="m-0 mt-3 text-sm leading-relaxed text-text-tertiary">
+                    该院校的介绍信息暂未补充，当前页面优先展示已接入的院校基本信息、招生计划、历年录取、校区位置和评价数据。
+                  </p>
+                );
+              }
+              // 数据用 "　　"（CJK 全角空格）做段落分隔；按它 split 成段落数组,每段 <p>
+              // 同时去掉每段前后空白和段首残留的全角空格。
+              const paras = raw.split(/[　\s]{2,}/).map((s) => s.trim()).filter(Boolean);
+              return (
+                <div className="mt-3 space-y-3 text-sm leading-[1.85] text-text-tertiary">
+                  {paras.map((p, i) => (
+                    <p key={i} className="m-0 indent-[2em]">{p}</p>
+                  ))}
+                </div>
+              );
+            })()}
           </section>
 
           <section id="info" className="rounded-2xl bg-surface p-2 shadow-card scroll-mt-32">
