@@ -48,7 +48,9 @@ interface PathNode {
 }
 
 const ROOT: PathNode = { adcode: 100000, name: '全国', level: 'country' };
-const ROOT_CENTER: [number, number] = [104, 36];
+// 全国视野中心:lng 104 ≈ 兰州一带,lat 35 比理论几何中心(36)略偏南,
+// 让 Hainan 别贴底边、东北也不至于露太多大兴安岭以北空白。视觉更平衡。
+const ROOT_CENTER: [number, number] = [105, 35];
 const ROOT_ZOOM = 4;
 
 // 各层级目标 zoom(经验值,覆盖大省、中等市、小区县)。比 setBounds 自动算更稳定:
@@ -115,28 +117,6 @@ function buildDrillUpdater(adcode: number, name: string, level: PathNode['level'
   };
 }
 
-function buildCountLabel(name: string, count: number): string {
-  const dim = count === 0 ? 'opacity:0.5;' : '';
-  // 不能 pointer-events:none — 这个 label 自己要接 click 触发下钻
-  return `<div style="
-    padding:4px 10px;
-    border-radius:14px;
-    background:rgba(15,23,42,0.88);
-    color:#fff;
-    font-size:12px;
-    font-weight:500;
-    white-space:nowrap;
-    box-shadow:0 2px 6px rgba(0,0,0,0.25);
-    border:1px solid rgba(255,255,255,0.12);
-    cursor:pointer;
-    user-select:none;
-    ${dim}
-  ">
-    <span>${name}</span>
-    <span style="margin-left:6px;opacity:0.85">${count}</span>
-  </div>`;
-}
-
 function getDotColor(uni: MapUniversity): string {
   if (uni.is985) return '#d4af37';
   if (uni.is211) return '#9333ea';
@@ -190,6 +170,18 @@ function buildInfoHtml(uni: MapUniversity): string {
   `;
 }
 
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span
+        className="inline-block rounded-full"
+        style={{ width: 8, height: 8, backgroundColor: color, border: '1px solid white', boxShadow: '0 0 0 1px #cbd5e1' }}
+      />
+      {label}
+    </span>
+  );
+}
+
 export function MapTab() {
   const filters = useUniversityFilters((s) => s.filters);
   const mapQuery = pickMapFilters(filters);
@@ -199,10 +191,11 @@ export function MapTab() {
   const explorerRef = useRef<any>(null);
   const amapRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
-  const countMarkersRef = useRef<any[]>([]);
-  // labelsLayer 装所有院校的 LabelMarker(自带 collision avoidance,
-  // 多个 label 邻近时自动避让/隐藏,代替逐个 AMap.Marker)
+  // 学校 markers 的 LabelsLayer(zoom 12+ district view 显示的院校点 + 校名)
   const labelsLayerRef = useRef<any>(null);
+  // 数字标签的 LabelsLayer(全国/省/市 view 显示的 [省名 N] [市名 N] [区名 N]
+  // 等。改用 LabelsLayer + LabelMarker 避免邻近 labels 互相挤压重叠)
+  const countLayerRef = useRef<any>(null);
   const universitiesRef = useRef<MapUniversity[]>([]);
   // 程序化 zoom 窗口:setBounds/setZoomAndCenter 期间 zoomend 会 fire 多次,
   // 期间 zoom 可能临时低于当前层级阈值。窗口里跳过 zoomend handler 防误 pop。
@@ -332,10 +325,10 @@ export function MapTab() {
     return () => {
       cancelled = true;
       const m = mapRef.current;
-      countMarkersRef.current.forEach((marker) => {
-        try { m?.remove(marker); } catch { /* noop */ }
-      });
-      countMarkersRef.current = [];
+      if (countLayerRef.current) {
+        try { m?.remove(countLayerRef.current); } catch { /* noop */ }
+        countLayerRef.current = null;
+      }
       if (labelsLayerRef.current) {
         try { m?.remove(labelsLayerRef.current); } catch { /* noop */ }
         labelsLayerRef.current = null;
@@ -360,15 +353,13 @@ export function MapTab() {
 
     const current = currentPath[currentPath.length - 1];
 
-    // 公共清理:每次重渲都先把 polygon + 数字标签 + labelsLayer 清掉。
-    // 注:marker.setMap(null) 在 AMap 2.0 + DistrictExplorer 组合下可能静默失败,
-    // 用 map.remove(marker) 才稳。
+    // 公共清理:每次重渲都先把 polygon + 数字标签 layer + 学校 markers layer 清掉
     const clearAll = () => {
       try { explorer.clearFeaturePolygons(); } catch { /* noop */ }
-      countMarkersRef.current.forEach((m) => {
-        try { map.remove(m); } catch { /* noop */ }
-      });
-      countMarkersRef.current = [];
+      if (countLayerRef.current) {
+        try { map.remove(countLayerRef.current); } catch { /* noop */ }
+        countLayerRef.current = null;
+      }
       if (labelsLayerRef.current) {
         try { map.remove(labelsLayerRef.current); } catch { /* noop */ }
         labelsLayerRef.current = null;
@@ -509,6 +500,16 @@ export function MapTab() {
       if (subs.length === 0) return;
 
       const counts = aggregateForSubLevel(universities, current, subLevel ?? 'province');
+
+      // 数字标签改用 LabelsLayer + LabelMarker(自带 collision avoidance),
+      // 避免华北或市中心多个相邻 labels 互相挤压重叠
+      const countLayer = new AMap.LabelsLayer({
+        zooms: [3, 20],
+        zIndex: 500,
+        collision: true,
+        allowCollision: false,
+      });
+
       subs.forEach((feature: any) => {
         const fLevel: PathNode['level'] = feature.properties.level;
         const shortName = normalizeAreaName(feature.properties.name, fLevel);
@@ -516,33 +517,34 @@ export function MapTab() {
         const center = feature.properties.center || feature.properties.centroid;
         if (!center) return;
 
-        // label 自己可点,而不是靠"事件穿透到 polygon"——AMap.Marker 即便
-        // clickable:false + 内联 pointer-events:none 仍会吃掉点击,导致
-        // featureClick 不触发。直接给 label 绑 click handler dispatch 下钻。
         const fAdcode: number = feature.properties.adcode;
-        const marker = new AMap.Marker({
+        // rank: 数据多的省/市优先保留(空间挤时先 hide 数据少的);+1 防 0 跟无 rank 撞
+        const labelMarker = new AMap.LabelMarker({
           position: center,
-          content: buildCountLabel(shortName, count),
-          offset: new AMap.Pixel(-40, -12),
-          anchor: 'top-left',
-          clickable: true,
-          cursor: 'pointer',
-          zIndex: 200,
+          rank: count + 1,
+          text: {
+            content: `${shortName} ${count}`,
+            direction: 'center',
+            style: {
+              fontSize: 12,
+              fontWeight: 'normal',
+              fillColor: '#ffffff',
+              padding: [4, 10, 4, 10],
+              backgroundColor: 'rgba(15,23,42,0.88)',
+              borderColor: 'rgba(255,255,255,0.12)',
+              borderWidth: 1,
+            },
+          },
         });
-        marker.on('click', (e: any) => {
-          // 过滤 AMap 在 marker re-create 时偶发 fire 的 synthetic click。
-          // AMap.Marker click event 真实 DOM event 字段名是 `originEvent`
-          // (不是 originalEvent — 之前 typo 让 user click 也被滤掉)。
-          if (!e?.originEvent) {
-            console.log('[map] skip synthetic label click', { adcode: fAdcode, name: shortName });
-            return;
-          }
-          console.log('[map] label click', { adcode: fAdcode, level: fLevel, name: shortName });
+        labelMarker.on('click', (e: any) => {
+          if (!e?.originEvent) return; // 过滤 synthetic
           setCurrentPath(buildDrillUpdater(fAdcode, shortName, fLevel));
         });
-        map.add(marker);
-        countMarkersRef.current.push(marker);
+        countLayer.add(labelMarker);
       });
+
+      map.add(countLayer);
+      countLayerRef.current = countLayer;
 
       // 视野控制:用 setZoomAndCenter(..., immediately=true) 跳过 AMap 动画。
       // 浏览器实测 animate 版本中途会被覆盖(可能 explorer.renderSubFeatures
@@ -605,13 +607,25 @@ export function MapTab() {
             </Fragment>
           ))}
         </div>
-        <span className="text-text-muted">
-          {dataLoading
-            ? '加载院校位置中...'
-            : dataError
-            ? '数据加载失败'
-            : `共 ${universities?.length ?? 0} 所院校（含坐标）`}
-        </span>
+        <div className="flex items-center gap-4">
+          {/* 色点 legend(只在叶子 = district view 显院校 markers 时才有意义) */}
+          {currentPath[currentPath.length - 1].level === 'district' && (
+            <div className="flex items-center gap-2 text-[12px] text-text-muted">
+              <LegendDot color="#d4af37" label="985" />
+              <LegendDot color="#9333ea" label="211" />
+              <LegendDot color="#0ea5e9" label="双一流" />
+              <LegendDot color="#f97316" label="专科" />
+              <LegendDot color="#64748b" label="其他" />
+            </div>
+          )}
+          <span className="text-text-muted">
+            {dataLoading
+              ? '加载院校位置中...'
+              : dataError
+              ? '数据加载失败'
+              : `共 ${universities?.length ?? 0} 所院校（含坐标）`}
+          </span>
+        </div>
       </div>
       <div
         className="relative overflow-hidden rounded-xl bg-surface shadow-card"

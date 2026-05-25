@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { universityService } from '@/services/university';
 import { useUniversityFilters } from '@/stores/universityFilterStore';
@@ -24,13 +25,28 @@ function ChipRow<V extends string>({
   items,
   value,
   onChange,
+  maxVisible,
 }: {
   label: string;
   items: Array<{ value: V; label: string }>;
   value: V | undefined;
   onChange: (v: V | undefined) => void;
+  // 超过这个数量时自动折叠,显示前 N 个 + "更多"切换。undefined 表示全显示。
+  // 用于「学校类型」这种 ~30 项的长列表。
+  maxVisible?: number;
 }) {
+  const [expanded, setExpanded] = useState(false);
   if (items.length === 0) return null;
+
+  const needsCollapse = maxVisible != null && items.length > maxVisible;
+  // 如果当前选中项落在被折叠的尾部 items 里,强制展开,避免选中后却看不到当前值
+  const activeHiddenWhenCollapsed =
+    needsCollapse &&
+    value != null &&
+    items.findIndex((i) => i.value === value) >= (maxVisible ?? 0);
+  const showAll = !needsCollapse || expanded || activeHiddenWhenCollapsed;
+  const visibleItems = showAll ? items : items.slice(0, maxVisible);
+
   return (
     <div className="flex items-start gap-3 py-1.5 border-b border-border-subtle last:border-b-0">
       <span className="shrink-0 text-[13px] text-text-muted pt-0.5 w-20">{label}</span>
@@ -44,7 +60,7 @@ function ChipRow<V extends string>({
         >
           全部
         </button>
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const active = value === item.value;
           return (
             <button
@@ -59,6 +75,15 @@ function ChipRow<V extends string>({
             </button>
           );
         })}
+        {needsCollapse && !activeHiddenWhenCollapsed && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[13px] border-0 bg-transparent px-1 py-0.5 cursor-pointer text-text-muted hover:text-primary transition-colors"
+          >
+            {expanded ? '收起' : `更多 (${items.length - (maxVisible ?? 0)}+)`}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -120,6 +145,7 @@ export function MapFilterBar() {
         items={toItems(options?.types ?? [])}
         value={filters.type}
         onChange={(v) => setFilters({ ...filters, type: v, page: 1 })}
+        maxVisible={12}
       />
     </div>
   );
