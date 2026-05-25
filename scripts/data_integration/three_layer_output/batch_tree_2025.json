@@ -1,0 +1,548 @@
+{
+  "year": 2025,
+  "province": "四川",
+  "examReform": "新高考",
+  "volunteerUnit": "院校专业组",
+  "source": "2025年招生考试报·高考指南",
+  "scope": [
+    "物理",
+    "历史"
+  ],
+  "tree": [
+    {
+      "id": "bktqp",
+      "name": "本科提前批次",
+      "order": 1,
+      "children": [
+        {
+          "id": "bktqp_gjzx",
+          "name": "国家专项计划",
+          "enrollmentType": "国家专项计划",
+          "order": 1,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "has_data",
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 2
+          }
+        },
+        {
+          "id": "bktqp_a",
+          "name": "A段",
+          "order": 2,
+          "volunteerSettings": {
+            "mode": "sequential_1_2",
+            "count": 3,
+            "desc": "3个志愿(1个第一志愿+2个平行第二志愿)"
+          },
+          "children": [
+            {
+              "id": "bktqp_a_js",
+              "name": "军事类",
+              "enrollmentType": "军事类",
+              "order": 1,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_a_fxjs",
+              "name": "飞行技术",
+              "enrollmentType": "飞行技术",
+              "order": 2,
+              "subjects": [
+                "物理"
+              ],
+              "dataStatus": "no_data"
+            },
+            {
+              "id": "bktqp_a_gasf",
+              "name": "公安类、司法类",
+              "enrollmentType": "公安类、司法类",
+              "order": 3,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_a_hh",
+              "name": "航海类",
+              "enrollmentType": "航海类",
+              "order": 4,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_a_xfjy",
+              "name": "消防救援",
+              "enrollmentType": "消防救援",
+              "order": 5,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_a_zhpj",
+              "name": "高校综合评价",
+              "enrollmentType": "高校综合评价",
+              "order": 6,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_a_qt",
+              "name": "其他",
+              "enrollmentType": "其他",
+              "order": 7,
+              "subjects": [
+                "物理"
+              ],
+              "dataStatus": "no_data"
+            }
+          ]
+        },
+        {
+          "id": "bktqp_gxzx",
+          "name": "高校专项计划",
+          "enrollmentType": "高校专项计划",
+          "order": 3,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "has_data",
+          "volunteerSettings": {
+            "mode": "sequential",
+            "count": 1,
+            "desc": "1个顺序志愿"
+          }
+        },
+        {
+          "id": "bktqp_b",
+          "name": "B段",
+          "order": 4,
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 30
+          },
+          "children": [
+            {
+              "id": "bktqp_b_gjgfsf",
+              "name": "国家公费师范生",
+              "enrollmentType": "国家公费师范生",
+              "order": 1,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_b_gjyszx",
+              "name": "国家优师专项",
+              "enrollmentType": "国家优师专项",
+              "order": 2,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_b_ncddyx",
+              "name": "农村订单定向医学生",
+              "enrollmentType": "农村订单定向医学生",
+              "order": 3,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_b_sjgfsf",
+              "name": "省级公费师范生",
+              "enrollmentType": "省级公费师范生",
+              "order": 4,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_b_dfyszx",
+              "name": "地方优师计划",
+              "enrollmentType": "地方优师计划",
+              "order": 5,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_b_xczx",
+              "name": "乡村振兴计划",
+              "enrollmentType": "乡村振兴计划",
+              "order": 6,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bktqp_b_qt",
+              "name": "其他",
+              "enrollmentType": "其他",
+              "order": 7,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bkp",
+      "name": "本科批次",
+      "order": 2,
+      "children": [
+        {
+          "id": "bkp_a",
+          "name": "A段",
+          "order": 1,
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 20
+          },
+          "children": [
+            {
+              "id": "bkp_a_gjzx",
+              "name": "国家专项计划",
+              "enrollmentType": "国家专项计划",
+              "order": 1,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bkp_a_dfzx",
+              "name": "地方专项计划",
+              "enrollmentType": "地方专项计划",
+              "order": 2,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            }
+          ]
+        },
+        {
+          "id": "bkp_gxzx",
+          "name": "高校专项计划",
+          "enrollmentType": "高校专项计划",
+          "order": 2,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "has_data",
+          "volunteerSettings": {
+            "mode": "sequential_1_1",
+            "count": 2,
+            "desc": "2个志愿(1个第一志愿+1个第二志愿)"
+          }
+        },
+        {
+          "id": "bkp_gspyd",
+          "name": "高水平运动队",
+          "enrollmentType": "高水平运动队",
+          "order": 3,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "no_data",
+          "volunteerSettings": {
+            "mode": "sequential",
+            "count": 1
+          }
+        },
+        {
+          "id": "bkp_b",
+          "name": "B段",
+          "order": 4,
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 45
+          },
+          "children": [
+            {
+              "id": "bkp_b_pt",
+              "name": "普通类本科",
+              "enrollmentType": "普通类本科",
+              "order": 1,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bkp_b_bkzyjy",
+              "name": "本科层次职业教育人才培养改革试点",
+              "enrollmentType": "本科层次职业教育人才培养改革试点",
+              "order": 2,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bkp_b_mzb",
+              "name": "民族班",
+              "enrollmentType": "民族班",
+              "order": 3,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bkp_b_fxzyx",
+              "name": "非西藏生源定向西藏就业",
+              "enrollmentType": "非西藏生源定向西藏就业",
+              "order": 4,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            },
+            {
+              "id": "bkp_b_qtdx",
+              "name": "其他定向招生",
+              "enrollmentType": "其他定向招生",
+              "order": 5,
+              "subjects": [
+                "物理"
+              ],
+              "dataStatus": "no_data"
+            },
+            {
+              "id": "bkp_b_yk",
+              "name": "部委属和外省属高校少数民族预科、边防军人子女预科、四川大学国防科研试验基地预科",
+              "enrollmentType": "部委属和外省属高校少数民族预科、边防军人子女预科、四川大学国防科研试验基地预科",
+              "order": 6,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "has_data"
+            }
+          ]
+        },
+        {
+          "id": "bkp_smzyy",
+          "name": "原\"少数民族语言授课为主\"",
+          "order": 5,
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 20
+          },
+          "children": [
+            {
+              "id": "bkp_smzyy_bk",
+              "name": "本科",
+              "enrollmentType": "少数民族语言授课为主·本科",
+              "order": 1,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "no_data"
+            },
+            {
+              "id": "bkp_smzyy_yk",
+              "name": "预科",
+              "enrollmentType": "少数民族语言授课为主·预科",
+              "order": 2,
+              "subjects": [
+                "物理",
+                "历史"
+              ],
+              "dataStatus": "no_data"
+            }
+          ]
+        },
+        {
+          "id": "bkp_jsmzyw",
+          "name": "原\"加授少数民族语文\"",
+          "enrollmentType": "加授少数民族语文",
+          "order": 6,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "no_data",
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 6
+          }
+        },
+        {
+          "id": "bkp_qyjh",
+          "name": "区域教育均衡发展专项计划",
+          "enrollmentType": "区域教育均衡发展专项计划",
+          "order": 7,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "has_data",
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 20
+          }
+        },
+        {
+          "id": "bkp_sxyk",
+          "name": "省属高校少数民族预科",
+          "enrollmentType": "省属高校少数民族预科",
+          "order": 8,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "has_data",
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 20
+          }
+        }
+      ]
+    },
+    {
+      "id": "zktqp",
+      "name": "高职(专科)提前批次",
+      "order": 3,
+      "volunteer": {
+        "mode": "sequential_1_2",
+        "count": 3,
+        "desc": "3个志愿(1个第一志愿+2个平行第二志愿)"
+      },
+      "children": [
+        {
+          "id": "zktqp_dxpyjs",
+          "name": "定向培养军士",
+          "enrollmentType": "定向培养军士",
+          "order": 1,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "has_data"
+        },
+        {
+          "id": "zktqp_gasf",
+          "name": "公安类、司法类",
+          "enrollmentType": "公安类、司法类",
+          "order": 2,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "has_data"
+        },
+        {
+          "id": "zktqp_hh",
+          "name": "航海类",
+          "enrollmentType": "航海类",
+          "order": 3,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "has_data"
+        }
+      ]
+    },
+    {
+      "id": "zkp",
+      "name": "高职(专科)批次",
+      "order": 4,
+      "children": [
+        {
+          "id": "zkp_pt",
+          "name": "普通类高职(专科)",
+          "enrollmentType": "普通类高职(专科)",
+          "order": 1,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "has_data",
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 45
+          }
+        },
+        {
+          "id": "zkp_smzyy",
+          "name": "原\"少数民族语言授课为主\"",
+          "enrollmentType": "少数民族语言授课为主·专科",
+          "order": 2,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "no_data",
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 6
+          }
+        },
+        {
+          "id": "zkp_jsmzyw",
+          "name": "原\"加授少数民族语文\"",
+          "enrollmentType": "加授少数民族语文·专科",
+          "order": 3,
+          "subjects": [
+            "物理",
+            "历史"
+          ],
+          "dataStatus": "no_data",
+          "volunteerSettings": {
+            "mode": "parallel",
+            "count": 6
+          }
+        }
+      ]
+    }
+  ]
+}

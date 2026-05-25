@@ -218,6 +218,41 @@ export function MapTab() {
     console.log('[map] path =', currentPath.map((n) => `${n.name}(${n.level})`).join(' / '));
   }, [currentPath]);
 
+  // zoomend 自动 pop:用户滚轮缩小到 zoom < 当前 level 的下限时,自动回上一级。
+  // 经验阈值(取自 AMap setBounds 各层级稳定缩放):
+  //   district 内部 ~11-13;低于 10 视为"想退出区/县"
+  //   city 内部 ~9;低于 7 视为"想退出市"
+  //   province 内部 ~7;低于 5 视为"想退出省"
+  //   country 在 4,不再 pop。
+  // setBounds 触发的程序化 zoomend 也会进 handler,但新 level 阈值通常不会被
+  // setBounds 后的 zoom 击穿,所以不会出无限 pop 循环。
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const MIN_ZOOM: Record<PathNode['level'], number> = {
+      country: 0,
+      province: 5,
+      city: 7,
+      district: 10,
+    };
+    const handler = () => {
+      const z = map.getZoom();
+      setCurrentPath((prev) => {
+        if (prev.length <= 1) return prev;
+        const current = prev[prev.length - 1];
+        const min = MIN_ZOOM[current.level];
+        if (z < min) {
+          console.log(`[map] zoom ${z.toFixed(2)} < ${min} for ${current.level} → pop`);
+          return prev.slice(0, -1);
+        }
+        return prev;
+      });
+    };
+    map.on('zoomend', handler);
+    return () => { try { map.off('zoomend', handler); } catch { /* noop */ } };
+  }, [mapReady]);
+
   // Effect 1: 初始化地图 + DistrictExplorer + click handler(仅一次)
   useEffect(() => {
     let cancelled = false;

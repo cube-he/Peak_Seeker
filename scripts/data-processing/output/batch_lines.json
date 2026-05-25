@@ -1,0 +1,1786 @@
+[
+  {
+    "year": 2020,
+    "province": "四川",
+    "batch": "专科批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2020,
+    "province": "四川",
+    "batch": "专科批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2020,
+    "province": "四川",
+    "batch": "本科第一批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 527
+  },
+  {
+    "year": 2020,
+    "province": "四川",
+    "batch": "本科第一批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 529
+  },
+  {
+    "year": 2020,
+    "province": "四川",
+    "batch": "本科第二批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 459
+  },
+  {
+    "year": 2020,
+    "province": "四川",
+    "batch": "本科第二批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 443
+  },
+  {
+    "year": 2021,
+    "province": "四川",
+    "batch": "专科批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2021,
+    "province": "四川",
+    "batch": "专科批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2021,
+    "province": "四川",
+    "batch": "本科第一批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 541
+  },
+  {
+    "year": 2021,
+    "province": "四川",
+    "batch": "本科第一批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 521
+  },
+  {
+    "year": 2021,
+    "province": "四川",
+    "batch": "本科第二批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 474
+  },
+  {
+    "year": 2021,
+    "province": "四川",
+    "batch": "本科第二批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 430
+  },
+  {
+    "year": 2022,
+    "province": "四川",
+    "batch": "专科批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2022,
+    "province": "四川",
+    "batch": "专科批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2022,
+    "province": "四川",
+    "batch": "本科第一批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 538
+  },
+  {
+    "year": 2022,
+    "province": "四川",
+    "batch": "本科第一批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 515
+  },
+  {
+    "year": 2022,
+    "province": "四川",
+    "batch": "本科第二批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 466
+  },
+  {
+    "year": 2022,
+    "province": "四川",
+    "batch": "本科第二批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 426
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "一类模式专科",
+    "examType": "文科",
+    "batchType": "特殊类",
+    "score": 150
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "一类模式专科",
+    "examType": "理科",
+    "batchType": "特殊类",
+    "score": 150
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "一类模式本科-彝文专业",
+    "examType": "文科",
+    "batchType": "特殊类",
+    "score": 390
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "一类模式本科-彝文专业",
+    "examType": "理科",
+    "batchType": "特殊类",
+    "score": 345
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "一类模式本科-藏文专业",
+    "examType": "文科",
+    "batchType": "特殊类",
+    "score": 370
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "一类模式本科-藏文专业",
+    "examType": "理科",
+    "batchType": "特殊类",
+    "score": 330
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "专科",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "专科",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "专科批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "专科批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "体育类(本科批)",
+    "examType": "不分文理",
+    "batchType": "体育类",
+    "score": 345
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "体育类(高职专科)",
+    "examType": "不分文理",
+    "batchType": "体育类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "体育类(高职专科)-三州考生",
+    "examType": "不分文理",
+    "batchType": "体育类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-公共管理与服务类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 598
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-农林牧渔类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 590
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-加工制造类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 551
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-医药卫生类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 543
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-土木水利类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 575
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-教育类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 564
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-旅游类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 549
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-材料与资源环境类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 490
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-汽车类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 551
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-电子信息类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 517
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-美术与设计类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 245
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-计算机类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 599
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-财经商贸类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 590
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-轻纺食品类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 541
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(本科)-餐饮类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 509
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(高职专科)",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "对口招生(高职专科)-美术与设计类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 120
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "本一",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 527
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "本一",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 520
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "本二",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 458
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "本二",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 433
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "本科第一批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 527
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "本科第一批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 520
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "本科第二批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 458
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "本科第二批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 433
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-书法学类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 395
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-作曲与作曲技术理论类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 405
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-录音艺术类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 370
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-戏剧影视表演类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 355
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-播音与主持类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 370
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-服装表演类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 295
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-编导类",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 445
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-编导类",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 415
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-美术学类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 360
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-舞蹈类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 295
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-设计学类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 370
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-音乐学(理论)类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 395
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-音乐学类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 355
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(本科)-音乐表演类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 310
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-书法学类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-录音艺术类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-戏剧影视表演类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-播音与主持类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-服装表演类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-编导类",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-编导类",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-美术与设计类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-舞蹈类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-音乐学类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2023,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-音乐表演类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "一类模式专科",
+    "examType": "文科",
+    "batchType": "特殊类",
+    "score": 150
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "一类模式专科",
+    "examType": "理科",
+    "batchType": "特殊类",
+    "score": 150
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "一类模式本科-彝文专业",
+    "examType": "文科",
+    "batchType": "特殊类",
+    "score": 400
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "一类模式本科-彝文专业",
+    "examType": "理科",
+    "batchType": "特殊类",
+    "score": 370
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "一类模式本科-藏文专业",
+    "examType": "文科",
+    "batchType": "特殊类",
+    "score": 350
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "一类模式本科-藏文专业",
+    "examType": "理科",
+    "batchType": "特殊类",
+    "score": 350
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "专科",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "专科",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "专科批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "专科批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "体育类(本科批)",
+    "examType": "不分文理",
+    "batchType": "体育类",
+    "score": 335
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "体育类(高职专科)",
+    "examType": "不分文理",
+    "batchType": "体育类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "体育类(高职专科)-三州考生",
+    "examType": "不分文理",
+    "batchType": "体育类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-交通技术与服务类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 412
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-公共管理与服务类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 564
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-农林牧渔类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 545
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-医药类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 522
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-土木水利类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 541
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-护理类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 556
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-教育类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 481
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-旅游类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 496
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-智能制造类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 528
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-材料化工与资源环境类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 541
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-汽车类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 485
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-电子信息类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 515
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-纺织服装类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 548
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-美术与设计类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 245
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-计算机类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 551
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-财经商贸类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 542
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(本科)-餐饮类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 491
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(高职专科)",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "对口招生(高职专科)-美术与设计类",
+    "examType": "不分文理",
+    "batchType": "特殊类",
+    "score": 120
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "本一",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 529
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "本一",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 539
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "本二",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 457
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "本二",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 459
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "本科第一批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 529
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "本科第一批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 539
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "本科第二批",
+    "examType": "文科",
+    "batchType": "普通类",
+    "score": 457
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "本科第二批",
+    "examType": "理科",
+    "batchType": "普通类",
+    "score": 459
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-书法学",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 375
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-书法学",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 380
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-戏曲类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 229
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-播音与主持类",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 370
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-播音与主持类",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 370
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-校考",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 457
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-校考",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 459
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-美术与设计类",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 345
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-美术与设计类",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 345
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-舞蹈类",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 290
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-舞蹈类",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 295
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-表(导)演类(戏剧影视导演方向)",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 445
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-表(导)演类(戏剧影视导演方向)",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 440
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-表(导)演类(戏剧影视表演方向)",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 355
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-表(导)演类(戏剧影视表演方向)",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 360
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-表(导)演类(服装表演方向)",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 345
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-表(导)演类(服装表演方向)",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 350
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-音乐教育类",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 345
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-音乐教育类",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 350
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-音乐表演类",
+    "examType": "文科",
+    "batchType": "艺术类",
+    "score": 315
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(本科)-音乐表演类",
+    "examType": "理科",
+    "batchType": "艺术类",
+    "score": 320
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-书法学",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-播音与主持类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-美术与设计类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-舞蹈类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-表(导)演类(戏剧影视导演方向)",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-表(导)演类(戏剧影视表演方向)",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-表(导)演类(服装表演方向)",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-音乐教育类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2024,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-音乐表演类",
+    "examType": "不分文理",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "专科",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "专科",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "专科(原“加授少数民族语文”)",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "专科(原“加授少数民族语文”)",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "专科(原“少数民族语言授课为主”)",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "专科(原“少数民族语言授课为主”)",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "体育类(本科批)",
+    "examType": "综合",
+    "batchType": "体育类",
+    "score": 330
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "体育类(高职专科)",
+    "examType": "综合",
+    "batchType": "体育类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "体育类(高职专科)-阿坝州、甘孜州、凉山州",
+    "examType": "综合",
+    "batchType": "体育类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-交通技术与服务类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 466
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-公共管理与服务类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 533
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-农林牧渔类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 516
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-医药类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 554
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-土木水利类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 514
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-护理类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 564
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-教育类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 515
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-旅游类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 478
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-智能制造类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 500
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-材料化工与资源环境类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 499
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-汽车类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 490
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-电子信息类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 500
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-纺织服装类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 546
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-美术与设计类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 210
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-计算机类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 538
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-财经商贸类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 545
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(本科)-餐饮类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 540
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(高职专科)",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "对口招生(高职专科)-美术与设计类",
+    "examType": "综合",
+    "batchType": "特殊类",
+    "score": 120
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科(区域均衡专项)",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 467
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科(区域均衡专项)",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 438
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科(原“加授少数民族语文”)",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 350
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科(原“加授少数民族语文”)",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 345
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科(原“少数民族语言授课为主”)",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 350
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科(原“少数民族语言授课为主”)",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 345
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科(高校专项)",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 533
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科(高校专项)",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 518
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科(高水平运动队)",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 467
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科(高水平运动队)",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 438
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科A(国家专项)",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 467
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科A(国家专项)",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 438
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科A(地方专项)",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 467
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科A(地方专项)",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 438
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科B",
+    "examType": "历史",
+    "batchType": "普通类",
+    "score": 467
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科B",
+    "examType": "物理",
+    "batchType": "普通类",
+    "score": 438
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科批次",
+    "examType": "历史类",
+    "batchType": "普通类",
+    "score": 467
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "本科批次",
+    "examType": "物理类",
+    "batchType": "普通类",
+    "score": 438
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "特殊类型",
+    "examType": "历史",
+    "batchType": "特殊类",
+    "score": 533
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "特殊类型",
+    "examType": "物理",
+    "batchType": "特殊类",
+    "score": 518
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "特殊类型招生控制线",
+    "examType": "历史类",
+    "batchType": "普通类",
+    "score": 533
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "特殊类型招生控制线",
+    "examType": "物理类",
+    "batchType": "普通类",
+    "score": 518
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(本科)-书法学类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 370
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(本科)-播音与主持类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 365
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(本科)-美术与设计类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 330
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(本科)-舞蹈类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 285
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(本科)-表(导)演类(戏剧影视导演方向)",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 430
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(本科)-表(导)演类(戏剧影视表演方向)",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 340
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(本科)-表(导)演类(服装表演方向)",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 345
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(本科)-音乐教育类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 345
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(本科)-音乐表演类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 315
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(校考)",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 438
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-书法学类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-播音与主持类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-美术与设计类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-舞蹈类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-表(导)演类(戏剧影视导演方向)",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-表(导)演类(戏剧影视表演方向)",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-表(导)演类(服装表演方向)",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-音乐教育类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类(高职专科)-音乐表演类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 140
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "艺术类-省际联考的戏曲类",
+    "examType": "综合",
+    "batchType": "艺术类",
+    "score": 219
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "高职（专科）批次",
+    "examType": "历史类",
+    "batchType": "普通类",
+    "score": 150
+  },
+  {
+    "year": 2025,
+    "province": "四川",
+    "batch": "高职（专科）批次",
+    "examType": "物理类",
+    "batchType": "普通类",
+    "score": 150
+  }
+]
