@@ -123,6 +123,9 @@ export interface MapUniversity {
   district: string | null;
   level: string | null;
   type: string | null;
+  // 办学性质:公办 / 民办 / 中外合作办学 等(对应 DB runningNature)。
+  // 用于地图 marker 边框色编码:民办 = 深红边,其他 = 白边
+  nature: string | null;
   is985: boolean;
   is211: boolean;
   isDoubleFirstClass: boolean;

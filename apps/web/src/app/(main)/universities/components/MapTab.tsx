@@ -117,19 +117,43 @@ function buildDrillUpdater(adcode: number, name: string, level: PathNode['level'
   };
 }
 
-function getDotColor(uni: MapUniversity): string {
-  if (uni.is985) return '#d4af37';
-  if (uni.is211) return '#9333ea';
-  if (uni.isDoubleFirstClass) return '#0ea5e9';
-  if (uni.level === '专科') return '#f97316';
-  return '#64748b';
+// 学校 marker 颜色 = 主色(档次,5 级互斥) + 边框(办学性质,2 类) 双通道 encoding。
+//   主色优先级: 985 > 211 > 双一流 > 本科 > 专科(取第一个命中的)
+//   边框: 民办 = 深红 #b91c1c(粗 2.5px) / 其他(公办、合作办学等) = 白 2px
+// 这样同一张图能同时读出"档次"和"是否民办",比单纯 7 色优先级链更直观——
+// 985 不会因为也"是公办"被淹没,民办本科 / 民办专科 这种风险/学费敏感档次
+// 也能一眼跟同档次公办区分。
+type MarkerStyle = { fill: string; stroke: string; strokeWidth: number };
+const TIER_COLORS = {
+  is985: '#d4af37',          // 金
+  is211: '#9333ea',          // 紫
+  doubleFirstClass: '#0ea5e9',// 蓝
+  bachelor: '#16a34a',       // 绿
+  diploma: '#f97316',        // 橙
+} as const;
+const NATURE_STROKE = {
+  publicLike: { stroke: '#ffffff', width: 2 },     // 公办 / 合作办学 等
+  private: { stroke: '#b91c1c', width: 2.5 },      // 民办
+} as const;
+function getMarkerStyle(uni: MapUniversity): MarkerStyle {
+  let fill: string;
+  if (uni.is985) fill = TIER_COLORS.is985;
+  else if (uni.is211) fill = TIER_COLORS.is211;
+  else if (uni.isDoubleFirstClass) fill = TIER_COLORS.doubleFirstClass;
+  else if (uni.level === '专科') fill = TIER_COLORS.diploma;
+  else fill = TIER_COLORS.bachelor; // 默认按本科算(数据里 level 不一定填,但走到这里非专科非双一流非 211/985,基本是本科)
+  const isPrivate = uni.nature === '民办';
+  const s = isPrivate ? NATURE_STROKE.private : NATURE_STROKE.publicLike;
+  return { fill, stroke: s.stroke, strokeWidth: s.width };
 }
 
-/** 院校 marker 的色点 icon(给 AMap.LabelMarker 用)。返回 SVG data URI,
- *  12x12 圆点 + 2px 白边。AMap.LabelMarker icon.image 需要 URL 形式。 */
-function dotIconUrl(color: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><circle cx="6" cy="6" r="5" fill="${color}" stroke="white" stroke-width="2"/></svg>`;
-  // 用 utf8 编码(btoa 对中文不安全;这里 svg 是纯 ASCII 但保险起见用 utf8)
+/** 院校 marker 的色点 icon(给 AMap.LabelMarker 用)。返回 SVG data URI。
+ *  18x18 圆点,fill = 档次色,stroke = 办学性质色。 */
+function dotIconUrl(style: MarkerStyle): string {
+  // viewBox 18x18, 中心 9,9, 半径 = (size - strokeWidth) / 2 - 0.5 留 anti-alias 边
+  const r = (18 - style.strokeWidth) / 2 - 0.5;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><circle cx="9" cy="9" r="${r}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="${style.strokeWidth}"/></svg>`;
+  // utf8 编码(btoa 对中文不安全;这里 svg 是纯 ASCII 但保险起见用 utf8)
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
@@ -170,12 +194,28 @@ function buildInfoHtml(uni: MapUniversity): string {
   `;
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+function LegendDot({
+  fill,
+  label,
+  stroke = '#ffffff',
+  strokeWidth = 1.5,
+}: {
+  fill: string;
+  label: string;
+  stroke?: string;
+  strokeWidth?: number;
+}) {
   return (
     <span className="flex items-center gap-1">
       <span
         className="inline-block rounded-full"
-        style={{ width: 8, height: 8, backgroundColor: color, border: '1px solid white', boxShadow: '0 0 0 1px #cbd5e1' }}
+        style={{
+          width: 10,
+          height: 10,
+          backgroundColor: fill,
+          border: `${strokeWidth}px solid ${stroke}`,
+          boxShadow: '0 0 0 1px #cbd5e1',
+        }}
       />
       {label}
     </span>
@@ -437,20 +477,20 @@ export function MapTab() {
           u.is985 ? 4 : u.is211 ? 3 : u.isDoubleFirstClass ? 2 : 1;
 
         scopeUnis.forEach((u) => {
-          const color = getDotColor(u);
+          const style = getMarkerStyle(u);
           const labelMarker = new AMap.LabelMarker({
             position: [u.lng, u.lat],
             rank: rankOf(u), // collision avoidance 按 rank 保留高优先级
             icon: {
               type: 'image',
-              image: dotIconUrl(color),
-              size: [12, 12],
+              image: dotIconUrl(style),
+              size: [18, 18],
               anchor: 'center',
             },
             text: {
               content: u.name,
               direction: 'right',
-              offset: [6, 0],
+              offset: [10, 0], // dot 18px 半径 9 + 2 留白
               style: {
                 fontSize: 11,
                 fontWeight: 'normal',
@@ -612,14 +652,18 @@ export function MapTab() {
           ))}
         </div>
         <div className="flex items-center gap-4">
-          {/* 色点 legend(只在叶子 = district view 显院校 markers 时才有意义) */}
+          {/* 色点 legend(只在叶子 = district view 显院校 markers 时才有意义)
+              主色 = 档次,边框 = 公办/民办(粗深红 = 民办 vs 细白边 = 公办) */}
           {currentPath[currentPath.length - 1].level === 'district' && (
-            <div className="flex items-center gap-2 text-[12px] text-text-muted">
-              <LegendDot color="#d4af37" label="985" />
-              <LegendDot color="#9333ea" label="211" />
-              <LegendDot color="#0ea5e9" label="双一流" />
-              <LegendDot color="#f97316" label="专科" />
-              <LegendDot color="#64748b" label="其他" />
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
+              <LegendDot fill="#d4af37" label="985" />
+              <LegendDot fill="#9333ea" label="211" />
+              <LegendDot fill="#0ea5e9" label="双一流" />
+              <LegendDot fill="#16a34a" label="本科" />
+              <LegendDot fill="#f97316" label="专科" />
+              <span className="text-text-faint">|</span>
+              <LegendDot fill="#94a3b8" stroke="#ffffff" strokeWidth={1.5} label="公办" />
+              <LegendDot fill="#94a3b8" stroke="#b91c1c" strokeWidth={2} label="民办" />
             </div>
           )}
           <span className="text-text-muted">
