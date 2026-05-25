@@ -3,10 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Empty, Input, Pagination, Select, Spin } from 'antd';
 import {
-  AppstoreOutlined,
   CloseOutlined,
   EnvironmentOutlined,
-  FireOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
@@ -304,50 +302,6 @@ function UniversityCard({
   );
 }
 
-function HotUniversitiesSidebar() {
-  const { data } = useQuery({
-    queryKey: ['universities-hot'],
-    queryFn: () => universityService.getHot(10),
-  });
-
-  const list = data?.data || data || [];
-
-  return (
-    <div className="rounded-xl bg-surface p-5 shadow-card">
-      <div className="mb-4 flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-fixed">
-          <FireOutlined className="text-sm text-accent" />
-        </div>
-        <span className="font-serif text-base font-semibold text-text">热门院校</span>
-      </div>
-      <div className="space-y-2">
-        {(Array.isArray(list) ? list : []).slice(0, 10).map((uni: any, idx: number) => (
-          <Link
-            key={uni.id}
-            href={`/universities/${uni.id}`}
-            className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 no-underline transition-colors hover:bg-surface-dim"
-          >
-            <span
-              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs font-semibold ${
-                idx < 3 ? 'bg-primary text-white' : 'bg-surface-dim text-text-tertiary'
-              }`}
-            >
-              {idx + 1}
-            </span>
-            <UniversityLogo name={uni.name} logoUrl={uni.logoUrl} size={24} />
-            <span className="truncate text-sm text-text-tertiary transition-colors group-hover:text-primary">
-              {uni.name}
-            </span>
-          </Link>
-        ))}
-        {(!Array.isArray(list) || list.length === 0) && (
-          <div className="py-6 text-center text-xs text-text-muted">暂无数据</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function UniversityListTab() {
   const [filters, setFilters] = useState<UniversityQueryParams>({
     page: 1,
@@ -578,21 +532,6 @@ export function UniversityListTab() {
         </main>
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <div />
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="rounded-xl bg-surface p-5 shadow-card">
-            <div className="mb-2 flex items-center gap-2 text-text">
-              <AppstoreOutlined className="text-primary" />
-              <span className="font-serif text-base font-semibold">数据说明</span>
-            </div>
-            <p className="m-0 text-sm leading-relaxed text-text-tertiary">
-              地图视图等扩展功能待后端接口接入。
-            </p>
-          </div>
-          <HotUniversitiesSidebar />
-        </div>
-      </div>
     </div>
   );
 }
