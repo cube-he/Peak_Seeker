@@ -235,12 +235,13 @@ export function MapTab() {
 
     return () => {
       cancelled = true;
-      countMarkersRef.current.forEach((m) => {
-        try { m.setMap(null); } catch { /* noop */ }
+      const m = mapRef.current;
+      countMarkersRef.current.forEach((marker) => {
+        try { m?.remove(marker); } catch { /* noop */ }
       });
       countMarkersRef.current = [];
-      uniMarkersRef.current.forEach((m) => {
-        try { m.setMap(null); } catch { /* noop */ }
+      uniMarkersRef.current.forEach((marker) => {
+        try { m?.remove(marker); } catch { /* noop */ }
       });
       uniMarkersRef.current = [];
       if (explorerRef.current) {
@@ -263,15 +264,17 @@ export function MapTab() {
 
     const current = currentPath[currentPath.length - 1];
 
-    // 公共清理:每次重渲都先把 polygon + 数字标签 + 单 markers 清掉
+    // 公共清理:每次重渲都先把 polygon + 数字标签 + 单 markers 清掉。
+    // 注:marker.setMap(null) 在 AMap 2.0 + DistrictExplorer 组合下可能静默失败,
+    // 用 map.remove(marker) 才稳。
     const clearAll = () => {
       try { explorer.clearFeaturePolygons(); } catch { /* noop */ }
       countMarkersRef.current.forEach((m) => {
-        try { m.setMap(null); } catch { /* noop */ }
+        try { map.remove(m); } catch { /* noop */ }
       });
       countMarkersRef.current = [];
       uniMarkersRef.current.forEach((m) => {
-        try { m.setMap(null); } catch { /* noop */ }
+        try { map.remove(m); } catch { /* noop */ }
       });
       uniMarkersRef.current = [];
       try { infoWindowRef.current?.close(); } catch { /* noop */ }
@@ -279,7 +282,7 @@ export function MapTab() {
 
     explorer.loadAreaNode(current.adcode, (err: any, areaNode: any) => {
       if (err) {
-        console.error('DistrictExplorer loadAreaNode failed:', current, err);
+        console.error('[map] loadAreaNode failed:', current, err);
         return;
       }
 
@@ -288,6 +291,14 @@ export function MapTab() {
       const subs: any[] = areaNode.getSubFeatures();
       const subLevel: 'province' | 'city' | 'district' | undefined =
         subs[0]?.properties.level;
+      // 诊断:看 loadAreaNode 在每一层返回的 sub features 数量 + 层级
+      console.log(
+        `[map] level=${current.level} adcode=${current.adcode} name=${current.name}`,
+        `subs=${subs.length} subLevel=${subLevel ?? '(none)'}`,
+        subs.length > 0 && subs.length <= 5
+          ? subs.map((s) => s.properties.name)
+          : '',
+      );
 
       // markers 模式只在叶子(district)触发;subs 为空也兜底显示 markers
       const showMarkers = current.level === 'district' || subs.length === 0;
