@@ -12,7 +12,7 @@ import type { UniversityQueryParams } from '@/services/university';
 const DEFAULT_FILTERS: UniversityQueryParams = {
   page: 1,
   pageSize: 12,
-  sortBy: 'name',
+  sortBy: 'softRank', // 与 master 上 list 重构后的默认一致(按软科排序)
   sortOrder: 'asc',
 };
 

@@ -320,6 +320,50 @@ describe('UniversityService.findAll', () => {
   });
 });
 
+describe('UniversityService.findAdmissions extras transcription', () => {
+  const buildService = (admissions: any[], plans: any[]) => {
+    const prisma = {
+      admissionRecord: {
+        findMany: jest.fn().mockResolvedValue(admissions),
+      },
+      enrollmentPlan: {
+        findMany: jest.fn().mockResolvedValue(plans),
+      },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const service = new UniversityService(prisma as any, redis as any, admissionService as any);
+    return { service, prisma };
+  };
+
+  it('attaches latest-year enrollmentPlan chip fields to each admission', async () => {
+    const mockAdmissions = [
+      { id: 1, universityId: 10, majorId: 100, year: 2024, majorMinScore: 600, major: { id: 100, name: '计算机' } },
+      { id: 2, universityId: 10, majorId: 101, year: 2024, majorMinScore: 590, major: { id: 101, name: '软工' } },
+    ];
+    const mockPlans = [
+      { universityId: 10, majorId: 100, year: 2024, majorRanking: '12', disciplineEval: '软科：A+', isNationalFeature: true },
+      { universityId: 10, majorId: 100, year: 2023, majorRanking: '15', disciplineEval: '软科：A', isNationalFeature: false },
+      { universityId: 10, majorId: 101, year: 2022, majorRanking: '25', disciplineEval: null,       isNationalFeature: false },
+    ];
+
+    const { service } = buildService(mockAdmissions, mockPlans);
+    const result: any[] = await service.findAdmissions(10);
+
+    expect(result[0].extras).toEqual({ majorRanking: '12', disciplineEval: '软科：A+', isNationalFeature: true });
+    expect(result[1].extras).toEqual({ majorRanking: '25', disciplineEval: null, isNationalFeature: false });
+  });
+
+  it('attaches empty extras when no enrollmentPlan rows for that major', async () => {
+    const mockAdmissions = [{ id: 1, universityId: 10, majorId: 999, year: 2024, major: { id: 999, name: '冷门' } }];
+
+    const { service } = buildService(mockAdmissions, []);
+    const result: any[] = await service.findAdmissions(10);
+
+    expect(result[0].extras).toEqual({ majorRanking: null, disciplineEval: null, isNationalFeature: false });
+  });
+});
+
 describe('UniversityService.getFilters', () => {
   const buildService = () => {
     const prisma = {
@@ -440,5 +484,53 @@ describe('UniversityService.findAllForMap', () => {
     const result = await (svc as any).findAllForMap({});
     expect(result).toEqual(cached);
     expect(prisma.university.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('findAll: extended sortBy mapping', () => {
+  const buildService = () => {
+    const prisma = {
+      university: {
+        findMany: jest.fn(),
+        count: jest.fn(),
+      },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const service = new UniversityService(prisma as any, redis as any, admissionService as any);
+    return { service, prisma };
+  };
+
+  it.each([
+    'rankingAlumni',
+    'rankingQS',
+    'rankingUSNews',
+    'rankingTimes',
+    'aClassDisciplineCount',
+    'campusArea',
+    'createdYear',
+    'heatScore',
+  ])('sortBy=%s goes through memory path (nullable field)', async (sortBy) => {
+    const { service, prisma } = buildService();
+    prisma.university.findMany.mockResolvedValue([
+      { id: 1, name: '北大', is985: true, is211: true, [sortBy]: 1 },
+      { id: 2, name: '清华', is985: true, is211: true, [sortBy]: null },
+    ]);
+    prisma.university.count.mockResolvedValue(2);
+    await service.findAll({ sortBy, sortOrder: 'asc' } as any);
+    const call = prisma.university.findMany.mock.calls[0]?.[0] ?? {};
+    expect(call.skip).toBeUndefined();
+    expect(call.take).toBeUndefined();
+  });
+
+  it('sortBy=name goes through DB path (not in NULLABLE set)', async () => {
+    const { service, prisma } = buildService();
+    prisma.university.findMany.mockResolvedValue([]);
+    prisma.university.count.mockResolvedValue(0);
+    await service.findAll({ sortBy: 'name', sortOrder: 'asc', page: 1, pageSize: 20 } as any);
+    const call = prisma.university.findMany.mock.calls[0]?.[0] ?? {};
+    expect(call.skip).toBe(0);
+    expect(call.take).toBe(20);
+    expect(call.orderBy).toEqual({ name: 'asc' });
   });
 });

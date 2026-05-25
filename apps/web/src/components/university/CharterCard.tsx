@@ -11,6 +11,9 @@ interface Props {
 
 const has = (v: any) => v != null && v !== '';
 
+// charterInfo 里这些字段对用户无价值 — 元数据 / 抓取信息 / 冗余,在 UI 上隐藏
+const CHARTER_HIDDEN_KEYS = new Set(['来源网址', '章程字数', '采集时间', '是否有章程']);
+
 // 提取首个 http(s) URL；若整串本身是 URL 则返回它
 function extractUrl(text: string): string | null {
   const trimmed = text.trim();
@@ -65,7 +68,9 @@ export default function CharterCard(p: Props) {
   // charterInfo: 对象按 key 展平、字符串直显
   let charterRendered: React.ReactNode = null;
   if (p.charterInfo && typeof p.charterInfo === 'object' && !Array.isArray(p.charterInfo)) {
-    const entries = Object.entries(p.charterInfo).filter(([, v]) => v != null && v !== '');
+    const entries = Object.entries(p.charterInfo).filter(
+      ([k, v]) => v != null && v !== '' && !CHARTER_HIDDEN_KEYS.has(k),
+    );
     if (entries.length > 0) {
       charterRendered = (
         <div className="space-y-2 text-[13px]">

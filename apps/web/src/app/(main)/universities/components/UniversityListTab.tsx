@@ -3,10 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Empty, Input, Pagination, Spin } from 'antd';
 import {
-  AppstoreOutlined,
   CloseOutlined,
   EnvironmentOutlined,
-  FireOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
@@ -20,108 +18,14 @@ import { classifyRank, getTier } from '@/utils/classify-rank';
 import RankTierBadge from '@/components/admission/RankTierBadge';
 import RankDistance from '@/components/admission/RankDistance';
 import type { UniversityListItem } from '@/services/university';
-
-const SORTS: Array<{
-  label: string;
-  value: Pick<UniversityQueryParams, 'sortBy' | 'sortOrder'>;
-  needsRank?: boolean;
-}> = [
-  { label: '默认排序', value: { sortBy: 'name', sortOrder: 'asc' } },
-  { label: '位次排序', value: { sortBy: 'minRank', sortOrder: 'asc' } },
-  { label: '软科排名', value: { sortBy: 'softRank', sortOrder: 'asc' } },
-  { label: '冲稳保排序', value: { sortBy: 'tier', sortOrder: 'asc' }, needsRank: true },
-  { label: '按省份', value: { sortBy: 'province', sortOrder: 'asc' } },
-  { label: '按类型', value: { sortBy: 'type', sortOrder: 'asc' } },
-];
+import { SORT_OPTIONS, type SortDirection } from './sort/sort-options';
+import SortButton from './sort/SortButton';
+import SortMorePopover from './sort/SortMorePopover';
 
 type ActiveFilter = {
   key: keyof UniversityQueryParams;
   label: string;
 };
-
-function FilterGroup({
-  title,
-  items,
-  value,
-  onChange,
-}: {
-  title: string;
-  items: Array<{ value: string; count: number }>;
-  value?: string;
-  onChange: (value: string | undefined) => void;
-}) {
-  return (
-    <div className="border-b border-border-subtle py-4 last:border-b-0">
-      <div className="mb-3 text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">
-        {title}
-      </div>
-      <div className="space-y-1">
-        <button
-          type="button"
-          onClick={() => onChange(undefined)}
-          className={`flex w-full items-center justify-between rounded-md border-0 px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-            !value ? 'bg-primary-fixed font-medium text-primary' : 'text-text-secondary hover:bg-surface-dim hover:text-text'
-          }`}
-        >
-          <span>不限</span>
-          <span className="text-[11px] text-text-faint">ALL</span>
-        </button>
-        {items.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            onClick={() => onChange(value === item.value ? undefined : item.value)}
-            className={`flex w-full items-center justify-between rounded-md border-0 px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-              value === item.value ? 'bg-primary-fixed font-medium text-primary' : 'text-text-secondary hover:bg-surface-dim hover:text-text'
-            }`}
-          >
-            <span>{item.value}</span>
-            <span className="text-[11px] text-text-faint">{item.count}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FeatureFilters({
-  filters,
-  setFilters,
-}: {
-  filters: UniversityQueryParams;
-  setFilters: (filters: UniversityQueryParams) => void;
-}) {
-  const featureItems: Array<{ key: 'is985' | 'is211' | 'isDoubleFirstClass'; label: string }> = [
-    { key: 'is985', label: '985 工程' },
-    { key: 'is211', label: '211 工程' },
-    { key: 'isDoubleFirstClass', label: '双一流' },
-  ];
-
-  return (
-    <div className="border-b border-border-subtle py-4">
-      <div className="mb-3 text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">
-        学校层次
-      </div>
-      <div className="space-y-1">
-        {featureItems.map((item) => {
-          const active = !!filters[item.key];
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setFilters({ ...filters, [item.key]: active ? undefined : true, page: 1 })}
-              className={`flex w-full items-center justify-between rounded-md border-0 px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                active ? 'bg-primary-fixed font-medium text-primary' : 'text-text-secondary hover:bg-surface-dim hover:text-text'
-              }`}
-            >
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 const TIER_ITEMS: Array<{ key: 'rush' | 'stable' | 'safe'; label: string }> = [
   { key: 'rush', label: '冲' },
@@ -129,45 +33,68 @@ const TIER_ITEMS: Array<{ key: 'rush' | 'stable' | 'safe'; label: string }> = [
   { key: 'safe', label: '保' },
 ];
 
-function TierFilterGroup({
+// 每一行 chip 筛选：label 左,chips 右(text-link 风格,仿阳光高考网)。
+// 点 "全部" 清空 value,点某 chip 选该值再点取消。
+function FilterRow<V>({
+  label,
+  items,
   value,
-  rankAvailable,
   onChange,
+  disabled,
+  disabledHint,
 }: {
-  value?: 'rush' | 'stable' | 'safe';
-  rankAvailable: boolean;
-  onChange: (v: 'rush' | 'stable' | 'safe' | undefined) => void;
+  label: string;
+  items: Array<{ value: V; label: string }>;
+  value: V | undefined;
+  onChange: (v: V | undefined) => void;
+  disabled?: boolean;
+  disabledHint?: string;
 }) {
+  if (items.length === 0) return null;
+  const baseBtn = disabled
+    ? 'text-text-faint cursor-not-allowed'
+    : 'text-text hover:text-primary cursor-pointer';
   return (
-    <div className="border-b border-border-subtle py-4 last:border-b-0">
-      <div className="mb-3 text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">
-        录取概率
-      </div>
-      {rankAvailable ? (
-        <div className="space-y-1">
-          {TIER_ITEMS.map((item) => (
+    <div className="flex items-start gap-3 py-2 border-b border-border-subtle last:border-b-0">
+      <span className="shrink-0 text-[13px] text-text-muted pt-1 w-20">{label}</span>
+      <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(undefined)}
+          className={`text-[13px] border-0 bg-transparent px-1 py-0.5 transition-colors ${
+            !disabled && value == null ? 'text-primary font-medium' : baseBtn
+          }`}
+        >
+          全部
+        </button>
+        {items.map((item) => {
+          const active = value === item.value;
+          return (
             <button
-              key={item.key}
+              key={String(item.value)}
               type="button"
-              onClick={() => onChange(value === item.key ? undefined : item.key)}
-              className={`flex w-full items-center rounded-md border-0 px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                value === item.key
-                  ? 'bg-primary-fixed font-medium text-primary'
-                  : 'text-text-secondary hover:bg-surface-dim hover:text-text'
+              disabled={disabled}
+              title={disabled ? disabledHint : undefined}
+              onClick={() => onChange(active ? undefined : item.value)}
+              className={`text-[13px] border-0 bg-transparent px-1 py-0.5 transition-colors ${
+                !disabled && active ? 'text-primary font-medium' : baseBtn
               }`}
             >
               {item.label}
             </button>
-          ))}
-        </div>
-      ) : (
-        <div className="text-[12px] text-text-faint">先在成绩页录入位次后可用</div>
-      )}
+          );
+        })}
+        {disabled && disabledHint && (
+          <span className="text-[11px] text-text-faint ml-2">{disabledHint}</span>
+        )}
+      </div>
     </div>
   );
 }
 
-function FilterPanel({
+// Top filter bar — 每个 filter category 一行 chip 平铺(仿阳光高考网风格)
+function TopFilterBar({
   filters,
   setFilters,
   onClear,
@@ -183,58 +110,89 @@ function FilterPanel({
   });
   const studentRank = useStudentRank((s) => s.rank);
 
+  // 985 / 211 / 双一流 三 boolean 合并为单选(string key)
+  const featureValue: 'is985' | 'is211' | 'isDoubleFirstClass' | undefined = filters.is985
+    ? 'is985'
+    : filters.is211
+      ? 'is211'
+      : filters.isDoubleFirstClass
+        ? 'isDoubleFirstClass'
+        : undefined;
+  const setFeature = (v: 'is985' | 'is211' | 'isDoubleFirstClass' | undefined) => {
+    setFilters({
+      ...filters,
+      is985: v === 'is985' || undefined,
+      is211: v === 'is211' || undefined,
+      isDoubleFirstClass: v === 'isDoubleFirstClass' || undefined,
+      page: 1,
+    });
+  };
+
+  const toItems = <T,>(arr: Array<{ value: T; count: number }>) =>
+    arr.map((a) => ({ value: a.value, label: String(a.value) }));
+
   return (
-    <aside className="rounded-xl bg-surface p-4 shadow-card lg:sticky lg:top-20">
-      <div className="flex items-center justify-between">
-        <h3 className="m-0 font-serif text-base font-semibold text-text">筛选</h3>
+    <div className="mt-3">
+      <FilterRow
+        label="所在地"
+        items={toItems(options?.provinces ?? [])}
+        value={filters.province}
+        onChange={(province) => setFilters({ ...filters, province: province as any, city: undefined, page: 1 })}
+      />
+      {filters.province && (
+        <FilterRow
+          label="城市"
+          items={toItems((options?.cities ?? []).filter((c) => c.province === filters.province))}
+          value={filters.city}
+          onChange={(city) => setFilters({ ...filters, city: city as any, page: 1 })}
+        />
+      )}
+      <FilterRow
+        label="办学层次"
+        items={toItems(options?.levels ?? [])}
+        value={filters.level}
+        onChange={(level) => setFilters({ ...filters, level: level as any, page: 1 })}
+      />
+      <FilterRow
+        label="办学性质"
+        items={toItems(options?.natures ?? [])}
+        value={filters.nature}
+        onChange={(nature) => setFilters({ ...filters, nature: nature as any, page: 1 })}
+      />
+      <FilterRow
+        label="学校类型"
+        items={toItems(options?.types ?? [])}
+        value={filters.type}
+        onChange={(type) => setFilters({ ...filters, type: type as any, page: 1 })}
+      />
+      <FilterRow
+        label="院校特性"
+        items={[
+          { value: 'is985', label: '985 工程' },
+          { value: 'is211', label: '211 工程' },
+          { value: 'isDoubleFirstClass', label: '双一流' },
+        ]}
+        value={featureValue}
+        onChange={(v) => setFeature(v as any)}
+      />
+      <FilterRow
+        label="录取概率"
+        items={TIER_ITEMS.map((t) => ({ value: t.key, label: t.label }))}
+        value={filters.tierFilter}
+        onChange={(t) => setFilters({ ...filters, tierFilter: t as any, page: 1 })}
+        disabled={studentRank == null}
+        disabledHint="先在成绩页录入位次"
+      />
+      <div className="flex justify-end pt-2">
         <button
           type="button"
           onClick={onClear}
-          className="border-0 bg-transparent text-[11px] uppercase tracking-[1.4px] text-text-faint transition-colors hover:text-primary"
+          className="border-0 bg-transparent text-[12px] text-text-faint hover:text-primary cursor-pointer"
         >
-          清除
+          清除全部
         </button>
       </div>
-
-      <FeatureFilters filters={filters} setFilters={setFilters} />
-      <FilterGroup
-        title="所在地"
-        items={options?.provinces ?? []}
-        value={filters.province}
-        onChange={(province) => setFilters({ ...filters, province, city: undefined, page: 1 })}
-      />
-      {filters.province && (
-        <FilterGroup
-          title="城市"
-          items={(options?.cities ?? []).filter((c) => c.province === filters.province)}
-          value={filters.city}
-          onChange={(city) => setFilters({ ...filters, city, page: 1 })}
-        />
-      )}
-      <FilterGroup
-        title="学校类型"
-        items={options?.types ?? []}
-        value={filters.type}
-        onChange={(type) => setFilters({ ...filters, type, page: 1 })}
-      />
-      <FilterGroup
-        title="办学性质"
-        items={options?.natures ?? []}
-        value={filters.nature}
-        onChange={(nature) => setFilters({ ...filters, nature, page: 1 })}
-      />
-      <FilterGroup
-        title="办学层次"
-        items={options?.levels ?? []}
-        value={filters.level}
-        onChange={(level) => setFilters({ ...filters, level, page: 1 })}
-      />
-      <TierFilterGroup
-        value={filters.tierFilter}
-        rankAvailable={studentRank != null}
-        onChange={(tierFilter) => setFilters({ ...filters, tierFilter, page: 1 })}
-      />
-    </aside>
+    </div>
   );
 }
 
@@ -372,52 +330,8 @@ function UniversityCard({
   );
 }
 
-function HotUniversitiesSidebar() {
-  const { data } = useQuery({
-    queryKey: ['universities-hot'],
-    queryFn: () => universityService.getHot(10),
-  });
-
-  const list = data?.data || data || [];
-
-  return (
-    <div className="rounded-xl bg-surface p-5 shadow-card">
-      <div className="mb-4 flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-fixed">
-          <FireOutlined className="text-sm text-accent" />
-        </div>
-        <span className="font-serif text-base font-semibold text-text">热门院校</span>
-      </div>
-      <div className="space-y-2">
-        {(Array.isArray(list) ? list : []).slice(0, 10).map((uni: any, idx: number) => (
-          <Link
-            key={uni.id}
-            href={`/universities/${uni.id}`}
-            className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 no-underline transition-colors hover:bg-surface-dim"
-          >
-            <span
-              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs font-semibold ${
-                idx < 3 ? 'bg-primary text-white' : 'bg-surface-dim text-text-tertiary'
-              }`}
-            >
-              {idx + 1}
-            </span>
-            <UniversityLogo name={uni.name} logoUrl={uni.logoUrl} size={24} />
-            <span className="truncate text-sm text-text-tertiary transition-colors group-hover:text-primary">
-              {uni.name}
-            </span>
-          </Link>
-        ))}
-        {(!Array.isArray(list) || list.length === 0) && (
-          <div className="py-6 text-center text-xs text-text-muted">暂无数据</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function UniversityListTab() {
-  // filter 走共享 store,跟「地图」tab 双向同步
+  // filter 走共享 store,跟「地图」tab 双向同步;默认值在 store 里(sortBy='softRank')
   const filters = useUniversityFilters((s) => s.filters);
   const setFilters = useUniversityFilters((s) => s.setFilters);
   const [keywordInput, setKeywordInput] = useState('');
@@ -537,40 +451,54 @@ export function UniversityListTab() {
             size="large"
           />
 
-          <div className="flex flex-wrap gap-2">
-            {SORTS.map((sort) => {
-              const active =
-                filters.sortBy === sort.value.sortBy && filters.sortOrder === sort.value.sortOrder;
-              const disabled = sort.needsRank === true && studentRank == null;
+          <div className="flex flex-wrap gap-2 items-center">
+            {SORT_OPTIONS.filter((o) => o.group === 'hot').map((o, idx) => {
+              const disabled =
+                !!(o.requiresExamType && !examType) ||
+                !!(o.requiresUserRank && studentRank == null);
               return (
-                <button
-                  key={sort.label}
-                  type="button"
+                <SortButton
+                  key={`${o.group}-${o.key}-${idx}`}
+                  option={o}
+                  current={{
+                    key: filters.sortBy ?? 'softRank',
+                    direction: (filters.sortOrder ?? 'asc') as SortDirection,
+                  }}
                   disabled={disabled}
-                  title={disabled ? '先在成绩页录入位次' : undefined}
-                  onClick={() => setFilters({ ...filters, ...sort.value, page: 1 })}
-                  className={`rounded-md border-0 px-3.5 py-2 text-[13px] transition-colors ${
-                    active
-                      ? 'bg-surface-high text-text shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                      : disabled
-                        ? 'cursor-not-allowed bg-bg text-text-faint'
-                        : 'bg-bg text-text-tertiary hover:text-primary'
-                  }`}
-                >
-                  {sort.label}
-                </button>
+                  onChange={(key, dir) => {
+                    setFilters({
+                      ...filters,
+                      sortBy: key ?? 'softRank',
+                      sortOrder: dir ?? 'asc',
+                      page: 1,
+                    });
+                  }}
+                />
               );
             })}
+            <SortMorePopover
+              options={SORT_OPTIONS.filter((o) => o.group !== 'hot')}
+              current={{
+                key: filters.sortBy ?? 'softRank',
+                direction: (filters.sortOrder ?? 'asc') as SortDirection,
+              }}
+              disabled={false}
+              onChange={(key, dir) => {
+                setFilters({
+                  ...filters,
+                  sortBy: key ?? 'softRank',
+                  sortOrder: dir ?? 'asc',
+                  page: 1,
+                });
+              }}
+            />
           </div>
+          <TopFilterBar filters={filters} setFilters={setFilters} onClear={clearFilters} />
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <FilterPanel filters={filters} setFilters={setFilters} onClear={clearFilters} />
-        </div>
-
-        <main className="min-w-0">
+      <div>
+        <main>
           <div className="mb-4 flex flex-col gap-3 rounded-xl bg-bg md:flex-row md:items-center md:justify-between">
             <div className="text-sm text-text-tertiary">
               找到 <strong className="font-serif text-lg font-semibold text-text tabular-nums">{total}</strong> 所院校
@@ -629,21 +557,6 @@ export function UniversityListTab() {
         </main>
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <div />
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="rounded-xl bg-surface p-5 shadow-card">
-            <div className="mb-2 flex items-center gap-2 text-text">
-              <AppstoreOutlined className="text-primary" />
-              <span className="font-serif text-base font-semibold">数据说明</span>
-            </div>
-            <p className="m-0 text-sm leading-relaxed text-text-tertiary">
-              地图视图等扩展功能待后端接口接入。
-            </p>
-          </div>
-          <HotUniversitiesSidebar />
-        </div>
-      </div>
     </div>
   );
 }

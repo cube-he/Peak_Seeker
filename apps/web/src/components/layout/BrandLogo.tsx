@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
 type BrandLogoProps = {
@@ -23,31 +24,6 @@ const sizeStyles = {
   },
 };
 
-function CompassHomeMark({
-  variant,
-  className,
-}: {
-  variant: 'default' | 'reverse';
-  className: string;
-}) {
-  const ink = variant === 'reverse' ? '#ffffff' : '#1e3a5f';
-  const accent = variant === 'reverse' ? '#d4a843' : '#b8860b';
-  const softInk = variant === 'reverse' ? 'rgba(255,255,255,0.42)' : 'rgba(30,58,95,0.5)';
-  const circleInk = variant === 'reverse' ? 'rgba(255,255,255,0.72)' : '#1e3a5f';
-
-  return (
-    <svg className={className} viewBox="0 0 58 58" fill="none" aria-hidden="true">
-      <path d="M8 22L29 8L50 22" stroke={ink} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="29" y1="6" x2="29" y2="11" stroke={ink} strokeWidth="2.4" strokeLinecap="round" />
-      <circle cx="29" cy="36" r="13" stroke={circleInk} strokeWidth="1.4" />
-      <circle cx="29" cy="36" r="1.6" fill={ink} />
-      <path d="M29 36L36 28" stroke={accent} strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M36 28L33 30L34 32Z" fill={accent} />
-      <path d="M29 36L24 42" stroke={softInk} strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export default function BrandLogo({
   href = '/',
   variant = 'default',
@@ -60,9 +36,20 @@ export default function BrandLogo({
   const subtitleColor = variant === 'reverse' ? 'text-white/55' : 'text-text-muted';
   const wrapperClass = `inline-flex items-center ${styles.gap} no-underline ${className}`;
 
+  // reverse（深色背景）时用 CSS filter 将深蓝 PNG 反白，避免图标不可见
+  const markStyle = variant === 'reverse' ? { filter: 'brightness(0) invert(1)' } : undefined;
+
   const content = (
     <>
-      <CompassHomeMark variant={variant} className={`${styles.mark} flex-shrink-0`} />
+      <Image
+        src="/images/brand-mark.png"
+        alt="智愿家 logo"
+        width={48}
+        height={48}
+        className={`${styles.mark} flex-shrink-0 object-contain`}
+        style={markStyle}
+        aria-hidden="true"
+      />
       <span className="flex flex-col">
         <span className={`font-serif ${styles.title} font-semibold leading-tight ${titleColor}`}>
           智愿家

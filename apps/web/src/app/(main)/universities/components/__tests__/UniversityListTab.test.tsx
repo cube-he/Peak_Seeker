@@ -84,16 +84,16 @@ describe('UniversityListTab header', () => {
   it('enables rank/tier sorting and shows the tier filter when a rank is set', async () => {
     useStudentRank.setState({ rank: 12000, examType: '物理' });
     renderTab();
-    expect(await screen.findByRole('button', { name: '位次排序' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: '冲稳保排序' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: /位次/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '冲稳保' })).toBeEnabled();
     expect(screen.getByRole('button', { name: '冲' })).toBeInTheDocument();
   });
 
   it('disables tier sort when no rank is set', async () => {
     // afterEach 已把 rank 重置为 null
     renderTab();
-    expect(await screen.findByRole('button', { name: '冲稳保排序' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '位次排序' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: '冲稳保' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /位次/ })).toBeEnabled();
   });
 
   it('does not show a rank-tier badge when no student rank is set', async () => {
@@ -110,7 +110,9 @@ describe('UniversityListTab header', () => {
     });
     renderTab();
     await screen.findByText('测试大学');
-    expect(screen.queryByText('稳')).not.toBeInTheDocument();
+    // TopFilterBar 总是渲染 冲/稳/保 按钮，但无 rank 时是 disabled
+    const stableBtn = screen.getByRole('button', { name: '稳' });
+    expect(stableBtn).toBeDisabled();
   });
 
   it('shows soft ranking and category rank on the card', async () => {

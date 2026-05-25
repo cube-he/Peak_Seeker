@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { QueryUniversityDto } from './dto/query-university.dto';
@@ -90,12 +91,15 @@ export class UniversityService {
     const minRankField = isHistory ? 'minRankHistory' : 'minRankPhysics';
     const predRankField = isHistory ? 'predRankHistory' : 'predRankPhysics';
 
-    // minRank / tier 排序映射到科类冗余字段；softRank 映射到 softRanking 列；其余沿用 university 标量字段
-    const orderByField =
-      sortBy === 'minRank' ? minRankField
-      : sortBy === 'tier' ? predRankField
-      : sortBy === 'softRank' ? 'softRanking'
-      : sortBy;
+    // 把外部 sortBy 值映射到 prisma university 模型的实际字段名。
+    // minRank/tier 跟随 examType 选物/史字段；softRank 是固定 softRanking 别名；
+    // 其他都是 1:1 直接映射（已经是 prisma 字段名）。
+    const orderByField = (() => {
+      if (sortBy === 'minRank') return minRankField;
+      if (sortBy === 'tier') return predRankField;
+      if (sortBy === 'softRank') return 'softRanking';
+      return sortBy;
+    })();
 
     // 单条 university 行 -> 列表响应项：注入科类相关 latestAdmission / predictedMinRank，
     // 并剥掉 6 个原始冗余列，避免泄漏到响应。
@@ -118,11 +122,19 @@ export class UniversityService {
       };
     };
 
-    // minRank/tier/softRank 对应可空列，MariaDB 升序下 NULL 排首；
-    // 这些排序与 tierFilter 一起走内存路径，用 sortRows 让 NULL 恒沉底。
+    // 所有可空字段排序都走内存路径，用 sortRows 让 NULL 沉底
+    // （MariaDB ASC 默认 NULL 在前，DB 路径无法 NULL-last）
+    const NULLABLE_SORT_BYS = new Set([
+      'minRank', 'tier', 'softRank',
+      'rankingAlumni', 'rankingQS', 'rankingUSNews', 'rankingTimes',
+      'aClassDisciplineCount', 'firstClassDisciplineCount',
+      'employmentRate', 'avgSalary', 'furtherStudyRate',
+      'satisfactionOverall', 'satisfactionLife', 'satisfactionEnviron',
+      'campusArea', 'createdYear', 'heatScore',
+    ]);
     const needsMemoryPath =
       (tierFilter != null && userRank != null) ||
-      sortBy === 'minRank' || sortBy === 'tier' || sortBy === 'softRank';
+      NULLABLE_SORT_BYS.has(sortBy);
 
     if (needsMemoryPath) {
       let rows = await this.prisma.university.findMany({ where });
@@ -132,7 +144,33 @@ export class UniversityService {
           return classifyRank(userRank, u[predRankField], tier, isHistory) === tierFilter;
         });
       }
-      rows = sortRows(rows, orderByField, sortOrder);
+      // 默认排序（sortBy=softRank）的分层逻辑:
+      // - 软科主榜(softRankList='本科')、民办榜(='民办')、高职榜(='高职')
+      //   各自从 1 重新计数,softRanking 跨榜不可比 → 必须按榜分层。
+      // - 综合本科 → 民办本科 → 其他本科 → 职业本科 → 专科 → 其他
+      // 同分层内 softRanking ASC NULLS LAST。
+      if (sortBy === 'softRank') {
+        const priority = (u: any): number => {
+          if (u.level === '本科' && u.softRankList === '本科') return 0;
+          if (u.level === '本科' && u.softRankList === '民办') return 1;
+          if (u.level === '本科') return 2;
+          if (u.level === '职业本科') return 3;
+          if (u.level === '专科') return 4;
+          return 5;
+        };
+        rows = [...rows].sort((a: any, b: any) => {
+          const lp = priority(a) - priority(b);
+          if (lp !== 0) return lp;
+          const av = a.softRanking;
+          const bv = b.softRanking;
+          if (av == null && bv == null) return 0;
+          if (av == null) return 1;
+          if (bv == null) return -1;
+          return av - bv;
+        });
+      } else {
+        rows = sortRows(rows, orderByField, sortOrder);
+      }
       const total = rows.length;
       const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
       return {
@@ -351,13 +389,47 @@ export class UniversityService {
       where.year = { in: years };
     }
 
-    return this.prisma.admissionRecord.findMany({
-      where,
-      include: {
-        major: true,
+    const admissions: Array<Prisma.AdmissionRecordGetPayload<{ include: { major: true } }>> =
+      await this.prisma.admissionRecord.findMany({
+        where,
+        include: { major: true },
+        orderBy: [{ year: 'desc' }, { majorMinRank: 'asc' }],
+      });
+
+    // Fetch enrollment plan chip fields (majorRanking, disciplineEval, isNationalFeature)
+    // for each distinct majorId. We order by year desc so the first entry per major
+    // is the latest-year plan — used as the canonical chip source regardless of
+    // which admission year the caller is viewing.
+    const majorIds = Array.from(new Set(admissions.map((a) => a.majorId).filter(Boolean)));
+    const plans = majorIds.length > 0
+      ? await this.prisma.enrollmentPlan.findMany({
+          where: { universityId: id, majorId: { in: majorIds } },
+          orderBy: { year: 'desc' },
+          select: {
+            majorId: true,
+            year: true,
+            majorRanking: true,
+            disciplineEval: true,
+            isNationalFeature: true,
+          },
+        })
+      : [];
+
+    const latestPlanByMajor = new Map<number, typeof plans[0]>();
+    for (const p of plans) {
+      if (!latestPlanByMajor.has(p.majorId)) {
+        latestPlanByMajor.set(p.majorId, p);
+      }
+    }
+
+    return admissions.map((a) => ({
+      ...a,
+      extras: {
+        majorRanking: latestPlanByMajor.get(a.majorId)?.majorRanking ?? null,
+        disciplineEval: latestPlanByMajor.get(a.majorId)?.disciplineEval ?? null,
+        isNationalFeature: latestPlanByMajor.get(a.majorId)?.isNationalFeature ?? false,
       },
-      orderBy: [{ year: 'desc' }, { majorMinRank: 'asc' }],
-    });
+    }));
   }
 
   async getHotUniversities(limit?: number) {
