@@ -397,7 +397,11 @@ export function MapTab() {
         // 同步从 explorer 拿父级 areaNode(city view 时已 loadAreaNode 缓存过)。
         if (current.level === 'district' && currentPath.length >= 2) {
           const parentNode = currentPath[currentPath.length - 2];
-          const parentArea = explorer.getAreaNodeByAdcode?.(parentNode.adcode);
+          // AMapUI DistrictExplorer 实际 API 叫 getLocalAreaNode(同步,从内部
+          // _areaNodeCache 取),不是 getAreaNodeByAdcode(那个不存在)。
+          // 进 district view 时父级 city 已经在前一个 effect 跑过 loadAreaNode,
+          // 所以这里 sync 取一定命中。
+          const parentArea = explorer.getLocalAreaNode?.(parentNode.adcode);
           if (parentArea) {
             explorer.renderSubFeatures(parentArea, (feature: any) => {
               const isCurrent = feature.properties.adcode === current.adcode;
