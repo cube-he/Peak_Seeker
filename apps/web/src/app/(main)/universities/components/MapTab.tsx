@@ -72,11 +72,6 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-// AMap.plugin 是 callback API,包成 Promise 方便 await
-function loadPlugin(AMap: any, name: string): Promise<void> {
-  return new Promise((resolve) => AMap.plugin(name, () => resolve()));
-}
-
 export function MapTab() {
   const filters = useUniversityFilters((s) => s.filters);
   const mapQuery = pickMapFilters(filters);
@@ -88,6 +83,7 @@ export function MapTab() {
   const amapRef = useRef<any>(null);
 
   const [mapLoading, setMapLoading] = useState(true);
+  const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<Error | null>(null);
 
   const { data: universities, isLoading: dataLoading, isError: dataError } = useQuery({
@@ -96,13 +92,12 @@ export function MapTab() {
     staleTime: 60_000,
   });
 
-  // Effect 1: 初始化地图 + 加载 MarkerCluster 插件(仅一次)
+  // Effect 1: 初始化地图(仅一次)。MarkerCluster/HeatMap 已在 loadAMap 的
+  // plugins 里预声明(amap-loader.ts),这里直接 new 即可。
   useEffect(() => {
     let cancelled = false;
     loadAMap()
-      .then(async (AMap) => {
-        if (cancelled || !containerRef.current) return;
-        await loadPlugin(AMap, 'AMap.MarkerCluster');
+      .then((AMap) => {
         if (cancelled || !containerRef.current) return;
         amapRef.current = AMap;
         mapRef.current = new AMap.Map(containerRef.current, {
@@ -114,6 +109,7 @@ export function MapTab() {
           closeWhenClickMap: true,
         });
         setMapLoading(false);
+        setMapReady(true); // 通知 Effect 2 可以建 cluster 了(否则数据先到时会被早退)
       })
       .catch((err) => {
         if (cancelled) return;
@@ -142,8 +138,9 @@ export function MapTab() {
     };
   }, []);
 
-  // Effect 2: 数据/filter 变化时重建 cluster
+  // Effect 2: 数据/filter 变化(且 map 就绪)时重建 cluster
   useEffect(() => {
+    if (!mapReady) return;
     const map = mapRef.current;
     const AMap = amapRef.current;
     if (!map || !AMap || !universities) return;
@@ -188,7 +185,7 @@ export function MapTab() {
       clusterData.forEach((p: any) => bounds.extend(p.lnglat));
       map.setBounds(bounds, false, [40, 40, 40, 40]);
     });
-  }, [universities]);
+  }, [universities, mapReady]);
 
   if (mapError) {
     return (

@@ -44,11 +44,16 @@ export function loadAMap(): Promise<typeof AMap> {
   };
 
   // Dynamic import keeps `@amap/amap-jsapi-loader` out of the SSR bundle.
+  // plugins 在 SDK 初始化时一次性声明,后续运行时 AMap.plugin('X', cb) 在 v2.0
+  // 可靠性差(回调不一定触发)。把项目用到的插件全部预声明,空闲就闲着,需要就直接 new。
+  // 当前消费者:
+  //   - CampusMap: 只用核心 Map + Marker
+  //   - MapTab: 用 MarkerCluster(阶段 B)、HeatMap(阶段 D)
   loadPromise = import('@amap/amap-jsapi-loader').then((mod) =>
     mod.default.load({
       key,
       version: '2.0',
-      plugins: [],         // Stage 1 only needs Map + Marker (in core); no PlaceSearch
+      plugins: ['AMap.MarkerCluster', 'AMap.HeatMap'],
     }),
   );
   return loadPromise;
