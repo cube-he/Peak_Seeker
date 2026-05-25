@@ -224,7 +224,7 @@ model University {
   grade              String? @map("university_grade") @db.VarChar(50)
 
   // 学科建设
-  disciplineEvaluationLevel String? @map("discipline_evaluation_level") @db.VarChar(50)
+  disciplineEvaluationLevel String? @map("discipline_evaluation_level") @db.Text
   hasMasterProgram          Boolean @default(false) @map("has_master_program")
   hasDoctoralProgram        Boolean @default(false) @map("has_doctoral_program")
   masterProgramCount        Int?    @map("master_program_count")
@@ -313,7 +313,7 @@ model University {
   admissionEmail              String?  @map("admission_email") @db.VarChar(200)
   cityTier                    String?  @map("city_tier") @db.VarChar(20)
   universityTier              String?  @map("university_tier") @db.VarChar(50)
-  universityBackground        String?  @map("university_background") @db.VarChar(50)
+  universityBackground        String?  @map("university_background") @db.Text
 
   // 学科建设补充（来自 02_详情扩展）
   firstClassDisciplineCount   Int?     @map("first_class_discipline_count")
