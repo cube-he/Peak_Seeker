@@ -14,19 +14,22 @@ import {
 } from '@/stores/universityFilterStore';
 
 /**
- * 院校地图 Tab(3 层下钻:全国 → 省 → 市,市级直接显示学校 markers,跳过区县):
+ * 院校地图 Tab(4 层下钻:全国 → 省 → 市 → 区县 → 学校 markers):
  *
- *   [全国] → 点河北 → [全国, 河北] → 点石家庄 → [全国, 河北, 石家庄](叶子,渲染单 markers)
+ *   [全国] → 点河北 → [全国, 河北] → 点石家庄 → [全国, 河北, 石家庄]
+ *     → 点长安区 → [全国, 河北, 石家庄, 长安区](叶子,渲染 markers)
  *
  * 渲染规则:
  *   - 全国:32 省 polygon + 每省 [省名 N] 数字标签
- *   - 省(非直辖市):各市 polygon + [市名 N] 数字标签
- *   - 市:无 polygon,该市内所有院校 markers(按 985/211/双一流/本科/专科 分色)
- *   - 直辖市(北京/上海/天津/重庆) sub features 直接 level=district,
- *     自动跳过中间层,点直辖市直接到 markers 模式
+ *   - 省:各市 polygon + [市名 N] 数字标签
+ *   - 市:各区/县 polygon + [区名 N] 数字标签
+ *   - 区/县(叶子):该区/县内院校 markers(按 985/211/双一流/本科/专科 分色),
+ *     click 弹卡片 + 跳详情
+ *   - 直辖市(北京/上海/天津/重庆) sub features 直接是 district,
+ *     省级点击进入直接看到「市 = 直辖市」的各区,再点区到 markers
  *
  * 视野控制:
- *   - 点省/市 → 平滑 setBounds 动画到对应行政区
+ *   - 点省/市/区 → 平滑 setBounds 动画到对应行政区
  *   - 点"全国"面包屑 → setZoomAndCenter(4, [104,36], true) 即时还原,无动画
  */
 
@@ -69,14 +72,17 @@ function aggregateForSubLevel(
   return m;
 }
 
-/** 选出当前 path 范围内的所有院校(用于 marker 视图):限定 province + (可选 city) */
+/** 选出当前 path 范围内的所有院校(只在 district 叶子或子级空时调用)。
+ *  限定 province + (可选 city,直辖市可能缺) + (可选 district) */
 function pickUnisInScope(unis: MapUniversity[], path: PathNode[]): MapUniversity[] {
   const province = path.find((n) => n.level === 'province')?.name;
   const city = path.find((n) => n.level === 'city')?.name;
-  if (!province) return []; // 没进省 = 还在全国视图,不出 markers
+  const district = path.find((n) => n.level === 'district')?.name;
+  if (!province) return [];
   return unis.filter((u) => {
     if (u.province !== province) return false;
     if (city && u.city !== city) return false;
+    if (district && u.district !== district) return false;
     return true;
   });
 }
@@ -209,11 +215,9 @@ export function MapTab() {
           closeWhenClickMap: true,
         });
 
-        // polygon 点击 → 下钻一级。district 不下钻(我们不在 marker 视图画 district polygon,
-        // 这个分支是防御性的:就算 AMapUI 触发了,也忽略)
+        // polygon 点击 → 下钻一级(province/city/district 都可点,district 是叶子)
         explorerRef.current.on('featureClick', (_e: any, feature: any) => {
           const level: PathNode['level'] = feature.properties.level;
-          if (level === 'district') return;
           const adcode: number = feature.properties.adcode;
           const shortName = normalizeAreaName(feature.properties.name, level);
           setCurrentPath((prev) => {
@@ -285,13 +289,8 @@ export function MapTab() {
       const subLevel: 'province' | 'city' | 'district' | undefined =
         subs[0]?.properties.level;
 
-      // markers 模式触发条件:
-      //   - 普通市:current.level === 'city'(跳过 district 这层,直接看具体学校)
-      //   - 直辖市:current.level === 'province' AND subLevel === 'district'
-      //     (直辖市 sub features 直接是 district,自然跳市级)
-      const showMarkers =
-        current.level === 'city' ||
-        (current.level === 'province' && subLevel === 'district');
+      // markers 模式只在叶子(district)触发;subs 为空也兜底显示 markers
+      const showMarkers = current.level === 'district' || subs.length === 0;
 
       if (showMarkers) {
         const scopeUnis = pickUnisInScope(universities, currentPath);
