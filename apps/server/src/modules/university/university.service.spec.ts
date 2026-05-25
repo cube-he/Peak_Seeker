@@ -351,3 +351,94 @@ describe('UniversityService.getFilters', () => {
     expect(filters.natures[0]).toEqual({ value: '公办', count: 150 });
   });
 });
+
+describe('UniversityService.findAllForMap', () => {
+  // Prisma Decimal mock: an object with toNumber() — same shape as findById coercion
+  const decimal = (n: number) => ({ toNumber: () => n });
+
+  const mapUni = (over: any = {}) => ({
+    id: 1, name: '四川大学', province: '四川', city: '成都',
+    level: '本科', type: '综合',
+    is985: true, is211: true, isDoubleFirstClass: true,
+    campuses: [
+      { latitude: decimal(30.6303), longitude: decimal(104.0834), district: '武侯区' },
+    ],
+    ...over,
+  });
+
+  const setup = (universities: any[]) => {
+    const prisma = {
+      university: { findMany: jest.fn().mockResolvedValue(universities) },
+    };
+    const redis = {
+      getCache: jest.fn().mockResolvedValue(null),
+      setCache: jest.fn().mockResolvedValue(undefined),
+    };
+    const admissionService = { getTargetYear: jest.fn() };
+    const svc = new UniversityService(prisma as any, redis as any, admissionService as any);
+    return { svc, prisma, redis };
+  };
+
+  it('returns id/name/lat/lng/district plus filter-relevant fields', async () => {
+    const { svc } = setup([mapUni()]);
+    const result: any[] = await (svc as any).findAllForMap({});
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      id: 1, name: '四川大学', province: '四川', city: '成都', district: '武侯区',
+      level: '本科', type: '综合',
+      is985: true, is211: true, isDoubleFirstClass: true,
+      lat: 30.6303, lng: 104.0834,
+    });
+  });
+
+  it('coerces Prisma Decimal latitude/longitude to plain number', async () => {
+    const { svc } = setup([mapUni()]);
+    const result: any[] = await (svc as any).findAllForMap({});
+    expect(typeof result[0].lat).toBe('number');
+    expect(typeof result[0].lng).toBe('number');
+  });
+
+  it('excludes universities that have no verified main campus with coords', async () => {
+    const { svc } = setup([
+      mapUni({ id: 1, campuses: [{ latitude: decimal(30), longitude: decimal(104), district: null }] }),
+      mapUni({ id: 2, campuses: [] }), // 没有 verified main campus
+    ]);
+    const result: any[] = await (svc as any).findAllForMap({});
+    expect(result.map((r) => r.id)).toEqual([1]);
+  });
+
+  it('translates filter params into prisma where clause (province + level + is985)', async () => {
+    const { svc, prisma } = setup([mapUni()]);
+    await (svc as any).findAllForMap({ province: '四川', level: '本科', is985: true });
+    const call = prisma.university.findMany.mock.calls[0][0];
+    expect(call.where.province).toBe('四川');
+    expect(call.where.level).toBe('本科');
+    expect(call.where.is985).toBe(true);
+    // 必须有 verified main campus
+    expect(call.where.campuses).toEqual({
+      some: { geoStatus: 'verified', isMain: true, latitude: { not: null } },
+    });
+  });
+
+  it('caches results keyed by query parameters', async () => {
+    const { svc, redis } = setup([mapUni()]);
+    await (svc as any).findAllForMap({ province: '四川' });
+    expect(redis.setCache).toHaveBeenCalled();
+    const cacheKey = (redis.setCache as jest.Mock).mock.calls[0][0];
+    expect(cacheKey).toMatch(/^university:map:/);
+    expect(cacheKey).toContain('四川');
+  });
+
+  it('returns cached value without hitting the database', async () => {
+    const cached = [{ id: 99, name: 'cached' }];
+    const prisma = { university: { findMany: jest.fn() } };
+    const redis = {
+      getCache: jest.fn().mockResolvedValue(cached),
+      setCache: jest.fn(),
+    };
+    const svc = new UniversityService(prisma as any, redis as any, {} as any);
+    const result = await (svc as any).findAllForMap({});
+    expect(result).toEqual(cached);
+    expect(prisma.university.findMany).not.toHaveBeenCalled();
+  });
+});

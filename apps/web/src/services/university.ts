@@ -100,6 +100,36 @@ export interface CampusPoiQueryParams {
   limit?: number;
 }
 
+/** 地图视图的查询参数(分页/排序 不需要,地图一次性返回全部匹配的点) */
+export interface MapQueryParams {
+  keyword?: string;
+  province?: string;
+  city?: string;
+  type?: string;
+  level?: string;
+  grade?: string;
+  nature?: string;
+  is985?: boolean;
+  is211?: boolean;
+  isDoubleFirstClass?: boolean;
+}
+
+/** 地图视图的院校点 */
+export interface MapUniversity {
+  id: number;
+  name: string;
+  province: string | null;
+  city: string | null;
+  district: string | null;
+  level: string | null;
+  type: string | null;
+  is985: boolean;
+  is211: boolean;
+  isDoubleFirstClass: boolean;
+  lat: number;
+  lng: number;
+}
+
 export const universityService = {
   getList: (params: UniversityQueryParams): Promise<UniversityListResponse> =>
     api.get('/universities', { params }),
@@ -111,6 +141,8 @@ export const universityService = {
   getFilters: (): Promise<UniversityFilters> => api.get('/universities/filters'),
   getRankingBoard: (examType: ExamType): Promise<RankingBoard[]> =>
     api.get('/universities/ranking-board', { params: { examType } }) as any,
+  getMap: (params: MapQueryParams): Promise<MapUniversity[]> =>
+    api.get('/universities/map', { params }) as any,
   getCampusPois: (
     universityId: number,
     campusId: number,

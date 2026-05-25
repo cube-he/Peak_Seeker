@@ -15,6 +15,7 @@ import UniversityLogo from '@/components/university/UniversityLogo';
 import { universityService, type UniversityQueryParams } from '@/services/university';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useStudentRank } from '@/stores/studentRankStore';
+import { useUniversityFilters } from '@/stores/universityFilterStore';
 import { classifyRank, getTier } from '@/utils/classify-rank';
 import RankTierBadge from '@/components/admission/RankTierBadge';
 import RankDistance from '@/components/admission/RankDistance';
@@ -416,12 +417,9 @@ function HotUniversitiesSidebar() {
 }
 
 export function UniversityListTab() {
-  const [filters, setFilters] = useState<UniversityQueryParams>({
-    page: 1,
-    pageSize: 12,
-    sortBy: 'name',
-    sortOrder: 'asc',
-  });
+  // filter 走共享 store,跟「地图」tab 双向同步
+  const filters = useUniversityFilters((s) => s.filters);
+  const setFilters = useUniversityFilters((s) => s.setFilters);
   const [keywordInput, setKeywordInput] = useState('');
   const debouncedKeyword = useDebouncedValue(keywordInput, 300);
   const examType = useStudentRank((s) => s.examType);

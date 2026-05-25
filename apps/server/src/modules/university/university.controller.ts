@@ -12,6 +12,7 @@ import { UniversityPickerOptionDto } from './dto/picker-option.dto';
 import { UniversityService } from './university.service';
 import { RankingBoardService } from './ranking-board.service';
 import { QueryUniversityDto } from './dto/query-university.dto';
+import { MapQueryDto } from './dto/map-query.dto';
 import { PoiQueryDto } from './dto/poi-query.dto';
 import { RankingBoardQueryDto } from './dto/ranking-board-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -57,6 +58,12 @@ export class UniversityController {
   @ApiQuery({ name: 'examType', required: false, enum: ['物理', '历史'] })
   async getRankingBoard(@Query() query: RankingBoardQueryDto) {
     return this.rankingBoardService.getRankingBoard(query.examType ?? '物理');
+  }
+
+  @Get('map')
+  @ApiOperation({ summary: '地图视图:返回带坐标的院校列表(供 AMap markers 用)' })
+  async findAllForMap(@Query() query: MapQueryDto) {
+    return this.universityService.findAllForMap(query);
   }
 
   @Get(':id')

@@ -4,6 +4,7 @@ import { Tabs } from 'antd';
 import MainLayout from '@/components/layout/MainLayout';
 import { RankingBoardTab } from './components/RankingBoardTab';
 import { UniversityListTab } from './components/UniversityListTab';
+import { MapTab } from './components/MapTab';
 
 export default function UniversitiesPage() {
   return (
@@ -14,6 +15,7 @@ export default function UniversitiesPage() {
           items={[
             { key: 'ranking', label: '排行导览', children: <RankingBoardTab /> },
             { key: 'all', label: '全部院校', children: <UniversityListTab /> },
+            { key: 'map', label: '地图', children: <MapTab /> },
           ]}
         />
       </div>

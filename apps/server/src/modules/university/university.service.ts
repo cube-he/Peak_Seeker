@@ -2,8 +2,25 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { QueryUniversityDto } from './dto/query-university.dto';
+import { MapQueryDto } from './dto/map-query.dto';
 import { AdmissionService } from '../admission/admission.service';
 import { getTier, classifyRank } from './rank-tier';
+
+/** 地图视图返回的院校最小载荷:仅 marker + 筛选所需的字段,2226 所一次性拉 */
+export interface MapUniversity {
+  id: number;
+  name: string;
+  province: string | null;
+  city: string | null;
+  district: string | null;
+  level: string | null;
+  type: string | null;
+  is985: boolean;
+  is211: boolean;
+  isDoubleFirstClass: boolean;
+  lat: number;
+  lng: number;
+}
 
 /**
  * 内存排序：NULL 恒沉底（不论升降序）。数值按大小比较，字符串按 zh-CN locale。
@@ -139,6 +156,82 @@ export class UniversityService {
       data: data.map(shape),
       pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
     };
+  }
+
+  async findAllForMap(query: MapQueryDto): Promise<MapUniversity[]> {
+    // 缓存 key 含完整 query,filter 变化触发新查询;1h TTL 跟其他读接口一致
+    const cacheKey = `university:map:${JSON.stringify(query)}`;
+    const cached = await this.redis.getCache<MapUniversity[]>(cacheKey);
+    if (cached) return cached;
+
+    const where: any = {};
+    if (query.keyword) {
+      where.OR = [
+        { name: { contains: query.keyword } },
+        { code: { contains: query.keyword } },
+      ];
+    }
+    if (query.province) where.province = query.province;
+    if (query.city) where.city = query.city;
+    if (query.type) where.type = query.type;
+    if (query.level) where.level = query.level;
+    if (query.nature) where.runningNature = query.nature;
+    if (query.grade) where.grade = query.grade;
+    if (query.isDoubleFirstClass !== undefined) where.isDoubleFirstClass = query.isDoubleFirstClass;
+    if (query.is985 !== undefined) where.is985 = query.is985;
+    if (query.is211 !== undefined) where.is211 = query.is211;
+
+    // 必须有 verified 主校区且有坐标——没坐标的院校(11/2237)不进地图
+    where.campuses = {
+      some: { geoStatus: 'verified', isMain: true, latitude: { not: null } },
+    };
+
+    const rows = await this.prisma.university.findMany({
+      where,
+      select: {
+        id: true, name: true, province: true, city: true,
+        level: true, type: true,
+        is985: true, is211: true, isDoubleFirstClass: true,
+        campuses: {
+          where: { geoStatus: 'verified', isMain: true, latitude: { not: null } },
+          select: { latitude: true, longitude: true, district: true },
+          take: 1,
+          orderBy: { id: 'asc' },
+        },
+      },
+    });
+
+    // Prisma Decimal -> number(同 findById 的处理逻辑)
+    const toNum = (v: unknown): number => {
+      if (typeof v === 'number') return v;
+      if (v && typeof v === 'object' && 'toNumber' in v) {
+        return (v as { toNumber: () => number }).toNumber();
+      }
+      return Number(v);
+    };
+
+    const items: MapUniversity[] = rows
+      .filter((u: any) => u.campuses.length > 0)
+      .map((u: any) => {
+        const c = u.campuses[0];
+        return {
+          id: u.id,
+          name: u.name,
+          province: u.province,
+          city: u.city,
+          district: c.district,
+          level: u.level,
+          type: u.type,
+          is985: u.is985,
+          is211: u.is211,
+          isDoubleFirstClass: u.isDoubleFirstClass,
+          lat: toNum(c.latitude),
+          lng: toNum(c.longitude),
+        };
+      });
+
+    await this.redis.setCache(cacheKey, items, 3600);
+    return items;
   }
 
   async findById(id: number, subject?: string) {
