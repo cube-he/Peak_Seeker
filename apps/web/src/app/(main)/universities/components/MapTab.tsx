@@ -14,21 +14,20 @@ import {
 } from '@/stores/universityFilterStore';
 
 /**
- * 院校地图 Tab(完整版 = Batch 1+2+3):
+ * 院校地图 Tab(3 层下钻:全国 → 省 → 市,市级直接显示学校 markers,跳过区县):
  *
- * 三级行政区下钻 + 区县内单 markers + 顶部面包屑导航。
- *
- * 视图栈 currentPath:
- *   [中国] → 点河北 → [中国, 河北] → 点石家庄 → [中国, 河北, 石家庄]
- *     → 点长安区 → [中国, 河北, 石家庄, 长安区](叶子,渲染单 markers)
+ *   [全国] → 点河北 → [全国, 河北] → 点石家庄 → [全国, 河北, 石家庄](叶子,渲染单 markers)
  *
  * 渲染规则:
- *   - 叶子之前(country/province/city):子级 polygon + 中心 [name N] 数字标签
- *   - 叶子(district):无 polygon,单院校 markers(按 985/211/双一流/本科/专科 分色) + click 弹卡片
+ *   - 全国:32 省 polygon + 每省 [省名 N] 数字标签
+ *   - 省(非直辖市):各市 polygon + [市名 N] 数字标签
+ *   - 市:无 polygon,该市内所有院校 markers(按 985/211/双一流/本科/专科 分色)
+ *   - 直辖市(北京/上海/天津/重庆) sub features 直接 level=district,
+ *     自动跳过中间层,点直辖市直接到 markers 模式
  *
- * 聚合用 subLevel(子级的层级)区分:子级 province → 按 U.province 聚合;
- * city → U.city;district → U.district。
- * 直辖市(北京/上海/天津/重庆) sub features 直接 level=district,自然跳过市级。
+ * 视野控制:
+ *   - 点省/市 → 平滑 setBounds 动画到对应行政区
+ *   - 点"全国"面包屑 → setZoomAndCenter(4, [104,36], true) 即时还原,无动画
  */
 
 const PROVINCE_SUFFIX_RE = /(壮族自治区|维吾尔自治区|回族自治区|特别行政区|自治区|省|市)$/;
@@ -44,7 +43,9 @@ interface PathNode {
   level: 'country' | 'province' | 'city' | 'district';
 }
 
-const ROOT: PathNode = { adcode: 100000, name: '中国', level: 'country' };
+const ROOT: PathNode = { adcode: 100000, name: '全国', level: 'country' };
+const ROOT_CENTER: [number, number] = [104, 36];
+const ROOT_ZOOM = 4;
 
 function aggregateForSubLevel(
   unis: MapUniversity[],
@@ -68,17 +69,14 @@ function aggregateForSubLevel(
   return m;
 }
 
-/** 选出"叶子层"(district)内的所有院校,渲染单 markers */
-function pickDistrictUnis(unis: MapUniversity[], path: PathNode[]): MapUniversity[] {
-  // path 至少是 [中国, 省, (市), 区];筛 province + (city) + district 匹配的院校
+/** 选出当前 path 范围内的所有院校(用于 marker 视图):限定 province + (可选 city) */
+function pickUnisInScope(unis: MapUniversity[], path: PathNode[]): MapUniversity[] {
   const province = path.find((n) => n.level === 'province')?.name;
   const city = path.find((n) => n.level === 'city')?.name;
-  const district = path.find((n) => n.level === 'district')?.name;
-  if (!district) return [];
+  if (!province) return []; // 没进省 = 还在全国视图,不出 markers
   return unis.filter((u) => {
-    if (district && u.district !== district) return false;
+    if (u.province !== province) return false;
     if (city && u.city !== city) return false;
-    if (province && u.province !== province) return false;
     return true;
   });
 }
@@ -211,13 +209,14 @@ export function MapTab() {
           closeWhenClickMap: true,
         });
 
-        // polygon 点击 → 下钻一级(包括 district,作为叶子)
+        // polygon 点击 → 下钻一级。district 不下钻(我们不在 marker 视图画 district polygon,
+        // 这个分支是防御性的:就算 AMapUI 触发了,也忽略)
         explorerRef.current.on('featureClick', (_e: any, feature: any) => {
           const level: PathNode['level'] = feature.properties.level;
+          if (level === 'district') return;
           const adcode: number = feature.properties.adcode;
           const shortName = normalizeAreaName(feature.properties.name, level);
           setCurrentPath((prev) => {
-            // 已是当前层级最后一项 → 不重复 push
             if (prev[prev.length - 1]?.adcode === adcode) return prev;
             return [...prev, { adcode, name: shortName, level }];
           });
@@ -282,10 +281,21 @@ export function MapTab() {
 
       clearAll();
 
-      // 叶子(district):画单 markers,不画 polygon/数字标签
-      if (current.level === 'district') {
-        const districtUnis = pickDistrictUnis(universities, currentPath);
-        districtUnis.forEach((u) => {
+      const subs: any[] = areaNode.getSubFeatures();
+      const subLevel: 'province' | 'city' | 'district' | undefined =
+        subs[0]?.properties.level;
+
+      // markers 模式触发条件:
+      //   - 普通市:current.level === 'city'(跳过 district 这层,直接看具体学校)
+      //   - 直辖市:current.level === 'province' AND subLevel === 'district'
+      //     (直辖市 sub features 直接是 district,自然跳市级)
+      const showMarkers =
+        current.level === 'city' ||
+        (current.level === 'province' && subLevel === 'district');
+
+      if (showMarkers) {
+        const scopeUnis = pickUnisInScope(universities, currentPath);
+        scopeUnis.forEach((u) => {
           const marker = new AMap.Marker({
             position: [u.lng, u.lat],
             content: buildDotHtml(getDotColor(u)),
@@ -304,12 +314,12 @@ export function MapTab() {
         try {
           map.setBounds(areaNode.getBounds(), false, [60, 60, 60, 60]);
         } catch (e) {
-          console.warn('setBounds failed for district', current, e);
+          console.warn('setBounds failed (markers)', current, e);
         }
         return;
       }
 
-      // 非叶子:子级 polygon + 数字标签
+      // 非 markers 模式:子级 polygon + 数字标签(全国 view / 非直辖省 view)
       explorer.renderSubFeatures(areaNode, () => ({
         cursor: 'pointer',
         bubble: true,
@@ -320,13 +330,9 @@ export function MapTab() {
         fillOpacity: 0.25,
       }));
 
-      const subs: any[] = areaNode.getSubFeatures();
       if (subs.length === 0) return;
 
-      const subLevel: 'province' | 'city' | 'district' =
-        subs[0].properties.level ?? 'province';
-      const counts = aggregateForSubLevel(universities, current, subLevel);
-
+      const counts = aggregateForSubLevel(universities, current, subLevel ?? 'province');
       subs.forEach((feature: any) => {
         const fLevel: PathNode['level'] = feature.properties.level;
         const shortName = normalizeAreaName(feature.properties.name, fLevel);
@@ -347,12 +353,16 @@ export function MapTab() {
         countMarkersRef.current.push(marker);
       });
 
-      // 平滑 setBounds:除初始全国视图外都 fly to(默认带动画)
-      if (current.level !== 'country') {
+      // 视野控制:
+      //   - 全国:即时还原 zoom+center(无动画),让点"全国"面包屑能"直接还原"
+      //   - 省:平滑 fly to 该省 bounds
+      if (current.level === 'country') {
+        map.setZoomAndCenter(ROOT_ZOOM, ROOT_CENTER, true);
+      } else {
         try {
           map.setBounds(areaNode.getBounds(), false, [60, 60, 60, 60]);
         } catch (e) {
-          console.warn('setBounds failed for', current, e);
+          console.warn('setBounds failed (polygon)', current, e);
         }
       }
     });
