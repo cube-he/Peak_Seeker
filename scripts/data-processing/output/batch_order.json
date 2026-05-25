@@ -1,0 +1,92 @@
+[
+  {
+    "sequence": 1,
+    "batchGroup": "本科提前批",
+    "stage": "A段前",
+    "category": "本科提前批国家专项计划",
+    "volunteerSetting": "2个平行志愿",
+    "isParallel": true,
+    "maxVolunteers": 2
+  },
+  {
+    "sequence": 2,
+    "batchGroup": "本科提前批",
+    "stage": "A段",
+    "category": "飞行技术、军事类、公安类、司法类、航海类、消防救援、高校综合评价等本科招生高校（专业）",
+    "volunteerSetting": "3个志愿（1个第一志愿和2个平行的第二志愿）",
+    "isParallel": true,
+    "maxVolunteers": 2
+  },
+  {
+    "sequence": 3,
+    "batchGroup": "本科提前批",
+    "stage": "A段后B段前",
+    "category": "本科提前批高校专项计划",
+    "volunteerSetting": "1个顺序志愿",
+    "isParallel": false,
+    "maxVolunteers": 1
+  },
+  {
+    "sequence": 4,
+    "batchGroup": "本科提前批",
+    "stage": "B段",
+    "category": "国家公费师范生、国家优师专项、农村订单定向医学生、省级公费师范生、地方优师计划、乡村振兴计划、全国重点马克思主义学院的马克思主义理论专业、部分院校小语种专业、本科提前批少数民族预科、参加我省统一录取的香港高校等本科招生高校（专业）",
+    "volunteerSetting": "30个平行志愿",
+    "isParallel": true,
+    "maxVolunteers": 30
+  },
+  {
+    "sequence": 5,
+    "batchGroup": "本科批次",
+    "stage": "A段",
+    "category": "国家专项计划、地方专项计划",
+    "volunteerSetting": "20个平行志愿",
+    "isParallel": true,
+    "maxVolunteers": 20
+  },
+  {
+    "sequence": 6,
+    "batchGroup": "本科批次",
+    "stage": "A段后B段前",
+    "category": "高校专项计划、高水平运动队",
+    "volunteerSetting": "高校专项计划：2个志愿（1个第一志愿，1个第二志愿）高水平运动队：1个顺序志愿",
+    "isParallel": false,
+    "maxVolunteers": 2
+  },
+  {
+    "sequence": 7,
+    "batchGroup": "本科批次",
+    "stage": "B段",
+    "category": "本科提前批及本科批次A段以外的本科招生高校（专业）（包括部委属和外省属高校少数民族预科、边防军人子女预科、四川大学国防科研试验基地预科、民族班、定向招生、纳入普通类招生的艺术类专业等）",
+    "volunteerSetting": "45个平行志愿",
+    "isParallel": true,
+    "maxVolunteers": 45
+  },
+  {
+    "sequence": 8,
+    "batchGroup": "本科批次",
+    "stage": "B段后",
+    "category": "区域教育均衡发展专项计划、省属高校少数民族预科",
+    "volunteerSetting": "20个平行志愿",
+    "isParallel": true,
+    "maxVolunteers": 20
+  },
+  {
+    "sequence": 9,
+    "batchGroup": "高职（专科）提前批次",
+    "stage": null,
+    "category": "定向培养士官、公安类、司法类、航海类等经批准可纳入提前批次录取的高职（专科）招生高校（专业）",
+    "volunteerSetting": "3个志愿（1个第一志愿、2个平行的第二志愿）",
+    "isParallel": true,
+    "maxVolunteers": 2
+  },
+  {
+    "sequence": 10,
+    "batchGroup": "高职（专科）批次",
+    "stage": null,
+    "category": "高职（专科）提前批次以外的其他高职（专科）招生高校（专业）",
+    "volunteerSetting": "45个平行志愿",
+    "isParallel": true,
+    "maxVolunteers": 45
+  }
+]
