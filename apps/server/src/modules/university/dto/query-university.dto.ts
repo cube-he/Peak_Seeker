@@ -69,13 +69,29 @@ export class QueryUniversityDto {
   @IsBoolean()
   is211?: boolean;
 
-  @ApiPropertyOptional({ description: '排序字段', enum: ['name', 'province', 'type'] })
+  @ApiPropertyOptional({ description: '排序字段', enum: ['name', 'province', 'type', 'minRank', 'tier', 'softRank'] })
   @IsOptional()
-  @IsIn(['name', 'province', 'type'])
+  @IsIn(['name', 'province', 'type', 'minRank', 'tier', 'softRank'])
   sortBy?: string = 'name';
 
   @ApiPropertyOptional({ description: '排序方向', enum: ['asc', 'desc'] })
   @IsOptional()
   @IsIn(['asc', 'desc'])
   sortOrder?: 'asc' | 'desc' = 'asc';
+
+  @ApiPropertyOptional({ description: '科类', enum: ['物理', '历史'] })
+  @IsOptional()
+  @IsIn(['物理', '历史'])
+  examType?: string;
+
+  @ApiPropertyOptional({ description: '冲稳保筛选', enum: ['rush', 'stable', 'safe'] })
+  @IsOptional()
+  @IsIn(['rush', 'stable', 'safe'])
+  tierFilter?: string;
+
+  @ApiPropertyOptional({ description: '考生位次（冲稳保标签/筛选用）' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  userRank?: number;
 }

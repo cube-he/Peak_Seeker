@@ -15,6 +15,7 @@ const mockMajor = {
   matchStatus: 'PASS',
   failReasons: [],
   planCount: 20,
+  planNotes: '色弱、色盲考生不录取；英语单科 ≥ 110',
 };
 
 const mockCandidateGroup = {
@@ -52,6 +53,24 @@ const mockCandidateGroup = {
   majorCount: 1,
   selectableMajorCount: 1,
   softFailCount: 0,
+  matchScore: 87,
+  matchReason: '本省·985·位次安全',
+  history3y: [
+    { year: 2023, score: 619, rank: 14200 },
+    { year: 2024, score: 622, rank: 12800 },
+    { year: 2025, score: 624, rank: 12034 },
+  ],
+  historyFiling3y: [
+    { year: 2023, score: 624, rank: 13100 },
+    { year: 2024, score: 627, rank: 11800 },
+    { year: 2025, score: 629, rank: 11200 },
+  ],
+  prefMatch: {
+    province: 'match',
+    tuition: 'within',
+    career: 'strong',
+    subjects: 'match',
+  },
   majors: [mockMajor],
   majorSections: {
     recommended: [mockMajor],
@@ -159,5 +178,50 @@ describe('GeneratePlanPage', () => {
     const logo = await screen.findByRole('img', { name: 'Alpha University' });
 
     expect(logo).toHaveAttribute('src', '/logos/alpha.png');
+  });
+
+  it('renders MatchHeader with matchScore and matchReason', async () => {
+    render(<GeneratePlanPage />);
+
+    expect(await screen.findByText('匹配度')).toBeInTheDocument();
+    expect(await screen.findByText('87')).toBeInTheDocument();
+    expect(await screen.findByText('本省·985·位次安全')).toBeInTheDocument();
+  });
+
+  it('renders 3-year trend chart with default 组最低 toggle', async () => {
+    render(<GeneratePlanPage />);
+
+    // 默认 toggle 现在是 'min'（因为投档线数据稀疏，组最低有 fallback 更连续）
+    expect(await screen.findByText(/近 3 年组最低分/)).toBeInTheDocument();
+    // 切换按钮始终显示两个
+    expect(await screen.findByText('投档线趋势')).toBeInTheDocument();
+    expect(await screen.findByText('组最低趋势')).toBeInTheDocument();
+  });
+
+  it('renders NotesChip next to major name when planNotes present', async () => {
+    render(<GeneratePlanPage />);
+
+    // NotesChip 取首句作为摘要（≤14 字截断），"色弱、色盲考生不录取" 是 10 字
+    expect(await screen.findByText('色弱、色盲考生不录取')).toBeInTheDocument();
+    // 多句备注末尾显示 +N
+    expect(await screen.findByText('+1')).toBeInTheDocument();
+  });
+
+  it('renders prefMatch chips (province / tuition / career / subjects)', async () => {
+    const { container } = render(<GeneratePlanPage />);
+
+    // 等待 match header 渲染
+    await screen.findByText('匹配度');
+
+    // prefChip 由 CSS class 标识（jest.style-mock 把 class 名映射为字面字符串）
+    const prefChips = container.querySelectorAll('.prefChip');
+    expect(prefChips.length).toBeGreaterThanOrEqual(4);
+
+    // 4 个 label 都在 prefChip 容器里
+    const labels = Array.from(prefChips).map((el) => el.textContent || '');
+    expect(labels.some((t) => t.includes('本省'))).toBe(true);
+    expect(labels.some((t) => t.includes('学费'))).toBe(true);
+    expect(labels.some((t) => t.includes('考研方向'))).toBe(true);
+    expect(labels.some((t) => t.includes('选科'))).toBe(true);
   });
 });

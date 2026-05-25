@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AdmissionService } from './admission.service';
 import { FindAggregatedDto } from './dto/find-aggregated.dto';
+import { AggregatedDetailDto } from './dto/aggregated-detail.dto';
 import { LookupPredictionsDto } from './dto/lookup-predictions.dto';
 
 @ApiTags('录取数据')
@@ -51,9 +52,15 @@ export class AdmissionController {
   }
 
   @Get('aggregated')
-  @ApiOperation({ summary: '聚合查询录取数据（多年趋势+招生计划）' })
+  @ApiOperation({ summary: '聚合查询录取数据（轻量列表项）' })
   async findAggregated(@Query() dto: FindAggregatedDto) {
     return this.admissionService.findAggregated(dto);
+  }
+
+  @Get('aggregated/detail')
+  @ApiOperation({ summary: '聚合录取结果详情（单组合全年份+招生计划+征集志愿）' })
+  async findAggregatedDetail(@Query() dto: AggregatedDetailDto) {
+    return this.admissionService.findAggregatedDetail(dto);
   }
 
   @Post('lookup-predictions')

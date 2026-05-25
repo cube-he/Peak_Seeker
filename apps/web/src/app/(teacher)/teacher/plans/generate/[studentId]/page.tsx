@@ -39,7 +39,6 @@ import {
   findPlanForBatch,
   formatCandidateGroup,
   formatGroupPlanChange,
-  formatGroupScoreLine,
   formatRankGap,
   formatSubjectCombination,
   formatSupplementary,
@@ -55,6 +54,12 @@ import {
   type WorkbenchPlan,
 } from './plan-workbench-utils';
 import styles from './candidate-pool-polished.module.css';
+import {
+  MatchHeader, TrendChart, NotesChip, MetricStrip,
+  FilterBar, DEFAULT_FILTERS, HiddenCard, ComparePanel,
+  type FilterState, type FilterGradeKey, type TierFilter,
+} from '@/components/candidate-pool-v2';
+import compareStyles from '@/components/candidate-pool-v2/styles.module.css';
 
 type Gradient = 'CHONG' | 'WEN' | 'BAO';
 type DynamicGradientTier =
@@ -162,6 +167,7 @@ interface CandidateMajor {
   previousMajorAdmissionCount?: number | null;
   matchScore?: number | null;
   matchReasons?: string[];
+  matchReason?: string | null;
   dynamicGradient?: DynamicGradientDetail | null;
   suggestedGradient: Gradient;
   matchStatus: MatchStatus;
@@ -192,6 +198,12 @@ interface CandidateGroup {
     province?: string | null;
     city?: string | null;
     logoUrl?: string | null;
+    postgradRate?: string | null;
+    furtherStudyRate?: string | null;
+    employmentRate?: string | null;
+    avgSalary?: string | null;
+    satisfactionOverall?: number | null;
+    satisfactionCount?: number | null;
   };
   groupCode?: string | null;
   groupName?: string | null;
@@ -224,6 +236,15 @@ interface CandidateGroup {
   softFailCount: number;
   matchScore?: number | null;
   matchReasons?: string[];
+  matchReason?: string | null;
+  prefMatch?: {
+    province?: 'match' | 'mismatch';
+    tuition?: 'within' | 'over';
+    career?: 'strong' | 'weak';
+    subjects?: 'match';
+  };
+  history3y?: Array<{ year: number; score: number; rank: number }>;
+  historyFiling3y?: Array<{ year: number; score: number; rank: number }>;
   universityRank?: number | null;
   anchorMajorMinScore?: number | null;
   anchorMajorMinRank?: number | null;
@@ -471,12 +492,6 @@ function tagClass(tone: 'rush' | 'stable' | 'safe' | 'muted' | 'warn' | 'extreme
   return cx(styles.tag, toneClass);
 }
 
-function formatDynamicRank(detail?: DynamicGradientDetail | null) {
-  if (!detail?.adjustedMinRank) return '-';
-  const base = detail.baseMinRank ? `历史 ${detail.baseMinRank.toLocaleString()} 位` : '历史 -';
-  return `${base} / 修正 ${detail.adjustedMinRank.toLocaleString()} 位`;
-}
-
 function formatCompetition(group: CandidateGroup) {
   const current = group.competition?.currentCount;
   const previous = group.competition?.previousCount;
@@ -528,14 +543,30 @@ function majorSectionTone(section: MajorDisplaySection, major: CandidateMajor) {
   return major.matchStatus === 'SOFT_FAIL' ? 'warn' : gradientTone(gradientTier(major));
 }
 
+function getRankingClass(ranking?: string | null): string {
+  if (!ranking) return '';
+  const norm = String(ranking).replace(/[\s+]/g, (m) => m === '+' ? '+' : '').trim();
+  if (norm === 'A+') return compareStyles.majorRankingAplus;
+  if (norm === 'A') return compareStyles.majorRankingA;
+  if (norm === 'B+') return compareStyles.majorRankingBplus;
+  if (norm === 'B') return compareStyles.majorRankingB;
+  return compareStyles.majorRankingC;
+}
+
 function CandidateMajorSection({
   title,
   section,
   majors,
+  group,
+  onAdd,
+  addingMajorKey,
 }: {
   title: string;
   section: MajorDisplaySection;
   majors: CandidateMajor[];
+  group?: CandidateGroup;
+  onAdd?: (group: CandidateGroup, major: CandidateMajor) => void;
+  addingMajorKey?: number | null;
 }) {
   if (!majors.length) return null;
   return (
@@ -545,29 +576,121 @@ function CandidateMajorSection({
         <em>{majors.length}</em>
       </div>
       <div className={styles.majorSectionRows}>
-        {majors.map((major) => (
-          <div
-            key={major.enrollmentPlanId}
-            className={cx(
-              styles.majorRow,
-              section === 'BACKUP' && styles.majorRowBackup,
-              section === 'RISK' && styles.majorRowRisk,
-            )}
-          >
-            <span className={styles.majorNameCell}>
-              <strong>{major.majorName}</strong>
-              {major.displayReason ? <small>{major.displayReason}</small> : null}
-            </span>
-            <span className={styles.num}>{formatScoreRankValue(major.majorMinScore, major.majorMinRank)}</span>
-            <span>计划 {major.planCount ?? '-'}</span>
-            <span>{major.standardDuration || major.duration || '-'}</span>
-            <span>
-              <span className={tagClass(majorSectionTone(section, major))}>
-                {section === 'RISK' ? MAJOR_SECTION_LABEL.RISK : section === 'BACKUP' ? MAJOR_SECTION_LABEL.BACKUP : GRADIENT_LABEL[gradientTier(major)]}
-              </span>
-            </span>
-          </div>
-        ))}
+        {majors.map((major) => {
+          const starClass =
+            section === 'RECOMMENDED' ? compareStyles.majorStarRec :
+            section === 'RISK' ? compareStyles.majorStarRisk :
+            compareStyles.majorStarBak;
+
+          // 1 年涨跌（majorMinScore vs previousMajorMinScore）
+          const curr = major.majorMinScore;
+          const prev = major.previousMajorMinScore;
+          const trendArrow =
+            curr != null && prev != null
+              ? curr > prev
+                ? <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendUp}`}>↗</span>
+                : curr < prev
+                  ? <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendDown}`}>↘</span>
+                  : <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendFlat}`}>→</span>
+              : <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendFlat}`}>—</span>;
+
+          const isAdded = addingMajorKey === major.enrollmentPlanId;
+
+          return (
+            <div
+              key={major.enrollmentPlanId}
+              className={`${compareStyles.majorRowV2} ${section === 'RISK' ? compareStyles.majorRowV2Risk : ''}`}
+            >
+              <div className={`${compareStyles.majorStarV2} ${starClass}`}>★</div>
+
+              <div className={compareStyles.majorNameV2}>
+                <b>{major.majorName}</b>
+                {/* 评级优先级：① 学科评估等级 disciplineEval (A+/A/B+ 字母) - 学校×专业最权威
+                    ② 专业排名 majorRanking (#N 数字) - 全国该专业排名，覆盖率更高
+                    都没有就不显示 */}
+                {(() => {
+                  const evalText = major.disciplineEval && String(major.disciplineEval).trim() && String(major.disciplineEval).trim() !== '/' ? String(major.disciplineEval).trim() : null;
+                  if (evalText) {
+                    return (
+                      <span
+                        className={`${compareStyles.majorRankingChip} ${getRankingClass(evalText)}`}
+                        title="学科评估等级（学校×专业）"
+                      >
+                        {evalText}
+                      </span>
+                    );
+                  }
+                  const rankText = major.majorRanking && String(major.majorRanking).trim() && String(major.majorRanking).trim() !== '/' ? String(major.majorRanking).trim() : null;
+                  if (rankText) {
+                    const n = parseInt(rankText, 10);
+                    const numClass =
+                      !Number.isFinite(n) ? compareStyles.majorRankNumOther :
+                      n <= 3 ? compareStyles.majorRankNumTop3 :
+                      n <= 10 ? compareStyles.majorRankNumTop10 :
+                      n <= 30 ? compareStyles.majorRankNumTop30 :
+                      n <= 100 ? compareStyles.majorRankNumTop100 :
+                      compareStyles.majorRankNumOther;
+                    return (
+                      <span
+                        className={`${compareStyles.majorRankNum} ${numClass}`}
+                        title={`专业全国排名 第 ${rankText} 名`}
+                      >
+                        #{rankText}
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+                {major.isNationalFeature ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagNational}`}>国家特色</span> : null}
+                {major.isSinoForeign ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagSino}`}>中外</span> : null}
+                {major.planNotes ? <NotesChip notes={major.planNotes} /> : null}
+              </div>
+
+              <div className={compareStyles.majorScoreCell}>
+                <div className={compareStyles.scoreMain}>
+                  <span className={compareStyles.scoreMainValue}>{curr ?? '—'}</span>
+                  {curr != null && prev != null && curr !== prev ? (
+                    <span style={{
+                      fontSize: 11, fontWeight: 600,
+                      color: curr > prev ? '#c53030' : '#276749',
+                    }}>
+                      {curr > prev ? '+' : ''}{curr - prev}
+                    </span>
+                  ) : null}
+                </div>
+                <div className={compareStyles.scoreSub}>
+                  位次 {major.majorMinRank?.toLocaleString() ?? '—'}
+                </div>
+              </div>
+
+              <div className={compareStyles.degreePoints}>
+                <span className={major.localMasterPoint ? compareStyles.has : ''}>硕</span>
+                <span className={(major as any).localDoctoralPoint ? compareStyles.has : ''}>博</span>
+              </div>
+
+              {trendArrow}
+
+              <div className={compareStyles.majorPlanText}>
+                本专业 <b>{major.planCount ?? '—'}</b> 人
+              </div>
+
+              {group && onAdd ? (
+                <button
+                  type="button"
+                  className={`${compareStyles.majorRowAction} ${isAdded ? compareStyles.majorRowActionDone : ''}`}
+                  onClick={() => onAdd(group, major)}
+                  disabled={isAdded}
+                >
+                  {isAdded ? '✓ 已加入' : <><PlusOutlined /> 加入</>}
+                </button>
+              ) : (
+                <span className={tagClass(majorSectionTone(section, major))}>
+                  {section === 'RISK' ? MAJOR_SECTION_LABEL.RISK : section === 'BACKUP' ? MAJOR_SECTION_LABEL.BACKUP : GRADIENT_LABEL[gradientTier(major)]}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -639,16 +762,6 @@ function riskReviewItems(group: CandidateGroup, major: CandidateMajor | undefine
   ];
 }
 
-function MetricTile({ label, value, note }: { label: string; value: ReactNode; note?: ReactNode }) {
-  return (
-    <div className={styles.signal}>
-      <div className={styles.label}>{label}</div>
-      <div className={styles.value}>{value}</div>
-      {note ? <div className={styles.sub}>{note}</div> : null}
-    </div>
-  );
-}
-
 function EvidenceItem({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className={styles.evidenceItem}>
@@ -688,6 +801,35 @@ export default function GeneratePlanPage() {
   const [searchText, setSearchText] = useState('');
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
+  // 默认显示「组最低」：后端对组最低做了 majorMin fallback，趋势连续性更好
+  // 切到「投档线」时只显示 2025 起的真投档数据（早期记录缺失 filing 字段）
+  const [trendType, setTrendType] = useState<'filing' | 'min'>('min');
+  const [poolFilters, setPoolFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  // 不持久化的"不考虑"集合（per-session）
+  const [hiddenGroupKeys, setHiddenGroupKeys] = useState<Set<string>>(new Set());
+  const hideGroup = (key: string) => setHiddenGroupKeys((prev) => new Set([...prev, key]));
+  const restoreGroup = (key: string) =>
+    setHiddenGroupKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+
+  // 展开态 Tab（per-group），默认 majors
+  const [groupExpandTabs, setGroupExpandTabs] = useState<Record<string, 'majors' | 'evidence' | 'school'>>({});
+  const setGroupExpandTab = (key: string, tab: 'majors' | 'evidence' | 'school') =>
+    setGroupExpandTabs((prev) => ({ ...prev, [key]: tab }));
+
+  // 多卡对比（最多 4 张）
+  const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
+  const [compareDrawerOpen, setCompareDrawerOpen] = useState(false);
+  const toggleCompare = (key: string) =>
+    setCompareSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else if (next.size < 4) next.add(key);
+      return next;
+    });
   const [candidatePage, setCandidatePage] = useState(1);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
   const [activeDetail, setActiveDetail] = useState<{ group: CandidateGroup; major: CandidateMajor } | null>(null);
@@ -740,6 +882,30 @@ export default function GeneratePlanPage() {
   });
   const candidateGroups = unwrap<CandidateGroupListResult>(groupData);
   const groups = candidateGroups?.groups ?? [];
+
+  // 前端筛选：基于 poolFilters 过滤 groups（不改变 service 返回顺序）
+  const visibleGroups = useMemo(() => {
+    return groups.filter((group) => {
+      // 梯度筛选
+      const tier = gradientTier(group) as FilterGradeKey;
+      if (!poolFilters.grades.has(tier)) return false;
+
+      // 档次筛选
+      const cardTiers: TierFilter[] = [];
+      if (group.university?.is985) cardTiers.push('985');
+      if (group.university?.is211) cardTiers.push('211');
+      if (group.university?.isDoubleFirstClass) cardTiers.push('DFC');
+      if (cardTiers.length === 0) cardTiers.push('other');
+      const tierMatch = cardTiers.some((t) => poolFilters.tiers.has(t));
+      if (!tierMatch) return false;
+
+      // 地域筛选（依据后端计算的 prefMatch.province）
+      if (poolFilters.province === 'local' && group.prefMatch?.province !== 'match') return false;
+      if (poolFilters.province === 'outside' && group.prefMatch?.province !== 'mismatch') return false;
+
+      return true;
+    });
+  }, [groups, poolFilters]);
   const isUsingFallbackYear = Boolean(candidateGroups?.isFallbackYear && candidateGroups.sourceYear && candidateGroups.planYear);
   const isUsingScoreBasedRank = Boolean(
     candidateGroups?.studentRankSource === 'SCORE_SEGMENT' &&
@@ -1017,6 +1183,7 @@ export default function GeneratePlanPage() {
           {major.majorCode ? <span className="ml-2 font-mono text-xs text-text-tertiary">{major.majorCode}</span> : null}
           {major.isRecommendedAnchor ? <Tag color="gold" className="ml-2">推荐锚定</Tag> : null}
           {major.displaySection ? <Tag color={major.displaySection === 'RISK' ? 'warning' : major.displaySection === 'BACKUP' ? 'default' : 'success'} className="ml-2">{MAJOR_SECTION_LABEL[major.displaySection]}</Tag> : null}
+          {major.planNotes ? <span className="ml-2 inline-block"><NotesChip notes={major.planNotes} /></span> : null}
           {major.displayReason ? <div className="mt-1 text-xs text-text-tertiary">{major.displayReason}</div> : null}
         </button>
       ),
@@ -1282,11 +1449,45 @@ export default function GeneratePlanPage() {
               </div>
             </div>
             <div className={styles.candidateView}>
+              <FilterBar
+                filters={poolFilters}
+                setFilters={setPoolFilters}
+                filteredCount={visibleGroups.length}
+                totalCount={groups.length}
+              />
               <div className={styles.densityNote}>
                 <div>
-                  当前展示 <strong>{groups.length}</strong> 个候选，按 <strong>{CANDIDATE_SORT_OPTIONS.find((item) => item.value === candidateSort)?.label}</strong> 排序
+                  当前展示 <strong>{visibleGroups.length}</strong> 个候选，按 <strong>{CANDIDATE_SORT_OPTIONS.find((item) => item.value === candidateSort)?.label}</strong> 排序
                 </div>
-                <span>{includeSoftFails ? '包含风险项' : '仅显示可选项'}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ display: 'inline-flex', gap: 2, padding: 2, borderRadius: 6, background: 'var(--surface-dim, #f0eee6)' }}>
+                    <button
+                      type="button"
+                      onClick={() => setTrendType('filing')}
+                      style={{
+                        height: 22, padding: '0 10px', borderRadius: 4, border: 0, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        background: trendType === 'filing' ? '#fff' : 'transparent',
+                        color: trendType === 'filing' ? '#1e3a5f' : '#6b6962',
+                        boxShadow: trendType === 'filing' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                      }}
+                    >
+                      投档线趋势
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTrendType('min')}
+                      style={{
+                        height: 22, padding: '0 10px', borderRadius: 4, border: 0, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        background: trendType === 'min' ? '#fff' : 'transparent',
+                        color: trendType === 'min' ? '#1e3a5f' : '#6b6962',
+                        boxShadow: trendType === 'min' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                      }}
+                    >
+                      组最低趋势
+                    </button>
+                  </div>
+                  <span>{includeSoftFails ? '包含风险项' : '仅显示可选项'}</span>
+                </div>
               </div>
               {isUsingFallbackYear ? (
                 <Alert
@@ -1310,10 +1511,21 @@ export default function GeneratePlanPage() {
                   <div className="mt-4 text-sm font-medium text-text">正在计算候选专业组</div>
                   <div className="mt-1 text-xs text-text-tertiary">系统正在综合位次、计划变化、竞争人数、选科池和征集数据</div>
                 </div>
-              ) : groups.length ? (
+              ) : visibleGroups.length ? (
                 <>
                   <div className={styles.cardList}>
-                    {groups.map((group) => {
+                    {visibleGroups.map((group) => {
+                      // 隐藏的卡：渲染塌缩 HiddenCard
+                      if (hiddenGroupKeys.has(group.groupKey)) {
+                        return (
+                          <HiddenCard
+                            key={group.groupKey}
+                            universityName={group.universityName}
+                            meta={`${GRADIENT_LABEL[gradientTier(group)]}${group.university?.softRanking ? ' · 软科 #' + group.university.softRanking : ''}${group.university?.city ? ' · ' + group.university.city : ''}`}
+                            onRestore={() => restoreGroup(group.groupKey)}
+                          />
+                        );
+                      }
                       const expanded = expandedGroupKeys.includes(group.groupKey);
                       const planChange = formatGroupPlanChange(group);
                       const added = isCandidateGroupAlreadyAdded(group, planItems);
@@ -1327,8 +1539,85 @@ export default function GeneratePlanPage() {
                         ...(group.matchReasons ?? []),
                         ...(anchor?.matchReasons ?? []),
                       ].filter(Boolean);
+                      const trendPoints = (trendType === 'filing' ? group.historyFiling3y : group.history3y) ?? [];
+                      const ms = group.matchScore ?? 0;
+                      const weightClass =
+                        ms >= 85 ? compareStyles.cardPrimary :
+                        ms > 0 && ms < 70 ? compareStyles.cardSecondary :
+                        '';
+                      const comparedClass = compareSet.has(group.groupKey) ? compareStyles.cardCompared : '';
+                      const trendDelta = trendPoints.length >= 2
+                        ? trendPoints[trendPoints.length - 1].score - trendPoints[0].score
+                        : null;
                       return (
-                        <article key={group.groupKey} className={styles.candidateCard}>
+                        <article key={group.groupKey} className={`${styles.candidateCard} ${weightClass} ${comparedClass}`}>
+                          <MatchHeader
+                            matchScore={group.matchScore ?? 0}
+                            matchReason={group.matchReason}
+                            prefMatch={group.prefMatch}
+                            compared={compareSet.has(group.groupKey)}
+                            onCompareToggle={() => toggleCompare(group.groupKey)}
+                          />
+                          {trendPoints.length > 0 ? (
+                            <div style={{ padding: '8px 16px', borderTop: '1px solid #f0eee6', borderBottom: '1px solid #f0eee6', background: '#faf9f5', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 11, color: '#6b6962', fontWeight: 600, letterSpacing: 0.4, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                {trendType === 'filing' ? '近 3 年投档线' : '近 3 年组最低分'}
+                              </span>
+                              <div style={{ width: 280, flexShrink: 0 }}>
+                                <TrendChart points={trendPoints} />
+                              </div>
+                              <div style={{ fontSize: 12, color: '#6b6962', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', flexWrap: 'wrap' }}>
+                                {trendDelta != null ? (
+                                  <>
+                                    <span style={{ fontFamily: 'Georgia, "Noto Serif SC", SimSun, serif', fontWeight: 600, color: '#1a1a19' }}>
+                                      {trendPoints[0].score} → {trendPoints[trendPoints.length - 1].score}
+                                    </span>
+                                    <span style={{
+                                      fontSize: 11, fontWeight: 700,
+                                      padding: '2px 6px', borderRadius: 4,
+                                      background: trendDelta > 0 ? '#fef2f2' : trendDelta < 0 ? '#f0fff4' : '#f0eee6',
+                                      color: trendDelta > 0 ? '#c53030' : trendDelta < 0 ? '#276749' : '#6b6962',
+                                    }}>
+                                      {trendDelta > 0 ? '+' : ''}{trendDelta}
+                                    </span>
+                                    <span style={{ fontSize: 10, color: '#87867f' }}>{trendPoints.length} 年</span>
+                                  </>
+                                ) : null}
+                                {group.predictedMinRank?.point != null ? (
+                                  <span
+                                    title={`基于 ${group.predictedMinRank.targetYear ?? '2026'} 年预测 · 信心 ${group.predictedMinRank.confidence ?? '—'}`}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                                      padding: '3px 8px', borderRadius: 5,
+                                      background: '#fdf8ec', border: '1px solid #f0dfad',
+                                      color: '#8a6510', fontSize: 11, fontWeight: 600,
+                                      cursor: 'help',
+                                    }}
+                                  >
+                                    ◇ {group.predictedMinRank.targetYear ?? 2026} 预测 ~{group.predictedMinRank.point.toLocaleString()} 位
+                                    {group.predictedMinRank.confidence ? (
+                                      <span style={{
+                                        marginLeft: 2,
+                                        padding: '0 4px',
+                                        borderRadius: 3,
+                                        fontSize: 9,
+                                        background: group.predictedMinRank.confidence === 'high' ? '#e8f5ec'
+                                          : group.predictedMinRank.confidence === 'medium' ? '#ebf4ff'
+                                          : '#f0eee6',
+                                        color: group.predictedMinRank.confidence === 'high' ? '#276749'
+                                          : group.predictedMinRank.confidence === 'medium' ? '#2c5282'
+                                          : '#87867f',
+                                      }}>
+                                        {group.predictedMinRank.confidence === 'high' ? '高'
+                                          : group.predictedMinRank.confidence === 'medium' ? '中'
+                                          : '低'}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          ) : null}
                           <div className={styles.candidateTop}>
                             <UniversityLogo name={group.universityName || '学校'} logoUrl={group.university?.logoUrl} size={40} />
                             <button type="button" className="min-w-0 border-0 bg-transparent p-0 text-left" onClick={() => toggleGroup(group.groupKey)}>
@@ -1345,7 +1634,17 @@ export default function GeneratePlanPage() {
                                 <span>{formatCandidateGroup(group)}</span>
                               </div>
                             </button>
-                            <div className={styles.cardActions}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                              <div className={`${compareStyles.gradeBadge} ${
+                                gradientTone(gradientTier(group)) === 'rush' ? compareStyles.gradeBadgeRush :
+                                gradientTone(gradientTier(group)) === 'safe' ? compareStyles.gradeBadgeSafe :
+                                compareStyles.gradeBadgeStable
+                              }`}>
+                                <span className={compareStyles.gradeLabel}>梯度</span>
+                                <span className={compareStyles.gradeValue}>{GRADIENT_LABEL[gradientTier(group)]}</span>
+                                <span className={compareStyles.gradeNote}>{rankGap.text}</span>
+                              </div>
+                              <div className={styles.cardActions}>
                               <button type="button" className={cx(styles.btn, styles.btnSmall)} onClick={() => anchor && setActiveDetail({ group, major: anchor })}>详情</button>
                               <button
                                 type="button"
@@ -1365,83 +1664,160 @@ export default function GeneratePlanPage() {
                                   {getAddActionLabel(group, anchor, added)}
                                 </button>
                               ) : null}
-                            </div>
-                          </div>
-
-                          <div className={styles.rankSummary}>
-                            <div className={styles.grade}>
-                              <span className={tagClass(gradientTone(gradientTier(group)))}>梯度：{GRADIENT_LABEL[gradientTier(group)]}</span>
-                              <span className={styles.collectionNote}>{formatSupplementary(group)}</span>
-                            </div>
-                            <div className={styles.diff}>
-                              与学生位次差 <strong>{rankGap.text}</strong>
-                              <br />
-                              学生 {formatRankValue(studentRankForDecision)} / 修正 {formatRankValue(adjustedRank)}
-                            </div>
-                          </div>
-
-                          <div className={styles.signalGrid}>
-                            <MetricTile label="组最低" value={formatScoreRankValue(group.groupMinScore, group.groupMinRank)} note={formatGroupScoreLine(group)} />
-                            <MetricTile label="修正位次" value={formatRankValue(adjustedRank)} note={formatDynamicRank(group.dynamicGradient)} />
-                            <MetricTile label="招生计划" value={planChange.text} note={planChange.tone === 'down' ? '缩招需复核' : '按后端年份口径'} />
-                            <MetricTile label="专业" value={`${group.majorCount} 个 / ${group.selectableMajorCount} 可选`} note={anchor?.majorName ?? '-'} />
-                          </div>
-
-                          <div className={styles.dataEvidence}>
-                            <div className={styles.evidenceTitle}>数据依据</div>
-                            <div className={styles.evidenceGrid}>
-                              <EvidenceItem label="位次依据">
-                                排序位次 {formatRankValue(studentRankForDecision)}，修正位次 {formatRankValue(adjustedRank)}，{rankGap.text}。
-                              </EvidenceItem>
-                              <EvidenceItem label="计划变化">{planChange.text}</EvidenceItem>
-                              <EvidenceItem label="竞争变化">{formatCompetition(group)}；{formatSelectionCompetition(group)}</EvidenceItem>
-                              <EvidenceItem label="风险提示">
-                                {group.dynamicGradient?.reasons?.length
-                                  ? group.dynamicGradient.reasons.slice(0, 2).join('；')
-                                  : evidence.length ? evidence.slice(0, 2).join('；') : '按专业匹配排序'}
-                              </EvidenceItem>
-                            </div>
-                            {group.supplementary?.scope === 'UNIVERSITY_BATCH' ? (
-                              <div className={styles.noteRow}>
-                                <span className={styles.compareNote}>院校批次征集仅参考，不直接降低专业组风险</span>
+                              <button
+                                type="button"
+                                className={cx(styles.btn, styles.btnSmall)}
+                                onClick={() => hideGroup(group.groupKey)}
+                                title="不考虑此校（可恢复）"
+                                style={{ color: '#87867f' }}
+                              >
+                                ✕ 不考虑
+                              </button>
                               </div>
-                            ) : null}
+                            </div>
                           </div>
+
+                          <MetricStrip
+                            planCount={group.currentPlanCount}
+                            planDelta={group.planCountChange}
+                            postgradRate={group.university?.postgradRate}
+                            furtherStudyRate={group.university?.furtherStudyRate}
+                            employmentRate={group.university?.employmentRate}
+                            avgSalary={group.university?.avgSalary}
+                            satisfaction={group.university?.satisfactionOverall}
+                            satisfactionSample={group.university?.satisfactionCount}
+                            tuition={anchor?.tuition ?? null}
+                            duration={anchor?.duration ?? anchor?.standardDuration ?? null}
+                          />
 
                           <div className={styles.majorList}>
                             <CandidateMajorSection
                               title={MAJOR_SECTION_LABEL.RECOMMENDED}
                               section="RECOMMENDED"
                               majors={previewMajors}
+                              group={group}
+                              onAdd={addCandidateGroup}
+                              addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
                             />
-                            {expanded ? (
-                              <>
-                                <CandidateMajorSection
-                                  title={MAJOR_SECTION_LABEL.BACKUP}
-                                  section="BACKUP"
-                                  majors={majorSections.backup}
-                                />
-                                <CandidateMajorSection
-                                  title={MAJOR_SECTION_LABEL.RISK}
-                                  section="RISK"
-                                  majors={majorSections.risk}
-                                />
-                              </>
-                            ) : null}
                           </div>
 
-                          {expanded ? (
-                            <div className="mt-4">
-                              <Table
-                                rowKey="enrollmentPlanId"
-                                size="small"
-                                columns={majorColumns(group)}
-                                dataSource={group.majors}
-                                pagination={false}
-                                scroll={{ x: 900 }}
-                              />
-                            </div>
-                          ) : null}
+                          {expanded ? (() => {
+                            const currentTab = groupExpandTabs[group.groupKey] ?? 'majors';
+                            return (
+                              <>
+                                <div className={compareStyles.expandedTabs}>
+                                  <button
+                                    type="button"
+                                    className={`${compareStyles.expandedTab} ${currentTab === 'majors' ? compareStyles.active : ''}`}
+                                    onClick={() => setGroupExpandTab(group.groupKey, 'majors')}
+                                  >
+                                    完整专业（{group.majorCount}）
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`${compareStyles.expandedTab} ${currentTab === 'evidence' ? compareStyles.active : ''}`}
+                                    onClick={() => setGroupExpandTab(group.groupKey, 'evidence')}
+                                  >
+                                    数据依据 / 模型校验
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`${compareStyles.expandedTab} ${currentTab === 'school' ? compareStyles.active : ''}`}
+                                    onClick={() => setGroupExpandTab(group.groupKey, 'school')}
+                                  >
+                                    院校详情
+                                  </button>
+                                </div>
+                                <div className={compareStyles.expandedPanel}>
+                                  {currentTab === 'majors' ? (
+                                    <>
+                                      <CandidateMajorSection
+                                        title={MAJOR_SECTION_LABEL.BACKUP}
+                                        section="BACKUP"
+                                        majors={majorSections.backup}
+                                        group={group}
+                                        onAdd={addCandidateGroup}
+                                        addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
+                                      />
+                                      <CandidateMajorSection
+                                        title={MAJOR_SECTION_LABEL.RISK}
+                                        section="RISK"
+                                        majors={majorSections.risk}
+                                        group={group}
+                                        onAdd={addCandidateGroup}
+                                        addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
+                                      />
+                                      <div className="mt-4">
+                                        <Table
+                                          rowKey="enrollmentPlanId"
+                                          size="small"
+                                          columns={majorColumns(group)}
+                                          dataSource={group.majors}
+                                          pagination={false}
+                                          scroll={{ x: 900 }}
+                                        />
+                                      </div>
+                                    </>
+                                  ) : currentTab === 'evidence' ? (
+                                    <div className={styles.dataEvidence}>
+                                      <div className={styles.evidenceTitle}>数据依据</div>
+                                      <div className={styles.evidenceGrid}>
+                                        <EvidenceItem label="位次依据">
+                                          排序位次 {formatRankValue(studentRankForDecision)}，修正位次 {formatRankValue(adjustedRank)}，{rankGap.text}。
+                                        </EvidenceItem>
+                                        <EvidenceItem label="计划变化">{planChange.text}</EvidenceItem>
+                                        <EvidenceItem label="竞争变化">{formatCompetition(group)}；{formatSelectionCompetition(group)}</EvidenceItem>
+                                        <EvidenceItem label="风险提示">
+                                          {group.dynamicGradient?.reasons?.length
+                                            ? group.dynamicGradient.reasons.slice(0, 2).join('；')
+                                            : evidence.length ? evidence.slice(0, 2).join('；') : '按专业匹配排序'}
+                                        </EvidenceItem>
+                                      </div>
+                                      {group.supplementary?.scope === 'UNIVERSITY_BATCH' ? (
+                                        <div className={styles.noteRow}>
+                                          <span className={styles.compareNote}>院校批次征集仅参考，不直接降低专业组风险</span>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
+                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>办学层次</div>
+                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
+                                          {group.university?.is985 ? '985 工程 · ' : ''}
+                                          {group.university?.is211 ? '211 工程 · ' : ''}
+                                          {group.university?.isDoubleFirstClass ? '双一流建设高校 · ' : ''}
+                                          {group.university?.runningNature ?? '—'}
+                                        </div>
+                                      </div>
+                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
+                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>排名参考</div>
+                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
+                                          软科 #{group.university?.softRanking ?? '—'}
+                                        </div>
+                                      </div>
+                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
+                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>地理位置</div>
+                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
+                                          {group.university?.province ?? '—'}{group.university?.city ? ' · ' + group.university.city : ''}
+                                        </div>
+                                      </div>
+                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
+                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>升学就业</div>
+                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
+                                          {group.university?.postgradRate ? `保研 ${group.university.postgradRate}` : ''}
+                                          {group.university?.furtherStudyRate ? ` · 升学 ${group.university.furtherStudyRate}` : ''}
+                                          {group.university?.employmentRate ? ` · 就业 ${group.university.employmentRate}` : ''}
+                                          {group.university?.avgSalary ? ` · 月薪 ${group.university.avgSalary}` : ''}
+                                          {!group.university?.postgradRate && !group.university?.employmentRate ? '—' : ''}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })() : null}
                         </article>
                       );
                     })}
@@ -1724,6 +2100,44 @@ export default function GeneratePlanPage() {
             </section>
           </div>
         ) : null}
+      </Drawer>
+
+      {/* 浮动对比 bar */}
+      {compareSet.size > 0 ? (
+        <div className={compareStyles.compareBar}>
+          <span className={compareStyles.compareBarIcon}>⚖</span>
+          <div className={compareStyles.compareBarText}>
+            已选 <b>{compareSet.size}</b> / 4 项参与对比
+            <div className={compareStyles.compareBarNames}>
+              {Array.from(compareSet).map((key) => visibleGroups.find((g) => g.groupKey === key)?.universityName ?? '').filter(Boolean).join(' · ')}
+            </div>
+          </div>
+          <button className={compareStyles.compareBarBtnGhost} onClick={() => setCompareSet(new Set())}>
+            清空
+          </button>
+          <button
+            className={compareStyles.compareBarBtnPrimary}
+            disabled={compareSet.size < 2}
+            onClick={() => setCompareDrawerOpen(true)}
+          >
+            打开对比 →
+          </button>
+        </div>
+      ) : null}
+
+      {/* 对比 Drawer */}
+      <Drawer
+        open={compareDrawerOpen}
+        onClose={() => setCompareDrawerOpen(false)}
+        title={<span>⚖ 候选对比（{compareSet.size} 项）</span>}
+        width={typeof window !== 'undefined' ? Math.min(1180, window.innerWidth * 0.92) : 1100}
+        placement="right"
+      >
+        <ComparePanel
+          groups={Array.from(compareSet)
+            .map((key) => visibleGroups.find((g) => g.groupKey === key))
+            .filter((g): g is NonNullable<typeof g> => Boolean(g))}
+        />
       </Drawer>
     </div>
   );

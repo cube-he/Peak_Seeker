@@ -1,8 +1,27 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { QueryUniversityDto } from './dto/query-university.dto';
 import { AdmissionService } from '../admission/admission.service';
+import { getTier, classifyRank } from './rank-tier';
+
+/**
+ * 内存排序：NULL 恒沉底（不论升降序）。数值按大小比较，字符串按 zh-CN locale。
+ * 用于 findAll 的可空排序列（minRank/tier/softRank），规避 MariaDB 升序 NULL 排首。
+ */
+function sortRows<T>(rows: T[], field: string, order: 'asc' | 'desc'): T[] {
+  const dir = order === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const av = (a as any)[field];
+    const bv = (b as any)[field];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv), 'zh-CN') * dir;
+  });
+}
 
 @Injectable()
 export class UniversityService {
@@ -28,17 +47,18 @@ export class UniversityService {
       is211,
       sortBy = 'name',
       sortOrder = 'asc',
+      examType = '物理',
+      tierFilter,
+      userRank,
     } = query;
 
     const where: any = {};
-
     if (keyword) {
       where.OR = [
         { name: { contains: keyword } },
         { code: { contains: keyword } },
       ];
     }
-
     if (province) where.province = province;
     if (city) where.city = city;
     if (type) where.type = type;
@@ -49,35 +69,76 @@ export class UniversityService {
     if (is985 !== undefined) where.is985 = is985;
     if (is211 !== undefined) where.is211 = is211;
 
+    const isHistory = examType === '历史';
+    const minScoreField = isHistory ? 'minScoreHistory' : 'minScorePhysics';
+    const minRankField = isHistory ? 'minRankHistory' : 'minRankPhysics';
+    const predRankField = isHistory ? 'predRankHistory' : 'predRankPhysics';
+
+    // minRank / tier 排序映射到科类冗余字段；softRank 映射到 softRanking 列；其余沿用 university 标量字段
+    const orderByField =
+      sortBy === 'minRank' ? minRankField
+      : sortBy === 'tier' ? predRankField
+      : sortBy === 'softRank' ? 'softRanking'
+      : sortBy;
+
+    // 单条 university 行 -> 列表响应项：注入科类相关 latestAdmission / predictedMinRank，
+    // 并剥掉 6 个原始冗余列，避免泄漏到响应。
+    const shape = (u: any) => {
+      const {
+        minScorePhysics,
+        minRankPhysics,
+        minScoreHistory,
+        minRankHistory,
+        predRankPhysics,
+        predRankHistory,
+        ...rest
+      } = u;
+      const minScore = u[minScoreField];
+      const minRank = u[minRankField];
+      return {
+        ...rest,
+        latestAdmission: minScore != null ? { minScore, minRank } : null,
+        predictedMinRank: u[predRankField] ?? null,
+      };
+    };
+
+    // minRank/tier/softRank 对应可空列，MariaDB 升序下 NULL 排首；
+    // 这些排序与 tierFilter 一起走内存路径，用 sortRows 让 NULL 恒沉底。
+    const needsMemoryPath =
+      (tierFilter != null && userRank != null) ||
+      sortBy === 'minRank' || sortBy === 'tier' || sortBy === 'softRank';
+
+    if (needsMemoryPath) {
+      let rows = await this.prisma.university.findMany({ where });
+      if (tierFilter != null && userRank != null) {
+        rows = rows.filter((u: any) => {
+          const tier = getTier({ is985: u.is985, is211: u.is211, batch: u.level ?? '' });
+          return classifyRank(userRank, u[predRankField], tier, isHistory) === tierFilter;
+        });
+      }
+      rows = sortRows(rows, orderByField, sortOrder);
+      const total = rows.length;
+      const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
+      return {
+        data: pageRows.map(shape),
+        pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      };
+    }
+
+    // 常规路径：DB 排序 + 分页（仅用于 name/province/type 等非可空字段）
     const [data, total] = await Promise.all([
       this.prisma.university.findMany({
         where,
         skip: (page - 1) * pageSize,
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
-        include: {
-          admissionRecords: {
-            where: { year: new Date().getFullYear() - 1 },
-            take: 1,
-            orderBy: { year: 'desc' },
-          },
-        },
+        orderBy: { [orderByField]: sortOrder },
       }),
       this.prisma.university.count({ where }),
     ]);
 
     return {
-      data: data.map((u) => ({
-        ...u,
-        latestAdmission: u.admissionRecords[0] || null,
-        admissionRecords: undefined,
-      })),
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
+      data: data.map(shape),
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
     };
   }
 
@@ -198,13 +259,47 @@ export class UniversityService {
       where.year = { in: years };
     }
 
-    return this.prisma.admissionRecord.findMany({
-      where,
-      include: {
-        major: true,
+    const admissions: Array<Prisma.AdmissionRecordGetPayload<{ include: { major: true } }>> =
+      await this.prisma.admissionRecord.findMany({
+        where,
+        include: { major: true },
+        orderBy: [{ year: 'desc' }, { majorMinRank: 'asc' }],
+      });
+
+    // Fetch enrollment plan chip fields (majorRanking, disciplineEval, isNationalFeature)
+    // for each distinct majorId. We order by year desc so the first entry per major
+    // is the latest-year plan — used as the canonical chip source regardless of
+    // which admission year the caller is viewing.
+    const majorIds = Array.from(new Set(admissions.map((a) => a.majorId).filter(Boolean)));
+    const plans = majorIds.length > 0
+      ? await this.prisma.enrollmentPlan.findMany({
+          where: { universityId: id, majorId: { in: majorIds } },
+          orderBy: { year: 'desc' },
+          select: {
+            majorId: true,
+            year: true,
+            majorRanking: true,
+            disciplineEval: true,
+            isNationalFeature: true,
+          },
+        })
+      : [];
+
+    const latestPlanByMajor = new Map<number, typeof plans[0]>();
+    for (const p of plans) {
+      if (!latestPlanByMajor.has(p.majorId)) {
+        latestPlanByMajor.set(p.majorId, p);
+      }
+    }
+
+    return admissions.map((a) => ({
+      ...a,
+      extras: {
+        majorRanking: latestPlanByMajor.get(a.majorId)?.majorRanking ?? null,
+        disciplineEval: latestPlanByMajor.get(a.majorId)?.disciplineEval ?? null,
+        isNationalFeature: latestPlanByMajor.get(a.majorId)?.isNationalFeature ?? false,
       },
-      orderBy: [{ year: 'desc' }, { majorMinRank: 'asc' }],
-    });
+    }));
   }
 
   async getHotUniversities(limit?: number) {
@@ -290,32 +385,24 @@ export class UniversityService {
     const cached = await this.redis.getCache(cacheKey);
     if (cached) return cached;
 
-    const [provinces, types, levels, cities, grades] = await Promise.all([
+    const [provinces, types, levels, cities, grades, natures] = await Promise.all([
       this.prisma.university.groupBy({
-        by: ['province'],
-        _count: true,
-        where: { province: { not: null } },
+        by: ['province'], _count: true, where: { province: { not: null } },
       }),
       this.prisma.university.groupBy({
-        by: ['type'],
-        _count: true,
-        where: { type: { not: null } },
+        by: ['type'], _count: true, where: { type: { not: null } },
       }),
       this.prisma.university.groupBy({
-        by: ['level'],
-        _count: true,
-        where: { level: { not: null } },
+        by: ['level'], _count: true, where: { level: { not: null } },
       }),
       this.prisma.university.groupBy({
-        by: ['city'],
-        _count: true,
-        where: { city: { not: null } },
-        orderBy: { _count: { city: 'desc' } },
+        by: ['province', 'city'], _count: true, where: { city: { not: null } },
       }),
       this.prisma.university.groupBy({
-        by: ['grade'],
-        _count: true,
-        where: { grade: { not: null } },
+        by: ['grade'], _count: true, where: { grade: { not: null } },
+      }),
+      this.prisma.university.groupBy({
+        by: ['runningNature'], _count: true, where: { runningNature: { not: null } },
       }),
     ]);
 
@@ -323,8 +410,11 @@ export class UniversityService {
       provinces: provinces.map((p) => ({ value: p.province, count: p._count })),
       types: types.map((t) => ({ value: t.type, count: t._count })),
       levels: levels.map((l) => ({ value: l.level, count: l._count })),
-      cities: cities.map((c) => ({ value: c.city, count: c._count })),
+      cities: cities
+        .map((c) => ({ value: c.city!, count: c._count, province: c.province }))
+        .sort((a, b) => a.value.localeCompare(b.value, 'zh-CN')),
       grades: grades.map((g) => ({ value: g.grade, count: g._count })),
+      natures: natures.map((n) => ({ value: n.runningNature, count: n._count })),
     };
 
     await this.redis.setCache(cacheKey, filters, 86400);

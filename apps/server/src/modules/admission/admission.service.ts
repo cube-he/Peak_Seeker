@@ -1,6 +1,14 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { FindAggregatedDto } from './dto/find-aggregated.dto';
+import type {
+  AggregatedAdmissionResponse,
+  AggregatedAdmissionListItem,
+  AggregatedAdmissionDetail,
+  YearlyAdmissionData,
+  CurrentEnrollmentPlan,
+  SupplementaryInfo,
+} from '@volunteer-helper/shared';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -120,7 +128,7 @@ export class AdmissionService {
     };
   }
 
-  async findAggregated(dto: FindAggregatedDto) {
+  async findAggregated(dto: FindAggregatedDto): Promise<AggregatedAdmissionResponse> {
     const {
       score,
       rank,
@@ -132,8 +140,6 @@ export class AdmissionService {
       is985,
       is211,
       isDoubleFirstClass,
-      page = 1,
-      pageSize = 20,
     } = dto;
 
     if (score == null && rank == null) {
@@ -141,7 +147,7 @@ export class AdmissionService {
     }
 
     const scoreRange = range ?? 20;
-    const rankRange = range ?? 5000;
+    const rankRange = range ?? 30000;
 
     // 构建 where 条件
     const where: any = { province };
@@ -170,13 +176,10 @@ export class AdmissionService {
       if (isDoubleFirstClass) where.university.isDoubleFirstClass = true;
     }
 
-    // 查询所有年份的匹配记录（take: 10000 防 OOM）
     const records = await this.prisma.admissionRecord.findMany({
       where,
       select: {
         universityId: true,
-        majorId: true,
-        year: true,
         majorCode: true,
         majorName: true,
         groupCode: true,
@@ -185,12 +188,8 @@ export class AdmissionService {
         recruitType: true,
         majorMinScore: true,
         majorMinRank: true,
-        majorAvgScore: true,
-        majorAvgRank: true,
-        majorAdmissionCount: true,
         groupMinScore: true,
         groupMinRank: true,
-        groupAdmissionCount: true,
         university: {
           select: {
             id: true,
@@ -220,20 +219,18 @@ export class AdmissionService {
       take: 10000,
     });
 
-    // 按 (universityId, majorCode, groupCode, batch, recruitType) 分组
+    // 按 (universityId, majorCode, groupCode, batch, recruitType, subjects) 分组。
+    // subjects 加入分组键，避免物理/历史记录被并成一行。
     const groups = new Map<string, {
       university: any;
       major: any;
-      majorId: number;
       majorCode: string;
       majorName: string;
       groupCode: string;
       batch: string;
       subjects: string;
       recruitType: string;
-      yearlyData: any[];
-      currentPlan: any;
-      supplementary: any;
+      yearlyData: { majorMinScore: number | null; majorMinRank: number | null; groupMinScore: number | null; groupMinRank: number | null }[];
     }>();
 
     for (const record of records) {
@@ -243,13 +240,13 @@ export class AdmissionService {
         record.groupCode,
         record.batch,
         record.recruitType,
+        record.subjects,
       ].join(':');
 
       if (!groups.has(key)) {
         groups.set(key, {
           university: record.university,
           major: record.major,
-          majorId: record.majorId,
           majorCode: record.majorCode,
           majorName: record.majorName,
           groupCode: record.groupCode,
@@ -257,25 +254,18 @@ export class AdmissionService {
           subjects: record.subjects,
           recruitType: record.recruitType,
           yearlyData: [],
-          currentPlan: null,
-          supplementary: null,
         });
       }
 
       groups.get(key)!.yearlyData.push({
-        year: record.year,
         majorMinScore: record.majorMinScore,
         majorMinRank: record.majorMinRank,
-        majorAvgScore: record.majorAvgScore,
-        majorAvgRank: record.majorAvgRank,
-        majorAdmissionCount: record.majorAdmissionCount,
         groupMinScore: record.groupMinScore,
         groupMinRank: record.groupMinRank,
-        groupAdmissionCount: record.groupAdmissionCount,
       });
     }
 
-    // 按"最近年份最佳可用分数/位次"排序
+    // 按"最近年份最佳可用分数/位次"排序（取消分页，整段返回）
     const allGroups = Array.from(groups.values());
     allGroups.sort((a, b) => {
       if (score != null) {
@@ -288,150 +278,148 @@ export class AdmissionService {
       return (aRank ?? Infinity) - (bRank ?? Infinity); // 按位次升序
     });
 
-    const total = allGroups.length;
-    const paginatedGroups = allGroups.slice((page - 1) * pageSize, page * pageSize);
+    const limited = allGroups.slice(0, 500);
 
-    // 仅为当前页的项目查询招生计划
-    if (paginatedGroups.length > 0) {
-      const uniIds = [...new Set(paginatedGroups.map((g) => g.university.id))];
-      const latestPlanYear = new Date().getFullYear();
+    // 注入 predictedMinRank — 同一专业组的所有专业共享一条预测。
+    const targetYear = getTargetYear();
+    const preds = limited.length
+      ? await this.prisma.rankPrediction.findMany({
+          where: {
+            targetYear,
+            OR: limited.map((g) => ({
+              universityId: g.university.id,
+              groupCode: g.groupCode,
+              batch: g.batch,
+              recruitType: g.recruitType,
+              subjects: g.subjects,
+            })),
+          },
+        })
+      : [];
 
-      const plans = await this.prisma.enrollmentPlan.findMany({
-        where: {
-          province,
-          year: latestPlanYear,
-          universityId: { in: uniIds },
-          ...(batch && { batch }),
-          ...(subjects && { subjects }),
-        },
-        select: {
-          universityId: true,
-          majorCode: true,
-          groupCode: true,
-          batch: true,
-          recruitType: true,
-          majorName: true,
-          planCount: true,
-          tuition: true,
-          duration: true,
-          subjectRequirements: true,
-          disciplineEval: true,
-          majorRanking: true,
-          majorHonor: true,
-          localMasterPoint: true,
-          localDoctoralPoint: true,
-          isNew: true,
-          isSinoForeign: true,
-          planNotes: true,
-        },
-      });
-
-      // 用 Map 匹配招生计划到分组
-      const planMap = new Map<string, any>();
-      for (const plan of plans) {
-        const key = [
-          plan.universityId,
-          plan.majorCode,
-          plan.groupCode,
-          plan.batch,
-          plan.recruitType,
-        ].join(':');
-        planMap.set(key, plan);
-      }
-
-      for (const group of paginatedGroups) {
-        const key = [
-          group.university.id,
-          group.majorCode,
-          group.groupCode,
-          group.batch,
-          group.recruitType,
-        ].join(':');
-        group.currentPlan = planMap.get(key) ?? null;
-      }
-
-      // 查询征集志愿摘要（按 universityId + batch 维度）
-      const suppSummaries = await this.prisma.supplementarySummary.findMany({
-        where: {
-          province,
-          universityId: { in: uniIds },
-          ...(batch && { batch }),
-        },
-        select: {
-          universityId: true,
-          batch: true,
-          year: true,
-          totalRounds: true,
-          totalPlanCount: true,
-          supplementaryRate: true,
-        },
-      });
-
-      // 按 (universityId, batch) 取最近年份的征集摘要
-      const suppMap = new Map<string, any>();
-      for (const s of suppSummaries) {
-        const sKey = `${s.universityId}:${s.batch}`;
-        const existing = suppMap.get(sKey);
-        if (!existing || s.year > existing.year) {
-          suppMap.set(sKey, s);
-        }
-      }
-
-      for (const group of paginatedGroups) {
-        const sKey = `${group.university.id}:${group.batch}`;
-        const supp = suppMap.get(sKey);
-        if (supp) {
-          group.supplementary = {
-            totalRounds: supp.totalRounds,
-            totalPlanCount: supp.totalPlanCount,
-            supplementaryRate: supp.supplementaryRate ? Number(supp.supplementaryRate) : null,
-          };
-        }
-      }
-
-      // Inject predictedMinRank — multi-to-one join (same prediction shared across
-      // all majors in the same group). spec-0 ETL writes one row per
-      // (uniId, groupCode, batch, recruitType, subjects, targetYear).
-      const targetYear = getTargetYear();
-
-      const preds = await this.prisma.rankPrediction.findMany({
-        where: {
-          targetYear,
-          OR: paginatedGroups.map((g) => ({
-            universityId: g.university.id,
-            groupCode: g.groupCode,
-            batch: g.batch,
-            recruitType: g.recruitType,
-            subjects: g.subjects,
-          })),
-        },
-      });
-
-      const predMap = new Map<string, (typeof preds)[number]>();
-      for (const p of preds) {
-        const k = [p.universityId, p.groupCode, p.batch, p.recruitType, p.subjects].join('|');
-        predMap.set(k, p);
-      }
-
-      for (const g of paginatedGroups) {
-        const k = [g.university.id, g.groupCode, g.batch, g.recruitType, g.subjects].join('|');
-        const pred = predMap.get(k);
-        (g as any).predictedMinRank = pred
-          ? {
-              point: pred.pointRank,
-              conservative: pred.conservativeRank,
-              optimistic: pred.optimisticRank,
-              basisYears: pred.basisYears as number[],
-              confidence: pred.confidence,
-              targetYear: pred.targetYear,
-            }
-          : null;
-      }
+    const predMap = new Map<string, (typeof preds)[number]>();
+    for (const p of preds) {
+      const k = [p.universityId, p.groupCode, p.batch, p.recruitType, p.subjects].join('|');
+      predMap.set(k, p);
     }
 
+    const data: AggregatedAdmissionListItem[] = limited.map((g) => {
+      const k = [g.university.id, g.groupCode, g.batch, g.recruitType, g.subjects].join('|');
+      const pred = predMap.get(k);
+      return {
+        university: g.university,
+        major: g.major,
+        majorCode: g.majorCode,
+        majorName: g.majorName,
+        groupCode: g.groupCode,
+        batch: g.batch,
+        subjects: g.subjects,
+        recruitType: g.recruitType,
+        predictedMinRank: pred
+          ? {
+              point: pred.pointRank!,
+              conservative: pred.conservativeRank!,
+              optimistic: pred.optimisticRank!,
+              basisYears: pred.basisYears as number[],
+              confidence: pred.confidence as 'high' | 'medium' | 'low',
+              targetYear: pred.targetYear,
+            }
+          : null,
+      };
+    });
+
+    return { data, total: data.length };
+  }
+
+  async findAggregatedDetail(query: {
+    universityId: number;
+    majorCode: string;
+    groupCode: string;
+    batch: string;
+    recruitType: string;
+    province: string;
+    subjects: string;
+  }): Promise<AggregatedAdmissionDetail> {
+    const { universityId, majorCode, groupCode, batch, recruitType, province, subjects } = query;
+
+    const records = await this.prisma.admissionRecord.findMany({
+      where: { universityId, majorCode, groupCode, batch, recruitType, province, subjects },
+      select: {
+        year: true,
+        majorMinScore: true,
+        majorMinRank: true,
+        majorAvgScore: true,
+        majorAvgRank: true,
+        majorAdmissionCount: true,
+        groupMinScore: true,
+        groupMinRank: true,
+        groupAdmissionCount: true,
+      },
+      orderBy: { year: 'desc' },
+    });
+
+    const yearlyData: YearlyAdmissionData[] = records.map((r) => ({
+      year: r.year,
+      majorMinScore: r.majorMinScore,
+      majorMinRank: r.majorMinRank,
+      majorAvgScore: r.majorAvgScore,
+      majorAvgRank: r.majorAvgRank,
+      majorAdmissionCount: r.majorAdmissionCount,
+      groupMinScore: r.groupMinScore,
+      groupMinRank: r.groupMinRank,
+      groupAdmissionCount: r.groupAdmissionCount,
+    }));
+
+    // 当年招生计划：取该组合最新年份一条
+    const planRow = await this.prisma.enrollmentPlan.findFirst({
+      where: { universityId, majorCode, groupCode, batch, recruitType, province, subjects },
+      orderBy: { year: 'desc' },
+      select: {
+        planCount: true,
+        tuition: true,
+        duration: true,
+        subjectRequirements: true,
+        disciplineEval: true,
+        majorRanking: true,
+        majorHonor: true,
+        localMasterPoint: true,
+        localDoctoralPoint: true,
+        isNew: true,
+        isSinoForeign: true,
+        planNotes: true,
+      },
+    });
+    const currentPlan: CurrentEnrollmentPlan | null = planRow ?? null;
+
+    // 征集志愿摘要：按 (university, batch) 维度取最新年份一条
+    const suppRow = await this.prisma.supplementarySummary.findFirst({
+      where: { universityId, province, batch },
+      orderBy: { year: 'desc' },
+      select: {
+        totalRounds: true,
+        totalPlanCount: true,
+        supplementaryRate: true,
+      },
+    });
+    const supplementary: SupplementaryInfo | null = suppRow
+      ? {
+          totalRounds: suppRow.totalRounds,
+          totalPlanCount: suppRow.totalPlanCount,
+          supplementaryRate:
+            suppRow.supplementaryRate != null ? Number(suppRow.supplementaryRate) : null,
+        }
+      : null;
+
     return {
-      data: paginatedGroups,
-      pagination: { page, pageSize, total },
+      universityId,
+      majorCode,
+      groupCode,
+      batch,
+      recruitType,
+      subjects,
+      yearlyData,
+      currentPlan,
+      supplementary,
     };
   }
 

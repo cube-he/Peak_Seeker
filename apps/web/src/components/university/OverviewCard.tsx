@@ -45,7 +45,7 @@ export default function OverviewCard(p: Props) {
   return (
     <Card title={<><BankOutlined className="mr-1" />概况</>} size="small">
       {items.length > 0 && (
-        <Descriptions column={{ xs: 1, sm: 2 }} size="small">
+        <Descriptions column={1} size="small">
           {items.map((it) => (
             <Descriptions.Item key={it.label} label={it.label}>
               {it.value}

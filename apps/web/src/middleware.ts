@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Routes accessible without authentication
-const PUBLIC_ROUTES = ['/', '/login', '/register'];
+const PUBLIC_ROUTES = ['/login', '/register'];
 const PUBLIC_PREFIXES = ['/share/', '/universities', '/majors', '/scores'];
 
 // Role-based route prefixes
@@ -55,6 +55,20 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api') ||
     pathname.includes('.')
   ) {
+    return NextResponse.next();
+  }
+
+  // Home page: logged-in users go to their role dashboard; visitors see the landing.
+  if (pathname === '/') {
+    const homeToken =
+      request.cookies.get('access_token')?.value ||
+      request.headers.get('authorization')?.replace('Bearer ', '');
+    if (homeToken) {
+      const homeRole = getRoleFromToken(homeToken);
+      if (homeRole && ROLE_DASHBOARDS[homeRole]) {
+        return NextResponse.redirect(new URL(ROLE_DASHBOARDS[homeRole], request.url));
+      }
+    }
     return NextResponse.next();
   }
 

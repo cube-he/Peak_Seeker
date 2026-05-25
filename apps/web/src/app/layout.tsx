@@ -31,6 +31,9 @@ const inter = localFont({
 export const metadata: Metadata = {
   title: '智愿家 Zhiyuanjia | 你的升学智囊',
   description: '基于 AI 与大数据的升学决策平台，让每一个志愿都被认真对待。智慧·志愿·专家。',
+  icons: {
+    icon: '/images/favicon.png',
+  },
 };
 
 export default function RootLayout({

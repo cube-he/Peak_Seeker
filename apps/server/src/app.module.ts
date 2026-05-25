@@ -33,6 +33,7 @@ import { GeoModule } from './modules/geo/geo.module';
 import { PolicyModule } from './modules/policy/policy.module';
 import { BatchConfigModule } from './modules/batch-config/batch-config.module';
 import { PlanCandidateModule } from './modules/plan-candidate/plan-candidate.module';
+import { StatsModule } from './modules/stats/stats.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { PlanCandidateModule } from './modules/plan-candidate/plan-candidate.mod
     AlgorithmConfigModule,
     BatchConfigModule,
     PlanCandidateModule,
+    StatsModule,
   ],
   providers: [
     // 全局应用限流守卫

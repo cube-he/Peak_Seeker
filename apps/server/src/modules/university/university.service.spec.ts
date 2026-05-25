@@ -232,3 +232,166 @@ describe('getPickerOptions', () => {
     expect(result.map(r => r.name)).toEqual(['安庆师范大学', '北京大学', '清华大学']);
   });
 });
+
+describe('UniversityService.findAll', () => {
+  const setup = (universities: any[]) => {
+    const prisma = {
+      university: {
+        findMany: jest.fn().mockResolvedValue(universities),
+        count: jest.fn().mockResolvedValue(universities.length),
+      },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const svc = new UniversityService(prisma as any, redis as any, admissionService as any);
+    return { svc, prisma };
+  };
+
+  const uni = (over: any = {}) => ({
+    id: 1, name: 'X', is985: false, is211: false, level: '本科',
+    minScorePhysics: 600, minRankPhysics: 12000,
+    minScoreHistory: 560, minRankHistory: 8000,
+    predRankPhysics: 11000, predRankHistory: 7500,
+    ...over,
+  });
+
+  it('builds latestAdmission and predictedMinRank from physics columns by default', async () => {
+    const { svc } = setup([uni()]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20 } as any);
+    expect(result.data[0].latestAdmission).toEqual({ minScore: 600, minRank: 12000 });
+    expect(result.data[0].predictedMinRank).toBe(11000);
+  });
+
+  it('uses history columns when examType is 历史', async () => {
+    const { svc } = setup([uni()]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20, examType: '历史' } as any);
+    expect(result.data[0].latestAdmission).toEqual({ minScore: 560, minRank: 8000 });
+    expect(result.data[0].predictedMinRank).toBe(7500);
+  });
+
+  it('latestAdmission is null when the exam-type score column is null', async () => {
+    const { svc } = setup([uni({ minScorePhysics: null, minRankPhysics: null })]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20 } as any);
+    expect(result.data[0].latestAdmission).toBeNull();
+  });
+
+  it('sortBy=minRank sorts by exam-type rank, nulls last', async () => {
+    const { svc } = setup([
+      uni({ id: 1, minRankPhysics: 12000 }),
+      uni({ id: 2, minRankPhysics: null }),
+      uni({ id: 3, minRankPhysics: 5000 }),
+    ]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20, sortBy: 'minRank', sortOrder: 'asc' } as any);
+    expect(result.data.map((u: any) => u.id)).toEqual([3, 1, 2]);
+  });
+
+  it('sortBy=softRank sorts by softRanking, nulls last', async () => {
+    const { svc } = setup([
+      uni({ id: 1, softRanking: 50 }),
+      uni({ id: 2, softRanking: null }),
+      uni({ id: 3, softRanking: 10 }),
+    ]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20, sortBy: 'softRank', sortOrder: 'asc' } as any);
+    expect(result.data.map((u: any) => u.id)).toEqual([3, 1, 2]);
+  });
+
+  it('does not leak raw redundancy columns into the response', async () => {
+    const { svc } = setup([uni()]);
+    const result: any = await svc.findAll({ page: 1, pageSize: 20 } as any);
+    expect(result.data[0].minRankPhysics).toBeUndefined();
+    expect(result.data[0].predRankPhysics).toBeUndefined();
+  });
+
+  it('tierFilter classifies in memory and returns only the matched tier', async () => {
+    // 985 校 stable 阈值 1500；userRank 12000：
+    //   id1 predRank 11000 → diff -1000 → stable
+    //   id2 predRank 3000  → diff -9000 → rush
+    const { svc, prisma } = setup([
+      uni({ id: 1, is985: true, predRankPhysics: 11000 }),
+      uni({ id: 2, is985: true, predRankPhysics: 3000 }),
+    ]);
+    const result: any = await svc.findAll({
+      page: 1, pageSize: 20, tierFilter: 'stable', userRank: 12000,
+    } as any);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].id).toBe(1);
+    expect(result.pagination.total).toBe(1);
+    expect(prisma.university.findMany.mock.calls[0][0].skip).toBeUndefined();
+  });
+});
+
+describe('UniversityService.findAdmissions extras transcription', () => {
+  const buildService = (admissions: any[], plans: any[]) => {
+    const prisma = {
+      admissionRecord: {
+        findMany: jest.fn().mockResolvedValue(admissions),
+      },
+      enrollmentPlan: {
+        findMany: jest.fn().mockResolvedValue(plans),
+      },
+    };
+    const redis = { getCache: jest.fn(), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const service = new UniversityService(prisma as any, redis as any, admissionService as any);
+    return { service, prisma };
+  };
+
+  it('attaches latest-year enrollmentPlan chip fields to each admission', async () => {
+    const mockAdmissions = [
+      { id: 1, universityId: 10, majorId: 100, year: 2024, majorMinScore: 600, major: { id: 100, name: '计算机' } },
+      { id: 2, universityId: 10, majorId: 101, year: 2024, majorMinScore: 590, major: { id: 101, name: '软工' } },
+    ];
+    const mockPlans = [
+      { universityId: 10, majorId: 100, year: 2024, majorRanking: '12', disciplineEval: '软科：A+', isNationalFeature: true },
+      { universityId: 10, majorId: 100, year: 2023, majorRanking: '15', disciplineEval: '软科：A', isNationalFeature: false },
+      { universityId: 10, majorId: 101, year: 2022, majorRanking: '25', disciplineEval: null,       isNationalFeature: false },
+    ];
+
+    const { service } = buildService(mockAdmissions, mockPlans);
+    const result: any[] = await service.findAdmissions(10);
+
+    expect(result[0].extras).toEqual({ majorRanking: '12', disciplineEval: '软科：A+', isNationalFeature: true });
+    expect(result[1].extras).toEqual({ majorRanking: '25', disciplineEval: null, isNationalFeature: false });
+  });
+
+  it('attaches empty extras when no enrollmentPlan rows for that major', async () => {
+    const mockAdmissions = [{ id: 1, universityId: 10, majorId: 999, year: 2024, major: { id: 999, name: '冷门' } }];
+
+    const { service } = buildService(mockAdmissions, []);
+    const result: any[] = await service.findAdmissions(10);
+
+    expect(result[0].extras).toEqual({ majorRanking: null, disciplineEval: null, isNationalFeature: false });
+  });
+});
+
+describe('UniversityService.getFilters', () => {
+  const buildService = () => {
+    const prisma = {
+      university: {
+        groupBy: jest.fn()
+          .mockResolvedValueOnce([{ province: '四川', _count: 100 }])            // provinces
+          .mockResolvedValueOnce([{ type: '综合', _count: 50 }])                 // types
+          .mockResolvedValueOnce([{ level: '本科', _count: 200 }])               // levels
+          .mockResolvedValueOnce([{ province: '四川', city: '成都', _count: 80 }]) // cities
+          .mockResolvedValueOnce([{ grade: '一线城市', _count: 10 }])             // grades
+          .mockResolvedValueOnce([{ runningNature: '公办', _count: 150 }]),       // natures
+      },
+    };
+    const redis = { getCache: jest.fn().mockResolvedValue(null), setCache: jest.fn().mockResolvedValue(undefined) };
+    const admissionService = { getTargetYear: jest.fn() };
+    const svc = new UniversityService(prisma as any, redis as any, admissionService as any);
+    return { svc };
+  };
+
+  it('tags each city with its province', async () => {
+    const { svc } = buildService();
+    const filters: any = await svc.getFilters();
+    expect(filters.cities[0]).toEqual({ value: '成都', count: 80, province: '四川' });
+  });
+
+  it('exposes natures from runningNature groupBy', async () => {
+    const { svc } = buildService();
+    const filters: any = await svc.getFilters();
+    expect(filters.natures[0]).toEqual({ value: '公办', count: 150 });
+  });
+});

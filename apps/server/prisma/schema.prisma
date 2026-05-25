@@ -224,7 +224,7 @@ model University {
   grade              String? @map("university_grade") @db.VarChar(50)
 
   // 学科建设
-  disciplineEvaluationLevel String? @map("discipline_evaluation_level") @db.VarChar(50)
+  disciplineEvaluationLevel String? @map("discipline_evaluation_level") @db.Text
   hasMasterProgram          Boolean @default(false) @map("has_master_program")
   hasDoctoralProgram        Boolean @default(false) @map("has_doctoral_program")
   masterProgramCount        Int?    @map("master_program_count")
@@ -248,6 +248,10 @@ model University {
   // 软科排名
   softRating  String? @map("soft_rating") @db.VarChar(50)
   softRanking Int?    @map("soft_ranking")
+  softRankList     String? @map("soft_rank_list") @db.VarChar(20)
+  softCategory     String? @map("soft_category") @db.VarChar(50)
+  softCategoryRank Int?    @map("soft_category_rank")
+  softRankYear     Int?    @map("soft_rank_year") @db.SmallInt
 
   // 人口统计
   maleRatio   Int?    @map("male_ratio")
@@ -289,6 +293,39 @@ model University {
   geoSource    String?   @map("geo_source") @db.VarChar(50)
   geoUpdatedAt DateTime? @map("geo_updated_at")
 
+  // 院校位次冗余字段（科类拆分，由 apps/server/scripts/backfill-university-ranks.ts 回填）
+  minScorePhysics Int? @map("min_score_physics")
+  minRankPhysics  Int? @map("min_rank_physics")
+  minScoreHistory Int? @map("min_score_history")
+  minRankHistory  Int? @map("min_rank_history")
+  predRankPhysics Int? @map("pred_rank_physics")
+  predRankHistory Int? @map("pred_rank_history")
+
+  // 院校基础补充（来自 01_基础名录）
+  firstClassCategory          String?  @map("first_class_category") @db.VarChar(50)
+  hasGradSchool               Boolean  @default(false) @map("has_grad_school")
+  hasRecommendQualification   Boolean  @default(false) @map("has_recommend_qualification")
+  is101Plan                   Boolean  @default(false) @map("is_101_plan")
+  isQiangji                   Boolean  @default(false) @map("is_qiangji")
+  website                     String?  @db.VarChar(500)
+  admissionWebsite            String?  @map("admission_website") @db.VarChar(500)
+  admissionPhone              String?  @map("admission_phone") @db.VarChar(200)
+  admissionEmail              String?  @map("admission_email") @db.VarChar(200)
+  cityTier                    String?  @map("city_tier") @db.VarChar(20)
+  universityTier              String?  @map("university_tier") @db.VarChar(50)
+  universityBackground        String?  @map("university_background") @db.Text
+
+  // 学科建设补充（来自 02_详情扩展）
+  firstClassDisciplineCount   Int?     @map("first_class_discipline_count")
+  nationalFeatureMajorCount   Int?     @map("national_feature_major_count")
+  nationalKeyDisciplineCount  Int?     @map("national_key_discipline_count")
+  description                 String?  @db.Text
+  heatScore                   Int?     @map("heat_score")
+  bannerUrl                   String?  @map("banner_url") @db.VarChar(500)
+
+  // 多维排名补充（来自 03_历年排名）
+  rankingTimes                Int?     @map("ranking_times")
+
   campuses  UniversityCampus[]
   geoIssues UniversityGeoIssue[]
 
@@ -304,6 +341,18 @@ model University {
   @@index([isDoubleFirstClass])
   @@index([is985])
   @@index([is211])
+  @@index([minRankPhysics])
+  @@index([minRankHistory])
+  @@index([predRankPhysics])
+  @@index([predRankHistory])
+  @@index([softRanking])
+  @@index([heatScore])
+  @@index([rankingAlumni])
+  @@index([rankingQS])
+  @@index([rankingUSNews])
+  @@index([rankingTimes])
+  @@index([aClassDisciplineCount])
+  @@index([firstClassDisciplineCount])
   @@map("universities")
 }
 

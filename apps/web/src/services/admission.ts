@@ -1,7 +1,8 @@
 import api from './api';
 import type {
-  AggregatedAdmissionQuery,
   AggregatedAdmissionResponse,
+  AggregatedAdmissionDetail,
+  AggregatedAdmissionDetailQuery,
   LookupPredictionsRequest,
   LookupPredictionsResponse,
 } from '@volunteer-helper/shared';
@@ -20,6 +21,13 @@ export interface AdmissionByRankParams {
   range?: number;
 }
 
+export interface GetAggregatedParams {
+  rank: number;
+  province: string;
+  subjects: string;
+  range?: number;
+}
+
 export const admissionService = {
   getByScore(params: AdmissionByScoreParams): Promise<any> {
     return api.get('/admissions/by-score', { params }) as any;
@@ -33,8 +41,14 @@ export const admissionService = {
     return api.get('/admissions/statistics', { params: { province, year } }) as any;
   },
 
-  getAggregated(params: AggregatedAdmissionQuery): Promise<AggregatedAdmissionResponse> {
+  getAggregated(params: GetAggregatedParams): Promise<AggregatedAdmissionResponse> {
     return api.get('/admissions/aggregated', { params }) as any;
+  },
+
+  getAggregatedDetail(
+    query: AggregatedAdmissionDetailQuery,
+  ): Promise<AggregatedAdmissionDetail> {
+    return api.get('/admissions/aggregated/detail', { params: query }) as any;
   },
 
   lookupPredictions(req: LookupPredictionsRequest): Promise<LookupPredictionsResponse> {
