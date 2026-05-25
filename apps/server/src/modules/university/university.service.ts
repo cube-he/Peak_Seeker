@@ -16,6 +16,9 @@ export interface MapUniversity {
   district: string | null;
   level: string | null;
   type: string | null;
+  // 办学性质:公办 / 民办 / 中外合作办学 等。DB 字段叫 runningNature,
+  // 给前端时 alias 成 nature 跟 list 接口 / filter store 命名保持一致。
+  nature: string | null;
   is985: boolean;
   is211: boolean;
   isDoubleFirstClass: boolean;
@@ -228,7 +231,7 @@ export class UniversityService {
       where,
       select: {
         id: true, name: true, province: true, city: true,
-        level: true, type: true,
+        level: true, type: true, runningNature: true,
         is985: true, is211: true, isDoubleFirstClass: true,
         campuses: {
           where: { geoStatus: 'verified', isMain: true, latitude: { not: null } },
@@ -260,6 +263,7 @@ export class UniversityService {
           district: c.district,
           level: u.level,
           type: u.type,
+          nature: u.runningNature,
           is985: u.is985,
           is211: u.is211,
           isDoubleFirstClass: u.isDoubleFirstClass,
