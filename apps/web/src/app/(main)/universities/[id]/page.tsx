@@ -296,6 +296,7 @@ export default function UniversityDetailPage() {
             </h2>
             {(() => {
               const raw = u.description as string | null | undefined;
+              const website = u.website as string | null | undefined;
               if (!raw) {
                 return (
                   <p className="m-0 mt-3 text-sm leading-relaxed text-text-tertiary">
@@ -304,14 +305,32 @@ export default function UniversityDetailPage() {
                 );
               }
               // 数据用 "　　"（CJK 全角空格）做段落分隔；按它 split 成段落数组,每段 <p>
-              // 同时去掉每段前后空白和段首残留的全角空格。
               const paras = raw.split(/[　\s]{2,}/).map((s) => s.trim()).filter(Boolean);
+              // 截断启发式：长度 < 500 且结尾不是句号/感叹号/问号 → 数据源被截了
+              const looksTruncated = raw.length < 500 && !/[。！？.!?]$/.test(raw.trim());
               return (
-                <div className="mt-3 space-y-3 text-sm leading-[1.85] text-text-tertiary">
-                  {paras.map((p, i) => (
-                    <p key={i} className="m-0 indent-[2em]">{p}</p>
-                  ))}
-                </div>
+                <>
+                  <div className="mt-3 space-y-3 text-sm leading-[1.85] text-text-tertiary">
+                    {paras.map((p, i) => (
+                      <p key={i} className="m-0 indent-[2em]">{p}</p>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex items-center gap-3 text-xs text-text-tertiary">
+                    {looksTruncated && (
+                      <span className="text-amber-700">⚠ 简介数据不完整</span>
+                    )}
+                    {website && (
+                      <a
+                        href={website.startsWith('http') ? website : `https://${website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                      >
+                        访问学校官网 ↗
+                      </a>
+                    )}
+                  </div>
+                </>
               );
             })()}
           </section>
