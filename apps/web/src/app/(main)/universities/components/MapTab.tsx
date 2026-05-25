@@ -479,14 +479,15 @@ export function MapTab() {
 
         map.add(labelsLayer);
         labelsLayerRef.current = labelsLayer;
-        // 用 areaNode 的 center + 固定 zoom,稳定可控(比 setBounds 在 layout
-        // 收敛中容易算偏)
+        // 用 areaNode 的 center + 固定 zoom。immediate=true 跳过 AMap 动画——
+        // 浏览器实测 animate 版本会被中途覆盖(setZoom 缓动从 4→7 期间会被
+        // 后续某个 effect 重置回 4 附近)。瞬间 jump 反而稳定。
         try {
           const props = areaNode.getProps?.();
           const center = props?.center ?? props?.centroid;
           if (center) {
-            programmaticZoomUntilRef.current = Date.now() + 800;
-            map.setZoomAndCenter(TARGET_ZOOM[current.level], center, false);
+            programmaticZoomUntilRef.current = Date.now() + 200;
+            map.setZoomAndCenter(TARGET_ZOOM[current.level], center, true);
           }
         } catch (e) {
           console.warn('setZoomAndCenter failed (markers)', current, e);
@@ -543,9 +544,9 @@ export function MapTab() {
         countMarkersRef.current.push(marker);
       });
 
-      // 视野控制:
-      //   - 全国:即时还原 zoom+center(无动画)
-      //   - 省/市:平滑 fly to (固定 zoom + areaNode center,比 setBounds 稳)
+      // 视野控制:用 setZoomAndCenter(..., immediately=true) 跳过 AMap 动画。
+      // 浏览器实测 animate 版本中途会被覆盖(可能 explorer.renderSubFeatures
+      // 内部干扰)。瞬间 jump 反而稳定可靠。
       if (current.level === 'country') {
         programmaticZoomUntilRef.current = Date.now() + 200;
         map.setZoomAndCenter(ROOT_ZOOM, ROOT_CENTER, true);
@@ -554,8 +555,8 @@ export function MapTab() {
           const props = areaNode.getProps?.();
           const center = props?.center ?? props?.centroid;
           if (center) {
-            programmaticZoomUntilRef.current = Date.now() + 800;
-            map.setZoomAndCenter(TARGET_ZOOM[current.level], center, false);
+            programmaticZoomUntilRef.current = Date.now() + 200;
+            map.setZoomAndCenter(TARGET_ZOOM[current.level], center, true);
           }
         } catch (e) {
           console.warn('setZoomAndCenter failed (polygon)', current, e);
