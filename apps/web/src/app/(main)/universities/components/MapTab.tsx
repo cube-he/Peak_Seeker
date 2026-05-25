@@ -514,10 +514,10 @@ export function MapTab() {
           zIndex: 200,
         });
         marker.on('click', (e: any) => {
-          // 过滤 AMap 在 marker re-create 时偶发 fire 的 synthetic click(没有
-          // originalEvent)。这种 synthetic click 会让 path 在 Effect 2 重渲后
-          // 莫名自动 push 一级,造成 cascade。只接受真实 user click(有 DOM event)。
-          if (!e?.originalEvent) {
+          // 过滤 AMap 在 marker re-create 时偶发 fire 的 synthetic click。
+          // AMap.Marker click event 真实 DOM event 字段名是 `originEvent`
+          // (不是 originalEvent — 之前 typo 让 user click 也被滤掉)。
+          if (!e?.originEvent) {
             console.log('[map] skip synthetic label click', { adcode: fAdcode, name: shortName });
             return;
           }
