@@ -1,75 +1,58 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Spin } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { universityService, type MapUniversity } from '@/services/university';
-import { loadAMap } from '@/components/university/campus-location/amap-loader';
+import {
+  loadAMap,
+  loadDistrictExplorer,
+} from '@/components/university/campus-location/amap-loader';
 import {
   useUniversityFilters,
   pickMapFilters,
 } from '@/stores/universityFilterStore';
 
 /**
- * 院校地图 Tab。流程:
- * 1. loadAMap() → 加载 AMap.MarkerCluster 插件
- * 2. 初始化地图(中国中心 zoom 5),一次性创建,filter 改不重建
- * 3. 拉 /universities/map(filter 联动)
- * 4. 数据到位后,创建 MarkerCluster:每点按类型分色,点 cluster 自动放大,
- *    点单 marker 弹 InfoWindow(校名 + 标签 + 详情链接)
+ * 院校地图 Tab — Batch 1:基于 AMapUI.DistrictExplorer 的全国视图。
+ * - 加载 adcode=100000(全国),renderSubFeatures 画 32 省 polygon
+ * - 每省 centroid 上叠数字标签 `省名 N`(N=该省院校数)
+ * - 点 polygon / 单 markers / 面包屑 在 Batch 2+3 接入
  */
 
-/** marker 按类型分色,见 getDotColor 注释 */
-function getDotColor(uni: MapUniversity): string {
-  // 优先级 985 > 211 > 双一流 > 本科 > 专科
-  if (uni.is985) return '#d4af37'; // 金
-  if (uni.is211) return '#9333ea'; // 紫
-  if (uni.isDoubleFirstClass) return '#0ea5e9'; // 蓝
-  if (uni.level === '专科') return '#f97316'; // 橙
-  return '#64748b'; // 灰(普通本科)
+// 把 "河北省" / "新疆维吾尔自治区" / "广西壮族自治区" 等行政全名 → 短名,
+// 跟 University.province (DB 里 "河北" / "新疆" / "广西") 匹配。
+// 后缀按长度倒序:更长的特殊后缀先匹配。
+const PROVINCE_SUFFIX_RE = /(壮族自治区|维吾尔自治区|回族自治区|特别行政区|自治区|省|市)$/;
+function normalizeProvinceName(full: string): string {
+  return full.replace(PROVINCE_SUFFIX_RE, '');
 }
 
-function buildDotHtml(color: string): string {
-  return `<div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>`;
+function aggregateByProvince(unis: MapUniversity[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const u of unis) {
+    if (!u.province) continue;
+    m.set(u.province, (m.get(u.province) ?? 0) + 1);
+  }
+  return m;
 }
 
-function buildInfoHtml(uni: MapUniversity): string {
-  const tags: string[] = [];
-  if (uni.is985) tags.push('985');
-  if (uni.is211) tags.push('211');
-  if (uni.isDoubleFirstClass) tags.push('双一流');
-  if (uni.type) tags.push(uni.type);
-  if (uni.level) tags.push(uni.level);
-
-  const location = [uni.province, uni.city, uni.district].filter(Boolean).join(' · ');
-  const tagHtml = tags
-    .map(
-      (t) =>
-        `<span style="display:inline-block;padding:1px 6px;margin-right:4px;font-size:11px;background:#f1f5f9;border-radius:3px;color:#475569">${escapeHtml(t)}</span>`,
-    )
-    .join('');
-
-  return `
-    <div style="min-width:200px;padding:4px 2px;font-family:inherit">
-      <div style="font-weight:600;font-size:14px;color:#0f172a;margin-bottom:4px">${escapeHtml(
-        uni.name,
-      )}</div>
-      <div style="font-size:11px;color:#64748b;margin-bottom:6px">${escapeHtml(location)}</div>
-      <div style="margin-bottom:8px">${tagHtml}</div>
-      <a href="/universities/${uni.id}"
-         style="display:inline-block;padding:4px 12px;font-size:12px;color:#fff;background:#0f172a;border-radius:4px;text-decoration:none">
-        查看详情
-      </a>
-    </div>
-  `;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+function buildCountLabel(name: string, count: number): string {
+  return `<div style="
+    padding:4px 10px;
+    border-radius:14px;
+    background:rgba(15,23,42,0.88);
+    color:#fff;
+    font-size:12px;
+    font-weight:500;
+    white-space:nowrap;
+    box-shadow:0 2px 6px rgba(0,0,0,0.25);
+    border:1px solid rgba(255,255,255,0.12);
+    pointer-events:none;
+  ">
+    <span>${name}</span>
+    <span style="margin-left:6px;opacity:0.85">${count}</span>
+  </div>`;
 }
 
 export function MapTab() {
@@ -78,38 +61,48 @@ export function MapTab() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const clusterRef = useRef<any>(null);
-  const infoWindowRef = useRef<any>(null);
+  const explorerRef = useRef<any>(null);
   const amapRef = useRef<any>(null);
+  const countMarkersRef = useRef<any[]>([]);
 
   const [mapLoading, setMapLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<Error | null>(null);
 
-  const { data: universities, isLoading: dataLoading, isError: dataError } = useQuery({
+  const {
+    data: universities,
+    isLoading: dataLoading,
+    isError: dataError,
+  } = useQuery({
     queryKey: ['universities-map', mapQuery],
     queryFn: () => universityService.getMap(mapQuery),
     staleTime: 60_000,
   });
 
-  // Effect 1: 初始化地图(仅一次)。MarkerCluster/HeatMap 已在 loadAMap 的
-  // plugins 里预声明(amap-loader.ts),这里直接 new 即可。
+  const provinceCount = useMemo(
+    () => (universities ? aggregateByProvince(universities) : new Map<string, number>()),
+    [universities],
+  );
+
+  // Effect 1: 初始化地图 + DistrictExplorer(仅一次)
   useEffect(() => {
     let cancelled = false;
-    loadAMap()
-      .then((AMap) => {
+    Promise.all([loadAMap(), loadDistrictExplorer()])
+      .then(([AMap, DistrictExplorer]) => {
         if (cancelled || !containerRef.current) return;
         amapRef.current = AMap;
         mapRef.current = new AMap.Map(containerRef.current, {
-          zoom: 5,
+          zoom: 4,
           center: [104, 36],
+          // 默认地图自带省市边界会跟我们的 polygon 重叠;关闭 building 减少噪音
+          features: ['bg', 'road'],
         });
-        infoWindowRef.current = new AMap.InfoWindow({
-          offset: new AMap.Pixel(0, -10),
-          closeWhenClickMap: true,
+        explorerRef.current = new DistrictExplorer({
+          map: mapRef.current,
+          eventSupport: true,
         });
         setMapLoading(false);
-        setMapReady(true); // 通知 Effect 2 可以建 cluster 了(否则数据先到时会被早退)
+        setMapReady(true);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -119,73 +112,77 @@ export function MapTab() {
 
     return () => {
       cancelled = true;
-      if (clusterRef.current) {
-        try {
-          clusterRef.current.setMap(null);
-        } catch {
-          // noop
-        }
-        clusterRef.current = null;
+      countMarkersRef.current.forEach((m) => {
+        try { m.setMap(null); } catch { /* noop */ }
+      });
+      countMarkersRef.current = [];
+      if (explorerRef.current) {
+        try { explorerRef.current.clearFeaturePolygons(); } catch { /* noop */ }
       }
       if (mapRef.current) {
-        try {
-          mapRef.current.destroy();
-        } catch {
-          // noop
-        }
+        try { mapRef.current.destroy(); } catch { /* noop */ }
         mapRef.current = null;
       }
     };
   }, []);
 
-  // Effect 2: 数据/filter 变化(且 map 就绪)时重建 cluster
+  // Effect 2: map 就绪 + 数据到位 → 画省级 polygon + 数字标签
   useEffect(() => {
     if (!mapReady) return;
+    const explorer = explorerRef.current;
     const map = mapRef.current;
     const AMap = amapRef.current;
-    if (!map || !AMap || !universities) return;
+    if (!explorer || !map || !AMap || !universities) return;
 
-    // 清掉旧 cluster
-    if (clusterRef.current) {
-      try {
-        clusterRef.current.setMap(null);
-      } catch {
-        // noop
+    explorer.loadAreaNode(100000, (err: any, areaNode: any) => {
+      if (err) {
+        console.error('DistrictExplorer loadAreaNode(全国) failed:', err);
+        return;
       }
-      clusterRef.current = null;
-    }
-    if (universities.length === 0) return;
+      // 清前一轮(filter 切换重渲染)
+      explorer.clearFeaturePolygons();
+      countMarkersRef.current.forEach((m) => {
+        try { m.setMap(null); } catch { /* noop */ }
+      });
+      countMarkersRef.current = [];
 
-    const points = universities.map((u) => ({
-      lnglat: [u.lng, u.lat] as [number, number],
-      data: u,
-    }));
+      // 32 省 polygon — 灰色边、淡色填充
+      explorer.renderSubFeatures(areaNode, () => ({
+        cursor: 'pointer',
+        bubble: true,
+        strokeColor: '#94a3b8',
+        strokeWeight: 1.2,
+        strokeOpacity: 0.75,
+        fillColor: '#cbd5e1',
+        fillOpacity: 0.25,
+      }));
 
-    clusterRef.current = new AMap.MarkerCluster(map, points, {
-      gridSize: 60,
-      maxZoom: 14,
-      // 单点 marker:按类型分色
-      renderMarker: (context: any) => {
-        const uni: MapUniversity = context.data[0].data;
-        context.marker.setContent(buildDotHtml(getDotColor(uni)));
-        context.marker.setOffset(new AMap.Pixel(-7, -7));
-        context.marker.on('click', () => {
-          if (!infoWindowRef.current) return;
-          infoWindowRef.current.setContent(buildInfoHtml(uni));
-          infoWindowRef.current.open(map, [uni.lng, uni.lat]);
+      // 每省中心叠数字标签
+      const subs: any[] = areaNode.getSubFeatures();
+      subs.forEach((feature: any) => {
+        const fullName: string = feature.properties.name;
+        const shortName = normalizeProvinceName(fullName);
+        const count = provinceCount.get(shortName) ?? 0;
+        // DistrictExplorer 的 centroid 字段名是 'center'(数组 [lng, lat]),
+        // 个别 feature 可能没有 — 退化到 polygon bounds 中心
+        const center = feature.properties.center || feature.properties.centroid;
+        if (!center) return;
+
+        const marker = new AMap.Marker({
+          position: center,
+          content: buildCountLabel(shortName, count),
+          // 标签 ~80x24,offset 让标签锚点居中
+          offset: new AMap.Pixel(-40, -12),
+          anchor: 'top-left',
+          clickable: false, // 让 polygon 收事件,不被标签拦截
+          bubble: true,
+          zIndex: 200,
         });
-      },
+        map.add(marker);
+        countMarkersRef.current.push(marker);
+      });
     });
-
-    // 聚合 marker 点击:自动 fitBounds 到该聚合点范围(放大)
-    clusterRef.current.on('click', (e: any) => {
-      const { clusterData, lnglat } = e;
-      if (!clusterData || clusterData.length <= 1) return;
-      const bounds = new AMap.Bounds(lnglat, lnglat);
-      clusterData.forEach((p: any) => bounds.extend(p.lnglat));
-      map.setBounds(bounds, false, [40, 40, 40, 40]);
-    });
-  }, [universities, mapReady]);
+  }, [mapReady, universities, provinceCount]);
 
   if (mapError) {
     return (
@@ -208,33 +205,13 @@ export function MapTab() {
             ? '加载院校位置中...'
             : dataError
             ? '数据加载失败'
-            : `共 ${universities?.length ?? 0} 所院校（含坐标）`}
+            : `共 ${universities?.length ?? 0} 所院校（含坐标）— 点击省份进入下一级（Batch 2 接入）`}
         </span>
-        {/* 颜色图例 */}
-        <div className="flex items-center gap-3 text-[11px]">
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: '#d4af37' }} />
-            985
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: '#9333ea' }} />
-            211
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: '#0ea5e9' }} />
-            双一流
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: '#64748b' }} />
-            本科
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: '#f97316' }} />
-            专科
-          </span>
-        </div>
       </div>
-      <div className="relative overflow-hidden rounded-xl bg-surface shadow-card" style={{ height: 640 }}>
+      <div
+        className="relative overflow-hidden rounded-xl bg-surface shadow-card"
+        style={{ height: 640 }}
+      >
         <div ref={containerRef} className="h-full w-full" />
         {mapLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-surface-dim/50">

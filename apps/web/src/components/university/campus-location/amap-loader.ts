@@ -59,10 +59,68 @@ export function loadAMap(): Promise<typeof AMap> {
   return loadPromise;
 }
 
+// AMapUI (独立 UI 组件库,DistrictExplorer 等行政区下钻组件)。主 SDK 不内置,
+// 走 CDN script tag 注入。AMapUI.loadUI 走回调,包 Promise 方便 await。
+let amapUILoadPromise: Promise<any> | null = null;
+
+declare const AMapUI: any;
+
+/**
+ * Lazy-load AMapUI(行政区下钻、infoWindow 等 UI 组件)。依赖主 SDK 已加载。
+ * 同一进程多次调用共享同一 promise。
+ */
+export function loadAMapUI(): Promise<any> {
+  if (amapUILoadPromise) return amapUILoadPromise;
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error('AMapUI loader called during SSR'));
+  }
+  amapUILoadPromise = loadAMap().then(
+    () =>
+      new Promise((resolve, reject) => {
+        // 已经注入过(其他组件先调用):直接返回
+        if ((window as any).AMapUI) {
+          resolve((window as any).AMapUI);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://webapi.amap.com/ui/1.1/main.js';
+        script.async = true;
+        script.onload = () => {
+          if ((window as any).AMapUI) resolve((window as any).AMapUI);
+          else reject(new Error('AMapUI script loaded but window.AMapUI is undefined'));
+        };
+        script.onerror = () => reject(new Error('Failed to load AMapUI script'));
+        document.head.appendChild(script);
+      }),
+  );
+  return amapUILoadPromise;
+}
+
+/**
+ * Lazy-load DistrictExplorer(三级行政区下钻组件)。依赖 AMapUI。
+ * 返回构造函数,调用方:`new DistrictExplorer({ map, eventSupport: true })`。
+ */
+let districtExplorerPromise: Promise<any> | null = null;
+export function loadDistrictExplorer(): Promise<any> {
+  if (districtExplorerPromise) return districtExplorerPromise;
+  districtExplorerPromise = loadAMapUI().then(
+    (UI) =>
+      new Promise((resolve, reject) => {
+        UI.loadUI(['geo/DistrictExplorer'], (DistrictExplorer: any) => {
+          if (DistrictExplorer) resolve(DistrictExplorer);
+          else reject(new Error('DistrictExplorer load returned undefined'));
+        });
+      }),
+  );
+  return districtExplorerPromise;
+}
+
 /**
  * Test-only helper: clears the cached loader promise so unit tests can
  * exercise the "first load" path repeatedly.
  */
 export function _resetLoaderForTests(): void {
   loadPromise = null;
+  amapUILoadPromise = null;
+  districtExplorerPromise = null;
 }
