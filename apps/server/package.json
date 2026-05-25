@@ -23,7 +23,8 @@
     "backfill:ranks": "ts-node -r tsconfig-paths/register scripts/backfill-university-ranks.ts",
     "import:soft-rankings": "ts-node -r tsconfig-paths/register scripts/import-soft-rankings.ts",
     "import:university-basic": "ts-node scripts/import-university-basic.ts",
-    "import:university-details": "ts-node scripts/import-university-details.ts"
+    "import:university-details": "ts-node scripts/import-university-details.ts",
+    "import:university-rankings": "ts-node scripts/import-university-rankings.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.17.0",
