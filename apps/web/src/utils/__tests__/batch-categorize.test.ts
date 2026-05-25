@@ -9,6 +9,13 @@ describe('categorizeBatch', () => {
     expect(categorizeBatch('本科一批(乡村振兴重点发展专项)')).toBe('本科批');
   });
 
+  it('归"本科批*" 为 "本科批" (新高考命名)', () => {
+    expect(categorizeBatch('本科批B段')).toBe('本科批');
+    expect(categorizeBatch('本科批A段')).toBe('本科批');
+    expect(categorizeBatch('本科批(高校专项)')).toBe('本科批');
+    expect(categorizeBatch('本科批(区域教育均衡发展专项)')).toBe('本科批');
+  });
+
   it('归"本科提前批*" 为 "提前批"', () => {
     expect(categorizeBatch('本科提前批 A段')).toBe('提前批');
     expect(categorizeBatch('本科提前批 B段')).toBe('提前批');
