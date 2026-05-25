@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Empty, Input, Pagination, Select, Spin } from 'antd';
+import { Alert, Empty, Input, Pagination, Spin } from 'antd';
 import {
   CloseOutlined,
   EnvironmentOutlined,
@@ -32,8 +32,67 @@ const TIER_ITEMS: Array<{ key: 'rush' | 'stable' | 'safe'; label: string }> = [
   { key: 'safe', label: '保' },
 ];
 
-// Top horizontal filter bar — feature chips + 5 dropdowns + tier chips,
-// 所有筛选条件并排在顶部一行（搜索框那个 card 内），列表占满宽度,移除 240px 左栏。
+// 每一行 chip 筛选：label 左,chips 右(text-link 风格,仿阳光高考网)。
+// 点 "全部" 清空 value,点某 chip 选该值再点取消。
+function FilterRow<V>({
+  label,
+  items,
+  value,
+  onChange,
+  disabled,
+  disabledHint,
+}: {
+  label: string;
+  items: Array<{ value: V; label: string }>;
+  value: V | undefined;
+  onChange: (v: V | undefined) => void;
+  disabled?: boolean;
+  disabledHint?: string;
+}) {
+  if (items.length === 0) return null;
+  const baseBtn = disabled
+    ? 'text-text-faint cursor-not-allowed'
+    : 'text-text hover:text-primary cursor-pointer';
+  return (
+    <div className="flex items-start gap-3 py-2 border-b border-border-subtle last:border-b-0">
+      <span className="shrink-0 text-[13px] text-text-muted pt-1 w-20">{label}</span>
+      <div className="flex flex-wrap gap-x-3 gap-y-1.5 items-center">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(undefined)}
+          className={`text-[13px] border-0 bg-transparent px-1 py-0.5 transition-colors ${
+            !disabled && value == null ? 'text-primary font-medium' : baseBtn
+          }`}
+        >
+          全部
+        </button>
+        {items.map((item) => {
+          const active = value === item.value;
+          return (
+            <button
+              key={String(item.value)}
+              type="button"
+              disabled={disabled}
+              title={disabled ? disabledHint : undefined}
+              onClick={() => onChange(active ? undefined : item.value)}
+              className={`text-[13px] border-0 bg-transparent px-1 py-0.5 transition-colors ${
+                !disabled && active ? 'text-primary font-medium' : baseBtn
+              }`}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+        {disabled && disabledHint && (
+          <span className="text-[11px] text-text-faint ml-2">{disabledHint}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Top filter bar — 每个 filter category 一行 chip 平铺(仿阳光高考网风格)
 function TopFilterBar({
   filters,
   setFilters,
@@ -50,120 +109,88 @@ function TopFilterBar({
   });
   const studentRank = useStudentRank((s) => s.rank);
 
-  const featureItems: Array<{ key: 'is985' | 'is211' | 'isDoubleFirstClass'; label: string }> = [
-    { key: 'is985', label: '985' },
-    { key: 'is211', label: '211' },
-    { key: 'isDoubleFirstClass', label: '双一流' },
-  ];
+  // 985 / 211 / 双一流 三 boolean 合并为单选(string key)
+  const featureValue: 'is985' | 'is211' | 'isDoubleFirstClass' | undefined = filters.is985
+    ? 'is985'
+    : filters.is211
+      ? 'is211'
+      : filters.isDoubleFirstClass
+        ? 'isDoubleFirstClass'
+        : undefined;
+  const setFeature = (v: 'is985' | 'is211' | 'isDoubleFirstClass' | undefined) => {
+    setFilters({
+      ...filters,
+      is985: v === 'is985' || undefined,
+      is211: v === 'is211' || undefined,
+      isDoubleFirstClass: v === 'isDoubleFirstClass' || undefined,
+      page: 1,
+    });
+  };
 
-  const toOptions = (items: Array<{ value: string; count: number }>) =>
-    items.map((i) => ({ value: i.value, label: `${i.value} (${i.count})` }));
+  const toItems = <T,>(arr: Array<{ value: T; count: number }>) =>
+    arr.map((a) => ({ value: a.value, label: String(a.value) }));
 
   return (
-    <div className="flex flex-wrap items-center gap-2 mt-3">
-      <span className="text-xs text-text-muted">筛选:</span>
-      {/* 学校层次 chip */}
-      {featureItems.map((item) => {
-        const active = !!filters[item.key];
-        return (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() =>
-              setFilters({ ...filters, [item.key]: active ? undefined : true, page: 1 })
-            }
-            className={`rounded-md border-0 px-2.5 py-1 text-[12px] transition-colors ${
-              active
-                ? 'bg-primary-fixed font-medium text-primary'
-                : 'bg-bg text-text-tertiary hover:text-primary'
-            }`}
-          >
-            {item.label}
-          </button>
-        );
-      })}
-      <span className="text-border mx-1">|</span>
-      {/* 5 个 dropdown */}
-      <Select
-        placeholder="所在地"
+    <div className="mt-3">
+      <FilterRow
+        label="所在地"
+        items={toItems(options?.provinces ?? [])}
         value={filters.province}
-        allowClear
-        size="small"
-        style={{ minWidth: 110 }}
-        options={toOptions(options?.provinces ?? [])}
-        onChange={(province) => setFilters({ ...filters, province, city: undefined, page: 1 })}
+        onChange={(province) => setFilters({ ...filters, province: province as any, city: undefined, page: 1 })}
       />
       {filters.province && (
-        <Select
-          placeholder="城市"
+        <FilterRow
+          label="城市"
+          items={toItems((options?.cities ?? []).filter((c) => c.province === filters.province))}
           value={filters.city}
-          allowClear
-          size="small"
-          style={{ minWidth: 110 }}
-          options={toOptions((options?.cities ?? []).filter((c) => c.province === filters.province))}
-          onChange={(city) => setFilters({ ...filters, city, page: 1 })}
+          onChange={(city) => setFilters({ ...filters, city: city as any, page: 1 })}
         />
       )}
-      <Select
-        placeholder="类型"
-        value={filters.type}
-        allowClear
-        size="small"
-        style={{ minWidth: 100 }}
-        options={toOptions(options?.types ?? [])}
-        onChange={(type) => setFilters({ ...filters, type, page: 1 })}
-      />
-      <Select
-        placeholder="办学性质"
-        value={filters.nature}
-        allowClear
-        size="small"
-        style={{ minWidth: 110 }}
-        options={toOptions(options?.natures ?? [])}
-        onChange={(nature) => setFilters({ ...filters, nature, page: 1 })}
-      />
-      <Select
-        placeholder="办学层次"
+      <FilterRow
+        label="办学层次"
+        items={toItems(options?.levels ?? [])}
         value={filters.level}
-        allowClear
-        size="small"
-        style={{ minWidth: 110 }}
-        options={toOptions(options?.levels ?? [])}
-        onChange={(level) => setFilters({ ...filters, level, page: 1 })}
+        onChange={(level) => setFilters({ ...filters, level: level as any, page: 1 })}
       />
-      <span className="text-border mx-1">|</span>
-      {/* 冲稳保 chip（仅有 userRank 时可用） */}
-      {TIER_ITEMS.map((item) => {
-        const active = filters.tierFilter === item.key;
-        const disabled = studentRank == null;
-        return (
-          <button
-            key={item.key}
-            type="button"
-            disabled={disabled}
-            title={disabled ? '先在成绩页录入位次' : undefined}
-            onClick={() =>
-              setFilters({ ...filters, tierFilter: active ? undefined : item.key, page: 1 })
-            }
-            className={`rounded-md border-0 px-2.5 py-1 text-[12px] transition-colors ${
-              active
-                ? 'bg-primary-fixed font-medium text-primary'
-                : disabled
-                  ? 'cursor-not-allowed bg-bg text-text-faint'
-                  : 'bg-bg text-text-tertiary hover:text-primary'
-            }`}
-          >
-            {item.label}
-          </button>
-        );
-      })}
-      <button
-        type="button"
-        onClick={onClear}
-        className="ml-auto border-0 bg-transparent text-[11px] uppercase tracking-[1.4px] text-text-faint hover:text-primary"
-      >
-        清除全部
-      </button>
+      <FilterRow
+        label="办学性质"
+        items={toItems(options?.natures ?? [])}
+        value={filters.nature}
+        onChange={(nature) => setFilters({ ...filters, nature: nature as any, page: 1 })}
+      />
+      <FilterRow
+        label="学校类型"
+        items={toItems(options?.types ?? [])}
+        value={filters.type}
+        onChange={(type) => setFilters({ ...filters, type: type as any, page: 1 })}
+      />
+      <FilterRow
+        label="院校特性"
+        items={[
+          { value: 'is985', label: '985 工程' },
+          { value: 'is211', label: '211 工程' },
+          { value: 'isDoubleFirstClass', label: '双一流' },
+        ]}
+        value={featureValue}
+        onChange={(v) => setFeature(v as any)}
+      />
+      <FilterRow
+        label="录取概率"
+        items={TIER_ITEMS.map((t) => ({ value: t.key, label: t.label }))}
+        value={filters.tierFilter}
+        onChange={(t) => setFilters({ ...filters, tierFilter: t as any, page: 1 })}
+        disabled={studentRank == null}
+        disabledHint="先在成绩页录入位次"
+      />
+      <div className="flex justify-end pt-2">
+        <button
+          type="button"
+          onClick={onClear}
+          className="border-0 bg-transparent text-[12px] text-text-faint hover:text-primary cursor-pointer"
+        >
+          清除全部
+        </button>
+      </div>
     </div>
   );
 }
