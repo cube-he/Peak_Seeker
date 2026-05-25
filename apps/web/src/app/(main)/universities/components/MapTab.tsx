@@ -236,6 +236,11 @@ export function MapTab() {
   // 数字标签的 LabelsLayer(全国/省/市 view 显示的 [省名 N] [市名 N] [区名 N]
   // 等。改用 LabelsLayer + LabelMarker 避免邻近 labels 互相挤压重叠)
   const countLayerRef = useRef<any>(null);
+  // 学校 dot markers(district view):用普通 AMap.Marker 而非 LabelMarker,
+  // 这样不参与 LabelsLayer 的 collision avoidance,所有 dot 永远全显示。
+  // 校名 label 单独走 LabelsLayer,空间挤时按 rank 自动避让 — 既保证用户
+  // 第一时间能看清所有学校位置点,又不会让校名糊成一团互相遮挡。
+  const schoolDotsRef = useRef<any[]>([]);
   const universitiesRef = useRef<MapUniversity[]>([]);
   // 程序化 zoom 窗口:setBounds/setZoomAndCenter 期间 zoomend 会 fire 多次,
   // 期间 zoom 可能临时低于当前层级阈值。窗口里跳过 zoomend handler 防误 pop。
@@ -373,6 +378,10 @@ export function MapTab() {
         try { m?.remove(labelsLayerRef.current); } catch { /* noop */ }
         labelsLayerRef.current = null;
       }
+      if (schoolDotsRef.current.length > 0) {
+        try { schoolDotsRef.current.forEach((d) => m?.remove(d)); } catch { /* noop */ }
+        schoolDotsRef.current = [];
+      }
       if (explorerRef.current) {
         try { explorerRef.current.clearFeaturePolygons(); } catch { /* noop */ }
       }
@@ -393,7 +402,7 @@ export function MapTab() {
 
     const current = currentPath[currentPath.length - 1];
 
-    // 公共清理:每次重渲都先把 polygon + 数字标签 layer + 学校 markers layer 清掉
+    // 公共清理:每次重渲都先把 polygon + 数字标签 layer + 学校 dots + 校名 layer 清掉
     const clearAll = () => {
       try { explorer.clearFeaturePolygons(); } catch { /* noop */ }
       if (countLayerRef.current) {
@@ -403,6 +412,10 @@ export function MapTab() {
       if (labelsLayerRef.current) {
         try { map.remove(labelsLayerRef.current); } catch { /* noop */ }
         labelsLayerRef.current = null;
+      }
+      if (schoolDotsRef.current.length > 0) {
+        try { schoolDotsRef.current.forEach((d) => map.remove(d)); } catch { /* noop */ }
+        schoolDotsRef.current = [];
       }
       try { infoWindowRef.current?.close(); } catch { /* noop */ }
     };
@@ -459,11 +472,13 @@ export function MapTab() {
         }
 
         const scopeUnis = pickUnisInScope(universities, currentPath);
-        console.log(`[map] district view ${current.name}: rendering ${scopeUnis.length} school labels`);
+        console.log(`[map] district view ${current.name}: rendering ${scopeUnis.length} schools (dots always-visible + labels collision-avoid)`);
 
-        // 用 AMap.LabelsLayer + LabelMarker:collision:true 让 labels 自动避让,
-        // 校名默认都显示,邻近的会智能隐藏部分以免互相遮挡。
-        // 比逐个 AMap.Marker + 自己写碰撞检测简单稳定。
+        // 拆成两层:
+        //   1) dot: 普通 AMap.Marker,直接 add 到 map,不在 LabelsLayer 内,
+        //      不参与 collision -> 所有学校点都永远显示,不用放大才看得到
+        //   2) label(校名): LabelsLayer + LabelMarker(只配 text 不配 icon),
+        //      仍按 rank 自动避让,避免邻近校名糊成一团
         const labelsLayer = new AMap.LabelsLayer({
           zooms: [3, 20],
           zIndex: 1000,
@@ -472,25 +487,40 @@ export function MapTab() {
           allowCollision: false,
         });
 
-        // 985 优先级最高,211 次之,双一流 再次,这样空间挤的时候保留更重要的
+        // 985 优先级最高,211 次之,双一流 再次,这样校名空间挤时保留更重要的
         const rankOf = (u: MapUniversity): number =>
           u.is985 ? 4 : u.is211 ? 3 : u.isDoubleFirstClass ? 2 : 1;
 
+        const dots: any[] = [];
         scopeUnis.forEach((u) => {
           const style = getMarkerStyle(u);
+          const dot = new AMap.Marker({
+            position: [u.lng, u.lat],
+            icon: new AMap.Icon({
+              image: dotIconUrl(style),
+              size: new AMap.Size(18, 18),
+              imageSize: new AMap.Size(18, 18),
+            }),
+            offset: new AMap.Pixel(-9, -9), // 居中(icon top-left → 圆心)
+            cursor: 'pointer',
+            zIndex: 200,
+          });
+          dot.on('click', () => {
+            if (!infoWindowRef.current) return;
+            infoWindowRef.current.setContent(buildInfoHtml(u));
+            infoWindowRef.current.open(map, [u.lng, u.lat]);
+          });
+          map.add(dot);
+          dots.push(dot);
+
           const labelMarker = new AMap.LabelMarker({
             position: [u.lng, u.lat],
-            rank: rankOf(u), // collision avoidance 按 rank 保留高优先级
-            icon: {
-              type: 'image',
-              image: dotIconUrl(style),
-              size: [18, 18],
-              anchor: 'center',
-            },
+            rank: rankOf(u),
+            // 不配 icon — dot 已经画在 map 上了,这里只贡献 text(collision 避让)
             text: {
               content: u.name,
               direction: 'right',
-              offset: [10, 0], // dot 18px 半径 9 + 2 留白
+              offset: [10, 0], // dot 半径 9 + 1 留白
               style: {
                 fontSize: 11,
                 fontWeight: 'normal',
@@ -504,7 +534,9 @@ export function MapTab() {
               },
             },
           });
-          labelMarker.on('click', () => {
+          // label 也支持点击:位置与 dot 重合,任一处可触发 info window
+          labelMarker.on('click', (e: any) => {
+            if (!e?.originEvent) return;
             if (!infoWindowRef.current) return;
             infoWindowRef.current.setContent(buildInfoHtml(u));
             infoWindowRef.current.open(map, [u.lng, u.lat]);
@@ -514,6 +546,7 @@ export function MapTab() {
 
         map.add(labelsLayer);
         labelsLayerRef.current = labelsLayer;
+        schoolDotsRef.current = dots;
         // 用 areaNode 的 center + 固定 zoom。immediate=true 跳过 AMap 动画——
         // 浏览器实测 animate 版本会被中途覆盖(setZoom 缓动从 4→7 期间会被
         // 后续某个 effect 重置回 4 附近)。瞬间 jump 反而稳定。
@@ -531,19 +564,39 @@ export function MapTab() {
       }
 
       // 非 markers 模式:子级 polygon + 数字标签(全国 view / 非直辖省 view)
-      explorer.renderSubFeatures(areaNode, () => ({
-        cursor: 'pointer',
-        bubble: true,
-        strokeColor: '#94a3b8',
-        strokeWeight: 1.2,
-        strokeOpacity: 0.75,
-        fillColor: '#cbd5e1',
-        fillOpacity: 0.25,
-      }));
+      // 先 aggregate counts,polygon + label 都按 count 区分:
+      //   count > 0 → 正常显示,clickable
+      //   count = 0 → polygon 大幅淡化 + 完全不画 label(用户不感兴趣这些 0 数据的区)
+      const counts = aggregateForSubLevel(universities, current, subLevel ?? 'province');
+
+      explorer.renderSubFeatures(areaNode, (feature: any) => {
+        const fLevel: PathNode['level'] = feature.properties.level;
+        const shortName = normalizeAreaName(feature.properties.name, fLevel);
+        const count = counts.get(shortName) ?? 0;
+        if (count === 0) {
+          // 0 数据区:几乎透明,鼠标不变手指(让用户视觉聚焦在有数据的区)
+          return {
+            cursor: 'default',
+            bubble: true,
+            strokeColor: '#e2e8f0',
+            strokeWeight: 0.5,
+            strokeOpacity: 0.35,
+            fillColor: '#f1f5f9',
+            fillOpacity: 0.08,
+          };
+        }
+        return {
+          cursor: 'pointer',
+          bubble: true,
+          strokeColor: '#94a3b8',
+          strokeWeight: 1.2,
+          strokeOpacity: 0.75,
+          fillColor: '#cbd5e1',
+          fillOpacity: 0.25,
+        };
+      });
 
       if (subs.length === 0) return;
-
-      const counts = aggregateForSubLevel(universities, current, subLevel ?? 'province');
 
       // 数字标签改用 LabelsLayer + LabelMarker(自带 collision avoidance),
       // 避免华北或市中心多个相邻 labels 互相挤压重叠
@@ -558,6 +611,7 @@ export function MapTab() {
         const fLevel: PathNode['level'] = feature.properties.level;
         const shortName = normalizeAreaName(feature.properties.name, fLevel);
         const count = counts.get(shortName) ?? 0;
+        if (count === 0) return; // 0 数据区:不画 label
         const center = feature.properties.center || feature.properties.centroid;
         if (!center) return;
 
