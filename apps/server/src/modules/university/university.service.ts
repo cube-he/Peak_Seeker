@@ -127,7 +127,28 @@ export class UniversityService {
           return classifyRank(userRank, u[predRankField], tier, isHistory) === tierFilter;
         });
       }
-      rows = sortRows(rows, orderByField, sortOrder);
+      // 默认排序（sortBy=softRank）走"先本科、后专科,各自按软科排名 ASC NULLS LAST"的复合排序,
+      // 让财经/医药等专门类专科院校不混进本科榜首。其余 sortBy 走通用 sortRows 单字段排序。
+      if (sortBy === 'softRank') {
+        const levelPriority = (lv: string | null | undefined): number => {
+          if (lv === '本科') return 0;
+          if (lv === '职业本科') return 1;
+          return 2;  // 专科 / null / 其他
+        };
+        rows = [...rows].sort((a: any, b: any) => {
+          const lp = levelPriority(a.level) - levelPriority(b.level);
+          if (lp !== 0) return lp;
+          // 同层级内按 softRanking ASC NULLS LAST
+          const av = a.softRanking;
+          const bv = b.softRanking;
+          if (av == null && bv == null) return 0;
+          if (av == null) return 1;
+          if (bv == null) return -1;
+          return av - bv;
+        });
+      } else {
+        rows = sortRows(rows, orderByField, sortOrder);
+      }
       const total = rows.length;
       const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
       return {
