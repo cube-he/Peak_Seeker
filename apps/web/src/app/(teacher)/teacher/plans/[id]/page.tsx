@@ -469,8 +469,8 @@ export default function PlanDetailPage() {
           </>
         );
       case 'APPROVED':
-        return <Tag color="processing">等待学生确认</Tag>;
-      case 'STUDENT_CONFIRMED':
+        return <Tag color="processing">等待家长确认</Tag>;
+      case 'PARENT_CONFIRMED':
         return (
           <Button
             type="primary"
@@ -753,17 +753,17 @@ export default function PlanDetailPage() {
         />
       </section>
 
-      {/* 学生退回意见或定稿提示 */}
-      {plan.studentChangeRequest ? (
+      {/* 家长退回意见或定稿提示 */}
+      {plan.parentChangeRequest ? (
         <Alert
           type="warning"
           showIcon
-          message="学生退回修改意见"
-          description={plan.studentChangeRequest}
+          message="家长退回修改意见"
+          description={plan.parentChangeRequest}
         />
       ) : null}
       {status === 'APPROVED' ? (
-        <Alert type="info" showIcon message="主管已通过，等待学生确认或退回修改。" />
+        <Alert type="info" showIcon message="主管已通过，等待家长确认或退回修改。" />
       ) : null}
       {status === 'FINALIZED' ? (
         <Alert type="success" showIcon message="方案已定稿，后续修改请派生新版本。" />

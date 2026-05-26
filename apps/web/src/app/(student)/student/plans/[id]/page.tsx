@@ -126,7 +126,7 @@ export default function StudentPlanDetailPage() {
         </Card>
       ) : null}
 
-      {plan.status === 'STUDENT_CONFIRMED' ? (
+      {plan.status === 'PARENT_CONFIRMED' ? (
         <Alert type="success" showIcon message="你已确认方案，等待老师定稿。" />
       ) : null}
       {plan.status === 'FINALIZED' ? (

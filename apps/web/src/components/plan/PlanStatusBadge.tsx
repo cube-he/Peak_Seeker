@@ -7,7 +7,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   PENDING_REVIEW: { label: '待审核', color: 'orange' },
   REVIEWING: { label: '审核中', color: 'gold' },
   APPROVED: { label: '已通过', color: 'blue' },
-  STUDENT_CONFIRMED: { label: '学生已确认', color: 'cyan' },
+  PARENT_CONFIRMED: { label: '家长已确认', color: 'cyan' },
   FINALIZED: { label: '已定稿', color: 'green' },
   REJECTED: { label: '已驳回', color: 'red' },
   PUBLISHED: { label: '已发布', color: 'purple' },

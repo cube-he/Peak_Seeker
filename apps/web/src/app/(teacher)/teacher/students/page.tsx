@@ -28,7 +28,7 @@ const PLAN_STATUS_LABEL: Record<string, string> = {
   PENDING_REVIEW: '待审',
   REVIEWING: '审中',
   APPROVED: '已通过',
-  STUDENT_CONFIRMED: '学生确认',
+  PARENT_CONFIRMED: '家长确认',
   REJECTED: '已退回',
   FINALIZED: '已定稿',
   PUBLISHED: '已发布',
