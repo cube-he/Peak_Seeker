@@ -250,6 +250,32 @@ function StudentCardGrid({ students, now }: { students: Student[]; now: Date }) 
   );
 }
 
+function TaskChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1 text-xs transition ${
+        active
+          ? 'border-primary bg-primary text-white'
+          : 'border-border-subtle bg-surface text-text hover:border-primary'
+      }`}
+    >
+      {label} <span className="ml-1 opacity-80">{count}</span>
+    </button>
+  );
+}
+
 function StudentCard({ student, now }: { student: Student; now: Date }) {
   const track = getStudentTodoTrack(student, now);
   const name = getDisplayName(student);
@@ -313,6 +339,7 @@ function TeacherStudentsPageInner() {
   // 顶部快捷 chip 引入的两个独立 flag（其他 chip 复用 statusFilter / progressFilter）
   const [noPlanOnly, setNoPlanOnly] = useState(false);
   const [highScoreOnly, setHighScoreOnly] = useState(false);
+  const [trackFilter, setTrackFilter] = useState<StudentTodoTrack | 'all'>('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   // 客户端启动后再产生 now / updatedAt，避免 SSR 时间不一致 hydration 警告
   const [clock, setClock] = useState<{ now: Date; updatedAt: Date } | null>(null);
@@ -346,6 +373,10 @@ function TeacherStudentsPageInner() {
 
   const students = useMemo(() => {
     let list = allStudents;
+    const now = clock?.now;
+    if (trackFilter !== 'all' && now) {
+      list = list.filter((s) => getStudentTodoTrack(s, now) === trackFilter);
+    }
     if (statusFilter) {
       list = list.filter((s) => getWorkflowStatus(s) === statusFilter);
     }
@@ -370,7 +401,7 @@ function TeacherStudentsPageInner() {
     if (noPlanOnly) list = list.filter((s) => !s.planCount);
     if (highScoreOnly) list = list.filter((s) => (s.totalScore ?? 0) >= 640);
     return list;
-  }, [allStudents, statusFilter, progressFilter, noPlanOnly, highScoreOnly]);
+  }, [allStudents, statusFilter, progressFilter, noPlanOnly, highScoreOnly, trackFilter, clock?.now]);
 
   const counts = useMemo(
     () => ({
@@ -382,6 +413,26 @@ function TeacherStudentsPageInner() {
     }),
     [allStudents],
   );
+
+  const trackCounts = useMemo(() => {
+    const now = clock?.now;
+    if (!now) {
+      return { 'wait-me': 0, 'wait-student-parent': 0, 'wait-supervisor': 0, sleeping: 0, delivered: 0, idle: 0 };
+    }
+    const c: Record<StudentTodoTrack, number> = {
+      'wait-me': 0,
+      'wait-student-parent': 0,
+      'wait-supervisor': 0,
+      sleeping: 0,
+      delivered: 0,
+      idle: 0,
+    };
+    allStudents.forEach((s) => {
+      const t = getStudentTodoTrack(s, now);
+      c[t] += 1;
+    });
+    return c;
+  }, [allStudents, clock?.now]);
 
   const noActiveFilter =
     !statusFilter && progressFilter === 'all' && !noPlanOnly && !highScoreOnly;
@@ -399,6 +450,7 @@ function TeacherStudentsPageInner() {
     setProgressFilter('all');
     setNoPlanOnly(false);
     setHighScoreOnly(false);
+    setTrackFilter('all');
   }
 
   function clickChip(chip: keyof typeof chipActive) {
@@ -654,6 +706,47 @@ function TeacherStudentsPageInner() {
           </div>
         </div>
       </section>
+
+      {/* 任务维度 chip — 与 Dashboard 三轨对齐 */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-text-muted">按任务:</span>
+        <TaskChip
+          label="全部"
+          count={allStudents.length}
+          active={trackFilter === 'all'}
+          onClick={() => setTrackFilter('all')}
+        />
+        <TaskChip
+          label="🔴 等我"
+          count={trackCounts['wait-me']}
+          active={trackFilter === 'wait-me'}
+          onClick={() => setTrackFilter('wait-me')}
+        />
+        <TaskChip
+          label="📤 等学生家长"
+          count={trackCounts['wait-student-parent']}
+          active={trackFilter === 'wait-student-parent'}
+          onClick={() => setTrackFilter('wait-student-parent')}
+        />
+        <TaskChip
+          label="⏳ 等主管"
+          count={trackCounts['wait-supervisor']}
+          active={trackFilter === 'wait-supervisor'}
+          onClick={() => setTrackFilter('wait-supervisor')}
+        />
+        <TaskChip
+          label="⚠️ 沉默"
+          count={trackCounts['sleeping']}
+          active={trackFilter === 'sleeping'}
+          onClick={() => setTrackFilter('sleeping')}
+        />
+        <TaskChip
+          label="✓ 已交付"
+          count={trackCounts['delivered']}
+          active={trackFilter === 'delivered'}
+          onClick={() => setTrackFilter('delivered')}
+        />
+      </div>
 
       {/* 快捷筛选 chip — 可点 */}
       <div className="flex flex-wrap gap-2">
