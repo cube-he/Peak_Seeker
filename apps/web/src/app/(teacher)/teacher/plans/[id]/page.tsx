@@ -96,6 +96,22 @@ export interface HistoricalScoreResult {
   source: HistoricalScoreSource;
 }
 
+// 来源标签:在单元格小字和 tooltip 里显示哪档数据
+const SOURCE_LABEL: Record<HistoricalScoreSource, string> = {
+  major25: '25 年专业级',
+  group25: '25 年组级',
+  major24: '24 年专业级',
+  legacy: '旧字段(兼容)',
+};
+
+// 来源配色:让老师一眼区分数据质量; text-primary=navy(最优), text-safe=green(次优), muted=兜底
+const SOURCE_TONE: Record<HistoricalScoreSource, string> = {
+  major25: 'text-primary',       // 最优先,深蓝
+  group25: 'text-text-secondary', // 较粗,深灰
+  major24: 'text-safe',           // 较旧但精确,绿色
+  legacy: 'text-text-muted',      // 兜底,弱化
+};
+
 // 历史最低分:返回 { score, source } 让 UI 能告诉老师当前是哪个维度的数据
 // 优先级:25 年专业级 > 25 年专业组级 > 24 年专业级 > 旧字段
 function getHistoricalScore(item: any): HistoricalScoreResult | null {
@@ -521,15 +537,49 @@ export default function PlanDetailPage() {
       title: '历史录取',
       key: 'historical',
       width: 110,
-      render: (_, item) => {
-        const hist = getHistoricalScore(item);
+      render: (_: unknown, item: any) => {
+        const active = getHistoricalScore(item);  // 当前算法用的那一档
         const rank = getHistoricalRank(item);
-        if (hist === null && rank === null) {
+
+        // 收集所有可用档位用于 hover/tooltip
+        const all: { source: HistoricalScoreSource; score: number }[] = [];
+        if (item.score25Major != null) all.push({ source: 'major25', score: item.score25Major });
+        if (item.score25Group != null) all.push({ source: 'group25', score: item.score25Group });
+        if (item.score24Major != null) all.push({ source: 'major24', score: item.score24Major });
+        if (all.length === 0 && item.lastYearMinScore != null) {
+          all.push({ source: 'legacy', score: item.lastYearMinScore });
+        }
+
+        if (active == null && rank === null) {
           return <span className="text-xs text-text-faint">--</span>;
         }
         return (
-          <div className="text-sm">
-            {hist !== null ? <div className="font-medium text-text">{hist.score} 分</div> : null}
+          <div className="space-y-0.5">
+            {active != null ? (
+              <Tooltip
+                title={
+                  <div className="space-y-1 text-xs">
+                    <div className="font-medium">历史录取分(各维度)</div>
+                    {all.map((d) => (
+                      <div key={d.source} className={d.source === active.source ? 'font-medium' : 'opacity-70'}>
+                        {SOURCE_LABEL[d.source]}: {d.score}
+                        {d.source === active.source ? ' ← 当前算法' : ''}
+                      </div>
+                    ))}
+                    <div className="border-t border-white/20 pt-1 text-white/60">
+                      数据来源:四川省教育考试院历年录取数据
+                    </div>
+                  </div>
+                }
+              >
+                <div className="flex flex-col leading-tight cursor-default">
+                  <span className={`text-sm font-medium ${SOURCE_TONE[active.source]}`}>
+                    {active.score} 分
+                  </span>
+                  <span className="text-[10px] text-text-muted">{SOURCE_LABEL[active.source]}</span>
+                </div>
+              </Tooltip>
+            ) : null}
             {rank !== null ? <div className="text-xs text-text-muted">{formatNumber(rank)} 位</div> : null}
           </div>
         );
