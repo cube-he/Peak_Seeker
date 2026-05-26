@@ -881,9 +881,9 @@ model VolunteerPlan {
 
   // 新关联
   planItems   PlanItem[]
-  reviews      PlanReview[]
+  reviews     PlanReview[]
   reviewDrafts PlanReviewDraft[]
-  evaluations  PlanEvaluation[]
+  evaluations PlanEvaluation[]
 
   @@unique([studentId, batchConfigId, versionNo], name: "plan_natural_key")
   @@index([studentId])
@@ -1032,11 +1032,14 @@ model PlanReviewDraft {
   reviewer   User @relation(fields: [reviewerId], references: [id])
 
   // 草稿内容(等同 PlanReview.comment / PlanReview.itemAnnotations,但未提交)
-  comment         String? @db.Text
-  itemAnnotations Json?   @map("item_annotations")
+  comment String? @db.Text
+
+  // 逐项批注（JSON: { sequence: number, annotation: string }[]）
+  itemAnnotations Json? @map("item_annotations")
 
   @@unique([planId, reviewerId])
   @@index([planId])
+  @@index([reviewerId])
   @@map("plan_review_drafts")
 }
 
