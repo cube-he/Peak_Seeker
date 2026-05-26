@@ -650,28 +650,30 @@ export function MapTab() {
         const fLevel: PathNode['level'] = feature.properties.level;
         const shortName = normalizeAreaName(feature.properties.name, fLevel);
         const count = counts.get(shortName) ?? 0;
+        const baseFill = getRegionFill(feature.properties.adcode);
         if (count === 0) {
-          // 0 数据区:几乎透明,鼠标不变手指(让用户视觉聚焦在有数据的区)
+          // 0 数据区:也走 pastel 但更淡(fillOpacity 0.12 + 灰边 1px),
+          // 让整省轮廓拼图完整 — 之前 fillOpacity 0.08 太透明,例如青海
+          // 8 个州市只有 西宁/海东 有数据,其他 6 州几乎不可见,看起来
+          // "省只剩两个块",用户会以为省边界没显示。
           return {
             cursor: 'default',
             bubble: true,
-            strokeColor: '#e2e8f0',
-            strokeWeight: 0.5,
-            strokeOpacity: 0.35,
-            fillColor: '#f1f5f9',
-            fillOpacity: 0.08,
+            strokeColor: '#cbd5e1',
+            strokeWeight: 0.8,
+            strokeOpacity: 0.5,
+            fillColor: baseFill,
+            fillOpacity: 0.12,
           };
         }
-        // 有数据区:按 adcode 哈希一个 pastel 色,淡淡铺底让相邻区域可辨。
-        // fillOpacity 0.25 不会盖住 dot / 文字(实测白色 dot stroke + 黑字
-        // label 在 pastel 背景上仍清晰)
+        // 有数据区:pastel 色,淡淡铺底让相邻区域可辨。
         return {
           cursor: 'pointer',
           bubble: true,
           strokeColor: '#94a3b8',
           strokeWeight: 1.2,
           strokeOpacity: 0.6,
-          fillColor: getRegionFill(feature.properties.adcode),
+          fillColor: baseFill,
           fillOpacity: 0.25,
         };
       });
