@@ -140,6 +140,35 @@ export const planApi = {
     return api.post(`/plans/${id}/review`, data) as any;
   },
 
+  // 获取当前用户对该方案的审核草稿，返回 null 表示未保存过草稿
+  async getReviewDraft(planId: number | string): Promise<null | {
+    id: number;
+    planId: number;
+    reviewerId: number;
+    comment: string | null;
+    itemAnnotations: { sequence: number; annotation: string }[] | null;
+    updatedAt: string;
+  }> {
+    const res = await api.get(`/plans/${planId}/review-draft`);
+    return res.data;
+  },
+
+  async upsertReviewDraft(
+    planId: number | string,
+    payload: {
+      comment?: string;
+      itemAnnotations?: { sequence: number; annotation: string }[];
+    },
+  ): Promise<any> {
+    const res = await api.put(`/plans/${planId}/review-draft`, payload);
+    return res.data;
+  },
+
+  async deleteReviewDraft(planId: number | string): Promise<{ ok: true }> {
+    const res = await api.delete(`/plans/${planId}/review-draft`);
+    return res.data;
+  },
+
   approvePlan(id: string, comment?: string): Promise<any> {
     return api.post(`/plans/${id}/review`, { action: 'APPROVE', comment }) as any;
   },
