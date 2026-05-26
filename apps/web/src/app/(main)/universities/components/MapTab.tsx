@@ -637,43 +637,9 @@ export function MapTab() {
 
       // 非 markers 模式:子级 polygon + 数字标签(全国 view / 非直辖省 view)
       //
-      // 先把"当前级整体边界"画出来 — province view 时 render 全国所有省 polygon,
-      // 当前省蓝色高亮 + 其他省透明骨架;city view 同理 render 父省所有市。这样
-      // 进省/市 view 时用户能一眼看到当前级的整体范围。跳过 country(没有 parent)。
-      //
-      // 用 loadAreaNode(异步)而非 getLocalAreaNode(同步):正常 drill-down 时
-      // 父级已在 cache 中同步回调;dispatch 直接跳 path / 进入时 parent 没缓存
-      // 也能从远程拉。fire-and-forget:不阻塞后续渲染,polygon 拿到时直接叠加。
-      if (current.level !== 'country' && currentPath.length >= 2) {
-        const parentNode = currentPath[currentPath.length - 2];
-        explorer.loadAreaNode(parentNode.adcode, (err: any, parentArea: any) => {
-          if (gen !== renderGenRef.current) return; // stale
-          if (err || !parentArea) return;
-          explorer.renderSubFeatures(parentArea, (feature: any) => {
-            const isCurrent = feature.properties.adcode === current.adcode;
-            if (isCurrent) {
-              return {
-                cursor: 'default',
-                bubble: true,
-                strokeColor: '#2563eb',
-                strokeWeight: 2,
-                strokeOpacity: 0.95,
-                fillColor: '#dbeafe',
-                fillOpacity: 0.18,
-              };
-            }
-            return {
-              cursor: 'default',
-              bubble: true,
-              strokeColor: '#cbd5e1',
-              strokeWeight: 0.5,
-              strokeOpacity: 0.25,
-              fillColor: 'transparent',
-              fillOpacity: 0,
-            };
-          });
-        });
-      }
+      // ⚠️ "当前级整体边界"高亮 render 延后到本函数末尾(在所有 sub features +
+      // count markers 之后)调用 — 见下方 renderParentHighlight。
+      // 不能在这里先 render,否则 sub features 渲染会覆盖蓝边在上。
 
       // 先 aggregate counts,polygon + label 都按 count 区分:
       //   count > 0 → 正常显示,clickable
@@ -782,6 +748,36 @@ export function MapTab() {
         } catch (e) {
           console.warn('setZoomAndCenter failed (polygon)', current, e);
         }
+      }
+
+      // === 当前级整体边界高亮:延后到所有 sub feature polygon 都渲染完之后 ===
+      // 这样后 add 的 polygon 在 add 顺序上靠后,叠加在 city/district polygon 之上,
+      // 蓝色边界不会被子市/子区淡灰边覆盖。
+      if (current.level !== 'country' && currentPath.length >= 2) {
+        const parentNode = currentPath[currentPath.length - 2];
+        explorer.loadAreaNode(parentNode.adcode, (err2: any, parentArea: any) => {
+          if (gen !== renderGenRef.current) return; // stale
+          if (err2 || !parentArea) return;
+          explorer.renderSubFeatures(parentArea, (feature: any) => {
+            const isCurrent = feature.properties.adcode === current.adcode;
+            if (isCurrent) {
+              return {
+                cursor: 'default', bubble: true,
+                strokeColor: '#2563eb', strokeWeight: 2.5,
+                strokeOpacity: 1,
+                fillColor: '#dbeafe', fillOpacity: 0.12,
+              };
+            }
+            // 非当前 sub:transparent,只是占位为了 styleFn 能 iterate;
+            // 上层已经被 current sub features 自己的色块占了
+            return {
+              cursor: 'default', bubble: true,
+              strokeColor: 'transparent', strokeWeight: 0,
+              strokeOpacity: 0,
+              fillColor: 'transparent', fillOpacity: 0,
+            };
+          });
+        });
       }
     });
   }, [mapReady, universities, currentPath]);
