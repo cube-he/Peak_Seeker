@@ -7,8 +7,10 @@ import { UniversityListTab } from './components/UniversityListTab';
 import { MapTab } from './components/MapTab';
 
 export default function UniversitiesPage() {
+  // 地图 tab 需要更宽的画布(默认 1200px 在 1920p 屏上两边留白太多),
+  // 1500px 给地图更大占比的同时,list / ranking tab 内容也更舒展
   return (
-    <MainLayout>
+    <MainLayout maxWidth="1500px">
       <div className="pb-12">
         <Tabs
           defaultActiveKey="ranking"

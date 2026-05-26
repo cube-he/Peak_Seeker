@@ -48,8 +48,12 @@ interface PathNode {
 }
 
 const ROOT: PathNode = { adcode: 100000, name: '全国', level: 'country' };
-// 全国视野中心:lng 104 ≈ 兰州一带,lat 35 比理论几何中心(36)略偏南,
-// 让 Hainan 别贴底边、东北也不至于露太多大兴安岭以北空白。视觉更平衡。
+// 中国本土 bbox:西南角(海南南端)→ 东北角(黑龙江漠河)。
+// country view 用 setBounds(这个) 让视野紧贴中国边界,不再露太多日本/印度/东南亚。
+// 比 setZoomAndCenter 强:zoom 跟 center 都由 container aspect 自适应算出。
+const CHINA_BOUNDS_SW: [number, number] = [73, 18];
+const CHINA_BOUNDS_NE: [number, number] = [135, 54];
+// fallback center / zoom(setBounds 不可用时兜底)
 const ROOT_CENTER: [number, number] = [105, 35];
 const ROOT_ZOOM = 4;
 
@@ -679,8 +683,16 @@ export function MapTab() {
       // 浏览器实测 animate 版本中途会被覆盖(可能 explorer.renderSubFeatures
       // 内部干扰)。瞬间 jump 反而稳定可靠。
       if (current.level === 'country') {
-        programmaticZoomUntilRef.current = Date.now() + 200;
-        map.setZoomAndCenter(ROOT_ZOOM, ROOT_CENTER, true);
+        // setBounds 中国 bbox:让视野紧贴中国领土,不再到处都是日本海/印度。
+        // immediately=true 跳过动画,avoid padding 给一点边距防贴边
+        programmaticZoomUntilRef.current = Date.now() + 500;
+        try {
+          const bounds = new AMap.Bounds(CHINA_BOUNDS_SW, CHINA_BOUNDS_NE);
+          map.setBounds(bounds, true, [10, 10, 10, 10]);
+        } catch (e) {
+          console.warn('setBounds failed, fallback to setZoomAndCenter', e);
+          map.setZoomAndCenter(ROOT_ZOOM, ROOT_CENTER, true);
+        }
       } else {
         try {
           const props = areaNode.getProps?.();
