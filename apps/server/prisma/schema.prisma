@@ -43,7 +43,7 @@ enum PlanStatus {
   PENDING_REVIEW
   REVIEWING
   APPROVED
-  STUDENT_CONFIRMED
+  PARENT_CONFIRMED
   REJECTED
   FINALIZED
   PUBLISHED
@@ -869,9 +869,9 @@ model VolunteerPlan {
   isFinal     Boolean   @default(false) @map("is_final")
   finalizedAt DateTime? @map("finalized_at")
   finalizedBy Int?      @map("finalized_by")
-  studentConfirmedAt DateTime? @map("student_confirmed_at")
-  studentChangeRequestedAt DateTime? @map("student_change_requested_at")
-  studentChangeRequest String? @map("student_change_request") @db.Text
+  parentConfirmedAt DateTime? @map("parent_confirmed_at")
+  parentChangeRequestedAt DateTime? @map("parent_change_requested_at")
+  parentChangeRequest String? @map("parent_change_request") @db.Text
   exportCount Int       @default(0) @map("export_count")
   dataVersion Int       @default(0) @map("data_version")
 
