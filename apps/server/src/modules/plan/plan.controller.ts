@@ -16,6 +16,8 @@ import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { PlanService } from './plan.service';
 import { PlanExportService } from './plan-export.service';
+import { PlanReviewDraftService } from './plan-review-draft.service';
+import { UpsertReviewDraftDto } from './dto/upsert-review-draft.dto';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
 import { ReviewPlanDto } from './dto/review-plan.dto';
@@ -30,6 +32,7 @@ export class PlanController {
   constructor(
     private planService: PlanService,
     private exportService: PlanExportService,
+    private draftService: PlanReviewDraftService,
   ) {}
 
   @Post()
@@ -202,5 +205,37 @@ export class PlanController {
     @Request() req: any,
   ) {
     return this.planService.toggleFavorite(id, req.user.id);
+  }
+
+  @Get(':id/review-draft')
+  @ApiOperation({ summary: '获取我对该方案的审核草稿(不存在返回 null)' })
+  @ApiParam({ name: 'id', type: Number })
+  async getReviewDraft(
+    @Request() req: any,
+    @Param('id', ParseIntPipe) planId: number,
+  ) {
+    return this.draftService.getDraft(planId, req.user.id);
+  }
+
+  @Put(':id/review-draft')
+  @ApiOperation({ summary: 'Upsert 我对该方案的审核草稿' })
+  @ApiParam({ name: 'id', type: Number })
+  async upsertReviewDraft(
+    @Request() req: any,
+    @Param('id', ParseIntPipe) planId: number,
+    @Body() dto: UpsertReviewDraftDto,
+  ) {
+    return this.draftService.upsertDraft(planId, req.user.id, dto);
+  }
+
+  @Delete(':id/review-draft')
+  @ApiOperation({ summary: '手动清空我对该方案的审核草稿' })
+  @ApiParam({ name: 'id', type: Number })
+  async deleteReviewDraft(
+    @Request() req: any,
+    @Param('id', ParseIntPipe) planId: number,
+  ) {
+    await this.draftService.clearDraft(planId, req.user.id);
+    return { ok: true };
   }
 }
