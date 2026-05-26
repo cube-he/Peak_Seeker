@@ -226,7 +226,7 @@ export default function UniversityDetailPage() {
           <TrendBanner
             admissions={admissions ?? []}
             studentRank={studentRank ?? null}
-            subject={examType}
+            defaultSubject={examType}
           />
         </div>
       )}
