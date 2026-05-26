@@ -439,12 +439,20 @@ export function MapTab() {
     };
   }, []);
 
+  // Effect 2 generation counter:每次 effect run +1。所有异步 callback
+  // (loadAreaNode / fire-and-forget renderSubFeatures) 都要先 check
+  // gen === currentGen,否则是 stale 回调,直接 return 避免 polygon 累加。
+  // 之前实测 polygon 数 343(应该 ~41) → 多次 effect run + fire-and-forget
+  // 没 cancel 导致每次 dispatch 都加 33 个 country polygon。
+  const renderGenRef = useRef(0);
+
   // Effect 2: 渲染当前层级(map 就绪 + 数据到位 + path 变化时)
   useEffect(() => {
     if (!mapReady || !universities) return;
     const explorer = explorerRef.current;
     const map = mapRef.current;
     const AMap = amapRef.current;
+    const gen = ++renderGenRef.current;
     if (!explorer || !map || !AMap) return;
 
     const current = currentPath[currentPath.length - 1];
@@ -468,6 +476,7 @@ export function MapTab() {
     };
 
     explorer.loadAreaNode(current.adcode, (err: any, areaNode: any) => {
+      if (gen !== renderGenRef.current) return; // stale
       if (err) {
         console.error('[map] loadAreaNode failed:', current, err);
         return;
@@ -638,6 +647,7 @@ export function MapTab() {
       if (current.level !== 'country' && currentPath.length >= 2) {
         const parentNode = currentPath[currentPath.length - 2];
         explorer.loadAreaNode(parentNode.adcode, (err: any, parentArea: any) => {
+          if (gen !== renderGenRef.current) return; // stale
           if (err || !parentArea) return;
           explorer.renderSubFeatures(parentArea, (feature: any) => {
             const isCurrent = feature.properties.adcode === current.adcode;
