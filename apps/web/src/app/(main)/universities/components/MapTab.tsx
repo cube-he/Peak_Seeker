@@ -811,9 +811,11 @@ export function MapTab() {
           </span>
         </div>
 
-        {/* AMap 容器:.map-canvas 由 styles.css 控制 height (clamp 560-760) */}
+        {/* AMap 容器:.map-canvas 由 styles.css 控制 height (clamp 560-760)。
+            inner div 要 min-height 兜底,否则 Effect 1 init 时 height: 100% 在 layout
+            未稳定前算成 0,AMap 初始化拿到 0 高度直接退化 (实测过) */}
         <div className="map-canvas">
-          <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+          <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: 560 }} />
           {!mapReady && (
             <div
               style={{
