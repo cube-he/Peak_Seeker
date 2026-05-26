@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useDebouncedCallback } from 'use-debounce';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -166,6 +167,32 @@ export default function PlanDetailPage() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
 
+  // 草稿保存:由 debounce 触发,失败不打扰用户(返回 toast 即可)
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const saveDraftMutation = useMutation({
+    mutationFn: (payload: {
+      comment?: string;
+      itemAnnotations?: { sequence: number; annotation: string }[];
+    }) => planApi.upsertReviewDraft(planId, payload),
+    onSuccess: () => setDraftSavedAt(new Date()),
+    // 草稿保存失败不弹错;静默(下次还会重试)
+    onError: () => {},
+  });
+
+  // 800ms 内连续输入只触发一次保存;避免每次按键都发请求
+  const debouncedSave = useDebouncedCallback(
+    (comment: string, annotations: Record<number, string>) => {
+      const itemAnnotations = Object.entries(annotations)
+        .filter(([, anno]) => anno && anno.trim())
+        .map(([seq, annotation]) => ({ sequence: Number(seq), annotation: annotation.trim() }));
+      saveDraftMutation.mutate({
+        comment: comment || undefined,
+        itemAnnotations: itemAnnotations.length ? itemAnnotations : undefined,
+      });
+    },
+    800,
+  );
+
   const submitMutation = useMutation({
     mutationFn: () => planApi.submitForReview(planId),
     onSuccess: () => {
@@ -198,6 +225,9 @@ export default function PlanDetailPage() {
     onSuccess: () => {
       setReviewComment('');
       setAnnotations({});
+      setDraftSavedAt(null);
+      // 后端事务已删 draft,此处刷新 draft query 让 cache 一致(返回 null)
+      void queryClient.invalidateQueries({ queryKey: ['plan-review-draft', planId] });
       void message.success('审核已提交');
       refresh();
     },
@@ -272,11 +302,20 @@ export default function PlanDetailPage() {
             rows={4}
             placeholder="填写总体审核意见（可选）"
             defaultValue={reviewComment}
-            onChange={(e) => setReviewComment(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setReviewComment(val);
+              debouncedSave(val, annotations);
+            }}
           />
           {annotationCount > 0 ? (
             <p className="text-xs text-text-muted">
               已对 {annotationCount} 个志愿填写逐项批注，将随本次审核一起提交。
+            </p>
+          ) : null}
+          {draftSavedAt ? (
+            <p className="text-xs text-text-muted">
+              草稿已保存于 {draftSavedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
             </p>
           ) : null}
         </div>
@@ -666,7 +705,19 @@ export default function PlanDetailPage() {
       ) : null}
 
       {/* C · 志愿明细 */}
-      <Card title="志愿明细" className="rounded-2xl shadow-card">
+      <Card
+        title={
+          <span>
+            志愿明细
+            {draftSavedAt ? (
+              <span className="ml-2 text-xs text-text-muted">
+                · 草稿已保存 {draftSavedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            ) : null}
+          </span>
+        }
+        className="rounded-2xl shadow-card"
+      >
         <Table
           rowKey="id"
           columns={columns}
@@ -680,9 +731,14 @@ export default function PlanDetailPage() {
                 planStatus={status}
                 editable={status === 'DRAFT' || status === 'PENDING_REVIEW'}
                 annotation={annotations[item.sequence] ?? ''}
-                onAnnotationChange={(val) =>
-                  setAnnotations((prev) => ({ ...prev, [item.sequence]: val }))
-                }
+                onAnnotationChange={(val) => {
+                  setAnnotations((prev) => {
+                    const next = { ...prev, [item.sequence]: val };
+                    // 同步触发草稿保存(取最新的 reviewComment 和 next annotations)
+                    debouncedSave(reviewComment, next);
+                    return next;
+                  });
+                }}
                 showAnnotationInput={isReviewing}
                 saving={updateMajorSelectionMutation.isPending}
                 onSaveMajors={(payload) =>
