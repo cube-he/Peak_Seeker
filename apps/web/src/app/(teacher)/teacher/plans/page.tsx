@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Button, Card, Empty, Input, Modal, Segmented, Select, Space, Spin, Table, Tag, message } from 'antd';
+import { Button, Input, Modal, Segmented, Select, Space, Spin, Table, Tag, message } from 'antd';
 import {
   AppstoreOutlined,
   DeleteOutlined,
@@ -346,71 +346,126 @@ function TeacherPlansPageInner() {
           scroll={{ x: 900 }}
           className="rounded-2xl bg-surface shadow-card"
         />
-      ) : viewMode === 'kanban' ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {plans.length === 0 ? (
-            <div className="col-span-full rounded-2xl bg-surface py-16 shadow-card">
-              <Empty description="暂无方案" />
-            </div>
-          ) : (
-            plans.map((plan) => (
-              <Card
-                key={plan.id}
-                hoverable
-                size="small"
-                className="h-full border-l-[3px] border-l-accent"
-                bodyStyle={{ padding: '16px' }}
-              >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-text">{plan.studentName}</p>
-                    <p className="mt-1 text-xs text-text-muted">
-                      {getBatchLabel(plan.batch)} · v{plan.version}
-                    </p>
-                  </div>
-                  <PlanStatusBadge status={plan.status} />
-                </div>
-                <div className="grid grid-cols-3 rounded-xl bg-bg py-3 text-center">
-                  <div className="border-r border-border-subtle px-2">
-                    <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">志愿</p>
-                    <p className="font-serif text-lg font-semibold text-text">{plan.itemCount}</p>
-                  </div>
-                  <div className="border-r border-border-subtle px-2">
-                    <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">来源</p>
-                    <p className="text-xs text-text-secondary">{plan.examSource === 'GAOKAO' ? '高考' : '模拟'}</p>
-                  </div>
-                  <div className="px-2">
-                    <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">更新</p>
-                    <p className="text-xs text-text-secondary">{formatDate(plan.updatedAt)}</p>
-                  </div>
-                </div>
-                <Space className="mt-4" size={8}>
-                  <Link href={`/teacher/plans/${plan.id}`}>
-                    <Button size="small" icon={<EyeOutlined />}>
-                      查看
-                    </Button>
-                  </Link>
-                  {plan.status === 'DRAFT' ? (
-                    <Button
-                      danger
-                      size="small"
-                      icon={<DeleteOutlined />}
-                      loading={deleteMutation.isPending && deleteMutation.variables === plan.id}
-                      onClick={() => confirmDeletePlan(plan)}
-                    >
-                      删除草稿
-                    </Button>
-                  ) : null}
-                </Space>
-              </Card>
-            ))
-          )}
-        </div>
-      ) : null}
+      ) : (
+        <KanbanBoard
+          plans={plans}
+          onDelete={confirmDeletePlan}
+          deletePendingId={
+            deleteMutation.isPending ? (deleteMutation.variables as number | undefined) : undefined
+          }
+        />
+      )}
 
       <div className="rounded-2xl border border-dashed border-border bg-surface px-5 py-4 text-sm text-text-muted">
         批量审核、导出全量报告需要后端补充批处理接口；当前已保留单方案查看与筛选能力。
       </div>
+    </div>
+  );
+}
+
+function KanbanBoard({
+  plans,
+  onDelete,
+  deletePendingId,
+}: {
+  plans: Plan[];
+  onDelete: (plan: Plan) => void;
+  deletePendingId: number | undefined;
+}) {
+  const grouped: Record<PlanTrack, Plan[]> = {
+    'wait-teacher': [],
+    'wait-parent': [],
+    'wait-supervisor': [],
+    'delivered': [],
+  };
+  plans.forEach((p) => {
+    grouped[getPlanTrack(p)].push(p);
+  });
+
+  (Object.keys(grouped) as PlanTrack[]).forEach((track) => {
+    grouped[track].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+  });
+
+  const tracks: PlanTrack[] = ['wait-teacher', 'wait-parent', 'wait-supervisor', 'delivered'];
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {tracks.map((track) => {
+        const meta = TRACK_META[track];
+        const items = grouped[track];
+        return (
+          <div key={track} className="rounded-2xl bg-surface p-3 shadow-card">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h3 className={`m-0 text-sm font-semibold ${meta.toneClass}`}>
+                {meta.emoji} {meta.label}
+              </h3>
+              <span className="text-xs text-text-muted">{items.length}</span>
+            </div>
+            <div className="space-y-2">
+              {items.length === 0 ? (
+                <p className="m-0 px-2 py-4 text-xs text-text-muted">{meta.emptyText}</p>
+              ) : (
+                items.map((plan) => (
+                  <PlanCard
+                    key={plan.id}
+                    plan={plan}
+                    onDelete={onDelete}
+                    deletePending={deletePendingId === plan.id}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlanCard({
+  plan,
+  onDelete,
+  deletePending,
+}: {
+  plan: Plan;
+  onDelete: (plan: Plan) => void;
+  deletePending: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-border-subtle bg-bg/30 p-3 transition hover:border-primary hover:bg-surface">
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <Link
+          href={`/teacher/plans/${plan.id}`}
+          className="truncate text-sm font-medium text-text no-underline hover:text-primary"
+        >
+          {plan.studentName}
+        </Link>
+        <span className="flex-shrink-0 text-[10px] text-text-muted">v{plan.version}</span>
+      </div>
+      <div className="mb-2 flex items-center justify-between">
+        <PlanStatusBadge status={plan.status} />
+        <span className="text-[10px] text-text-muted">{getBatchLabel(plan.batch)}</span>
+      </div>
+      <div className="flex items-center justify-between text-[11px] text-text-muted">
+        <span>志愿 {plan.itemCount} 条</span>
+        <span>{formatDate(plan.updatedAt)}</span>
+      </div>
+      {plan.status === 'DRAFT' ? (
+        <div className="mt-2 flex justify-end">
+          <Button
+            danger
+            type="text"
+            size="small"
+            icon={<DeleteOutlined />}
+            loading={deletePending}
+            onClick={() => onDelete(plan)}
+          >
+            删除草稿
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
