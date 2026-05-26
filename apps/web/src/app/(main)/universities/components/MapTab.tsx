@@ -48,20 +48,19 @@ interface PathNode {
 }
 
 const ROOT: PathNode = { adcode: 100000, name: '全国', level: 'country' };
-// 中国本土 bbox:西南角(海南南端)→ 东北角(黑龙江漠河)。
-// country view 用 setBounds(这个) 让视野紧贴中国边界,不再露太多日本/印度/东南亚。
-// 比 setZoomAndCenter 强:zoom 跟 center 都由 container aspect 自适应算出。
-const CHINA_BOUNDS_SW: [number, number] = [73, 18];
-const CHINA_BOUNDS_NE: [number, number] = [135, 54];
-// fallback center / zoom(setBounds 不可用时兜底)
-const ROOT_CENTER: [number, number] = [105, 35];
-const ROOT_ZOOM = 4;
+// 全国视野:zoom 5 + center [104, 36] + container height 760 → 视野紧贴中国。
+// 历史: setBounds(china_bbox) 实测在 AMap v2.0 silent fail,zoom 不变。
+// 改 zoom 4 → 5 后 lng range 从 131° → 66°,东到 137 西到 71 基本只露中国 ±2°
+// 边缘缓冲;配合 container height 760(aspect 1500/760 ≈ 1.97) lat range
+// ~33° 也基本覆盖中国 36° lat。海南 18 / 漠河 54 各切 ~1°,可接受。
+const ROOT_CENTER: [number, number] = [104, 36];
+const ROOT_ZOOM = 5;
 
 // 各层级目标 zoom(经验值,覆盖大省、中等市、小区县)。比 setBounds 自动算更稳定:
 // 经验上 setBounds 在 renderSubFeatures 刚完成时 AMap 内部 layout 还在收敛,
 // 自动 zoom 经常算偏低导致视野过广;固定 zoom + setZoomAndCenter 更可控。
 const TARGET_ZOOM: Record<PathNode['level'], number> = {
-  country: 4,
+  country: 5,
   province: 7,
   city: 10,
   district: 12,
@@ -683,16 +682,13 @@ export function MapTab() {
       // 浏览器实测 animate 版本中途会被覆盖(可能 explorer.renderSubFeatures
       // 内部干扰)。瞬间 jump 反而稳定可靠。
       if (current.level === 'country') {
-        // setBounds 中国 bbox:让视野紧贴中国领土,不再到处都是日本海/印度。
-        // immediately=true 跳过动画,avoid padding 给一点边距防贴边
+        // setBounds 实测在 country view 不生效(silent fail,zoom 跟 setBounds
+        // 前完全相同)。改用 setZoomAndCenter(5, [104, 36]) 紧贴中国:
+        //   zoom 4 时 lng range ~70°,东到日本 145、西到中亚,东南亚都露;
+        //   zoom 5 紧一倍,lng range ~35°,view 主要是中国领土。
+        // 配合 height 720 的容器,aspect 1500/720 ≈ 2.08 也更接近中国 bbox。
         programmaticZoomUntilRef.current = Date.now() + 500;
-        try {
-          const bounds = new AMap.Bounds(CHINA_BOUNDS_SW, CHINA_BOUNDS_NE);
-          map.setBounds(bounds, true, [10, 10, 10, 10]);
-        } catch (e) {
-          console.warn('setBounds failed, fallback to setZoomAndCenter', e);
-          map.setZoomAndCenter(ROOT_ZOOM, ROOT_CENTER, true);
-        }
+        map.setZoomAndCenter(ROOT_ZOOM, ROOT_CENTER, true);
       } else {
         try {
           const props = areaNode.getProps?.();
@@ -774,7 +770,7 @@ export function MapTab() {
       </div>
       <div
         className="relative overflow-hidden rounded-xl bg-surface shadow-card"
-        style={{ height: 640 }}
+        style={{ height: 760 }}
       >
         <div ref={containerRef} className="h-full w-full" />
         {!mapReady && (
