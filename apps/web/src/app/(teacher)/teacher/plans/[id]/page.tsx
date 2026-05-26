@@ -112,6 +112,9 @@ export default function PlanDetailPage() {
   const [reviewComment, setReviewComment] = useState('');
   // 教师对每个志愿的逐项批注：sequence -> annotation；提交审核时打包发送
   const [annotations, setAnnotations] = useState<Record<number, string>>({});
+  // 标记是否已从 draft 恢复初值,避免后续 draftData 重新拉取(如 React Query refetch)时
+  // 覆盖用户已经输入的内容
+  const [draftLoaded, setDraftLoaded] = useState(false);
   // 预案一览表默认折叠；用户可点击展开内联预览，或点全屏按钮弹 Modal
   const [showPreparationFullscreen, setShowPreparationFullscreen] = useState(false);
   // 客户端启动后再产生 now，避免 SSR / 客户端时间不一致 hydration 警告
@@ -127,6 +130,29 @@ export default function PlanDetailPage() {
   });
   const plan = unwrap<Record<string, any>>(data);
   const items: any[] = plan?.items ?? [];
+
+  // 拉取当前审核人对此方案的草稿:用于在审核中断后恢复未提交的批注/总体意见
+  const { data: draftData } = useQuery({
+    queryKey: ['plan-review-draft', planId],
+    queryFn: () => planApi.getReviewDraft(planId),
+    // 只在能审核的状态拉取,避免 DRAFT 状态(老师做方案中)误拉
+    enabled: !!plan && (plan.status === 'PENDING_REVIEW' || plan.status === 'REVIEWING'),
+  });
+
+  // 从服务端 draft 恢复:仅首次加载时填入,之后用户编辑不被覆盖
+  useEffect(() => {
+    if (draftLoaded) return;
+    if (!draftData) return;
+    if (draftData.comment) setReviewComment(draftData.comment);
+    if (Array.isArray(draftData.itemAnnotations)) {
+      const restored: Record<number, string> = {};
+      for (const a of draftData.itemAnnotations) {
+        restored[a.sequence] = a.annotation;
+      }
+      setAnnotations(restored);
+    }
+    setDraftLoaded(true);
+  }, [draftData, draftLoaded]);
 
   // 「审下一份」依赖当前教师 PENDING_REVIEW 队列；只在审核相关状态拉
   const { data: queueData } = useQuery({
