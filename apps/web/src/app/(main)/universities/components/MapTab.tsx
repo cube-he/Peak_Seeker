@@ -761,15 +761,15 @@ export function MapTab() {
           explorer.renderSubFeatures(parentArea, (feature: any) => {
             const isCurrent = feature.properties.adcode === current.adcode;
             if (isCurrent) {
+              // 当前级整体边界:粗深蓝边线,不填色(让内部子市 pastel 拼图清晰可见)。
+              // zIndex 100 确保在所有 sub feature(默认 0)之上。
               return {
                 cursor: 'default', bubble: true,
-                strokeColor: '#2563eb', strokeWeight: 3,
+                strokeColor: '#1e3a5f', strokeWeight: 4,
                 strokeOpacity: 1,
-                // 蓝色 polygon zIndex 主动设高,确保在所有 sub feature 之上(AMap polygon
-                // 默认按 add 顺序 z-order,但同一 styleFn 内不同 polygon 默认相同 zIndex,
-                // 不可靠)
-                zIndex: 50,
-                fillColor: '#dbeafe', fillOpacity: 0.25,
+                strokeStyle: 'solid',
+                zIndex: 100,
+                fillColor: 'transparent', fillOpacity: 0,
               };
             }
             // 非当前 sub:transparent,只是占位为了 styleFn 能 iterate;
