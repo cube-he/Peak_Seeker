@@ -246,9 +246,11 @@ export function MapTab() {
   // 类 heatmap 效果显示分布密度;province/city/district 随 level dot 变大。
   // collision 关掉 + allowCollision: true → 所有 dot 永远全显示,不参与避让)
   const schoolDotsLayerRef = useRef<any>(null);
-  // 学校校名 LabelsLayer(只 district view 显示,collision: true + allowCollision: false
-  // 按 985/211/双一流 rank 自动避让,避免邻近校名糊成一团)
-  const schoolNamesLayerRef = useRef<any>(null);
+  // 学校校名(只 district view 显示):用普通 AMap.Marker + content。
+  // 之前用 LabelsLayer + LabelMarker(text-only)实测渲染不稳定 — 5 个全部不显示。
+  // 普通 Marker DOM 定位永远全显示。district view 学校数量级不多(几所到几十所),
+  // 不需要 LabelsLayer 的 canvas 优化。
+  const schoolNameMarkersRef = useRef<any[]>([]);
   // 数字标签的 Markers([省名 N] [市名 N] [区名 N])。
   // 用普通 AMap.Marker + content HTML 而不是 LabelsLayer:LabelsLayer 即使
   // collision: false 也不一定渲染 text-only LabelMarker(实测全国 view 32 个
@@ -388,9 +390,9 @@ export function MapTab() {
         try { countMarkersRef.current.forEach((mk) => m?.remove(mk)); } catch { /* noop */ }
         countMarkersRef.current = [];
       }
-      if (schoolNamesLayerRef.current) {
-        try { m?.remove(schoolNamesLayerRef.current); } catch { /* noop */ }
-        schoolNamesLayerRef.current = null;
+      if (schoolNameMarkersRef.current.length > 0) {
+        try { schoolNameMarkersRef.current.forEach((mk) => m?.remove(mk)); } catch { /* noop */ }
+        schoolNameMarkersRef.current = [];
       }
       if (schoolDotsLayerRef.current) {
         try { m?.remove(schoolDotsLayerRef.current); } catch { /* noop */ }
@@ -423,9 +425,9 @@ export function MapTab() {
         try { countMarkersRef.current.forEach((m2) => map.remove(m2)); } catch { /* noop */ }
         countMarkersRef.current = [];
       }
-      if (schoolNamesLayerRef.current) {
-        try { map.remove(schoolNamesLayerRef.current); } catch { /* noop */ }
-        schoolNamesLayerRef.current = null;
+      if (schoolNameMarkersRef.current.length > 0) {
+        try { schoolNameMarkersRef.current.forEach((mk) => map.remove(mk)); } catch { /* noop */ }
+        schoolNameMarkersRef.current = [];
       }
       if (schoolDotsLayerRef.current) {
         try { map.remove(schoolDotsLayerRef.current); } catch { /* noop */ }
@@ -524,53 +526,50 @@ export function MapTab() {
           }
         }
 
-        // district 专属:再加一层校名 LabelsLayer。dot 已经在文件下面的通用块
-        // (clearAll 之后)按 level 大小渲染了,这里只贡献校名 label。
-        // collision: true + allowCollision: false → 按 rank 自动避让邻近重叠校名。
-        const namesLayer = new AMap.LabelsLayer({
-          zooms: [3, 20],
-          zIndex: 1100,
-          collision: true,
-          animation: false,
-          allowCollision: false,
-        });
-        const rankOf = (u: MapUniversity): number =>
-          u.is985 ? 4 : u.is211 ? 3 : u.isDoubleFirstClass ? 2 : 1;
-
+        // district 专属:校名 label 用普通 AMap.Marker + content。
+        // 之前用 LabelsLayer + LabelMarker(text-only)实测渲染不稳定 — 5 个校名
+        // 全部不显示(同 country countLayer 的 text-only LabelMarker bug)。
+        // 普通 Marker DOM 永远全显示,几所到几十所的数量级不卡。
+        // (校名 label 位置在 dot 右侧 12px 处,用 offset 实现)
         const scopeUnisForLabels = pickUnisInScope(universities, currentPath);
-        console.log(`[map] district view ${current.name}: ${scopeUnisForLabels.length} school name labels`);
+        console.log(`[map] district view ${current.name}: ${scopeUnisForLabels.length} school name markers`);
+        const nameMarkers: any[] = [];
         scopeUnisForLabels.forEach((u) => {
-          const labelMarker = new AMap.LabelMarker({
-            position: [u.lng, u.lat],
-            rank: rankOf(u),
-            // 不配 icon,只贡献 text(collision 避让 校名)
-            text: {
-              content: u.name,
-              direction: 'right',
-              offset: [10, 0], // dot 半径 9 + 1 留白
-              style: {
-                fontSize: 11,
-                fontWeight: 'normal',
-                fillColor: '#0f172a',
-                strokeColor: '#ffffff',
-                strokeWidth: 2,
-                padding: [2, 6, 2, 6],
-                backgroundColor: 'rgba(255,255,255,0.95)',
-                borderColor: '#cbd5e1',
-                borderWidth: 1,
-              },
-            },
-          });
-          labelMarker.on('click', (e: any) => {
-            if (!e?.originEvent) return;
+          const nameDiv = document.createElement('div');
+          nameDiv.style.cssText = [
+            'transform: translate(0, -50%)', // 左对齐,垂直居中
+            'padding: 2px 6px',
+            'background: rgba(255,255,255,0.95)',
+            'border: 1px solid #cbd5e1',
+            'border-radius: 3px',
+            'color: #0f172a',
+            'font-size: 11px',
+            'font-family: inherit',
+            'white-space: nowrap',
+            'cursor: pointer',
+            'user-select: none',
+            'pointer-events: auto',
+            'box-shadow: 0 1px 2px rgba(0,0,0,0.05)',
+          ].join(';');
+          nameDiv.textContent = u.name;
+          nameDiv.addEventListener('click', (ev) => {
+            ev.stopPropagation();
             if (!infoWindowRef.current) return;
             infoWindowRef.current.setContent(buildInfoHtml(u));
             infoWindowRef.current.open(map, [u.lng, u.lat]);
           });
-          namesLayer.add(labelMarker);
+          const nameMarker = new AMap.Marker({
+            position: [u.lng, u.lat],
+            content: nameDiv,
+            // 锚定 dot 右侧 12px(dot 半径 9 + 3 留白),垂直居中(用 transform 调)
+            offset: new AMap.Pixel(12, 0),
+            zIndex: 120,
+            bubble: false,
+          });
+          map.add(nameMarker);
+          nameMarkers.push(nameMarker);
         });
-        map.add(namesLayer);
-        schoolNamesLayerRef.current = namesLayer;
+        schoolNameMarkersRef.current = nameMarkers;
         // 用 areaNode 的 center + 固定 zoom。immediate=true 跳过 AMap 动画——
         // 浏览器实测 animate 版本会被中途覆盖(setZoom 缓动从 4→7 期间会被
         // 后续某个 effect 重置回 4 附近)。瞬间 jump 反而稳定。
