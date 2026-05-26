@@ -134,20 +134,20 @@ export class PlanController {
     return this.planService.finalize(id, req.user.id);
   }
 
-  @Post(':id/student-confirm')
+  @Post(':id/parent-confirm')
   @ApiOperation({ summary: '家长确认主管已通过的方案' })
   @ApiParam({ name: 'id', type: Number })
-  async studentConfirm(
+  async parentConfirmRoute(
     @Param('id', ParseIntPipe) id: number,
     @Request() req: any,
   ) {
     return this.planService.parentConfirm(id, req.user.id);
   }
 
-  @Post(':id/student-request-change')
+  @Post(':id/parent-request-change')
   @ApiOperation({ summary: '家长退回方案并提交修改意见' })
   @ApiParam({ name: 'id', type: Number })
-  async studentRequestChange(
+  async parentRequestChangeRoute(
     @Param('id', ParseIntPipe) id: number,
     @Request() req: any,
     @Body() body: { comment?: string },

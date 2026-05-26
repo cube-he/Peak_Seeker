@@ -187,10 +187,10 @@ export const planApi = {
   },
 
   confirmPlan(id: string): Promise<any> {
-    return api.post(`/plans/${id}/student-confirm`) as any;
+    return api.post(`/plans/${id}/parent-confirm`) as any;
   },
 
   requestChange(id: string, comment: string): Promise<any> {
-    return api.post(`/plans/${id}/student-request-change`, { comment }) as any;
+    return api.post(`/plans/${id}/parent-request-change`, { comment }) as any;
   },
 };
