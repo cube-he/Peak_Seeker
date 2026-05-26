@@ -84,6 +84,102 @@ function formatRelativeTime(date: Date, now: Date) {
   return `${Math.floor(seconds / 86_400)} 天前`;
 }
 
+// 学生当前所属的"任务轨"——与 Dashboard 三轨对齐
+type StudentTodoTrack =
+  | 'wait-me'
+  | 'wait-student-parent'
+  | 'wait-supervisor'
+  | 'sleeping'
+  | 'delivered'
+  | 'idle';
+
+function getStudentTodoTrack(student: Student, now: Date): StudentTodoTrack {
+  const status = getWorkflowStatus(student);
+  const noActionDays = daysSince(student.updatedAt, now);
+  const completeness = student.progress?.overallCompleteness ?? 0;
+
+  if (status === 'SUBMITTED') return 'delivered';
+  if (noActionDays !== null && noActionDays >= 7 && status !== 'FINALIZED') return 'sleeping';
+
+  if (
+    student.latestPlanStatus === 'PENDING_REVIEW' ||
+    student.latestPlanStatus === 'REVIEWING'
+  ) {
+    return 'wait-supervisor';
+  }
+
+  if (status === 'COLLECTING' && completeness < 60) return 'wait-me';
+  if (status === 'GENERATING') return 'wait-me';
+  if (status === 'COLLECTING' && completeness >= 60) return 'wait-student-parent';
+  if (status === 'FINALIZED') return 'wait-student-parent';
+
+  return 'idle';
+}
+
+const TRACK_LABEL: Record<StudentTodoTrack, string> = {
+  'wait-me': '等我动手',
+  'wait-student-parent': '等学生家长',
+  'wait-supervisor': '等主管审核',
+  'sleeping': '沉默',
+  'delivered': '已交付',
+  'idle': '进行中',
+};
+
+const TRACK_TONE: Record<StudentTodoTrack, string> = {
+  'wait-me': 'bg-rush text-white',
+  'wait-student-parent': 'bg-primary text-white',
+  'wait-supervisor': 'bg-accent text-white',
+  'sleeping': 'bg-rush text-white',
+  'delivered': 'bg-safe text-white',
+  'idle': 'bg-text-muted text-white',
+};
+
+function SopMiniBar({ student }: { student: Student }) {
+  const status = getWorkflowStatus(student);
+  const stages: { key: string; done: boolean; active: boolean }[] = [
+    { key: '签', done: !!student.createdAt, active: false },
+    { key: '采', done: status !== 'COLLECTING', active: status === 'COLLECTING' },
+    {
+      key: '案',
+      done: ['REVIEWING', 'FINALIZED', 'SUBMITTED'].includes(status),
+      active: status === 'GENERATING',
+    },
+    {
+      key: '审',
+      done: ['FINALIZED', 'SUBMITTED'].includes(status),
+      active: status === 'REVIEWING',
+    },
+    {
+      key: '稿',
+      done: status === 'SUBMITTED',
+      active: status === 'FINALIZED',
+    },
+    { key: '交', done: status === 'SUBMITTED', active: false },
+  ];
+
+  return (
+    <div className="flex items-center gap-1">
+      {stages.map((s, i) => (
+        <span key={s.key} className="flex items-center gap-1">
+          <span
+            aria-label={s.key}
+            className={`inline-block h-2 w-2 rounded-full ${
+              s.done
+                ? 'bg-safe'
+                : s.active
+                  ? 'bg-accent'
+                  : 'border border-text-muted bg-surface'
+            }`}
+          />
+          {i < stages.length - 1 ? (
+            <span aria-hidden className="h-px w-2 bg-border-subtle" />
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -137,8 +233,7 @@ export default function TeacherStudentsPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Task 2 将使用 now 渲染相对时间
-function StudentCardGrid({ students, now: _now }: { students: Student[]; now: Date }) {
+function StudentCardGrid({ students, now }: { students: Student[]; now: Date }) {
   if (students.length === 0) {
     return (
       <div className="rounded-2xl bg-surface py-20 text-center shadow-card">
@@ -149,20 +244,59 @@ function StudentCardGrid({ students, now: _now }: { students: Student[]; now: Da
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {students.map((s) => (
-        <div
-          key={s.id}
-          className="rounded-lg border border-border-subtle bg-surface p-4 shadow-card"
-        >
-          <p className="m-0 font-medium">{getDisplayName(s)}</p>
-          <p className="m-0 text-xs text-text-muted">
-            完整度 {s.progress?.overallCompleteness ?? 0}% · 方案 {s.planCount ?? 0}
-          </p>
-          <p className="m-0 mt-1 text-xs text-text-muted">
-            占位 — Task 2 会替换为完整 StudentCard
-          </p>
-        </div>
+        <StudentCard key={s.id} student={s} now={now} />
       ))}
     </div>
+  );
+}
+
+function StudentCard({ student, now }: { student: Student; now: Date }) {
+  const track = getStudentTodoTrack(student, now);
+  const name = getDisplayName(student);
+  const completeness = student.progress?.overallCompleteness ?? 0;
+  const lastUpdated = student.updatedAt ? new Date(student.updatedAt) : null;
+  const lastActionStr = lastUpdated ? formatRelativeTime(lastUpdated, now) : '--';
+  const totalScore = student.totalScore ?? null;
+  const provincialRank = student.provincialRank ?? null;
+  const planCount = student.planCount ?? 0;
+  const latestPlanLabel = student.latestPlanStatus
+    ? `v${student.latestPlanVersionNo ?? '?'} ${PLAN_STATUS_LABEL[student.latestPlanStatus] ?? student.latestPlanStatus}`
+    : '无方案';
+
+  // 沉默或已交付的卡片降低视觉权重，减少干扰
+  const dimClass = track === 'sleeping' || track === 'delivered' ? 'opacity-70' : '';
+
+  return (
+    <Link
+      href={`/teacher/students/${student.id}`}
+      className={`block rounded-lg border border-border-subtle bg-surface p-4 no-underline shadow-card transition hover:border-primary hover:shadow-md ${dimClass}`}
+    >
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="m-0 truncate font-medium text-text">{name}</p>
+          <p className="m-0 text-xs text-text-muted">
+            {totalScore != null ? `${totalScore} 分` : '--'} ·{' '}
+            位次 {provincialRank != null ? provincialRank.toLocaleString('zh-CN') : '--'}
+          </p>
+        </div>
+        <span
+          className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${TRACK_TONE[track]}`}
+        >
+          {TRACK_LABEL[track]}
+        </span>
+      </div>
+
+      <div className="mb-2">
+        <SopMiniBar student={student} />
+      </div>
+
+      <div className="space-y-0.5 text-xs text-text-muted">
+        <p className="m-0">
+          资料 {completeness}% · 方案 {planCount} 份 · 最新 {latestPlanLabel}
+        </p>
+        <p className="m-0">上次动作 {lastActionStr}</p>
+      </div>
+    </Link>
   );
 }
 
