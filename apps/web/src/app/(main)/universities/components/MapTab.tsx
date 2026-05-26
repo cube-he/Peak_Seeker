@@ -236,34 +236,6 @@ function buildInfoHtml(uni: MapUniversity): string {
   `;
 }
 
-function LegendDot({
-  fill,
-  label,
-  stroke = '#ffffff',
-  strokeWidth = 1.5,
-}: {
-  fill: string;
-  label: string;
-  stroke?: string;
-  strokeWidth?: number;
-}) {
-  return (
-    <span className="flex items-center gap-1">
-      <span
-        className="inline-block rounded-full"
-        style={{
-          width: 10,
-          height: 10,
-          backgroundColor: fill,
-          border: `${strokeWidth}px solid ${stroke}`,
-          boxShadow: '0 0 0 1px #cbd5e1',
-        }}
-      />
-      {label}
-    </span>
-  );
-}
-
 export function MapTab() {
   const filters = useUniversityFilters((s) => s.filters);
   const mapQuery = pickMapFilters(filters);
@@ -796,8 +768,6 @@ export function MapTab() {
     );
   }
 
-  const isDistrict = currentPath[currentPath.length - 1].level === 'district';
-
   return (
     <div className="fade-up">
       <PageHead
@@ -831,27 +801,6 @@ export function MapTab() {
             ))}
           </div>
           <div style={{ flex: 1 }} />
-          {isDistrict && (
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                gap: '4px 10px',
-                fontSize: 12,
-                color: 'var(--text-muted)',
-              }}
-            >
-              <LegendDot fill="#d4af37" label="985" />
-              <LegendDot fill="#9333ea" label="211" />
-              <LegendDot fill="#0ea5e9" label="双一流" />
-              <LegendDot fill="#16a34a" label="本科" />
-              <LegendDot fill="#f97316" label="专科" />
-              <span style={{ color: 'var(--text-faint)' }}>|</span>
-              <LegendDot fill="#94a3b8" stroke="#ffffff" strokeWidth={1.5} label="公办" />
-              <LegendDot fill="#94a3b8" stroke="#b91c1c" strokeWidth={2} label="民办" />
-            </div>
-          )}
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {dataLoading
               ? '加载院校位置中...'
@@ -880,6 +829,42 @@ export function MapTab() {
               <Spin />
             </div>
           )}
+
+          {/* Legend 浮动卡 — 右上角,所有 level 都显示。
+              主色编码档次,边框编码办学性质(公办白边 / 民办红边)。 */}
+          <div className="map-legend">
+            <h5>档次(主色)</h5>
+            <div className="lg-row">
+              <span className="swatch" style={{ background: '#d4af37' }} />
+              985 工程
+            </div>
+            <div className="lg-row">
+              <span className="swatch" style={{ background: '#9333ea' }} />
+              211 工程
+            </div>
+            <div className="lg-row">
+              <span className="swatch" style={{ background: '#0ea5e9' }} />
+              双一流
+            </div>
+            <div className="lg-row">
+              <span className="swatch" style={{ background: '#16a34a' }} />
+              本科
+            </div>
+            <div className="lg-row">
+              <span className="swatch" style={{ background: '#f97316' }} />
+              专科
+            </div>
+            <div className="divider" />
+            <h5>性质(边框)</h5>
+            <div className="lg-row">
+              <span className="swatch ring-white" />
+              公办
+            </div>
+            <div className="lg-row">
+              <span className="swatch ring-red" />
+              民办
+            </div>
+          </div>
         </div>
       </div>
     </div>
