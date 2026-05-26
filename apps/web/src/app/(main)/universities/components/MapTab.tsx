@@ -75,6 +75,27 @@ const DOT_SIZE_BY_LEVEL: Record<PathNode['level'], number> = {
   district: 18,
 };
 
+// 区域填充色:12 色 pastel 调色板(Tailwind -200 系列),按 adcode % 12 取色。
+// 用 adcode 取色而非 index 保证同省/同市每次刷新颜色固定,用户能形成位置记忆。
+// 配合 fillOpacity 0.25 视觉很淡,不会盖住 dot 和数字 label。
+const REGION_COLORS = [
+  '#fde68a', // amber
+  '#fed7aa', // orange
+  '#fecaca', // red
+  '#fbcfe8', // pink
+  '#ddd6fe', // violet
+  '#c7d2fe', // indigo
+  '#bfdbfe', // blue
+  '#a5f3fc', // cyan
+  '#a7f3d0', // emerald
+  '#bbf7d0', // green
+  '#d9f99d', // lime
+  '#fef3c7', // yellow
+];
+function getRegionFill(adcode: number): string {
+  return REGION_COLORS[Math.abs(adcode) % REGION_COLORS.length];
+}
+
 function aggregateForSubLevel(
   unis: MapUniversity[],
   parent: PathNode,
@@ -522,14 +543,23 @@ export function MapTab() {
           if (parentArea) {
             explorer.renderSubFeatures(parentArea, (feature: any) => {
               const isCurrent = feature.properties.adcode === current.adcode;
+              if (isCurrent) {
+                // 当前 district 蓝色高亮(不走 pastel 调色,跟"已选"语义区分)
+                return {
+                  cursor: 'default', bubble: true,
+                  strokeColor: '#2563eb', strokeWeight: 2,
+                  strokeOpacity: 0.95,
+                  fillColor: '#dbeafe', fillOpacity: 0.35,
+                };
+              }
+              // 邻区按 adcode 上 pastel 色但更淡(district view 主角是当前 district,
+              // 邻区 0.15 不抢戏)
               return {
-                cursor: 'default',
-                bubble: true,
-                strokeColor: isCurrent ? '#2563eb' : '#94a3b8',
-                strokeWeight: isCurrent ? 2 : 1,
-                strokeOpacity: isCurrent ? 0.95 : 0.4,
-                fillColor: isCurrent ? '#dbeafe' : '#cbd5e1',
-                fillOpacity: isCurrent ? 0.35 : 0.08,
+                cursor: 'default', bubble: true,
+                strokeColor: '#94a3b8', strokeWeight: 1,
+                strokeOpacity: 0.4,
+                fillColor: getRegionFill(feature.properties.adcode),
+                fillOpacity: 0.15,
               };
             });
           }
@@ -617,13 +647,16 @@ export function MapTab() {
             fillOpacity: 0.08,
           };
         }
+        // 有数据区:按 adcode 哈希一个 pastel 色,淡淡铺底让相邻区域可辨。
+        // fillOpacity 0.25 不会盖住 dot / 文字(实测白色 dot stroke + 黑字
+        // label 在 pastel 背景上仍清晰)
         return {
           cursor: 'pointer',
           bubble: true,
           strokeColor: '#94a3b8',
           strokeWeight: 1.2,
-          strokeOpacity: 0.75,
-          fillColor: '#cbd5e1',
+          strokeOpacity: 0.6,
+          fillColor: getRegionFill(feature.properties.adcode),
           fillOpacity: 0.25,
         };
       });
