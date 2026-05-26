@@ -22,6 +22,7 @@ describe('PlanService workflow gates', () => {
       },
       planItem: { count: jest.fn(), findMany: jest.fn() },
       planReview: { create: jest.fn() },
+      planReviewDraft: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       $transaction: jest.fn((cb: any) => cb(prisma)),
     };
 
@@ -207,6 +208,28 @@ describe('PlanService workflow gates', () => {
       maxGroupCount: 45,
       maxMajorPerGroup: 6,
       volunteerMode: 'parallel',
+    });
+  });
+
+  it('review clears reviewer draft within the same transaction', async () => {
+    // 设置当前用户为主管,且 plan 在 REVIEWING 状态
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 50,
+      status: 'REVIEWING',
+      currentReviewerId: 20,
+      versionNo: 1,
+    });
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 50, status: 'APPROVED' });
+    prisma.planReview.create.mockResolvedValue({ id: 999 });
+
+    await service.review(50, 20, {
+      action: 'APPROVE',
+      comment: 'looks good',
+      itemAnnotations: [{ sequence: 1, annotation: 'ok' }],
+    });
+
+    expect(prisma.planReviewDraft.deleteMany).toHaveBeenCalledWith({
+      where: { planId: 50, reviewerId: 20 },
     });
   });
 });

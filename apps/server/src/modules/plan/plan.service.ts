@@ -552,6 +552,11 @@ export class PlanService {
           itemAnnotations: (dto.itemAnnotations as any) ?? undefined,
         },
       });
+      // 审核动作成功后清空该审核人对该方案的草稿
+      // 用 tx 而非 this.prisma 确保原子性:如果 planReview.create 失败,事务回滚,draft 仍保留
+      await tx.planReviewDraft.deleteMany({
+        where: { planId, reviewerId: supervisorUserId },
+      });
       return updated;
     });
   }
