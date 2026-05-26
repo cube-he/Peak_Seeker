@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Button, Card, Empty, Input, Modal, Segmented, Select, Space, Spin, Table, Tag, message } from 'antd';
@@ -58,6 +58,51 @@ function formatDate(value?: string) {
   });
 }
 
+// 方案当前所属的"任务轨"——与 Dashboard 三轨对齐
+type PlanTrack =
+  | 'wait-teacher'
+  | 'wait-parent'
+  | 'wait-supervisor'
+  | 'delivered';
+
+function getPlanTrack(plan: Plan): PlanTrack {
+  const status = plan.status;
+  if (status === 'PENDING_REVIEW' || status === 'REVIEWING') return 'wait-supervisor';
+  if (status === 'APPROVED' || status === 'PARENT_CONFIRMED') return 'wait-parent';
+  if (status === 'FINALIZED' || status === 'PUBLISHED' || status === 'OUTDATED') return 'delivered';
+  return 'wait-teacher';
+}
+
+const TRACK_META: Record<
+  PlanTrack,
+  { label: string; emoji: string; toneClass: string; emptyText: string }
+> = {
+  'wait-teacher': {
+    label: '等老师动手',
+    emoji: '🔴',
+    toneClass: 'text-rush',
+    emptyText: '老师侧无待办',
+  },
+  'wait-parent': {
+    label: '等学生家长',
+    emoji: '📤',
+    toneClass: 'text-primary',
+    emptyText: '家长侧无待办',
+  },
+  'wait-supervisor': {
+    label: '等主管审核',
+    emoji: '⏳',
+    toneClass: 'text-accent',
+    emptyText: '主管侧无待审',
+  },
+  'delivered': {
+    label: '终稿/已提交',
+    emoji: '✓',
+    toneClass: 'text-safe',
+    emptyText: '尚无已交付方案',
+  },
+};
+
 export default function TeacherPlansPage() {
   // useSearchParams 要求外层包 Suspense，否则 Next 14 build 会 prerender 失败
   return (
@@ -75,7 +120,20 @@ export default function TeacherPlansPage() {
 
 function TeacherPlansPageInner() {
   const searchParams = useSearchParams();
-  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>(() => {
+    if (typeof window === 'undefined') return 'kanban';
+    const saved = window.localStorage.getItem('teacher-plans-view') as
+      | 'table'
+      | 'kanban'
+      | null;
+    return saved ?? 'kanban';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('teacher-plans-view', viewMode);
+    }
+  }, [viewMode]);
   // Dashboard 跳转过来时会带 ?status=PENDING_REVIEW 或 ?batch=xxx 作为初始 filter
   const [search, setSearch] = useState(() => searchParams.get('keyword') ?? '');
   const [batchFilter, setBatchFilter] = useState<string | undefined>(
@@ -265,11 +323,11 @@ function TeacherPlansPageInner() {
           <div className="xl:ml-auto">
             <Segmented
               options={[
-                { value: 'table', icon: <UnorderedListOutlined /> },
-                { value: 'card', icon: <AppstoreOutlined /> },
+                { label: '看板', value: 'kanban', icon: <AppstoreOutlined /> },
+                { label: '表格', value: 'table', icon: <UnorderedListOutlined /> },
               ]}
               value={viewMode}
-              onChange={(value) => setViewMode(value as 'table' | 'card')}
+              onChange={(value) => setViewMode(value as 'table' | 'kanban')}
             />
           </div>
         </div>
@@ -288,7 +346,7 @@ function TeacherPlansPageInner() {
           scroll={{ x: 900 }}
           className="rounded-2xl bg-surface shadow-card"
         />
-      ) : (
+      ) : viewMode === 'kanban' ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {plans.length === 0 ? (
             <div className="col-span-full rounded-2xl bg-surface py-16 shadow-card">
@@ -348,7 +406,7 @@ function TeacherPlansPageInner() {
             ))
           )}
         </div>
-      )}
+      ) : null}
 
       <div className="rounded-2xl border border-dashed border-border bg-surface px-5 py-4 text-sm text-text-muted">
         批量审核、导出全量报告需要后端补充批处理接口；当前已保留单方案查看与筛选能力。
