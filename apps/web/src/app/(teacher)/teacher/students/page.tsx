@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Avatar, Button, Input, Select, Space, Spin, Table, Tag, Tooltip } from 'antd';
+import { Avatar, Button, Empty, Input, Segmented, Select, Space, Spin, Table, Tag, Tooltip } from 'antd';
 import {
   FileTextOutlined,
   PlusOutlined,
@@ -137,6 +137,35 @@ export default function TeacherStudentsPage() {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Task 2 将使用 now 渲染相对时间
+function StudentCardGrid({ students, now: _now }: { students: Student[]; now: Date }) {
+  if (students.length === 0) {
+    return (
+      <div className="rounded-2xl bg-surface py-20 text-center shadow-card">
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有学生符合筛选条件" />
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {students.map((s) => (
+        <div
+          key={s.id}
+          className="rounded-lg border border-border-subtle bg-surface p-4 shadow-card"
+        >
+          <p className="m-0 font-medium">{getDisplayName(s)}</p>
+          <p className="m-0 text-xs text-text-muted">
+            完整度 {s.progress?.overallCompleteness ?? 0}% · 方案 {s.planCount ?? 0}
+          </p>
+          <p className="m-0 mt-1 text-xs text-text-muted">
+            占位 — Task 2 会替换为完整 StudentCard
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TeacherStudentsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -153,6 +182,19 @@ function TeacherStudentsPageInner() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   // 客户端启动后再产生 now / updatedAt，避免 SSR 时间不一致 hydration 警告
   const [clock, setClock] = useState<{ now: Date; updatedAt: Date } | null>(null);
+
+  // 视图切换:卡片 / 表格。默认卡片,localStorage 记忆上次选择
+  const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
+    if (typeof window === 'undefined') return 'card';
+    const saved = window.localStorage.getItem('teacher-students-view') as 'card' | 'table' | null;
+    return saved ?? 'card';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('teacher-students-view', viewMode);
+    }
+  }, [viewMode]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['teacher-students', search],
@@ -465,6 +507,14 @@ function TeacherStudentsPageInner() {
               { value: 'recommendable', label: '可推荐' },
             ]}
           />
+          <Segmented
+            value={viewMode}
+            onChange={(val) => setViewMode(val as 'card' | 'table')}
+            options={[
+              { label: '卡片', value: 'card' },
+              { label: '表格', value: 'table' },
+            ]}
+          />
           <div className="text-sm text-text-muted xl:ml-auto">
             当前显示 <strong className="text-text">{students.length}</strong> 名
           </div>
@@ -522,27 +572,31 @@ function TeacherStudentsPageInner() {
         </div>
       ) : null}
 
-      <Table
-        columns={columns}
-        dataSource={students}
-        loading={isLoading}
-        rowKey="id"
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys),
-        }}
-        pagination={{
-          pageSize: 20,
-          showSizeChanger: true,
-          showTotal: (total) => `共 ${total} 名学生`,
-        }}
-        scroll={{ x: 980 }}
-        className="rounded-2xl bg-surface shadow-card"
-        onRow={(record) => ({
-          className: 'cursor-pointer',
-          onClick: () => router.push(`/teacher/students/${record.id}`),
-        })}
-      />
+      {viewMode === 'table' ? (
+        <Table
+          columns={columns}
+          dataSource={students}
+          loading={isLoading}
+          rowKey="id"
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys),
+          }}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 名学生`,
+          }}
+          scroll={{ x: 980 }}
+          className="rounded-2xl bg-surface shadow-card"
+          onRow={(record) => ({
+            className: 'cursor-pointer',
+            onClick: () => router.push(`/teacher/students/${record.id}`),
+          })}
+        />
+      ) : (
+        <StudentCardGrid students={students} now={clock?.now ?? new Date()} />
+      )}
     </div>
   );
 }
