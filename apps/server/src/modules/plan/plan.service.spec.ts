@@ -83,7 +83,7 @@ describe('PlanService workflow gates', () => {
     expect(prisma.volunteerPlan.create).not.toHaveBeenCalled();
   });
 
-  it('studentConfirm moves an approved plan to STUDENT_CONFIRMED', async () => {
+  it('parentConfirm moves an approved plan to PARENT_CONFIRMED', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1,
       studentId: 10,
@@ -92,20 +92,20 @@ describe('PlanService workflow gates', () => {
     });
     prisma.volunteerPlan.update.mockResolvedValue({
       id: 1,
-      status: 'STUDENT_CONFIRMED',
-      studentConfirmedAt: new Date(),
+      status: 'PARENT_CONFIRMED',
+      parentConfirmedAt: new Date(),
     });
     prisma.planReview.create.mockResolvedValue({ id: 1 });
 
-    const result = await (service as any).studentConfirm(1, 100);
+    const result = await (service as any).parentConfirm(1, 100);
 
-    expect(result).toHaveProperty('status', 'STUDENT_CONFIRMED');
+    expect(result).toHaveProperty('status', 'PARENT_CONFIRMED');
     expect(prisma.volunteerPlan.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 1 },
         data: expect.objectContaining({
-          status: 'STUDENT_CONFIRMED',
-          studentConfirmedAt: expect.any(Date),
+          status: 'PARENT_CONFIRMED',
+          parentConfirmedAt: expect.any(Date),
         }),
       }),
     );
@@ -128,7 +128,7 @@ describe('PlanService workflow gates', () => {
       id: 1,
       createdById: 20,
       userId: null,
-      status: 'STUDENT_CONFIRMED',
+      status: 'PARENT_CONFIRMED',
       batchConfigId: null,
     });
 

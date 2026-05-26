@@ -135,34 +135,34 @@ export class PlanController {
   }
 
   @Post(':id/student-confirm')
-  @ApiOperation({ summary: '学生确认主管已通过的方案' })
+  @ApiOperation({ summary: '家长确认主管已通过的方案' })
   @ApiParam({ name: 'id', type: Number })
   async studentConfirm(
     @Param('id', ParseIntPipe) id: number,
     @Request() req: any,
   ) {
-    return this.planService.studentConfirm(id, req.user.id);
+    return this.planService.parentConfirm(id, req.user.id);
   }
 
   @Post(':id/student-request-change')
-  @ApiOperation({ summary: '学生退回方案并提交修改意见' })
+  @ApiOperation({ summary: '家长退回方案并提交修改意见' })
   @ApiParam({ name: 'id', type: Number })
   async studentRequestChange(
     @Param('id', ParseIntPipe) id: number,
     @Request() req: any,
     @Body() body: { comment?: string },
   ) {
-    return this.planService.studentRequestChange(
+    return this.planService.parentRequestChange(
       id,
       req.user.id,
-      body.comment?.trim() || '学生请求修改方案',
+      body.comment?.trim() || '家长请求修改方案',
     );
   }
 
   @Post(':id/confirm')
-  @ApiOperation({ summary: '学生确认方案（兼容旧前端）' })
+  @ApiOperation({ summary: '家长确认方案（兼容旧前端）' })
   async confirmAlias(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
-    return this.planService.studentConfirm(id, req.user.id);
+    return this.planService.parentConfirm(id, req.user.id);
   }
 
   @Post(':id/derive-version')

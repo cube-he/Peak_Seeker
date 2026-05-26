@@ -36,19 +36,19 @@ describe('PlanStateMachineService', () => {
     expect(sm.transition('REVIEWING', 'COMMENT')).toBe('REVIEWING');
   });
 
-  it('APPROVED -> student-confirm -> STUDENT_CONFIRMED', () => {
-    expect(sm.transition('APPROVED', 'STUDENT_CONFIRM' as any)).toBe('STUDENT_CONFIRMED');
+  it('APPROVED -> parent-confirm -> PARENT_CONFIRMED', () => {
+    expect(sm.transition('APPROVED', 'PARENT_CONFIRM')).toBe('PARENT_CONFIRMED');
   });
 
-  it('APPROVED -> student-request-change -> DRAFT', () => {
-    expect(sm.transition('APPROVED', 'STUDENT_REQUEST_CHANGE' as any)).toBe('DRAFT');
+  it('APPROVED -> parent-request-change -> DRAFT', () => {
+    expect(sm.transition('APPROVED', 'PARENT_REQUEST_CHANGE')).toBe('DRAFT');
   });
 
-  it('STUDENT_CONFIRMED -> finalize -> FINALIZED', () => {
-    expect(sm.transition('STUDENT_CONFIRMED' as any, 'FINALIZE')).toBe('FINALIZED');
+  it('PARENT_CONFIRMED -> finalize -> FINALIZED', () => {
+    expect(sm.transition('PARENT_CONFIRMED', 'FINALIZE')).toBe('FINALIZED');
   });
 
-  it('APPROVED -> finalize requires student confirmation', () => {
+  it('APPROVED -> finalize requires parent confirmation', () => {
     expect(() => sm.transition('APPROVED', 'FINALIZE')).toThrow(/不允许/);
   });
 
@@ -61,8 +61,9 @@ describe('PlanStateMachineService', () => {
       .toThrow(/不允许/);
   });
 
-  it('canDeriveVersion: APPROVED/REJECTED/FINALIZED 可派生，DRAFT/PENDING_REVIEW/REVIEWING 不可', () => {
+  it('canDeriveVersion: APPROVED/PARENT_CONFIRMED/REJECTED/FINALIZED 可派生，DRAFT/PENDING_REVIEW/REVIEWING 不可', () => {
     expect(sm.canDeriveVersion('APPROVED')).toBe(true);
+    expect(sm.canDeriveVersion('PARENT_CONFIRMED')).toBe(true);
     expect(sm.canDeriveVersion('REJECTED')).toBe(true);
     expect(sm.canDeriveVersion('FINALIZED')).toBe(true);
     expect(sm.canDeriveVersion('DRAFT')).toBe(false);

@@ -60,7 +60,7 @@ export function deriveWorkflowStatus(
       return 'SUBMITTED';
     case 'FINALIZED':
     case 'APPROVED':
-    case 'STUDENT_CONFIRMED':
+    case 'PARENT_CONFIRMED':
       return 'FINALIZED';
     case 'PENDING_REVIEW':
     case 'REVIEWING':

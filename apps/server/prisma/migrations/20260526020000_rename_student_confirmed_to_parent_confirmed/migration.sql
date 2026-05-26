@@ -39,3 +39,29 @@ ALTER TABLE `volunteer_plans`
 
 ALTER TABLE `volunteer_plans`
   CHANGE COLUMN `student_change_request` `parent_change_request` TEXT NULL;
+
+-- Step 5: 迁移 plan_reviews.action 枚举值
+ALTER TABLE `plan_reviews`
+  MODIFY COLUMN `action` ENUM(
+    'APPROVE',
+    'REJECT',
+    'REQUEST_CHANGE',
+    'COMMENT',
+    'STUDENT_CONFIRM',
+    'PARENT_CONFIRM',
+    'STUDENT_REQUEST_CHANGE',
+    'PARENT_REQUEST_CHANGE'
+  ) NOT NULL;
+
+UPDATE `plan_reviews` SET `action` = 'PARENT_CONFIRM' WHERE `action` = 'STUDENT_CONFIRM';
+UPDATE `plan_reviews` SET `action` = 'PARENT_REQUEST_CHANGE' WHERE `action` = 'STUDENT_REQUEST_CHANGE';
+
+ALTER TABLE `plan_reviews`
+  MODIFY COLUMN `action` ENUM(
+    'APPROVE',
+    'REJECT',
+    'REQUEST_CHANGE',
+    'COMMENT',
+    'PARENT_CONFIRM',
+    'PARENT_REQUEST_CHANGE'
+  ) NOT NULL;
