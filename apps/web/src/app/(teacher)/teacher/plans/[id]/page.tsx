@@ -88,9 +88,22 @@ function formatRelativeTime(date: Date | null, now: Date) {
   return date.toLocaleString('zh-CN');
 }
 
-// 历史最低分：优先 25 年专业级，依次回退专业组、旧 lastYearMinScore
-function getHistoricalScore(item: any): number | null {
-  return item?.score25Major ?? item?.score25Group ?? item?.lastYearMinScore ?? null;
+// 历史录取分来源枚举(供 UI 标注当前算法在用哪档)
+export type HistoricalScoreSource = 'major25' | 'group25' | 'major24' | 'legacy';
+
+export interface HistoricalScoreResult {
+  score: number;
+  source: HistoricalScoreSource;
+}
+
+// 历史最低分:返回 { score, source } 让 UI 能告诉老师当前是哪个维度的数据
+// 优先级:25 年专业级 > 25 年专业组级 > 24 年专业级 > 旧字段
+function getHistoricalScore(item: any): HistoricalScoreResult | null {
+  if (item?.score25Major != null) return { score: item.score25Major, source: 'major25' };
+  if (item?.score25Group != null) return { score: item.score25Group, source: 'group25' };
+  if (item?.score24Major != null) return { score: item.score24Major, source: 'major24' };
+  if (item?.lastYearMinScore != null) return { score: item.lastYearMinScore, source: 'legacy' };
+  return null;
 }
 
 function getHistoricalRank(item: any): number | null {
@@ -354,7 +367,7 @@ export default function PlanDetailPage() {
     const margins = items
       .map((it) => {
         const hist = getHistoricalScore(it);
-        return studentScore != null && hist != null ? studentScore - hist : null;
+        return studentScore != null && hist != null ? studentScore - hist.score : null;
       })
       .filter((m): m is number => m !== null);
     const avgMargin = margins.length
@@ -509,14 +522,14 @@ export default function PlanDetailPage() {
       key: 'historical',
       width: 110,
       render: (_, item) => {
-        const score = getHistoricalScore(item);
+        const hist = getHistoricalScore(item);
         const rank = getHistoricalRank(item);
-        if (score === null && rank === null) {
+        if (hist === null && rank === null) {
           return <span className="text-xs text-text-faint">--</span>;
         }
         return (
           <div className="text-sm">
-            {score !== null ? <div className="font-medium text-text">{score} 分</div> : null}
+            {hist !== null ? <div className="font-medium text-text">{hist.score} 分</div> : null}
             {rank !== null ? <div className="text-xs text-text-muted">{formatNumber(rank)} 位</div> : null}
           </div>
         );
@@ -527,20 +540,22 @@ export default function PlanDetailPage() {
       key: 'margin',
       width: 80,
       sorter: (a, b) => {
-        const sa = summary.studentScore != null && getHistoricalScore(a) != null
-          ? summary.studentScore - (getHistoricalScore(a) as number)
+        const histA = getHistoricalScore(a);
+        const histB = getHistoricalScore(b);
+        const sa = summary.studentScore != null && histA != null
+          ? summary.studentScore - histA.score
           : Number.POSITIVE_INFINITY;
-        const sb = summary.studentScore != null && getHistoricalScore(b) != null
-          ? summary.studentScore - (getHistoricalScore(b) as number)
+        const sb = summary.studentScore != null && histB != null
+          ? summary.studentScore - histB.score
           : Number.POSITIVE_INFINITY;
         return sa - sb;
       },
       render: (_, item) => {
-        const score = getHistoricalScore(item);
-        if (summary.studentScore == null || score == null) {
+        const hist = getHistoricalScore(item);
+        if (summary.studentScore == null || hist == null) {
           return <span className="text-xs text-text-faint">--</span>;
         }
-        const margin = summary.studentScore - score;
+        const margin = summary.studentScore - hist.score;
         const colorClass =
           margin < 0 ? 'text-rush' : margin >= 20 ? 'text-safe' : 'text-accent';
         return (
