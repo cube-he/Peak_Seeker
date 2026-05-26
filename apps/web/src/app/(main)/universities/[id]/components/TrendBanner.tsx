@@ -24,31 +24,62 @@ interface YearPoint {
 
 interface AdmissionRecordLike {
   year?: number | null;
+  // 实际 API 字段叫 subjects(复数,值 "物理"/"历史"),少数路径可能有 subject/examType
+  subjects?: string | null;
   subject?: string | null;
-  minScore?: number | null;
-  minRank?: number | null;
+  examType?: string | null;
+  // 分数 / 位次 4 个口径,优先级:
+  //   投档 filing > 院校 university > 组 group > 专业 major
+  // (院校最低分最常用,清华 2025 主要走 filingMinScore)
+  filingMinScore?: number | null;
+  filingMinRank?: number | null;
+  universityMinScore?: number | null;
+  universityMinRank?: number | null;
+  groupMinScore?: number | null;
+  groupMinRank?: number | null;
   majorMinScore?: number | null;
   majorMinRank?: number | null;
-  examType?: string | null;
+  // 老接口偶尔用 minScore / minRank
+  minScore?: number | null;
+  minRank?: number | null;
+}
+
+/** 从一条 admission record 抽出最优 (score, rank) 二元组 */
+function pickScoreRank(r: AdmissionRecordLike): { score: number; rank: number } | null {
+  const score =
+    r.filingMinScore ??
+    r.universityMinScore ??
+    r.groupMinScore ??
+    r.majorMinScore ??
+    r.minScore ??
+    null;
+  const rank =
+    r.filingMinRank ??
+    r.universityMinRank ??
+    r.groupMinRank ??
+    r.majorMinRank ??
+    r.minRank ??
+    null;
+  if (score == null || rank == null) return null;
+  return { score, rank };
 }
 
 function deriveYearly(records: AdmissionRecordLike[], subject: ExamType): YearPoint[] {
   if (!records?.length) return [];
-  // 按科类筛(examType / subject 字段命中 '物理' or '历史')
+  // 按科类筛(subjects / subject / examType 任意命中)
   const matched = records.filter((r) => {
-    const t = (r.examType ?? r.subject ?? '') as string;
+    const t = (r.subjects ?? r.subject ?? r.examType ?? '') as string;
     return t.includes(subject);
   });
   if (matched.length === 0) return [];
-  // 同年多条 → 取最低 score 那条(代表该科类该年的最低门槛)
+  // 同年多条 → 取最低 score 那条(代表该科类该年录取门槛)
   const m = new Map<number, YearPoint>();
   for (const r of matched) {
     if (!r.year) continue;
-    const score = r.minScore ?? r.majorMinScore ?? null;
-    const rank = r.minRank ?? r.majorMinRank ?? null;
-    if (score == null || rank == null) continue;
+    const sr = pickScoreRank(r);
+    if (!sr) continue;
     const cur = m.get(r.year);
-    if (!cur || score < cur.score) m.set(r.year, { year: r.year, score, rank });
+    if (!cur || sr.score < cur.score) m.set(r.year, { year: r.year, score: sr.score, rank: sr.rank });
   }
   return Array.from(m.values()).sort((a, b) => a.year - b.year);
 }
