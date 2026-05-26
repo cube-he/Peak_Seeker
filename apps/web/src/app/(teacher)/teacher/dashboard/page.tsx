@@ -3,16 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Button, Empty, Input, Spin } from 'antd';
+import { Button, Input, Spin } from 'antd';
 import {
   CheckCircleOutlined,
   FileTextOutlined,
   PlusOutlined,
   ReloadOutlined,
-  RightOutlined,
   SearchOutlined,
   UploadOutlined,
-  WarningOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
@@ -287,72 +285,17 @@ export default function TeacherDashboardPage() {
   const examDaysLeft = Math.max(0, daysUntil(examDate, now));
   const deadlineDaysLeft = Math.max(0, daysUntil(deadlineDate, now));
 
-  // 各状态人数
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {
-      COLLECTING: 0,
-      GENERATING: 0,
-      REVIEWING: 0,
-      FINALIZED: 0,
-      SUBMITTED: 0,
-    };
-    students.forEach((s) => {
-      const ws = getWorkflowStatus(s);
-      const key = counts[ws] !== undefined ? ws : 'COLLECTING';
-      counts[key] += 1;
-    });
-    return counts;
-  }, [students]);
-
   const totalStudents = students.length;
-  const finalizedCount = (statusCounts.FINALIZED ?? 0) + (statusCounts.SUBMITTED ?? 0);
-  const completionRatio = totalStudents > 0 ? Math.round((finalizedCount / totalStudents) * 100) : 0;
 
   const avgScore = useMemo(() => {
     const scored = students.map(getScore).filter((s): s is number => typeof s === 'number');
     return scored.length ? Math.round(scored.reduce((sum, s) => sum + s, 0) / scored.length) : null;
   }, [students]);
 
-  const avgCompleteness = useMemo(() => {
-    if (!students.length) return 0;
-    return Math.round(students.reduce((sum, s) => sum + getCompleteness(s), 0) / students.length);
-  }, [students]);
-
   const categorized = useMemo(
     () => categorizeStudents(students, pendingPlans, now),
     [students, pendingPlans, now],
   );
-
-  // TS 桥接:旧的 RiskSection 还在引用 `risks`,Task 3 会删除它。
-  // 此处提供一个空数组让 Task 1 commit 后旧代码不至于 ReferenceError(只是 TS error)。
-  const risks: TodoItem[] = [
-    ...categorized.waitMe,
-    ...categorized.waitStudentParent,
-    ...categorized.waitSupervisor,
-    ...categorized.sleeping,
-  ];
-
-  // 临期未定稿的人数（用于顶部警告）
-  const deadlineRiskCount = useMemo(
-    () => risks.filter((r) => r.tag === '临期未定稿').length,
-    [risks],
-  );
-
-  // 瓶颈：找非终态节点中人数最多的
-  const bottleneck = useMemo(() => {
-    const candidates: Array<{ key: string; label: string }> = [
-      { key: 'COLLECTING', label: '待采集' },
-      { key: 'GENERATING', label: '待生成' },
-      { key: 'REVIEWING', label: '待审核' },
-    ];
-    return candidates.reduce(
-      (best, stage) => {
-        const count = statusCounts[stage.key] ?? 0;
-        return count > best.count ? { stage, count } : best;
-      },
-      { stage: candidates[0], count: 0 },
-    );
-  }, [statusCounts]);
 
   const handleSearch = () => {
     const keyword = searchInput.trim();
@@ -403,14 +346,6 @@ export default function TeacherDashboardPage() {
           <span className="inline-flex items-center gap-1.5 rounded-md bg-accent-fixed px-3 py-1.5 text-accent">
             距志愿填报截止 <strong className="text-base">{deadlineDaysLeft}</strong> 天
           </span>
-          {deadlineRiskCount > 0 ? (
-            <Link
-              href="/teacher/students?workflowStatus=COLLECTING"
-              className="inline-flex items-center gap-1.5 rounded-md bg-[#fee2e2] px-3 py-1.5 text-rush no-underline"
-            >
-              <WarningOutlined /> {deadlineRiskCount} 人定稿临期
-            </Link>
-          ) : null}
         </div>
 
         {/* 快捷操作 */}
@@ -438,196 +373,15 @@ export default function TeacherDashboardPage() {
         </div>
       ) : (
         <>
-          {/* B 区：班级推进漏斗 */}
-          <FunnelSection
-            counts={statusCounts}
-            totalStudents={totalStudents}
-            completionRatio={completionRatio}
-            bottleneck={bottleneck}
+          <ThreeTrackTodoSection
+            waitMe={categorized.waitMe}
+            waitStudentParent={categorized.waitStudentParent}
+            waitSupervisor={categorized.waitSupervisor}
+            sleeping={categorized.sleeping}
           />
-
-          <div className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
-            {/* C 区：风险中心 */}
-            <RiskSection risks={risks} />
-
-            {/* D 区：关键指标卡 */}
-            <MetricsSection
-              totalStudents={totalStudents}
-              avgScore={avgScore}
-              riskCount={risks.length}
-              avgCompleteness={avgCompleteness}
-            />
-          </div>
         </>
       )}
     </div>
-  );
-}
-
-// ── B 区：班级推进漏斗 ──
-function FunnelSection({
-  counts,
-  totalStudents,
-  completionRatio,
-  bottleneck,
-}: {
-  counts: Record<string, number>;
-  totalStudents: number;
-  completionRatio: number;
-  bottleneck: { stage: { key: string; label: string }; count: number };
-}) {
-  const stages = [
-    { key: 'COLLECTING', label: '待采集', barClass: 'bg-gradient-to-r from-[#dbe5e7] to-[#a5b5b8]' },
-    { key: 'GENERATING', label: '待生成', barClass: 'bg-gradient-to-r from-[#cbd5e8] to-[#8595c3]' },
-    { key: 'REVIEWING', label: '待审核', barClass: 'bg-gradient-to-r from-[#fde4c8] to-[#e8a86a]' },
-    { key: 'FINALIZED', label: '已定稿', barClass: 'bg-gradient-to-r from-[#cfe9d6] to-[#80c89c]' },
-    { key: 'SUBMITTED', label: '已填报', barClass: 'bg-gradient-to-r from-[#bce5e0] to-[#5fa9a1]' },
-  ];
-
-  const max = Math.max(1, ...stages.map((s) => counts[s.key] ?? 0));
-
-  return (
-    <section className="rounded-2xl bg-surface shadow-card">
-      <div className="flex items-center justify-between border-b border-border-subtle px-6 py-4">
-        <h2 className="text-lg font-semibold text-text">班级推进</h2>
-        <span className="text-sm text-text-muted">
-          <strong className="text-text">{completionRatio}%</strong> 已定稿 · 共 {totalStudents} 人
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-3 px-6 py-5 md:grid-cols-3 lg:grid-cols-5">
-        {stages.map((stage) => {
-          const count = counts[stage.key] ?? 0;
-          const percent = max > 0 ? Math.max(4, Math.round((count / max) * 100)) : 0;
-          return (
-            <Link
-              key={stage.key}
-              href={`/teacher/students?workflowStatus=${stage.key}`}
-              className="group flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg/40 p-3 no-underline transition hover:border-primary hover:bg-surface hover:shadow-sm"
-            >
-              <span className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
-                {stage.label}
-              </span>
-              <span className="text-2xl font-semibold text-text">{count}</span>
-              <div className="h-1.5 overflow-hidden rounded-full bg-bg">
-                <div className={`h-full rounded-full ${stage.barClass}`} style={{ width: `${count > 0 ? percent : 0}%` }} />
-              </div>
-              <span className="text-[11px] text-text-faint group-hover:text-primary">点击查看 →</span>
-            </Link>
-          );
-        })}
-      </div>
-      {totalStudents > 0 && bottleneck.count > 0 ? (
-        <div className="border-t border-border-subtle bg-bg/40 px-6 py-3 text-sm text-text-muted">
-          <WarningOutlined className="mr-2 text-rush" />
-          瓶颈：<strong className="text-text">{bottleneck.count}</strong> 名学生卡在「{bottleneck.stage.label}」环节
-          <Link
-            href={`/teacher/students?workflowStatus=${bottleneck.stage.key}`}
-            className="ml-2 font-medium text-primary no-underline"
-          >
-            优先处理 →
-          </Link>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-// ── C 区：风险中心 ──
-function RiskSection({ risks }: { risks: RiskItem[] }) {
-  const displayed = risks.slice(0, 6);
-  return (
-    <section className="rounded-2xl bg-surface shadow-card">
-      <div className="flex items-center justify-between border-b border-border-subtle px-6 py-4">
-        <h2 className="text-lg font-semibold text-text">
-          风险中心
-          {risks.length > 0 ? (
-            <span className="ml-2 text-base font-semibold text-rush">{risks.length}</span>
-          ) : null}
-        </h2>
-        <Link href="/teacher/students" className="text-sm font-medium text-primary no-underline">
-          全部学生 <RightOutlined className="text-[10px]" />
-        </Link>
-      </div>
-      {risks.length === 0 ? (
-        <div className="py-12">
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="目前没有需要紧急处理的学生" />
-        </div>
-      ) : (
-        <div className="divide-y divide-border-subtle">
-          {displayed.map((risk) => {
-            const tagClass =
-              risk.severity === 'high' ? 'bg-[#fee2e2] text-rush' : 'bg-accent-fixed text-accent';
-            return (
-              <div key={risk.key} className="grid grid-cols-[40px_1fr_auto] items-center gap-4 px-6 py-4">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-light text-sm font-semibold text-white">
-                  {risk.initial}
-                </span>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-medium text-text">{risk.name}</span>
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${tagClass}`}>
-                      {risk.tag}
-                    </span>
-                  </div>
-                  <span className="mt-0.5 block text-xs text-text-muted">{risk.reason}</span>
-                </div>
-                <Link href={risk.primaryAction.href}>
-                  <Button size="small" type="primary" ghost>
-                    {risk.primaryAction.label}
-                  </Button>
-                </Link>
-              </div>
-            );
-          })}
-          {risks.length > displayed.length ? (
-            <div className="bg-bg/30 px-6 py-3 text-center text-xs text-text-muted">
-              还有 {risks.length - displayed.length} 名学生有风险，
-              <Link href="/teacher/students" className="font-medium text-primary no-underline">
-                查看全部 →
-              </Link>
-            </div>
-          ) : null}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ── D 区：关键指标卡 ──
-function MetricsSection({
-  totalStudents,
-  avgScore,
-  riskCount,
-  avgCompleteness,
-}: {
-  totalStudents: number;
-  avgScore: number | null;
-  riskCount: number;
-  avgCompleteness: number;
-}) {
-  const items = [
-    { label: '学生总数', value: totalStudents, suffix: '人' },
-    { label: '平均分', value: avgScore ?? '--', suffix: avgScore !== null ? '分' : '' },
-    { label: '风险学生', value: riskCount, suffix: '人', emphasize: riskCount > 0 },
-    { label: '平均完整度', value: avgCompleteness, suffix: '%' },
-  ];
-  return (
-    <section className="rounded-2xl bg-surface shadow-card">
-      <div className="border-b border-border-subtle px-6 py-4">
-        <h2 className="text-lg font-semibold text-text">关键指标</h2>
-      </div>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-5 px-6 py-5">
-        {items.map((item) => (
-          <div key={item.label}>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">{item.label}</p>
-            <p className={`mt-1 text-2xl font-semibold ${item.emphasize ? 'text-rush' : 'text-text'}`}>
-              {item.value}
-              <span className="ml-1 text-sm font-normal text-text-muted">{item.suffix}</span>
-            </p>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 
