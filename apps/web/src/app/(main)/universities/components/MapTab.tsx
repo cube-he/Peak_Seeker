@@ -627,6 +627,42 @@ export function MapTab() {
       }
 
       // 非 markers 模式:子级 polygon + 数字标签(全国 view / 非直辖省 view)
+      //
+      // 先把"当前级整体边界"画出来 — province view 时把全国所有省 polygon 先 render,
+      // 当前省蓝色高亮 + 其他省透明骨架;city view 同理 render 父省所有市。这样进入
+      // 省/市 view 时用户能一眼看到当前选中级的整体范围,不会只剩一堆子市分散小色块。
+      // 跳过 country view(没有 parent)。
+      if (current.level !== 'country' && currentPath.length >= 2) {
+        const parentNode = currentPath[currentPath.length - 2];
+        const parentArea = explorer.getLocalAreaNode?.(parentNode.adcode);
+        if (parentArea) {
+          explorer.renderSubFeatures(parentArea, (feature: any) => {
+            const isCurrent = feature.properties.adcode === current.adcode;
+            if (isCurrent) {
+              return {
+                cursor: 'default',
+                bubble: true,
+                strokeColor: '#2563eb',
+                strokeWeight: 2,
+                strokeOpacity: 0.95,
+                fillColor: '#dbeafe',
+                fillOpacity: 0.18,
+              };
+            }
+            // 非当前 sub:几乎透明,只留一个 hint 边线
+            return {
+              cursor: 'default',
+              bubble: true,
+              strokeColor: '#cbd5e1',
+              strokeWeight: 0.5,
+              strokeOpacity: 0.25,
+              fillColor: 'transparent',
+              fillOpacity: 0,
+            };
+          });
+        }
+      }
+
       // 先 aggregate counts,polygon + label 都按 count 区分:
       //   count > 0 → 正常显示,clickable
       //   count = 0 → polygon 大幅淡化 + 完全不画 label(用户不感兴趣这些 0 数据的区)
