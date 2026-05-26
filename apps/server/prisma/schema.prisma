@@ -607,6 +607,7 @@ model User {
   studentProfile StudentProfile?
   createdPlans   VolunteerPlan[] @relation("PlanCreator")
   reviews        PlanReview[]
+  reviewDrafts   PlanReviewDraft[]
   notifications  Notification[]
   auditLogs      AuditLog[]
 
@@ -880,8 +881,9 @@ model VolunteerPlan {
 
   // 新关联
   planItems   PlanItem[]
-  reviews     PlanReview[]
-  evaluations PlanEvaluation[]
+  reviews      PlanReview[]
+  reviewDrafts PlanReviewDraft[]
+  evaluations  PlanEvaluation[]
 
   @@unique([studentId, batchConfigId, versionNo], name: "plan_natural_key")
   @@index([studentId])
@@ -1012,6 +1014,30 @@ model PlanReview {
   @@index([planId])
   @@index([reviewerId])
   @@map("plan_reviews")
+}
+
+// ==================== 方案审核草稿 ====================
+
+model PlanReviewDraft {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联方案
+  planId Int           @map("plan_id")
+  plan   VolunteerPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  // 审核人(同一审核人对同一方案只能有一份草稿)
+  reviewerId Int  @map("reviewer_id")
+  reviewer   User @relation(fields: [reviewerId], references: [id])
+
+  // 草稿内容(等同 PlanReview.comment / PlanReview.itemAnnotations,但未提交)
+  comment         String? @db.Text
+  itemAnnotations Json?   @map("item_annotations")
+
+  @@unique([planId, reviewerId])
+  @@index([planId])
+  @@map("plan_review_drafts")
 }
 
 // ==================== 方案评估（录取追踪） ====================
