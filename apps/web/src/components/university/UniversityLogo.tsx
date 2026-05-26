@@ -24,9 +24,12 @@ interface UniversityLogoProps {
   name: string;
   logoUrl?: string | null;
   size?: number;
+  /** 额外 className(让外层 CSS selector 选中这个节点。例如院校库的
+   *  `.rank-row.rank-1 .uni-logo` 加金圈光环) */
+  className?: string;
 }
 
-export default function UniversityLogo({ name, logoUrl, size = 40 }: UniversityLogoProps) {
+export default function UniversityLogo({ name, logoUrl, size = 40, className }: UniversityLogoProps) {
   const [errored, setErrored] = useState(false);
   const showImage = !!logoUrl && !errored;
 
@@ -36,7 +39,7 @@ export default function UniversityLogo({ name, logoUrl, size = 40 }: UniversityL
 
   return (
     <div
-      className="flex-shrink-0 flex items-center justify-center overflow-hidden"
+      className={`flex-shrink-0 flex items-center justify-center overflow-hidden ${className ?? ''}`}
       style={{
         width: size,
         height: size,
