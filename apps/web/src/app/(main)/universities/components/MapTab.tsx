@@ -249,10 +249,12 @@ export function MapTab() {
   // 学校校名 LabelsLayer(只 district view 显示,collision: true + allowCollision: false
   // 按 985/211/双一流 rank 自动避让,避免邻近校名糊成一团)
   const schoolNamesLayerRef = useRef<any>(null);
-  // 数字标签的 LabelsLayer(全国/省/市 view 显示的 [省名 N] [市名 N] [区名 N]
-  // 等。allowCollision: true 让所有 sub region label 都显示在中心,
-  // 即使邻近重叠也不 hide — 用户明确要求 "省/市/区 标签全部显示在对应区域中心位置")
-  const countLayerRef = useRef<any>(null);
+  // 数字标签的 Markers([省名 N] [市名 N] [区名 N])。
+  // 用普通 AMap.Marker + content HTML 而不是 LabelsLayer:LabelsLayer 即使
+  // collision: false 也不一定渲染 text-only LabelMarker(实测全国 view 32 个
+  // 省 label 全部不显示);改用普通 Marker 数组确保 100% 显示在中心位置。
+  // 数量级:全国 32 / 省 21 市 / 市 20 区,普通 Marker 不卡。
+  const countMarkersRef = useRef<any[]>([]);
   const universitiesRef = useRef<MapUniversity[]>([]);
   // 程序化 zoom 窗口:setBounds/setZoomAndCenter 期间 zoomend 会 fire 多次,
   // 期间 zoom 可能临时低于当前层级阈值。窗口里跳过 zoomend handler 防误 pop。
@@ -382,9 +384,9 @@ export function MapTab() {
     return () => {
       cancelled = true;
       const m = mapRef.current;
-      if (countLayerRef.current) {
-        try { m?.remove(countLayerRef.current); } catch { /* noop */ }
-        countLayerRef.current = null;
+      if (countMarkersRef.current.length > 0) {
+        try { countMarkersRef.current.forEach((mk) => m?.remove(mk)); } catch { /* noop */ }
+        countMarkersRef.current = [];
       }
       if (schoolNamesLayerRef.current) {
         try { m?.remove(schoolNamesLayerRef.current); } catch { /* noop */ }
@@ -417,9 +419,9 @@ export function MapTab() {
     // 公共清理:每次重渲都把所有 layer 清掉(polygon + 数字标签 + 学校 dots + 校名)
     const clearAll = () => {
       try { explorer.clearFeaturePolygons(); } catch { /* noop */ }
-      if (countLayerRef.current) {
-        try { map.remove(countLayerRef.current); } catch { /* noop */ }
-        countLayerRef.current = null;
+      if (countMarkersRef.current.length > 0) {
+        try { countMarkersRef.current.forEach((m2) => map.remove(m2)); } catch { /* noop */ }
+        countMarkersRef.current = [];
       }
       if (schoolNamesLayerRef.current) {
         try { map.remove(schoolNamesLayerRef.current); } catch { /* noop */ }
@@ -620,18 +622,12 @@ export function MapTab() {
 
       if (subs.length === 0) return;
 
-      // 数字标签:collision: false → 完全关闭 layer 内部碰撞检测,所有 sub region
-      // label 都显示在中心。allowCollision: true 允许跟底图 POI 重叠。
-      // 之前 collision: true + allowCollision: false/true 时 AMap 还会做 layer 内
-      // marker 之间的避让 → rank 较低的省(如青海 11)被高 rank 邻居 hide。
-      // 关掉碰撞才能真正达到 "省/市/区 标签全部显示在对应区域中心位置"。
-      const countLayer = new AMap.LabelsLayer({
-        zooms: [3, 20],
-        zIndex: 500,
-        collision: false,
-        allowCollision: true,
-      });
-
+      // 数字标签改用普通 AMap.Marker + content HTML:
+      // LabelsLayer + LabelMarker(即使 collision: false)实测会被 AMap
+      // 视觉 hide 一部分(text-only marker 渲染不稳定);Marker + content
+      // 是简单 absolute 定位的 DOM,永远全显示,不参与任何避让。
+      // 数量级 32/21/20 个,普通 Marker 不卡。
+      const countMarkers: any[] = [];
       subs.forEach((feature: any) => {
         const fLevel: PathNode['level'] = feature.properties.level;
         const shortName = normalizeAreaName(feature.properties.name, fLevel);
@@ -639,35 +635,40 @@ export function MapTab() {
         if (count === 0) return; // 0 数据区:不画 label
         const center = feature.properties.center || feature.properties.centroid;
         if (!center) return;
-
         const fAdcode: number = feature.properties.adcode;
-        // rank: 数据多的省/市优先保留(空间挤时先 hide 数据少的);+1 防 0 跟无 rank 撞
-        const labelMarker = new AMap.LabelMarker({
-          position: center,
-          rank: count + 1,
-          text: {
-            content: `${shortName} ${count}`,
-            direction: 'center',
-            style: {
-              fontSize: 12,
-              fontWeight: 'normal',
-              fillColor: '#ffffff',
-              padding: [4, 10, 4, 10],
-              backgroundColor: 'rgba(15,23,42,0.88)',
-              borderColor: 'rgba(255,255,255,0.12)',
-              borderWidth: 1,
-            },
-          },
-        });
-        labelMarker.on('click', (e: any) => {
-          if (!e?.originEvent) return; // 过滤 synthetic
+
+        const labelDiv = document.createElement('div');
+        labelDiv.style.cssText = [
+          'transform: translate(-50%, -50%)',
+          'padding: 4px 10px',
+          'background: rgba(15,23,42,0.88)',
+          'border: 1px solid rgba(255,255,255,0.12)',
+          'border-radius: 4px',
+          'color: #ffffff',
+          'font-size: 12px',
+          'font-family: inherit',
+          'white-space: nowrap',
+          'cursor: pointer',
+          'user-select: none',
+          'pointer-events: auto',
+        ].join(';');
+        labelDiv.textContent = `${shortName} ${count}`;
+        labelDiv.addEventListener('click', (ev) => {
+          ev.stopPropagation();
           setCurrentPath(buildDrillUpdater(fAdcode, shortName, fLevel));
         });
-        countLayer.add(labelMarker);
-      });
 
-      map.add(countLayer);
-      countLayerRef.current = countLayer;
+        const marker = new AMap.Marker({
+          position: center,
+          content: labelDiv,
+          anchor: 'center',
+          zIndex: 110,
+          bubble: false,
+        });
+        map.add(marker);
+        countMarkers.push(marker);
+      });
+      countMarkersRef.current = countMarkers;
 
       // 视野控制:用 setZoomAndCenter(..., immediately=true) 跳过 AMap 动画。
       // 浏览器实测 animate 版本中途会被覆盖(可能 explorer.renderSubFeatures
