@@ -158,12 +158,18 @@ function getMarkerStyle(uni: MapUniversity): MarkerStyle {
 
 /** 院校 marker 的色点 icon(给 AMap.LabelMarker 用)。返回 SVG data URI。
  *  size x size 圆点,fill = 档次色,stroke = 办学性质色。
- *  size 默认 18(district view),全国/省/市 view 用更小的尺寸传入。 */
+ *  size 默认 18(district view),全国/省/市 view 用更小的尺寸传入。
+ *
+ *  stroke 宽度按 size 比例缩放(基准 size=18 用 style.strokeWidth):
+ *  小 dot 时若 stroke 不缩,白边会占绝大部分面积让 dot 远看发白看不清色。
+ *  公式 = strokeWidth * (size / 18),但保底 0.5 防止 anti-alias 消失。 */
 function dotIconUrl(style: MarkerStyle, size: number = 18): string {
-  // 中心 (size/2, size/2), 半径 = (size - strokeWidth) / 2 - 0.5 留 anti-alias 边
   const half = size / 2;
-  const r = Math.max((size - style.strokeWidth) / 2 - 0.5, 1);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${half}" cy="${half}" r="${r}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="${style.strokeWidth}"/></svg>`;
+  const scaledStroke = Math.max(style.strokeWidth * (size / 18), 0.5);
+  // 半径 = (size - stroke)/2 - 留 anti-alias 边(随 size 缩小也缩小)
+  const aaPad = Math.max(0.3, size / 36);
+  const r = Math.max((size - scaledStroke) / 2 - aaPad, 1);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${half}" cy="${half}" r="${r}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="${scaledStroke}"/></svg>`;
   // utf8 编码(btoa 对中文不安全;这里 svg 是纯 ASCII 但保险起见用 utf8)
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
