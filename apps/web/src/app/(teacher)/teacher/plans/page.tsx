@@ -162,6 +162,19 @@ function TeacherPlansPageInner() {
     [plans],
   );
 
+  const trackCounts = useMemo(() => {
+    const c: Record<PlanTrack, number> = {
+      'wait-teacher': 0,
+      'wait-parent': 0,
+      'wait-supervisor': 0,
+      'delivered': 0,
+    };
+    plans.forEach((p) => {
+      c[getPlanTrack(p)] += 1;
+    });
+    return c;
+  }, [plans]);
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => planApi.deletePlan(id),
     onSuccess: () => {
@@ -279,19 +292,25 @@ function TeacherPlansPageInner() {
         </Button>
       </header>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
-        {[
-          ['全部', counts.all, 'border-l-primary'],
-          ['待审核', counts.pending, 'border-l-rush'],
-          ['已通过', counts.approved, 'border-l-accent'],
-          ['已定稿', counts.finalized, 'border-l-safe'],
-          ['已退回', counts.rejected, 'border-l-border'],
-        ].map(([label, count, tone]) => (
-          <div key={label as string} className={`rounded-2xl border-l-[3px] ${tone} bg-surface px-4 py-3 shadow-card`}>
-            <p className="text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">{label}</p>
-            <p className="mt-1 font-serif text-2xl font-semibold text-text">{count}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {(['wait-teacher', 'wait-parent', 'wait-supervisor', 'delivered'] as PlanTrack[]).map(
+          (track) => {
+            const meta = TRACK_META[track];
+            return (
+              <div
+                key={track}
+                className="rounded-2xl border-l-[3px] border-l-primary bg-surface px-4 py-3 shadow-card"
+              >
+                <p className="text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">
+                  {meta.emoji} {meta.label}
+                </p>
+                <p className="mt-1 font-serif text-2xl font-semibold text-text">
+                  {trackCounts[track]}
+                </p>
+              </div>
+            );
+          },
+        )}
       </div>
 
       <section className="rounded-2xl bg-surface px-4 py-4 shadow-card">
