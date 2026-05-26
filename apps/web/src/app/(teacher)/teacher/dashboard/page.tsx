@@ -61,16 +61,22 @@ interface PendingPlan {
   updatedAt: string;
 }
 
-interface RiskItem {
-  key: string;
+// 三轨待办流 + 沉默学生的统一项目结构
+interface TodoItem {
+  key: string;             // 唯一 key (e.g. 'pending-plan-42')
   studentId: number;
   name: string;
   initial: string;
-  tag: string;
-  reason: string;
-  priority: number;
-  severity: 'high' | 'medium';
+  // 这一条出现在哪个轨上,决定颜色和分组
+  track: 'wait-me' | 'wait-student-parent' | 'wait-supervisor' | 'sleeping';
+  // 主标签,显示在卡片标题旁
+  label: string;
+  // 副文,显示在主标签下
+  detail: string;
+  // 主操作按钮
   primaryAction: { label: string; href: string };
+  // 排序优先级(数字越大越靠前)
+  priority: number;
 }
 
 function getScore(student: StudentCard) {
@@ -100,92 +106,130 @@ function formatRelativeTime(date: Date, now: Date) {
   return `${Math.floor(seconds / 86_400)} 天前`;
 }
 
-function computeRisks(
+function categorizeStudents(
   students: StudentCard[],
   pendingPlans: PendingPlan[],
   now: Date,
-  deadline: Date,
-): RiskItem[] {
-  const list: RiskItem[] = [];
-  const daysToDeadline = daysUntil(deadline, now);
+): {
+  waitMe: TodoItem[];
+  waitStudentParent: TodoItem[];
+  waitSupervisor: TodoItem[];
+  sleeping: TodoItem[];
+} {
+  const waitMe: TodoItem[] = [];
+  const waitStudentParent: TodoItem[] = [];
+  const waitSupervisor: TodoItem[] = [];
+  const sleeping: TodoItem[] = [];
 
-  students.forEach((student) => {
-    const status = getWorkflowStatus(student);
-    const noActionDays = daysSince(student.updatedAt, now);
-    const completeness = getCompleteness(student);
-    const name = student.realName || student.username || '学生';
-    const initial = name.charAt(0);
-
-    // 已定稿/已填报学生不再产生风险（除非临期但还没填报）
-    if (status === 'SUBMITTED') return;
-
-    // 信号 1：临期未定稿（7 天内截止且未定稿）
-    if (status !== 'FINALIZED' && daysToDeadline <= 7 && daysToDeadline >= 0) {
-      list.push({
-        key: `deadline-${student.id}`,
-        studentId: student.id,
-        name,
-        initial,
-        tag: '临期未定稿',
-        reason: `距填报截止还剩 ${daysToDeadline} 天 · 当前${STATUS_LABELS[status] ?? '未知'}`,
-        priority: 1000 + (7 - daysToDeadline) * 10,
-        severity: 'high',
-        primaryAction: { label: '打开档案', href: `/teacher/students/${student.id}` },
-      });
-      return;
-    }
-
-    // 信号 2：长时间无动作
-    if (noActionDays !== null && noActionDays >= 7 && status !== 'FINALIZED') {
-      list.push({
-        key: `idle-${student.id}`,
-        studentId: student.id,
-        name,
-        initial,
-        tag: '长时间无动作',
-        reason: `${noActionDays} 天未更新 · 当前${STATUS_LABELS[status] ?? '未知'}`,
-        priority: 500 + noActionDays,
-        severity: 'medium',
-        primaryAction: { label: '打开档案', href: `/teacher/students/${student.id}` },
-      });
-      return;
-    }
-
-    // 信号 3：低完整度（仅在采集阶段）
-    if (status === 'COLLECTING' && completeness < 60) {
-      list.push({
-        key: `incomplete-${student.id}`,
-        studentId: student.id,
-        name,
-        initial,
-        tag: '档案不完整',
-        reason: `完整度 ${completeness}%`,
-        priority: 200 + (60 - completeness),
-        severity: 'medium',
-        primaryAction: { label: '打开档案', href: `/teacher/students/${student.id}` },
-      });
-    }
-  });
-
-  // 信号 4：方案审核积压（>3 天未处理）
+  // ── 等主管:由 plan status PENDING_REVIEW 驱动 ──
   pendingPlans.forEach((plan) => {
     const days = daysSince(plan.updatedAt, now);
-    if (days === null || days < 3) return;
     const name = plan.studentName || '学生';
-    list.push({
+    waitSupervisor.push({
       key: `pending-${plan.id}`,
       studentId: plan.studentId,
       name,
       initial: name.charAt(0),
-      tag: '审核积压',
-      reason: `方案提交 ${days} 天未处理`,
-      priority: 700 + days,
-      severity: 'high',
-      primaryAction: { label: '立即审核', href: `/teacher/plans/${plan.id}` },
+      track: 'wait-supervisor',
+      label: '等主管审核',
+      detail: days === null ? `刚提交` : `提交 ${days} 天前`,
+      primaryAction: { label: '查看方案', href: `/teacher/plans/${plan.id}` },
+      priority: 1000 - (days ?? 0),
     });
   });
 
-  return list.sort((a, b) => b.priority - a.priority);
+  students.forEach((student) => {
+    const status = getWorkflowStatus(student);
+    const name = student.realName || student.username || '学生';
+    const initial = name.charAt(0);
+    const studentId = student.id;
+    const noActionDays = daysSince(student.updatedAt, now);
+    const completeness = getCompleteness(student);
+
+    if (status === 'SUBMITTED') return;
+
+    if (noActionDays !== null && noActionDays >= 7 && status !== 'FINALIZED') {
+      sleeping.push({
+        key: `sleeping-${studentId}`,
+        studentId,
+        name,
+        initial,
+        track: 'sleeping',
+        label: `沉默 ${noActionDays} 天`,
+        detail: `当前${STATUS_LABELS[status] ?? '未知'} · 完整度 ${completeness}%`,
+        primaryAction: { label: '联系跟进', href: `/teacher/students/${studentId}` },
+        priority: 800 + noActionDays,
+      });
+      return;
+    }
+
+    if (status === 'COLLECTING' && completeness < 60) {
+      waitMe.push({
+        key: `collect-${studentId}`,
+        studentId,
+        name,
+        initial,
+        track: 'wait-me',
+        label: '待采集资料',
+        detail: `完整度 ${completeness}% · 老师需补充`,
+        primaryAction: { label: '继续采集', href: `/teacher/students/${studentId}` },
+        priority: 500 + (60 - completeness),
+      });
+      return;
+    }
+
+    if (status === 'GENERATING') {
+      waitMe.push({
+        key: `generate-${studentId}`,
+        studentId,
+        name,
+        initial,
+        track: 'wait-me',
+        label: '待生成方案',
+        detail: `资料已齐 ${completeness}% · 等老师出方案`,
+        primaryAction: { label: '生成方案', href: `/teacher/plans/generate/${studentId}` },
+        priority: 600,
+      });
+      return;
+    }
+
+    if (status === 'COLLECTING' && completeness >= 60) {
+      waitStudentParent.push({
+        key: `student-fill-${studentId}`,
+        studentId,
+        name,
+        initial,
+        track: 'wait-student-parent',
+        label: '等家长补资料',
+        detail: `已 ${completeness}% · 缺剩余字段`,
+        primaryAction: { label: '查看 / 催办', href: `/teacher/students/${studentId}` },
+        priority: 300 + completeness,
+      });
+      return;
+    }
+
+    if (status === 'FINALIZED') {
+      waitStudentParent.push({
+        key: `finalize-${studentId}`,
+        studentId,
+        name,
+        initial,
+        track: 'wait-student-parent',
+        label: '终稿待签字',
+        detail: `方案已定稿 · 等家长确认提交`,
+        primaryAction: { label: '查看方案', href: `/teacher/students/${studentId}` },
+        priority: 400,
+      });
+      return;
+    }
+  });
+
+  waitMe.sort((a, b) => b.priority - a.priority);
+  waitStudentParent.sort((a, b) => b.priority - a.priority);
+  waitSupervisor.sort((a, b) => b.priority - a.priority);
+  sleeping.sort((a, b) => b.priority - a.priority);
+
+  return { waitMe, waitStudentParent, waitSupervisor, sleeping };
 }
 
 export default function TeacherDashboardPage() {
@@ -274,10 +318,19 @@ export default function TeacherDashboardPage() {
     return Math.round(students.reduce((sum, s) => sum + getCompleteness(s), 0) / students.length);
   }, [students]);
 
-  const risks = useMemo(
-    () => computeRisks(students, pendingPlans, now, deadlineDate),
-    [students, pendingPlans, now, deadlineDate],
+  const categorized = useMemo(
+    () => categorizeStudents(students, pendingPlans, now),
+    [students, pendingPlans, now],
   );
+
+  // TS 桥接:旧的 RiskSection 还在引用 `risks`,Task 3 会删除它。
+  // 此处提供一个空数组让 Task 1 commit 后旧代码不至于 ReferenceError(只是 TS error)。
+  const risks: TodoItem[] = [
+    ...categorized.waitMe,
+    ...categorized.waitStudentParent,
+    ...categorized.waitSupervisor,
+    ...categorized.sleeping,
+  ];
 
   // 临期未定稿的人数（用于顶部警告）
   const deadlineRiskCount = useMemo(
