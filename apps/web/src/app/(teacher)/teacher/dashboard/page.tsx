@@ -630,3 +630,113 @@ function MetricsSection({
     </section>
   );
 }
+
+// ── 三轨待办流 + 沉默学生 ──
+function ThreeTrackTodoSection({
+  waitMe,
+  waitStudentParent,
+  waitSupervisor,
+  sleeping,
+}: {
+  waitMe: TodoItem[];
+  waitStudentParent: TodoItem[];
+  waitSupervisor: TodoItem[];
+  sleeping: TodoItem[];
+}) {
+  return (
+    <section className="rounded-2xl bg-surface shadow-card">
+      <div className="border-b border-border-subtle px-6 py-4">
+        <h2 className="text-lg font-semibold text-text">今天该做什么</h2>
+      </div>
+      <div className="grid gap-4 px-6 py-5 lg:grid-cols-3">
+        <TodoTrack
+          title="🔴 等我动手"
+          items={waitMe}
+          emptyText="所有学生待办都不在你这里 ✓"
+          accentClass="text-rush"
+        />
+        <TodoTrack
+          title="📤 等学生家长"
+          items={waitStudentParent}
+          emptyText="学生家长侧无待办"
+          accentClass="text-primary"
+        />
+        <TodoTrack
+          title="⏳ 等主管审核"
+          items={waitSupervisor}
+          emptyText="无方案在主管手上"
+          accentClass="text-accent"
+        />
+      </div>
+      {sleeping.length > 0 ? (
+        <div className="border-t border-border-subtle bg-bg/40 px-6 py-4">
+          <h3 className="mb-2 text-sm font-semibold text-rush">
+            ⚠️ 沉默学生 ({sleeping.length})
+          </h3>
+          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+            {sleeping.map((item) => (
+              <TodoCard key={item.key} item={item} dim />
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+// 三轨各自的列
+function TodoTrack({
+  title,
+  items,
+  emptyText,
+  accentClass,
+}: {
+  title: string;
+  items: TodoItem[];
+  emptyText: string;
+  accentClass: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className={`text-sm font-semibold ${accentClass}`}>
+        {title} ({items.length})
+      </h3>
+      {items.length === 0 ? (
+        <p className="text-xs text-text-muted">{emptyText}</p>
+      ) : (
+        items.slice(0, 6).map((item) => <TodoCard key={item.key} item={item} />)
+      )}
+      {items.length > 6 ? (
+        <p className="text-xs text-text-muted">
+          还有 {items.length - 6} 项 · 滚动列表见学生页
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// 单条待办卡
+function TodoCard({ item, dim }: { item: TodoItem; dim?: boolean }) {
+  return (
+    <Link
+      href={item.primaryAction.href}
+      className={`group flex items-center gap-3 rounded-lg border border-border-subtle bg-bg/40 px-3 py-2 no-underline transition hover:border-primary hover:bg-surface ${
+        dim ? 'opacity-70' : ''
+      }`}
+    >
+      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-light text-xs font-semibold text-white">
+        {item.initial}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-1">
+          <span className="truncate text-sm font-medium text-text">{item.name}</span>
+          <span className="text-[10px] text-text-muted">{item.label}</span>
+        </div>
+        <span className="block truncate text-[11px] text-text-muted">{item.detail}</span>
+      </div>
+      <Button size="small" type="text" className="flex-shrink-0">
+        {item.primaryAction.label}
+      </Button>
+    </Link>
+  );
+}
