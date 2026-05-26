@@ -13,6 +13,7 @@ import {
   pickMapFilters,
 } from '@/stores/universityFilterStore';
 import { MapFilterBar } from './MapFilterBar';
+import { PageHead } from './shared/PageHead';
 
 /**
  * 院校地图 Tab(4 层下钻:全国 → 省 → 市 → 区县 → 学校 markers):
@@ -739,78 +740,95 @@ export function MapTab() {
 
   if (mapError) {
     return (
-      <div className="rounded-xl bg-surface p-6 shadow-card">
-        <Alert
-          type="error"
-          showIcon
-          message="地图加载失败"
-          description={mapError.message}
-        />
+      <div className="card" style={{ padding: 24 }}>
+        <Alert type="error" showIcon message="地图加载失败" description={mapError.message} />
       </div>
     );
   }
 
+  const isDistrict = currentPath[currentPath.length - 1].level === 'district';
+
   return (
-    <div className="pb-12">
-      {/* 共享 filter store 跟「全部院校」tab 同步:这里改 filter,list tab 重新分页;
-          list 改 filter,这里 map 重 fetch */}
+    <div className="fade-up">
+      <PageHead
+        eyebrow="Map View · 地图视图"
+        title={
+          <>
+            按地理位置看 <span className="num">{universities?.length ?? '—'}</span> 所院校
+          </>
+        }
+        lead="全国 → 省 → 市 → 区/县逐级下钻。点击区域中心数字标签进入下一层级,到区/县后展开学校点位。"
+      />
+
+      {/* 顶部 filter chip 卡 — MapFilterBar 沿用,跟列表 tab 共享 filter store */}
       <MapFilterBar />
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm">
-        {/* 面包屑导航:点任一级回到该层 */}
-        <div className="flex items-center gap-2">
-          {currentPath.map((p, i) => (
-            <Fragment key={`${p.adcode}-${i}`}>
-              {i > 0 && <span className="text-text-faint">/</span>}
-              {i === currentPath.length - 1 ? (
-                <span className="font-medium text-text">{p.name}</span>
-              ) : (
+
+      <div className="map-shell" style={{ minHeight: 720 }}>
+        {/* 顶部条:面包屑 + 状态/legend */}
+        <div className="map-bar">
+          <div className="crumb">
+            {currentPath.map((p, i) => (
+              <Fragment key={`${p.adcode}-${i}`}>
+                {i > 0 && <span className="sep">›</span>}
                 <button
                   type="button"
-                  onClick={() =>
-                    setCurrentPath((prev) => prev.slice(0, i + 1))
-                  }
-                  className="border-0 bg-transparent p-0 text-primary hover:underline cursor-pointer"
+                  className={i === currentPath.length - 1 ? 'is-current' : ''}
+                  onClick={() => setCurrentPath((prev) => prev.slice(0, i + 1))}
                 >
                   {p.name}
                 </button>
-              )}
-            </Fragment>
-          ))}
-        </div>
-        <div className="flex items-center gap-4">
-          {/* 色点 legend(只在叶子 = district view 显院校 markers 时才有意义)
-              主色 = 档次,边框 = 公办/民办(粗深红 = 民办 vs 细白边 = 公办) */}
-          {currentPath[currentPath.length - 1].level === 'district' && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
+              </Fragment>
+            ))}
+          </div>
+          <div style={{ flex: 1 }} />
+          {isDistrict && (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: '4px 10px',
+                fontSize: 12,
+                color: 'var(--text-muted)',
+              }}
+            >
               <LegendDot fill="#d4af37" label="985" />
               <LegendDot fill="#9333ea" label="211" />
               <LegendDot fill="#0ea5e9" label="双一流" />
               <LegendDot fill="#16a34a" label="本科" />
               <LegendDot fill="#f97316" label="专科" />
-              <span className="text-text-faint">|</span>
+              <span style={{ color: 'var(--text-faint)' }}>|</span>
               <LegendDot fill="#94a3b8" stroke="#ffffff" strokeWidth={1.5} label="公办" />
               <LegendDot fill="#94a3b8" stroke="#b91c1c" strokeWidth={2} label="民办" />
             </div>
           )}
-          <span className="text-text-muted">
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {dataLoading
               ? '加载院校位置中...'
               : dataError
-              ? '数据加载失败'
-              : `共 ${universities?.length ?? 0} 所院校（含坐标）`}
+                ? '数据加载失败'
+                : `共 ${universities?.length ?? 0} 所院校(含坐标)`}
           </span>
         </div>
-      </div>
-      <div
-        className="relative overflow-hidden rounded-xl bg-surface shadow-card"
-        style={{ height: 760 }}
-      >
-        <div ref={containerRef} className="h-full w-full" />
-        {!mapReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-surface-dim/50">
-            <Spin />
-          </div>
-        )}
+
+        {/* AMap 容器:.map-canvas 由 styles.css 控制 height (clamp 560-760) */}
+        <div className="map-canvas">
+          <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+          {!mapReady && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(245,244,237,.5)',
+              }}
+            >
+              <Spin />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
