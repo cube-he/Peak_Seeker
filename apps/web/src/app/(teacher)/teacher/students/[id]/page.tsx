@@ -96,6 +96,158 @@ function formatRank(rank: number | null | undefined) {
   return rank == null ? '-' : rank.toLocaleString('zh-CN');
 }
 
+// ── SOP 服务节点 ──
+type SopNodeStatus = 'done' | 'active' | 'pending' | 'skipped';
+
+interface SopNode {
+  key: string;
+  label: string;
+  status: SopNodeStatus;
+  timestamp?: Date | null;
+  detail?: string;
+}
+
+function deriveSopNodes(student: any): SopNode[] {
+  const intakeStatus = student?.intakeStatus;
+  const plans: any[] = student?.volunteerPlans ?? [];
+  const latestPlan = plans.reduce(
+    (acc: any, p: any) =>
+      !acc || (p.versionNo ?? 0) > (acc.versionNo ?? 0) ? p : acc,
+    null,
+  );
+  const planStatus = latestPlan?.status;
+  const planVersionNo = latestPlan?.versionNo;
+
+  const signedAt = student?.createdAt ? new Date(student.createdAt) : null;
+  const intakeSubmittedAt = student?.intakeSubmittedAt
+    ? new Date(student.intakeSubmittedAt)
+    : null;
+  const planCreatedAt = latestPlan?.createdAt ? new Date(latestPlan.createdAt) : null;
+  const planFinalizedAt = latestPlan?.finalizedAt
+    ? new Date(latestPlan.finalizedAt)
+    : null;
+
+  // 节点 1: 签约
+  const sign: SopNode = signedAt
+    ? { key: 'sign', label: '签约', status: 'done', timestamp: signedAt }
+    : { key: 'sign', label: '签约', status: 'pending' };
+
+  // 节点 2: 资料采集
+  let intake: SopNode;
+  if (intakeStatus === 'VERIFIED') {
+    intake = { key: 'intake', label: '资料采集', status: 'done', timestamp: intakeSubmittedAt };
+  } else if (intakeStatus === 'SUBMITTED' || intakeStatus === 'NEEDS_CHANGES') {
+    intake = {
+      key: 'intake',
+      label: '资料采集',
+      status: 'active',
+      timestamp: intakeSubmittedAt,
+      detail: intakeStatus === 'NEEDS_CHANGES' ? '需修改' : '待审',
+    };
+  } else {
+    intake = { key: 'intake', label: '资料采集', status: 'pending' };
+  }
+
+  // 节点 3: 方案制作
+  let drafting: SopNode;
+  if (!latestPlan) {
+    drafting = { key: 'drafting', label: '方案制作', status: 'pending' };
+  } else if (planStatus === 'DRAFT') {
+    drafting = {
+      key: 'drafting',
+      label: '方案制作',
+      status: 'active',
+      timestamp: planCreatedAt,
+      detail: `v${planVersionNo} 草稿`,
+    };
+  } else {
+    drafting = {
+      key: 'drafting',
+      label: '方案制作',
+      status: 'done',
+      timestamp: planCreatedAt,
+      detail: `v${planVersionNo}`,
+    };
+  }
+
+  // 节点 4: 主管审核
+  let supReview: SopNode;
+  if (!latestPlan || planStatus === 'DRAFT') {
+    supReview = { key: 'supervisor-review', label: '主管审核', status: 'pending' };
+  } else if (planStatus === 'PENDING_REVIEW' || planStatus === 'REVIEWING') {
+    supReview = {
+      key: 'supervisor-review',
+      label: '主管审核',
+      status: 'active',
+      detail: planStatus === 'REVIEWING' ? '审核中' : '待审核',
+    };
+  } else if (planStatus === 'REJECTED') {
+    supReview = {
+      key: 'supervisor-review',
+      label: '主管审核',
+      status: 'active',
+      detail: '已退回 待修改',
+    };
+  } else {
+    supReview = { key: 'supervisor-review', label: '主管审核', status: 'done' };
+  }
+
+  // 节点 5: 家长确认
+  let parentConfirm: SopNode;
+  if (
+    !latestPlan ||
+    ['DRAFT', 'PENDING_REVIEW', 'REVIEWING', 'REJECTED'].includes(planStatus)
+  ) {
+    parentConfirm = { key: 'parent-confirm', label: '家长确认', status: 'pending' };
+  } else if (planStatus === 'APPROVED') {
+    parentConfirm = {
+      key: 'parent-confirm',
+      label: '家长确认',
+      status: 'active',
+      detail: '等家长确认',
+    };
+  } else {
+    parentConfirm = { key: 'parent-confirm', label: '家长确认', status: 'done' };
+  }
+
+  // 节点 6: 终稿
+  let finalize: SopNode;
+  if (
+    !latestPlan ||
+    ['DRAFT', 'PENDING_REVIEW', 'REVIEWING', 'REJECTED', 'APPROVED'].includes(planStatus)
+  ) {
+    finalize = { key: 'finalize', label: '终稿', status: 'pending' };
+  } else if (planStatus === 'PARENT_CONFIRMED') {
+    finalize = { key: 'finalize', label: '终稿', status: 'active', detail: '待定稿' };
+  } else if (planStatus === 'FINALIZED' || planStatus === 'PUBLISHED') {
+    finalize = {
+      key: 'finalize',
+      label: '终稿',
+      status: 'done',
+      timestamp: planFinalizedAt,
+    };
+  } else {
+    finalize = { key: 'finalize', label: '终稿', status: 'pending' };
+  }
+
+  // 节点 7: 已提交
+  let submit: SopNode;
+  if (planStatus === 'PUBLISHED') {
+    submit = { key: 'submit', label: '已提交', status: 'done' };
+  } else if (planStatus === 'FINALIZED') {
+    submit = {
+      key: 'submit',
+      label: '已提交',
+      status: 'active',
+      detail: '待提交考试院',
+    };
+  } else {
+    submit = { key: 'submit', label: '已提交', status: 'pending' };
+  }
+
+  return [sign, intake, drafting, supReview, parentConfirm, finalize, submit];
+}
+
 function RankCheckExtra({ rankCheck }: { rankCheck?: RankCheck }) {
   if (!rankCheck || rankCheck.source === 'missing-input') {
     return <span>可由后端按一分一段自动计算，也可由老师校正。</span>;
@@ -231,6 +383,8 @@ export default function StudentDetailPage() {
     };
   }, [student?.volunteerPlans]);
 
+  const sopNodes = useMemo(() => deriveSopNodes(student), [student]);
+
   if (isLoading || !student) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -288,8 +442,8 @@ export default function StudentDetailPage() {
       <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
         {/* 主区 */}
         <div className="space-y-4">
-          {/* SOP 时间轴 — Task 2 会填充 */}
-          <div data-slot="sop-timeline-placeholder" />
+          {/* SOP 时间轴 */}
+          <SopTimeline nodes={sopNodes} />
 
           {/* 进度条 */}
           {progress ? (
@@ -715,5 +869,58 @@ function StudentSummaryBar({
         </div>
       </div>
     </header>
+  );
+}
+
+function SopTimeline({ nodes }: { nodes: SopNode[] }) {
+  return (
+    <Card title="服务进度" size="small">
+      <ol className="m-0 list-none space-y-3 p-0">
+        {nodes.map((node, i) => {
+          const isLast = i === nodes.length - 1;
+          return (
+            <li key={node.key} className="relative pl-6">
+              <span
+                aria-hidden
+                className={`absolute left-0 top-1 inline-flex h-4 w-4 items-center justify-center rounded-full ${
+                  node.status === 'done'
+                    ? 'bg-safe text-white'
+                    : node.status === 'active'
+                      ? 'bg-accent text-white'
+                      : node.status === 'skipped'
+                        ? 'bg-text-muted text-white'
+                        : 'border-2 border-text-muted bg-surface'
+                }`}
+              >
+                {node.status === 'done' ? '✓' : node.status === 'active' ? '●' : ''}
+              </span>
+              {!isLast ? (
+                <span
+                  aria-hidden
+                  className="absolute left-[7px] top-5 h-full w-0.5 bg-border-subtle"
+                />
+              ) : null}
+              <div>
+                <p
+                  className={`m-0 text-sm ${
+                    node.status === 'active' ? 'font-medium text-text' : 'text-text'
+                  }`}
+                >
+                  {node.label}
+                  {node.detail ? (
+                    <span className="ml-2 text-xs text-text-muted">{node.detail}</span>
+                  ) : null}
+                </p>
+                {node.timestamp ? (
+                  <p className="m-0 text-xs text-text-muted">
+                    {node.timestamp.toLocaleDateString('zh-CN')}
+                  </p>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
   );
 }
