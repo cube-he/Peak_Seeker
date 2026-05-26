@@ -17,11 +17,11 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
 import { planApi } from '@/services/plan-api';
+import { timelineApi, type TimelineEvent } from '@/services/timeline-api';
 
-// 高考 / 志愿填报截止日。今年官方日期公布前先用去年时间，由 VOLUNTEER_DEADLINE_IS_LAST_YEAR 控制 UI 提示
-const EXAM_DATE = '2026-06-07T09:00:00+08:00';
-const VOLUNTEER_DEADLINE = '2026-06-30T18:00:00+08:00';
-const VOLUNTEER_DEADLINE_IS_LAST_YEAR = true;
+// 兜底日期:仅在 timeline API 加载失败或事件缺失时使用。来源:四川省教育考试院 2026 年通知。
+const FALLBACK_EXAM_DATE = '2026-06-07T09:00:00+08:00';
+const FALLBACK_DEADLINE_REGULAR = '2026-07-01T17:00:00+08:00';
 
 const STATUS_LABELS: Record<string, string> = {
   COLLECTING: '待采集',
@@ -218,8 +218,28 @@ export default function TeacherDashboardPage() {
 
   const now = clock?.now ?? new Date(0);
   const updatedAt = clock?.updatedAt ?? new Date(0);
-  const examDate = useMemo(() => new Date(EXAM_DATE), []);
-  const deadlineDate = useMemo(() => new Date(VOLUNTEER_DEADLINE), []);
+
+  // 拉取真实 timeline 数据:高考日期 / 志愿填报截止 / 各批次录取窗口
+  // 失败时使用 FALLBACK_* 常量,但 UI 上不再标注"这是去年数据",因为现在数据是当年的官方值
+  const { data: timelineData } = useQuery({
+    queryKey: ['timeline', new Date().getFullYear()],
+    queryFn: () => timelineApi.getTimeline(),
+    staleTime: 1000 * 60 * 60, // timeline 数据一小时缓存够了
+  });
+  const timelineEvents: TimelineEvent[] = timelineData?.events ?? [];
+
+  // 从 events 提取关键日期,缺失则用 fallback
+  const examDate = useMemo(() => {
+    const gaokao = timelineEvents.find((e) => e.key === 'gaokao');
+    return new Date(gaokao?.startDate ?? FALLBACK_EXAM_DATE);
+  }, [timelineEvents]);
+
+  const deadlineDate = useMemo(() => {
+    // 本科批截止是教培老师最关心的;提前批/专科批截止可在副位展示(Task 后续可扩展)
+    const regular = timelineEvents.find((e) => e.key === 'volunteer_deadline_regular');
+    return new Date(regular?.startDate ?? FALLBACK_DEADLINE_REGULAR);
+  }, [timelineEvents]);
+
   const examDaysLeft = Math.max(0, daysUntil(examDate, now));
   const deadlineDaysLeft = Math.max(0, daysUntil(deadlineDate, now));
 
@@ -329,9 +349,6 @@ export default function TeacherDashboardPage() {
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-md bg-accent-fixed px-3 py-1.5 text-accent">
             距志愿填报截止 <strong className="text-base">{deadlineDaysLeft}</strong> 天
-            {VOLUNTEER_DEADLINE_IS_LAST_YEAR ? (
-              <span className="text-xs font-normal text-text-muted">(去年时间·仅供参考)</span>
-            ) : null}
           </span>
           {deadlineRiskCount > 0 ? (
             <Link
