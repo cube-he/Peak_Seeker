@@ -2,37 +2,34 @@
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Tabs, Space, Spin } from 'antd';
-import {
-  BankOutlined,
-  BookOutlined,
-  EnvironmentOutlined,
-  TrophyOutlined,
-} from '@ant-design/icons';
+import { Spin } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import { universityService } from '@/services/university';
-import RankingCard from '@/components/university/RankingCard';
-import SatisfactionCard from '@/components/university/SatisfactionCard';
-import EmploymentCard from '@/components/university/EmploymentCard';
-import OverviewCard from '@/components/university/OverviewCard';
-import DisciplineCard from '@/components/university/DisciplineCard';
-import CampusCard from '@/components/university/CampusCard';
-import CharterCard from '@/components/university/CharterCard';
-import QiangjiTable from '@/components/university/QiangjiTable';
-import CampusLocationTab from '@/components/university/campus-location/CampusLocationTab';
 import UniversityLogo from '@/components/university/UniversityLogo';
+import CharterCard from '@/components/university/CharterCard';
+import CampusLocationTab from '@/components/university/campus-location/CampusLocationTab';
+import QiangjiTable from '@/components/university/QiangjiTable';
 import AdmissionDetailTab from '@/components/university/admission-detail/AdmissionDetailTab';
 import { useUserStore } from '@/stores/userStore';
+import { useStudentRank } from '@/stores/studentRankStore';
+import { LocIcon, BankIcon, TrophyIcon, ChartIcon, BookmarkIcon, ArrowIcon } from '../components/shared/Icon';
+import { tierImageFor } from '../lib/tier';
+import { TrendBanner } from './components/TrendBanner';
+import '../styles.css';
+
+type TabKey = 'info' | 'admission' | 'majors' | 'campus';
 
 export default function UniversityDetailPage() {
   const params = useParams();
   const id = Number(params.id);
 
   const { examInfo } = useUserStore();
-  const userSubject = examInfo.subjects?.[0];
-  const [activeTab, setActiveTab] = useState('info');
+  const examType = useStudentRank((s) => s.examType);
+  const studentRank = useStudentRank((s) => s.rank);
+  const userSubject = examInfo.subjects?.[0] ?? examType;
+  const [tab, setTab] = useState<TabKey>('info');
   const [descExpanded, setDescExpanded] = useState(false);
 
   const { data: university, isLoading } = useQuery({
@@ -49,17 +46,19 @@ export default function UniversityDetailPage() {
 
   if (isLoading) {
     return (
-      <MainLayout>
-        <div className="flex justify-center py-20"><Spin size="large" /></div>
+      <MainLayout noPadding>
+        <div style={{ padding: 60, display: 'flex', justifyContent: 'center' }}>
+          <Spin size="large" />
+        </div>
       </MainLayout>
     );
   }
 
   if (!university) {
     return (
-      <MainLayout>
-        <div className="rounded-xl bg-surface shadow-card text-center py-16">
-          <p className="text-text-tertiary">院校不存在</p>
+      <MainLayout noPadding>
+        <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-muted)' }}>
+          院校不存在
         </div>
       </MainLayout>
     );
@@ -67,289 +66,487 @@ export default function UniversityDetailPage() {
 
   const u = university;
   const latestAdmission = u.admissionRecords?.[0] ?? admissions?.[0] ?? null;
-  const locationText = [u.province, u.city, u.type, u.level, u.runningNature].filter(Boolean).join(' · ');
-  const badgeItems = [
-    u.is985 ? '985 工程' : null,
-    u.is211 ? '211 工程' : null,
-    u.isDoubleFirstClass ? '双一流' : null,
-    u.type,
-    u.runningNature,
-  ].filter(Boolean);
-  const statItems = [
-    { label: '院校代码', value: u.code || '-', sub: u.department || '主管部门待补充' },
-    { label: '最近最低分', value: latestAdmission?.majorMinScore || latestAdmission?.minScore || '-', sub: latestAdmission?.year ? `${latestAdmission.year} 年录取` : '等待录取数据' },
-    { label: '最近最低位次', value: latestAdmission?.majorMinRank || latestAdmission?.minRank || '-', sub: userSubject ? `${userSubject} 类参考` : '按已选科类参考' },
-    { label: '招生专业', value: '-', sub: '当前可查计划数' },
-    {
-      label: '软科排名',
-      // 之前读 u.rankingSoft 字段已不存在（恒 undefined）会回落到 u.ranking 字符串；
-      // 现统一走新的 softRanking + softRankList + softRankYear 口径，与列表页一致
-      value: u.softRanking != null ? `#${u.softRanking}` : '-',
-      sub:
-        u.softRanking != null
-          ? ['软科', u.softRankYear, u.softRankList ? u.softRankList + '榜' : null]
-              .filter(Boolean)
-              .join(' ')
-          : '尚无软科数据',
-    },
-    { label: '建校时间', value: u.createdYear || '-', sub: u.campusArea ? `校园面积 ${u.campusArea} 亩` : '基础信息' },
-  ];
 
-  const tabItems = [
-    {
-      key: 'info',
-      label: <span><BankOutlined className="mr-1" />基本信息</span>,
-      children: (
-        <div className="py-4 space-y-4">
-          <CharterCard
-            renameHistory={u.renameHistory ?? null}
-            admissionGuide={u.admissionGuide ?? null}
-            charterInfo={u.charterInfo ?? null}
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <OverviewCard
-              code={u.code ?? null}
-              province={u.province ?? null}
-              city={u.city ?? null}
-              type={u.type ?? null}
-              level={u.level ?? null}
-              runningLevel={u.runningLevel ?? null}
-              runningNature={u.runningNature ?? null}
-              department={u.department ?? null}
-              createdYear={u.createdYear ?? null}
-              campusArea={u.campusArea ?? null}
-              maleRatio={u.maleRatio ?? null}
-              femaleRatio={u.femaleRatio ?? null}
-              tags={u.tags ?? null}
-            />
-            <DisciplineCard
-              disciplineEvaluationLevel={u.disciplineEvaluationLevel ?? null}
-              aClassDisciplineCount={u.aClassDisciplineCount ?? null}
-              hasMasterProgram={!!u.hasMasterProgram}
-              masterProgramCount={u.masterProgramCount ?? null}
-              masterPrograms={u.masterPrograms ?? null}
-              hasDoctoralProgram={!!u.hasDoctoralProgram}
-              doctoralProgramCount={u.doctoralProgramCount ?? null}
-              doctoralPrograms={u.doctoralPrograms ?? null}
-              postgradRate={u.postgradRate ?? null}
-              transferDifficulty={u.transferDifficulty ?? null}
-            />
-            <CampusCard
-              militaryTrainingDuration={u.militaryTrainingDuration ?? null}
-            />
-            <RankingCard
-              softRanking={u.softRanking ?? null}
-              softRankList={u.softRankList ?? null}
-              softRankYear={u.softRankYear ?? null}
-              softCategory={u.softCategory ?? null}
-              softCategoryRank={u.softCategoryRank ?? null}
-              rankingAlumni={u.rankingAlumni ?? null}
-              rankingQS={u.rankingQS ?? null}
-              rankingUSNews={u.rankingUSNews ?? null}
-              aClassDisciplineCount={u.aClassDisciplineCount ?? null}
-            />
-            <SatisfactionCard
-              overall={u.satisfactionOverall ?? null}
-              life={u.satisfactionLife ?? null}
-              environ={u.satisfactionEnviron ?? null}
-              count={u.satisfactionCount ?? null}
-            />
-            <EmploymentCard
-              employmentRate={u.employmentRate ?? null}
-              furtherStudyRate={u.furtherStudyRate ?? null}
-              avgSalary={u.avgSalary ?? null}
-              topEmployers={u.topEmployers ?? null}
-            />
-          </div>
-          {u.campuses && u.campuses.length > 0 && (
-            <CampusLocationTab universityId={u.id} campuses={u.campuses} />
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'admission-detail',
-      label: <span><BookOutlined className="mr-1" />招录详情</span>,
-      children: (
-        <AdmissionDetailTab
-          universityId={u.id}
-          universityFlags={{ is985: u.is985, is211: u.is211 }}
-          rawAdmissions={admissions ?? []}
-          universityScores={{
-            minScorePhysics: u.minScorePhysics ?? null,
-            minRankPhysics:  u.minRankPhysics  ?? null,
-            minScoreHistory: u.minScoreHistory ?? null,
-            minRankHistory:  u.minRankHistory  ?? null,
-          }}
-        />
-      ),
-    },
-    // Only show the tab when there is qiangji data
-    ...(u.qiangjiAdmissions?.length > 0
-      ? [
-          {
-            key: 'qiangji',
-            label: <span><TrophyOutlined className="mr-1" />强基计划</span>,
-            children: <QiangjiTable data={u.qiangjiAdmissions} />,
-          },
-        ]
-      : []),
-  ];
+  // 5 档梯队 → hero data-tier + bg image
+  const tierImg = tierImageFor({
+    is985: u.is985,
+    is211: u.is211,
+    isDoubleFirstClass: u.isDoubleFirstClass,
+    softRanking: u.softRanking,
+    softRankList: u.softRankList,
+    level: u.level,
+    nature: u.runningNature,
+  });
+
+  // hit-card:命中率(后端提供 bestPrediction.acceptRate)+ 用户位次
+  const acceptRate = u.bestPrediction?.acceptRate ?? null;
+  const uniMinRank =
+    examType === '历史' ? u.minRankHistory ?? null : u.minRankPhysics ?? null;
+  const rankDiff = studentRank != null && uniMinRank != null ? uniMinRank - studentRank : null;
+
+  // 描述段落拆分
+  const description = (u.description as string | null | undefined) ?? null;
+  const website = (u.website as string | null | undefined) ?? null;
+  const paras = description
+    ? description.split(/[　\s]{2,}/).map((s) => s.trim()).filter(Boolean)
+    : [];
+  const truncated = description != null && description.length < 500 && !/[。！？.!?]$/.test(description.trim());
 
   return (
     <MainLayout noPadding>
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary to-[#15212e] text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(800px_380px_at_82%_120%,rgba(184,134,11,0.2),transparent_60%)]" />
-        <div className="relative mx-auto grid max-w-[1200px] gap-6 px-4 py-9 sm:px-6 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:items-center lg:px-12">
-          <UniversityLogo name={u.name} logoUrl={u.logoUrl} size={96} />
-          <div className="min-w-0">
-            <nav className="mb-3 text-xs text-white/50">
-              <Link href="/universities" className="text-white/60 no-underline hover:text-white">
-                院校库
-              </Link>
-              <span className="mx-2">/</span>
+      {/* ===========================
+           HERO — full bleed 深 navy + tier 背景图
+           =========================== */}
+      <section className="dt-hero" data-tier={tierImg.id}>
+        <div className="dt-hero-bg" aria-hidden="true">
+          <img src={tierImg.src} alt="" />
+        </div>
+        <div className="dt-hero-inner">
+          <UniversityLogo name={u.name} logoUrl={u.logoUrl} size={80} className="uni-logo" />
+          <div style={{ minWidth: 0 }}>
+            <nav className="dt-crumb">
+              <Link href="/universities">院校库</Link>
+              <span className="sep">/</span>
               <span>{u.name}</span>
             </nav>
-            <div className="mb-2 text-[11px] uppercase tracking-[1.8px] text-white/45">
-              院校 ID · {u.code || u.id} · 在川招生
+            <div className="dt-eyebrow">院校代码 · {u.code || u.id} · 在川招生</div>
+            <h1>{u.name}</h1>
+            <div className="loc">
+              <LocIcon />
+              <span>{[u.province, u.city, u.type, u.level, u.runningNature].filter(Boolean).join(' · ')}</span>
             </div>
-            <h1 className="m-0 truncate font-serif text-[38px] font-semibold leading-tight text-white">
-              {u.name}
-            </h1>
-            <div className="mt-2 flex items-center gap-1 text-sm text-white/65">
-              <EnvironmentOutlined />
-              <span>{locationText || '院校基础信息待补充'}</span>
+            <div className="badges">
+              {u.is985 && <span className="tag gold">985 工程</span>}
+              {u.is211 && <span className="tag">211 工程</span>}
+              {u.isDoubleFirstClass && <span className="tag">双一流</span>}
+              {u.type && <span className="tag">{u.type}</span>}
+              {u.runningNature && <span className="tag">{u.runningNature}</span>}
             </div>
-            <Space size={8} wrap className="mt-4">
-              {badgeItems.map((item) => (
-                <span
-                  key={String(item)}
-                  className="rounded-full border border-white/15 bg-white/8 px-3 py-1 text-xs font-medium text-white/80"
-                >
-                  {item}
-                </span>
-              ))}
-            </Space>
           </div>
-          <div className="rounded-xl border border-white/15 bg-white/10 p-4 text-left backdrop-blur-md lg:text-right">
-            <div className="text-[10px] uppercase tracking-[1.5px] text-white/50">基于你的当前位次</div>
-            <div className="mt-2 font-serif text-[34px] font-bold leading-none text-accent-light">
-              {u.bestPrediction?.acceptRate ? `${Math.round(u.bestPrediction.acceptRate * 100)}%` : '--'}
+          <div className="hit-card">
+            <div className="k">
+              基于你的位次 {studentRank != null ? ` · ${studentRank.toLocaleString()} 名` : ''}
             </div>
-            <div className="mt-2 text-xs text-white/50">
-              {u.bestPrediction ? '预测命中率 · 可加入方案' : '输入分数后生成预测'}
+            <div className="pct">
+              {acceptRate != null ? Math.round(acceptRate * 100) : '— —'}
+              {acceptRate != null && <span className="pct-tail">%</span>}
             </div>
-            <div className="mt-4 flex gap-2 lg:justify-end">
-              <button className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm text-white transition-colors hover:bg-white/15">
-                收藏
+            {rankDiff != null && acceptRate != null && (
+              <div className="verdict">
+                你比录取线 {rankDiff > 0 ? '↑' : rankDiff < 0 ? '↓' : '·'}{' '}
+                <span className="em">{Math.abs(rankDiff).toLocaleString()}</span> 名
+              </div>
+            )}
+            <div className="sub">
+              {acceptRate != null ? '基于最近三年录取趋势 · 仅供参考' : '录入位次后生成个性化预测'}
+            </div>
+            <div className="actions">
+              <button type="button" className="btn outline">
+                <BookmarkIcon /> 收藏
               </button>
-              <button className="rounded-lg border-0 bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-light">
-                加入方案
+              <button type="button" className="btn primary">
+                加入方案 <ArrowIcon />
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="border-b border-border-subtle bg-surface">
-        <div className="mx-auto grid max-w-[1200px] gap-4 px-4 py-5 sm:px-6 md:grid-cols-3 lg:grid-cols-6 lg:px-12">
-          {statItems.map((item) => (
-            <div key={item.label} className="border-border-subtle lg:border-r lg:pr-4 last:border-r-0">
-              <div className="text-[10px] uppercase tracking-[1.4px] text-text-muted">{item.label}</div>
-              <div className="mt-1 truncate font-serif text-[22px] font-semibold leading-none text-text tabular-nums">
-                {item.value}
-              </div>
-              <div className="mt-1 truncate text-[11px] text-text-tertiary">{item.sub}</div>
+      {/* ===========================
+           Stats strip — 6 列(核心 3 大字 + 辅助 3 小字)
+           =========================== */}
+      <section className="dt-stats">
+        <div className="dt-stats-inner">
+          {[
+            {
+              k: '最近最低分',
+              v:
+                latestAdmission?.minScore ?? latestAdmission?.majorMinScore != null ? (
+                  <span className="em">
+                    {latestAdmission?.minScore ?? latestAdmission?.majorMinScore}
+                  </span>
+                ) : (
+                  '—'
+                ),
+              s: latestAdmission?.year ? `${latestAdmission.year} · ${examType}类` : '等待录取数据',
+              core: true,
+            },
+            {
+              k: '最近最低位次',
+              v: latestAdmission?.minRank ?? latestAdmission?.majorMinRank
+                ? (latestAdmission.minRank ?? latestAdmission.majorMinRank).toLocaleString()
+                : '—',
+              s: `${examType}类参考`,
+              core: true,
+            },
+            {
+              k: '软科排名',
+              v:
+                u.softRanking != null ? (
+                  <span className="em">#{u.softRanking}</span>
+                ) : (
+                  '—'
+                ),
+              s:
+                u.softRanking != null
+                  ? `软科 ${u.softRankYear ?? ''} ${u.softRankList ?? ''}榜`.trim()
+                  : '尚无软科数据',
+              core: true,
+            },
+            {
+              k: '院校代码',
+              v: u.code || '—',
+              s: u.department || '主管部门待补充',
+            },
+            {
+              k: '招生专业',
+              v: u.masterProgramCount != null ? String(u.masterProgramCount) : '—',
+              s: '一级学科硕士点',
+            },
+            {
+              k: '建校时间',
+              v: u.createdYear ? String(u.createdYear) : '—',
+              s: u.campusArea ? `校园面积 ${u.campusArea.toLocaleString()} 亩` : '基础信息',
+            },
+          ].map((it, i) => (
+            <div key={i} className={`cell ${it.core ? 'core' : 'aux'}`}>
+              <div className="k">{it.k}</div>
+              <div className="v">{it.v}</div>
+              <div className="sub">{it.s}</div>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="sticky top-16 z-30 border-b border-border bg-bg/95 backdrop-blur-md">
-        <div className="mx-auto flex max-w-[1200px] gap-7 overflow-x-auto px-4 sm:px-6 lg:px-12">
-          {[
-            ['info', '概览'],
-            ['admission-detail', '招录详情'],
-          ].map(([key, label]) => (
+      {/* ===========================
+           Trend banner — 录取走势主角卡
+           =========================== */}
+      {(admissions?.length ?? 0) > 0 && (
+        <div style={{ maxWidth: 1500, margin: '0 auto', padding: '24px 32px 0' }}>
+          <TrendBanner
+            admissions={admissions ?? []}
+            studentRank={studentRank ?? null}
+            subject={examType}
+          />
+        </div>
+      )}
+
+      {/* ===========================
+           Sticky subnav
+           =========================== */}
+      <nav className="dt-subnav">
+        <div className="dt-subnav-inner">
+          {(
+            [
+              ['info', '概览'],
+              ['admission', '招录详情'],
+              ['majors', '热门专业'],
+              ['campus', '校区与生活'],
+            ] as const
+          ).map(([k, l]) => (
             <button
-              key={key}
+              key={k}
               type="button"
+              className={tab === k ? 'is-active' : ''}
               onClick={() => {
-                setActiveTab(key);
-                document.getElementById('info')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                setTab(k);
+                document.getElementById('dt-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }}
-              className={`whitespace-nowrap cursor-pointer border-0 border-b-2 bg-transparent py-3 text-sm transition-colors hover:text-primary ${
-                activeTab === key ? 'border-primary text-primary' : 'border-transparent text-text-tertiary'
-              }`}
             >
-              {label}
+              {l}
             </button>
           ))}
         </div>
-      </section>
+      </nav>
 
-      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6 lg:px-12">
-        <main>
-          <section className="mb-6 rounded-2xl bg-surface p-5 shadow-card sm:p-7">
-            <div className="mb-2 text-[11px] uppercase tracking-[1.5px] text-accent">Overview · 院校概览</div>
-            <h2 className="m-0 font-serif text-[24px] font-semibold text-text">
+      {/* ===========================
+           Body
+           =========================== */}
+      <div className="dt-body" id="dt-section">
+        {description && (
+          <section
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 14,
+              padding: 24,
+              marginBottom: 24,
+            }}
+          >
+            <div className="eyebrow" style={{ fontSize: 11, letterSpacing: 2, color: 'var(--accent)' }}>
+              Overview · 院校概览
+            </div>
+            <h2 style={{ margin: '8px 0 12px', fontFamily: 'var(--font-heading)', fontSize: 22, fontWeight: 600 }}>
               {u.name} 的核心信息
             </h2>
-            {(() => {
-              const raw = u.description as string | null | undefined;
-              const website = u.website as string | null | undefined;
-              if (!raw) {
-                return (
-                  <p className="m-0 mt-3 text-sm leading-relaxed text-text-tertiary">
-                    该院校的介绍信息暂未补充，当前页面优先展示已接入的院校基本信息、招生计划、历年录取、校区位置和评价数据。
-                  </p>
-                );
-              }
-              const paras = raw.split(/[　\s]{2,}/).map((s) => s.trim()).filter(Boolean);
-              const looksTruncated = raw.length < 500 && !/[。！？.!?]$/.test(raw.trim());
-              return (
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() => setDescExpanded((v) => !v)}
-                    className="flex items-center gap-1.5 text-sm text-primary bg-transparent border-0 cursor-pointer p-0 hover:underline"
-                  >
-                    {descExpanded ? '▾ 收起院校简介' : '▸ 展开院校简介'}
-                    <span className="text-xs text-text-tertiary font-normal">（{raw.length} 字）</span>
-                  </button>
-                  {descExpanded && (
-                    <>
-                      <div className="mt-3 space-y-3 text-sm leading-[1.85] text-text-tertiary">
-                        {paras.map((p, i) => (
-                          <p key={i} className="m-0 indent-[2em]">{p}</p>
-                        ))}
-                      </div>
-                      <div className="mt-4 flex items-center gap-3 text-xs text-text-tertiary">
-                        {looksTruncated && (
-                          <span className="text-amber-700">⚠ 简介数据不完整</span>
-                        )}
-                        {website && (
-                          <a
-                            href={website.startsWith('http') ? website : `https://${website}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid"
-                          >
-                            访问学校官网 ↗
-                          </a>
-                        )}
-                      </div>
-                    </>
+            <button
+              type="button"
+              onClick={() => setDescExpanded((v) => !v)}
+              style={{
+                background: 'transparent',
+                border: 0,
+                padding: 0,
+                color: 'var(--primary)',
+                fontSize: 13,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              {descExpanded ? '▾ 收起院校简介' : '▸ 展开院校简介'}
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                ({description.length} 字)
+              </span>
+            </button>
+            {descExpanded && (
+              <>
+                <div style={{ marginTop: 12 }}>
+                  {paras.map((p, i) => (
+                    <p key={i} style={{ margin: '0 0 12px', fontSize: 14, lineHeight: 1.85, color: 'var(--text-tertiary)', textIndent: '2em' }}>
+                      {p}
+                    </p>
+                  ))}
+                </div>
+                <div style={{ marginTop: 12, display: 'flex', gap: 12, fontSize: 12, color: 'var(--text-tertiary)' }}>
+                  {truncated && <span style={{ color: '#92400e' }}>⚠ 简介数据不完整</span>}
+                  {website && (
+                    <a
+                      href={website.startsWith('http') ? website : `https://${website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--primary)', borderBottom: '1px dotted', paddingBottom: 1 }}
+                    >
+                      访问学校官网 ↗
+                    </a>
                   )}
                 </div>
-              );
-            })()}
+              </>
+            )}
           </section>
+        )}
 
-          <section id="info" className="rounded-2xl bg-surface p-2 shadow-card scroll-mt-32">
-            <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} style={{ padding: '0 18px' }} />
-          </section>
-        </main>
+        {tab === 'info' && (
+          <>
+            {/* 章程区(更名历史 / 招生章程 / 章程信息) */}
+            {(u.renameHistory || u.admissionGuide || u.charterInfo) && (
+              <div style={{ marginBottom: 24 }}>
+                <CharterCard
+                  renameHistory={u.renameHistory ?? null}
+                  admissionGuide={u.admissionGuide ?? null}
+                  charterInfo={u.charterInfo ?? null}
+                />
+              </div>
+            )}
+
+            <div className="info-grid">
+              {/* —— 总览 —— */}
+              <div className="info-card">
+                <h4>
+                  <span className="ic"><BankIcon /></span>总览
+                </h4>
+                <dl>
+                  <dt>院校代码</dt><dd>{u.code || '—'}</dd>
+                  <dt>所在省市</dt><dd>{[u.province, u.city].filter(Boolean).join(' · ') || '—'}</dd>
+                  <dt>学校类型</dt><dd>{u.type || '—'}</dd>
+                  <dt>办学层次</dt><dd>{u.level || '—'}</dd>
+                  <dt>办学性质</dt><dd>{u.runningNature || '—'}</dd>
+                  <dt>办学规格</dt><dd>{u.runningLevel || '—'}</dd>
+                  <dt>主管部门</dt><dd>{u.department || '—'}</dd>
+                  <dt>建校年份</dt><dd>{u.createdYear || '—'}</dd>
+                  <dt>校园面积</dt><dd>{u.campusArea ? `${u.campusArea.toLocaleString()} 亩` : '—'}</dd>
+                  {u.maleRatio != null && u.femaleRatio != null && (
+                    <>
+                      <dt>男女比例</dt>
+                      <dd>{u.maleRatio} : {u.femaleRatio}</dd>
+                    </>
+                  )}
+                  {Array.isArray(u.tags) && u.tags.length > 0 && (
+                    <>
+                      <dt>标签</dt>
+                      <dd>{u.tags.slice(0, 6).join(' · ')}</dd>
+                    </>
+                  )}
+                </dl>
+              </div>
+
+              {/* —— 学科与排名 —— */}
+              <div className="info-card">
+                <h4>
+                  <span className="ic"><TrophyIcon /></span>学科与排名
+                </h4>
+                <dl>
+                  <dt>软科主榜</dt>
+                  <dd>
+                    {u.softRanking != null ? (
+                      <>
+                        <span className="em">#{u.softRanking}</span> · {u.softRankYear ?? ''} {u.softRankList ?? ''}榜
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </dd>
+                  <dt>分类榜</dt>
+                  <dd>
+                    {u.softCategory && u.softCategoryRank != null ? (
+                      <>
+                        <span className="em">#{u.softCategoryRank}</span> · {u.softCategory}
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </dd>
+                  <dt>学科评估</dt><dd>{u.disciplineEvaluationLevel || '—'}</dd>
+                  <dt>A 类学科</dt><dd>{u.aClassDisciplineCount != null ? `${u.aClassDisciplineCount} 个` : '—'}</dd>
+                  <dt>硕士点</dt>
+                  <dd>
+                    {u.hasMasterProgram && u.masterProgramCount != null
+                      ? `${u.masterProgramCount} 个一级学科`
+                      : '—'}
+                  </dd>
+                  <dt>博士点</dt>
+                  <dd>
+                    {u.hasDoctoralProgram && u.doctoralProgramCount != null
+                      ? `${u.doctoralProgramCount} 个一级学科`
+                      : '—'}
+                  </dd>
+                  <dt>QS 世界</dt><dd>{u.rankingQS != null ? `#${u.rankingQS}` : '—'}</dd>
+                  <dt>校友会</dt><dd>{u.rankingAlumni != null ? `#${u.rankingAlumni}` : '—'}</dd>
+                  <dt>USNews</dt><dd>{u.rankingUSNews != null ? `#${u.rankingUSNews}` : '—'}</dd>
+                </dl>
+              </div>
+
+              {/* —— 就业与满意度 —— */}
+              <div className="info-card">
+                <h4>
+                  <span className="ic"><ChartIcon /></span>就业与满意度
+                </h4>
+                <dl>
+                  <dt>就业率</dt>
+                  <dd>
+                    {u.employmentRate != null ? (
+                      <span className="em">{u.employmentRate}%</span>
+                    ) : (
+                      '—'
+                    )}
+                  </dd>
+                  <dt>升学率</dt>
+                  <dd>{u.furtherStudyRate != null ? `${u.furtherStudyRate}%` : '—'}</dd>
+                  <dt>保研率</dt>
+                  <dd>{u.postgradRate != null ? `${u.postgradRate}%` : '—'}</dd>
+                  <dt>平均薪资</dt>
+                  <dd>
+                    {u.avgSalary != null ? (
+                      <>
+                        <span className="em">¥{u.avgSalary.toLocaleString()}</span> / 月
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </dd>
+                  <dt>满意度</dt>
+                  <dd>
+                    {u.satisfactionOverall != null
+                      ? `${u.satisfactionOverall} / 5.0 · 综合`
+                      : '—'}
+                  </dd>
+                  {Array.isArray(u.topEmployers) && u.topEmployers.length > 0 && (
+                    <>
+                      <dt>主要去向</dt>
+                      <dd>{u.topEmployers.slice(0, 3).join(' · ')}</dd>
+                    </>
+                  )}
+                </dl>
+              </div>
+
+              {/* —— 校园与生活 —— */}
+              <div className="info-card">
+                <h4>
+                  <span className="ic"><LocIcon /></span>校园与生活
+                </h4>
+                <dl>
+                  <dt>军训时长</dt><dd>{u.militaryTrainingDuration || '—'}</dd>
+                  <dt>转专业</dt><dd>{u.transferDifficulty || '—'}</dd>
+                  <dt>校园面积</dt><dd>{u.campusArea ? `${u.campusArea.toLocaleString()} 亩` : '—'}</dd>
+                  <dt>校区数</dt><dd>{u.campuses ? `${u.campuses.length} 个` : '—'}</dd>
+                  {u.maleRatio != null && u.femaleRatio != null && (
+                    <>
+                      <dt>男女比</dt>
+                      <dd>{u.maleRatio} : {u.femaleRatio}</dd>
+                    </>
+                  )}
+                </dl>
+              </div>
+            </div>
+
+            {/* 校区与周边(高德地图 + POI) */}
+            {u.campuses && u.campuses.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <CampusLocationTab universityId={u.id} campuses={u.campuses} />
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === 'admission' && (
+          <div className="info-card" style={{ padding: 0, minHeight: 0 }}>
+            <AdmissionDetailTab
+              universityId={u.id}
+              universityFlags={{ is985: u.is985, is211: u.is211 }}
+              rawAdmissions={admissions ?? []}
+              universityScores={{
+                minScorePhysics: u.minScorePhysics ?? null,
+                minRankPhysics: u.minRankPhysics ?? null,
+                minScoreHistory: u.minScoreHistory ?? null,
+                minRankHistory: u.minRankHistory ?? null,
+              }}
+            />
+          </div>
+        )}
+
+        {tab === 'majors' && (
+          <div className="info-card">
+            <h4>
+              <span className="ic"><BankIcon /></span>热门专业方向
+            </h4>
+            <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              详细专业库内容由专业模块提供
+              <br />
+              <Link href="/majors" style={{ color: 'var(--primary)', marginTop: 8, display: 'inline-block', fontSize: 13 }}>
+                进入专业库查看 →
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {tab === 'campus' && (
+          <>
+            {u.campuses && u.campuses.length > 0 ? (
+              <CampusLocationTab universityId={u.id} campuses={u.campuses} />
+            ) : (
+              <div className="info-card">
+                <h4>
+                  <span className="ic"><LocIcon /></span>校区与生活
+                </h4>
+                <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                  校区信息暂未补充
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* 强基计划(条件渲染,在所有 tab 之外) */}
+        {u.qiangjiAdmissions && u.qiangjiAdmissions.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <div className="section-banner">
+              <h2>强基计划</h2>
+              <span className="sb">{u.qiangjiAdmissions.length} 个专业</span>
+              <span className="line" />
+            </div>
+            <QiangjiTable data={u.qiangjiAdmissions} />
+          </div>
+        )}
       </div>
     </MainLayout>
   );
