@@ -620,14 +620,15 @@ export function MapTab() {
 
       if (subs.length === 0) return;
 
-      // 数字标签:allowCollision: true → 所有 sub region label 必显在中心,
-      // 即使邻近 label 几何上略重叠也不 hide(用户明确要求 "省/市/区 标签全部显示
-      // 在对应区域中心位置")。之前 allowCollision: false 时 rank 较低的省(如青海 11)
-      // 在 zoom 4 紧挨高 rank 邻居被算法 hide。
+      // 数字标签:collision: false → 完全关闭 layer 内部碰撞检测,所有 sub region
+      // label 都显示在中心。allowCollision: true 允许跟底图 POI 重叠。
+      // 之前 collision: true + allowCollision: false/true 时 AMap 还会做 layer 内
+      // marker 之间的避让 → rank 较低的省(如青海 11)被高 rank 邻居 hide。
+      // 关掉碰撞才能真正达到 "省/市/区 标签全部显示在对应区域中心位置"。
       const countLayer = new AMap.LabelsLayer({
         zooms: [3, 20],
         zIndex: 500,
-        collision: true,
+        collision: false,
         allowCollision: true,
       });
 
