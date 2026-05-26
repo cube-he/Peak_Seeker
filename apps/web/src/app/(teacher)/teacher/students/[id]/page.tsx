@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { Alert, Button, Card, Cascader, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, Tag, message } from 'antd';
+import { useParams, useRouter } from 'next/navigation';
+import { useMemo } from 'react';
+import { Alert, Button, Card, Cascader, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, message } from 'antd';
 import {
   ArrowLeftOutlined,
   DownloadOutlined,
@@ -52,6 +53,14 @@ const BONUS_ITEM_OPTIONS: Array<SelectOption & { bonusValue: number }> = [
   { label: '消防救援人员子女优先录取', value: 'PRIORITY_FIREFIGHTER_CHILD', bonusValue: 0 },
   { label: '司法行政人民警察子女优先录取', value: 'PRIORITY_JUDICIAL_POLICE_CHILD', bonusValue: 0 },
 ];
+
+// 考试类型中文标签
+const EXAM_TYPE_LABEL: Record<string, string> = {
+  PHYSICS: '物理',
+  HISTORY: '历史',
+  COMPREHENSIVE_LIBERAL: '文科',
+  COMPREHENSIVE_SCIENCE: '理科',
+};
 
 function toSelectValues(items?: BonusItem[] | string[]): string[] {
   if (!Array.isArray(items)) return [];
@@ -127,6 +136,7 @@ function RankCheckExtra({ rankCheck }: { rankCheck?: RankCheck }) {
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
   const studentId = params.id;
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
 
@@ -205,6 +215,22 @@ export default function StudentDetailPage() {
     }
   };
 
+  const plansSummary = useMemo(() => {
+    const plans = student?.volunteerPlans;
+    if (!Array.isArray(plans) || plans.length === 0) {
+      return null;
+    }
+    const latest = plans.reduce(
+      (acc: any, p: any) => (!acc || (p.versionNo ?? 0) > (acc.versionNo ?? 0) ? p : acc),
+      null,
+    );
+    return {
+      activePlanCount: plans.length,
+      latestPlanStatus: latest?.status ?? null,
+      latestPlanVersionNo: latest?.versionNo ?? null,
+    };
+  }, [student?.volunteerPlans]);
+
   if (isLoading || !student) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -214,145 +240,142 @@ export default function StudentDetailPage() {
   }
 
   const progress = student.progress;
-  const studentName = student.user?.realName || student.realName || student.user?.username || student.username || '学生详情';
 
   return (
     <div className="mx-auto max-w-[1040px] space-y-5">
-      <header className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-        <div>
-          <Link href="/teacher/students" className="mb-2 inline-flex items-center gap-2 text-sm text-text-tertiary no-underline hover:text-primary">
-            <ArrowLeftOutlined /> 返回学生列表
-          </Link>
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">Student Archive</p>
-          <h1 className="font-serif text-3xl font-semibold text-text">{studentName}</h1>
-          <div className="mt-2 flex items-center gap-2">
-            <Tag color={student.status === 'FINALIZED' ? 'green' : 'blue'}>{student.status || 'ACTIVE'}</Tag>
-            <Tag color={student.intakeStatus === 'VERIFIED' ? 'green' : student.intakeStatus === 'SUBMITTED' ? 'orange' : 'default'}>
-              资料：{student.intakeStatus || 'DRAFT'}
-            </Tag>
-            <span className="text-sm text-text-muted">{student.highSchool || '学校待补充'}</span>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Button icon={<DownloadOutlined />} onClick={onExportIntake}>
-            导出登记表
+      {/* 顶部摘要条 */}
+      <StudentSummaryBar
+        student={student}
+        plansSummary={plansSummary}
+        onBack={() => router.back()}
+        onSave={() => form.validateFields().then((values) => saveMutation.mutate(values))}
+        saving={saveMutation.isPending}
+      />
+
+      {/* 原有操作栏：导出/退回/确认/生成方案 */}
+      <div className="flex flex-wrap gap-3">
+        <Button icon={<DownloadOutlined />} onClick={onExportIntake}>
+          导出登记表
+        </Button>
+        {student.intakeStatus !== 'VERIFIED' ? (
+          <>
+            <Button onClick={onRequestIntakeChange} loading={reviewIntakeMutation.isPending}>
+              退回资料
+            </Button>
+            <Button
+              type="primary"
+              onClick={() => reviewIntakeMutation.mutate({ action: 'VERIFY', comment: '资料已核验' })}
+              loading={reviewIntakeMutation.isPending}
+            >
+              确认资料
+            </Button>
+          </>
+        ) : null}
+        <Link href={`/teacher/plans/generate/${studentId}`}>
+          <Button
+            icon={<FileTextOutlined />}
+            type="primary"
+            disabled={(progress && !progress.isRecommendable) || student.intakeStatus !== 'VERIFIED'}
+            title={student.intakeStatus !== 'VERIFIED' ? '需先确认学生资料' : progress && !progress.isRecommendable ? '档案未达到可推荐阈值，请先补全关键字段' : ''}
+            className="border-0"
+          >
+            生成方案
           </Button>
-          {student.intakeStatus !== 'VERIFIED' ? (
-            <>
-              <Button onClick={onRequestIntakeChange} loading={reviewIntakeMutation.isPending}>
-                退回资料
-              </Button>
-              <Button
-                type="primary"
-                onClick={() => reviewIntakeMutation.mutate({ action: 'VERIFY', comment: '资料已核验' })}
-                loading={reviewIntakeMutation.isPending}
-              >
-                确认资料
-              </Button>
-            </>
+        </Link>
+      </div>
+
+      {/* 左主右副两栏 */}
+      <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
+        {/* 主区 */}
+        <div className="space-y-4">
+          {/* SOP 时间轴 — Task 2 会填充 */}
+          <div data-slot="sop-timeline-placeholder" />
+
+          {/* 进度条 */}
+          {progress ? (
+            <Card className="rounded-2xl shadow-card">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <ProgressBar label="学生自填进度" percent={progress.studentSelfCompleteness} />
+                <ProgressBar label="老师录入进度" percent={progress.teacherDataCompleteness} />
+              </div>
+              <div className="mt-3">
+                <ProgressBar label="档案总进度" percent={progress.overallCompleteness} />
+              </div>
+              {!progress.isRecommendable && progress.missingFieldsForRecommend?.length > 0 ? (
+                <p className="mt-3 text-xs text-text-faint">
+                  未达可推荐阈值，缺：
+                  <span className="ml-1 text-text-secondary">
+                    {progress.missingFieldsForRecommend.slice(0, 8).join('、')}
+                    {progress.missingFieldsForRecommend.length > 8 ? ' 等' : ''}
+                  </span>
+                </p>
+              ) : null}
+            </Card>
           ) : null}
-          <Link href={`/teacher/plans/generate/${studentId}`}>
-            <Button
-              icon={<FileTextOutlined />}
-              type="primary"
-              disabled={(progress && !progress.isRecommendable) || student.intakeStatus !== 'VERIFIED'}
-              title={student.intakeStatus !== 'VERIFIED' ? '需先确认学生资料' : progress && !progress.isRecommendable ? '档案未达到可推荐阈值，请先补全关键字段' : ''}
-              className="border-0"
+
+          {/* 原 6 个折叠区 Field Cards 保留在主区 */}
+          <Card className="rounded-2xl shadow-card">
+            <Form
+              form={form}
+              layout="vertical"
+              initialValues={{
+                ...student,
+                ...student.user,
+                provincialRank: student.provincialRank ?? student.rankCheck?.calculatedRank ?? undefined,
+              }}
+              requiredMark="optional"
             >
-              生成方案
-            </Button>
-          </Link>
+              <Collapse
+                defaultActiveKey={['basic', 'exam', 'preference']}
+                items={[
+                  { key: 'basic', label: '基础信息', children: <BasicFields /> },
+                  {
+                    key: 'household',
+                    label: (
+                      <span className="flex items-center gap-1">
+                        <LockOutlined /> 户籍与高考所在地
+                      </span>
+                    ),
+                    children: <HouseholdFields />,
+                  },
+                  { key: 'exam', label: '考试成绩', children: <ExamFields rankCheck={student.rankCheck} /> },
+                  {
+                    key: 'bonus',
+                    label: (
+                      <span className="flex items-center gap-1">
+                        <LockOutlined /> 加分政策
+                      </span>
+                    ),
+                    children: (
+                      <div className="space-y-4">
+                        <BonusFields />
+                        <BonusCalcCard studentProfileId={Number(studentId)} />
+                      </div>
+                    ),
+                  },
+                  { key: 'health', label: '健康条件', children: <HealthFields /> },
+                  { key: 'preference', label: '偏好与规划', children: <PreferenceFields /> },
+                ]}
+              />
+            </Form>
+          </Card>
+
+          {progress && !progress.isRecommendable ? (
+            <Alert
+              type="info"
+              showIcon
+              message={'档案未达到“可推荐”阈值'}
+              description="补完整分数、位次、加分、选科等关键字段后，生成方案按钮才会启用。"
+            />
+          ) : null}
         </div>
-      </header>
 
-      {progress ? (
-        <Card className="rounded-2xl shadow-card">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <ProgressBar label="学生自填进度" percent={progress.studentSelfCompleteness} />
-            <ProgressBar label="老师录入进度" percent={progress.teacherDataCompleteness} />
-          </div>
-          <div className="mt-3">
-            <ProgressBar label="档案总进度" percent={progress.overallCompleteness} />
-          </div>
-          {!progress.isRecommendable && progress.missingFieldsForRecommend?.length > 0 ? (
-            <p className="mt-3 text-xs text-text-faint">
-              未达可推荐阈值，缺：
-              <span className="ml-1 text-text-secondary">
-                {progress.missingFieldsForRecommend.slice(0, 8).join('、')}
-                {progress.missingFieldsForRecommend.length > 8 ? ' 等' : ''}
-              </span>
-            </p>
-          ) : null}
-        </Card>
-      ) : null}
-
-      <Card className="rounded-2xl shadow-card">
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            ...student,
-            ...student.user,
-            provincialRank: student.provincialRank ?? student.rankCheck?.calculatedRank ?? undefined,
-          }}
-          requiredMark="optional"
-        >
-          <Collapse
-            defaultActiveKey={['basic', 'exam', 'preference']}
-            items={[
-              { key: 'basic', label: '基础信息', children: <BasicFields /> },
-              {
-                key: 'household',
-                label: (
-                  <span className="flex items-center gap-1">
-                    <LockOutlined /> 户籍与高考所在地
-                  </span>
-                ),
-                children: <HouseholdFields />,
-              },
-              { key: 'exam', label: '考试成绩', children: <ExamFields rankCheck={student.rankCheck} /> },
-              {
-                key: 'bonus',
-                label: (
-                  <span className="flex items-center gap-1">
-                    <LockOutlined /> 加分政策
-                  </span>
-                ),
-                children: (
-                  <div className="space-y-4">
-                    <BonusFields />
-                    <BonusCalcCard studentProfileId={Number(studentId)} />
-                  </div>
-                ),
-              },
-              { key: 'health', label: '健康条件', children: <HealthFields /> },
-              { key: 'preference', label: '偏好与规划', children: <PreferenceFields /> },
-            ]}
-          />
-
-          <div className="mt-6 flex justify-end border-t border-border-subtle pt-4">
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              onClick={() => form.validateFields().then((values) => saveMutation.mutate(values))}
-              loading={saveMutation.isPending}
-              size="large"
-              className="border-0"
-            >
-              保存
-            </Button>
-          </div>
-        </Form>
-      </Card>
-
-      {progress && !progress.isRecommendable ? (
-        <Alert
-          type="info"
-          showIcon
-          message="档案未达到“可推荐”阈值"
-          description="补完整分数、位次、加分、选科等关键字段后，生成方案按钮才会启用。"
-        />
-      ) : null}
+        {/* 副区 */}
+        <div className="space-y-4">
+          {/* 联系块 + 关键数据 — Task 3 会填充 */}
+          <div data-slot="side-panel-placeholder" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -632,5 +655,65 @@ function PreferenceFields() {
       <Form.Item name="careerDirection" label="职业方向"><Input.TextArea rows={2} /></Form.Item>
       <Form.Item name="otherRequirements" label="其他要求"><Input.TextArea rows={2} /></Form.Item>
     </>
+  );
+}
+
+// ── 顶部摘要条:身份 + 关键摘要 + 操作 ──
+function StudentSummaryBar({
+  student,
+  plansSummary,
+  onBack,
+  onSave,
+  saving,
+}: {
+  student: any;
+  plansSummary: { activePlanCount: number; latestPlanStatus: string | null; latestPlanVersionNo: number | null } | null;
+  onBack: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const name = student?.user?.realName || student?.realName || student?.username || '学生';
+  const examType = student?.examType ? EXAM_TYPE_LABEL[student.examType] ?? student.examType : '--';
+  const totalScore = student?.totalScore ?? null;
+  const provincialRank = student?.provincialRank ?? null;
+  const signedAt = student?.createdAt ? new Date(student.createdAt) : null;
+  const daysServed = signedAt
+    ? Math.floor((Date.now() - signedAt.getTime()) / 86_400_000)
+    : null;
+
+  return (
+    <header className="rounded-2xl bg-surface px-6 py-4 shadow-card">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} aria-label="返回" />
+            <h1 className="m-0 text-xl font-semibold text-text">{name}</h1>
+            <span className="text-sm text-text-muted">· {examType}</span>
+            {totalScore != null ? (
+              <span className="text-sm text-text-muted">· 总分 {totalScore}</span>
+            ) : null}
+            {provincialRank != null ? (
+              <span className="text-sm text-text-muted">
+                · 位次 {provincialRank.toLocaleString('zh-CN')}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-text-muted">
+            {signedAt ? <span>签约 {signedAt.toLocaleDateString('zh-CN')}</span> : null}
+            {daysServed != null ? <span>· 服务 {daysServed} 天</span> : null}
+            {plansSummary?.latestPlanStatus ? (
+              <span>
+                · 当前方案 v{plansSummary.latestPlanVersionNo ?? '?'} · {plansSummary.latestPlanStatus}
+              </span>
+            ) : null}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>
+            保存
+          </Button>
+        </div>
+      </div>
+    </header>
   );
 }
