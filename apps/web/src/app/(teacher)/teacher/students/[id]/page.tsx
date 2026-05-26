@@ -526,8 +526,8 @@ export default function StudentDetailPage() {
 
         {/* 副区 */}
         <div className="space-y-4">
-          {/* 联系块 + 关键数据 — Task 3 会填充 */}
-          <div data-slot="side-panel-placeholder" />
+          <ContactPanel student={student} />
+          <KeyDataPanel student={student} />
         </div>
       </div>
     </div>
@@ -921,6 +921,129 @@ function SopTimeline({ nodes }: { nodes: SopNode[] }) {
           );
         })}
       </ol>
+    </Card>
+  );
+}
+
+function ContactPanel({ student }: { student: any }) {
+  const studentPhone = student?.user?.phone ?? null;
+  const parentPhone = student?.parentPhone ?? null;
+
+  const callPhone = (phone: string) => {
+    window.location.href = `tel:${phone}`;
+  };
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      message.success(`${label}已复制`);
+    } catch {
+      message.error('复制失败');
+    }
+  };
+
+  return (
+    <Card title="联系方式" size="small">
+      <div className="space-y-3">
+        <div>
+          <p className="m-0 text-xs font-medium text-text-muted">学生</p>
+          {studentPhone ? (
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <span className="font-mono text-sm">{studentPhone}</span>
+              <div className="flex gap-1">
+                <Button size="small" onClick={() => callPhone(studentPhone)}>拨号</Button>
+                <Button size="small" onClick={() => copyToClipboard(studentPhone, '学生电话')}>复制</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="m-0 text-sm text-text-muted">--</p>
+          )}
+        </div>
+        <div>
+          <p className="m-0 text-xs font-medium text-text-muted">家长</p>
+          {parentPhone ? (
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <span className="font-mono text-sm">{parentPhone}</span>
+              <div className="flex gap-1">
+                <Button size="small" onClick={() => callPhone(parentPhone)}>拨号</Button>
+                <Button size="small" onClick={() => copyToClipboard(parentPhone, '家长电话')}>复制</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="m-0 text-sm text-text-muted">--</p>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function KeyDataPanel({ student }: { student: any }) {
+  // 第一组:分数·位次
+  const examType = student?.examType
+    ? EXAM_TYPE_LABEL[student.examType] ?? student.examType
+    : '--';
+  const firstChoice = student?.firstChoice ?? '--';
+  const reChoices = Array.isArray(student?.reChoices) ? student.reChoices.join('/') : '--';
+  const subjectStr = student?.examType ? `${examType}·${firstChoice}·${reChoices}` : '--';
+  const totalScore = student?.totalScore ?? null;
+  const provincialRank = student?.provincialRank ?? null;
+
+  // 第二组:资格条件
+  const bonusList = Array.isArray(student?.bonusItems) ? student.bonusItems : [];
+  const bonusValue = bonusList.reduce(
+    (sum: number, b: any) => sum + (b?.value ?? 0),
+    0,
+  );
+  const bonusLabel = bonusList.length === 0 ? '无' : `+${bonusValue} (${bonusList.length} 项)`;
+  const ethnicity = student?.user?.ethnicity ?? '--';
+  const sourceLoc =
+    [student?.province, student?.city, student?.county].filter(Boolean).join('·') || '--';
+
+  // 第三组:意向
+  const prefCities = Array.isArray(student?.preferredCities) ? student.preferredCities : [];
+  const prefMajors = Array.isArray(student?.preferredMajors) ? student.preferredMajors : [];
+  const prefCitiesStr =
+    prefCities.length === 0
+      ? '未填'
+      : prefCities.slice(0, 3).join('/') + (prefCities.length > 3 ? '...' : '');
+  const prefMajorsStr =
+    prefMajors.length === 0
+      ? '未填'
+      : prefMajors.slice(0, 3).join('/') + (prefMajors.length > 3 ? '...' : '');
+
+  return (
+    <Card title="关键数据" size="small">
+      <div className="space-y-4 text-sm">
+        <div>
+          <p className="m-0 mb-1 text-xs font-medium text-text-muted">分数·位次</p>
+          <p className="m-0 leading-relaxed">
+            <span>选科 {subjectStr}</span>
+            <br />
+            <span>最近模考 {totalScore ?? '--'}</span>
+            <br />
+            <span>预测位次 {provincialRank != null ? provincialRank.toLocaleString('zh-CN') : '--'}</span>
+          </p>
+        </div>
+        <div className="border-t border-border-subtle pt-3">
+          <p className="m-0 mb-1 text-xs font-medium text-text-muted">资格条件</p>
+          <p className="m-0 leading-relaxed">
+            <span>加分 {bonusLabel}</span>
+            <br />
+            <span>民族 {ethnicity}</span>
+            <br />
+            <span>生源地 {sourceLoc}</span>
+          </p>
+        </div>
+        <div className="border-t border-border-subtle pt-3">
+          <p className="m-0 mb-1 text-xs font-medium text-text-muted">意向</p>
+          <p className="m-0 leading-relaxed">
+            <span>意向城市 {prefCitiesStr}</span>
+            <br />
+            <span>目标专业 {prefMajorsStr}</span>
+          </p>
+        </div>
+      </div>
     </Card>
   );
 }
