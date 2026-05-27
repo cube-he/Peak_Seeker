@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
 import { planApi } from '@/services/plan-api';
 import { timelineApi, type TimelineEvent } from '@/services/timeline-api';
+import { consultationApi, type Consultation } from '@/services/consultation-api';
 
 // 兜底日期:仅在 timeline API 加载失败或事件缺失时使用。来源:四川省教育考试院 2026 年通知。
 const FALLBACK_EXAM_DATE = '2026-06-07T09:00:00+08:00';
@@ -373,6 +374,7 @@ export default function TeacherDashboardPage() {
         </div>
       ) : (
         <>
+          <TodayConsultationsSection />
           <ThreeTrackTodoSection
             waitMe={categorized.waitMe}
             waitStudentParent={categorized.waitStudentParent}
@@ -492,5 +494,77 @@ function TodoCard({ item, dim }: { item: TodoItem; dim?: boolean }) {
         {item.primaryAction.label}
       </Button>
     </Link>
+  );
+}
+
+function TodayConsultationsSection() {
+  const { data: list = [] } = useQuery({
+    queryKey: ['consultations-today'],
+    queryFn: () => consultationApi.listToday(),
+  });
+
+  if (list.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl bg-surface shadow-card">
+      <div className="border-b border-border-subtle px-6 py-4">
+        <h2 className="m-0 text-lg font-semibold text-text">今日沟通 ({list.length})</h2>
+      </div>
+      <div className="divide-y divide-border-subtle">
+        {list.map((c: Consultation) => {
+          const when = new Date(c.scheduledAt).toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          const name = c.student?.user?.realName ?? c.student?.user?.username ?? '学生';
+          const channelLabel =
+            c.channel === 'phone'
+              ? '电话'
+              : c.channel === 'wechat'
+                ? '微信'
+                : c.channel === 'in_person'
+                  ? '线下'
+                  : '视频';
+          const statusLabel =
+            c.status === 'scheduled'
+              ? '待开始'
+              : c.status === 'in_progress'
+                ? '进行中'
+                : c.status === 'completed'
+                  ? '已完成'
+                  : c.status === 'cancelled'
+                    ? '已取消'
+                    : '缺席';
+          const statusBg =
+            c.status === 'completed'
+              ? 'bg-safe'
+              : c.status === 'in_progress'
+                ? 'bg-accent'
+                : 'bg-text-muted';
+
+          return (
+            <Link
+              key={c.id}
+              href={`/teacher/students/${c.studentId}?tab=comm`}
+              className="flex items-center justify-between gap-3 px-6 py-3 no-underline hover:bg-bg/30"
+            >
+              <div>
+                <p className="m-0 text-sm font-medium text-text">
+                  {when} &middot; {name}
+                </p>
+                <p className="m-0 text-xs text-text-muted">
+                  {channelLabel}
+                  {c.purpose ? ` · ${c.purpose}` : ''}
+                  {c.durationEst ? ` · 估 ${c.durationEst} 分` : ''}
+                </p>
+              </div>
+              <span className={`rounded px-2 py-0.5 text-[10px] font-semibold text-white ${statusBg}`}>
+                {statusLabel}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
