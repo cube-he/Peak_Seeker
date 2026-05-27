@@ -16,6 +16,7 @@ import { useUserStore } from '@/stores/userStore';
 import { useStudentRank } from '@/stores/studentRankStore';
 import { LocIcon, BankIcon, TrophyIcon, ChartIcon, BookmarkIcon, ArrowIcon } from '../components/shared/Icon';
 import { tierImageFor } from '../lib/tier';
+import { getLatestYearly } from '../lib/admission';
 import { TrendBanner } from './components/TrendBanner';
 import '../styles.css';
 
@@ -65,7 +66,10 @@ export default function UniversityDetailPage() {
   }
 
   const u = university;
-  const latestAdmission = u.admissionRecords?.[0] ?? admissions?.[0] ?? null;
+  // 最近最低分/位次:跟 TrendBanner 共享 lib/admission.ts 的 getLatestYearly,
+  // 按 examType 筛 + groupBy year 后取最近年最低门槛(filing > university > group > major)。
+  // 避免之前用 admissionRecords[0] 取任意一条导致跟走势图数据不一致。
+  const latestYearly = getLatestYearly(admissions ?? u.admissionRecords ?? [], examType);
 
   // 5 档梯队 → hero data-tier + bg image
   const tierImg = tierImageFor({
@@ -160,23 +164,14 @@ export default function UniversityDetailPage() {
           {[
             {
               k: '最近最低分',
-              v:
-                latestAdmission?.minScore ?? latestAdmission?.majorMinScore != null ? (
-                  <span className="em">
-                    {latestAdmission?.minScore ?? latestAdmission?.majorMinScore}
-                  </span>
-                ) : (
-                  '—'
-                ),
-              s: latestAdmission?.year ? `${latestAdmission.year} · ${examType}类` : '等待录取数据',
+              v: latestYearly ? <span className="em">{latestYearly.score}</span> : '—',
+              s: latestYearly ? `${latestYearly.year} · ${examType}类` : '等待录取数据',
               core: true,
             },
             {
               k: '最近最低位次',
-              v: latestAdmission?.minRank ?? latestAdmission?.majorMinRank
-                ? (latestAdmission.minRank ?? latestAdmission.majorMinRank).toLocaleString()
-                : '—',
-              s: `${examType}类参考`,
+              v: latestYearly ? latestYearly.rank.toLocaleString() : '—',
+              s: latestYearly ? `${latestYearly.year} · ${examType}类参考` : `${examType}类参考`,
               core: true,
             },
             {
