@@ -151,9 +151,10 @@ export class StudentController {
   @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
   async updateProfileLegacy(
     @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
     @Body() dto: UpdateStudentProfileDto,
   ) {
-    return this.updateProfile(id, dto);
+    return this.updateProfile(id, user, dto);
   }
 
   @Put(':id/profile')
@@ -161,9 +162,10 @@ export class StudentController {
   @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
   async updateProfile(
     @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
     @Body() dto: UpdateStudentProfileDto,
   ) {
-    return this.studentService.updateProfile(id, dto);
+    return this.studentService.updateProfile(id, dto, 'teacher', user.id);
   }
 
   @Put(':id/assign')

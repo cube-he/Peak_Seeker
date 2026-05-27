@@ -18,6 +18,11 @@ import {
 } from './field-policy';
 import { ScoreSegmentService } from '../score-segment/score-segment.service';
 import type { ExamType } from '../score-segment/exam-type.helper';
+import {
+  TRACKED_FIELD_KEYS,
+  serializeFieldValue,
+  valuesEqual,
+} from './student-change-log.config';
 
 const USER_LEVEL_FIELD_SET = new Set<string>(USER_LEVEL_FIELDS);
 const TEMPORARY_RANK_FALLBACK_YEAR = 2025;
@@ -450,7 +455,12 @@ export class StudentService {
    * Update student profile with optimistic locking.
    * Automatically calculates infoCompleteness and may upgrade status.
    */
-  async updateProfile(id: number, dto: UpdateStudentProfileDto, actor: 'student' | 'teacher' = 'teacher') {
+  async updateProfile(
+    id: number,
+    dto: UpdateStudentProfileDto,
+    actor: 'student' | 'teacher' = 'teacher',
+    changedById?: number,
+  ) {
     const { dataVersion, ...rawUpdateData } = dto as Record<string, any>;
     const { profileUpdates: updateData, userUpdates } =
       this.splitUserLevelUpdates(rawUpdateData);
@@ -472,6 +482,30 @@ export class StudentService {
 
     if (!current) {
       throw new NotFoundException('学生不存在');
+    }
+
+    // ── 计算变更日志(只追踪白名单字段)──
+    const changeLogEntries: Array<{
+      fieldKey: string;
+      oldValue: string | null;
+      newValue: string | null;
+    }> = [];
+
+    if (changedById !== undefined) {
+      const oldSnapshot = current as Record<string, unknown>;
+      const incoming = { ...updateData, ...userUpdates } as Record<string, unknown>;
+      for (const fieldKey of Object.keys(incoming)) {
+        if (!TRACKED_FIELD_KEYS.has(fieldKey)) continue;
+        const oldVal = oldSnapshot[fieldKey];
+        const newVal = incoming[fieldKey];
+        if (!valuesEqual(oldVal, newVal)) {
+          changeLogEntries.push({
+            fieldKey,
+            oldValue: serializeFieldValue(oldVal),
+            newValue: serializeFieldValue(newVal),
+          });
+        }
+      }
     }
 
     // dataVersion 缺失（auto-save 单字段保存）时跳过乐观锁；显式传入时严格校验
@@ -532,30 +566,47 @@ export class StudentService {
     const provenance = this.computeProvenanceUpdates(updateData, actor);
     const hasUserUpdates = Object.keys(userUpdates).length > 0;
 
-    const updated = await this.prisma.studentProfile.update({
-      where: { id },
-      // bonusItems / preferredBatches 是 Json 列，DTO 用 class 做嵌套校验，
-      // Prisma 期望 InputJsonValue — 在边界做一次断言交给 Prisma
-      data: {
-        ...(updateData as Prisma.StudentProfileUpdateInput),
-        ...(hasUserUpdates ? { user: { update: userUpdates } } : {}),
-        ...statusUpdate,
-        ...rankUpdate,
-        ...provenance,
-        dataVersion: { increment: 1 },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            realName: true,
-            phone: true,
-            gender: true,
-            ethnicity: true,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.studentProfile.update({
+        where: { id },
+        // bonusItems / preferredBatches 是 Json 列，DTO 用 class 做嵌套校验，
+        // Prisma 期望 InputJsonValue — 在边界做一次断言交给 Prisma
+        data: {
+          ...(updateData as Prisma.StudentProfileUpdateInput),
+          ...(hasUserUpdates ? { user: { update: userUpdates } } : {}),
+          ...statusUpdate,
+          ...rankUpdate,
+          ...provenance,
+          dataVersion: { increment: 1 },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              realName: true,
+              phone: true,
+              gender: true,
+              ethnicity: true,
+            },
           },
         },
-      },
+      });
+
+      if (changeLogEntries.length > 0 && changedById !== undefined) {
+        await tx.studentFieldChangeLog.createMany({
+          data: changeLogEntries.map((e) => ({
+            studentId: id,
+            changedById,
+            actor,
+            fieldKey: e.fieldKey,
+            oldValue: e.oldValue,
+            newValue: e.newValue,
+          })),
+        });
+      }
+
+      return result;
     });
 
     return { ...updated, infoCompleteness: completeness, rankCheck };
@@ -761,6 +812,6 @@ export class StudentService {
     if (!profile) {
       throw new NotFoundException('学生档案不存在');
     }
-    return this.updateProfile(profile.id, dto, 'student');
+    return this.updateProfile(profile.id, dto, 'student', userId);
   }
 }

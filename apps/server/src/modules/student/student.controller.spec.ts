@@ -40,20 +40,22 @@ describe('StudentController', () => {
   it('updates through the profile route', async () => {
     const dto = { totalScore: 479 } as UpdateStudentProfileDto;
     const updated = { id: 1, totalScore: 479 };
+    const mockUser = { id: 42 } as any;
     studentService.updateProfile.mockResolvedValue(updated);
 
-    await expect(controller.updateProfile(1, dto)).resolves.toBe(updated);
+    await expect(controller.updateProfile(1, mockUser, dto)).resolves.toBe(updated);
 
-    expect(studentService.updateProfile).toHaveBeenCalledWith(1, dto);
+    expect(studentService.updateProfile).toHaveBeenCalledWith(1, dto, 'teacher', 42);
   });
 
   it('updates through the legacy route using the same profile flow', async () => {
     const dto = { totalScore: 479 } as UpdateStudentProfileDto;
     const updated = { id: 1, totalScore: 479 };
+    const mockUser = { id: 42 } as any;
     studentService.updateProfile.mockResolvedValue(updated);
 
-    await expect((controller as any).updateProfileLegacy(1, dto)).resolves.toBe(updated);
+    await expect((controller as any).updateProfileLegacy(1, mockUser, dto)).resolves.toBe(updated);
 
-    expect(studentService.updateProfile).toHaveBeenCalledWith(1, dto);
+    expect(studentService.updateProfile).toHaveBeenCalledWith(1, dto, 'teacher', 42);
   });
 });
