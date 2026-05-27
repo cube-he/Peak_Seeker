@@ -4,6 +4,7 @@ import {
   MissingHistoricalDataRule,
   ZeroPlanCountRule,
 } from './rules/qualification.rule';
+import { FillDifferenceRule, StableDifferenceRule, SafeDifferenceRule } from './rules/gradient.rule';
 import type { RuleContext } from './risk-rule.interface';
 
 const mkCtx = (item: any, student: any = {}): RuleContext => ({
@@ -82,6 +83,73 @@ describe('Qualification rules', () => {
 
     it('passes planCount>0', () => {
       const findings = ZeroPlanCountRule.evaluate(mkCtx({ planCount: 5 }));
+      expect(findings).toHaveLength(0);
+    });
+  });
+});
+
+describe('Gradient rules', () => {
+  describe('FillDifferenceRule', () => {
+    it('critical when diff > 15 (CHONG)', () => {
+      const findings = FillDifferenceRule.evaluate(
+        mkCtx({ gradient: 'CHONG', score25Major: 600 }, { totalScore: 580 }),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0].severity).toBe('critical');
+    });
+
+    it('moderate when diff 7-15 (CHONG)', () => {
+      const findings = FillDifferenceRule.evaluate(
+        mkCtx({ gradient: 'CHONG', score25Major: 590 }, { totalScore: 580 }),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0].severity).toBe('moderate');
+    });
+
+    it('no risk for non-CHONG', () => {
+      const findings = FillDifferenceRule.evaluate(
+        mkCtx({ gradient: 'WEN', score25Major: 600 }, { totalScore: 580 }),
+      );
+      expect(findings).toHaveLength(0);
+    });
+
+    it('no risk for small diff', () => {
+      const findings = FillDifferenceRule.evaluate(
+        mkCtx({ gradient: 'CHONG', score25Major: 583 }, { totalScore: 580 }),
+      );
+      expect(findings).toHaveLength(0);
+    });
+  });
+
+  describe('StableDifferenceRule', () => {
+    it('moderate when WEN diff < 2', () => {
+      const findings = StableDifferenceRule.evaluate(
+        mkCtx({ gradient: 'WEN', score25Major: 579 }, { totalScore: 580 }),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0].severity).toBe('moderate');
+    });
+
+    it('passes when diff >= 2', () => {
+      const findings = StableDifferenceRule.evaluate(
+        mkCtx({ gradient: 'WEN', score25Major: 575 }, { totalScore: 580 }),
+      );
+      expect(findings).toHaveLength(0);
+    });
+  });
+
+  describe('SafeDifferenceRule', () => {
+    it('moderate when BAO diff < 2', () => {
+      const findings = SafeDifferenceRule.evaluate(
+        mkCtx({ gradient: 'BAO', score25Major: 579 }, { totalScore: 580 }),
+      );
+      expect(findings).toHaveLength(1);
+    });
+
+    it('passes when diff >= 2', () => {
+      const findings = SafeDifferenceRule.evaluate(
+        mkCtx({ gradient: 'BAO', score25Major: 570 }, { totalScore: 580 }),
+      );
       expect(findings).toHaveLength(0);
     });
   });

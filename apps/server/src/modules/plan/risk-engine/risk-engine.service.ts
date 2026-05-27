@@ -3,11 +3,13 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { RiskFinding, RuleContext, RiskRule } from './risk-rule.interface';
 import { QualificationRules } from './rules/qualification.rule';
+import { GradientRules } from './rules/gradient.rule';
 
 @Injectable()
 export class RiskEngineService {
   private readonly rules: RiskRule[] = [
     ...QualificationRules,
+    ...GradientRules,
   ];
 
   constructor(private prisma: PrismaService) {}
