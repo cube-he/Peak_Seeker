@@ -611,6 +611,7 @@ model User {
   studentFieldChanges StudentFieldChangeLog[]
   notifications       Notification[]
   auditLogs      AuditLog[]
+  resolvedRisks  PlanItemRisk[]
 
   @@index([province])
   @@index([examYear])
@@ -986,6 +987,8 @@ model PlanItem {
   compositeScore Decimal? @map("composite_score") @db.Decimal(6, 2)
   scoreBreakdown Json?    @map("score_breakdown")
 
+  risks PlanItemRisk[]
+
   @@unique([planId, sequence])
   @@index([planId])
   @@index([universityId])
@@ -1045,6 +1048,32 @@ model PlanReviewDraft {
   @@index([planId])
   @@index([reviewerId])
   @@map("plan_review_drafts")
+}
+
+// ==================== 方案志愿风险评估 ====================
+
+model PlanItemRisk {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  planItemId Int      @map("plan_item_id")
+  planItem   PlanItem @relation(fields: [planItemId], references: [id], onDelete: Cascade)
+
+  ruleCode String @map("rule_code") @db.VarChar(50)
+  severity String @db.VarChar(20)
+  category String @db.VarChar(20)
+  message  String @db.Text
+  detail   Json?
+
+  resolvedAt   DateTime? @map("resolved_at")
+  resolution   String?   @db.VarChar(20)
+  resolverNote String?   @map("resolver_note") @db.VarChar(500)
+  resolvedById Int?      @map("resolved_by_id")
+  resolvedBy   User?     @relation(fields: [resolvedById], references: [id])
+
+  @@index([planItemId, severity])
+  @@index([ruleCode])
+  @@map("plan_item_risks")
 }
 
 // ==================== 方案评估（录取追踪） ====================
