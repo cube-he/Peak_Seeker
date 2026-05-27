@@ -26,6 +26,7 @@ import {
   DeleteOutlined,
   DownOutlined,
   FileTextOutlined,
+  InfoCircleOutlined,
   PlusOutlined,
   SendOutlined,
   WarningOutlined,
@@ -820,6 +821,9 @@ export default function GeneratePlanPage() {
   const setGroupExpandTab = (key: string, tab: 'majors' | 'evidence' | 'school') =>
     setGroupExpandTabs((prev) => ({ ...prev, [key]: tab }));
 
+  // 算法路径 Drawer
+  const [algoDrawerOpen, setAlgoDrawerOpen] = useState(false);
+
   // 多卡对比（最多 4 张）
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
   const [compareDrawerOpen, setCompareDrawerOpen] = useState(false);
@@ -1298,6 +1302,9 @@ export default function GeneratePlanPage() {
                 </button>
               </>
             ) : null}
+            <Button onClick={() => setAlgoDrawerOpen(true)} icon={<InfoCircleOutlined />}>
+              算法路径
+            </Button>
             </div>
           </div>
           <div className={styles.studentProfileGrid}>
@@ -2139,6 +2146,104 @@ export default function GeneratePlanPage() {
             .filter((g): g is NonNullable<typeof g> => Boolean(g))}
         />
       </Drawer>
+
+      <AlgorithmPathDrawer
+        open={algoDrawerOpen}
+        onClose={() => setAlgoDrawerOpen(false)}
+        student={student}
+        batchName={selectedBatchName}
+        candidateCount={candidateGroups?.total ?? 0}
+        softFailedCount={groups.filter((g) => g.softFailCount > 0).length}
+        selectedCount={planItems.length}
+      />
     </div>
+  );
+}
+
+function AlgorithmPathDrawer({
+  open,
+  onClose,
+  student,
+  batchName,
+  candidateCount,
+  softFailedCount,
+  selectedCount,
+}: {
+  open: boolean;
+  onClose: () => void;
+  student: any;
+  batchName: string | undefined;
+  candidateCount: number;
+  softFailedCount: number;
+  selectedCount: number;
+}) {
+  const examType = student?.examType ?? '--';
+  const totalScore = student?.totalScore ?? null;
+  const provincialRank = student?.provincialRank ?? null;
+  const firstChoice = student?.firstChoice ?? '--';
+  const reChoices = Array.isArray(student?.reChoices) ? student.reChoices.join('/') : '--';
+  const subjectCombo = `${examType}·${firstChoice}·${reChoices}`;
+  const cityPrefs = Array.isArray(student?.preferredCities)
+    ? student.preferredCities.slice(0, 5).join('/')
+    : '--';
+  const majorPrefs = Array.isArray(student?.preferredMajors)
+    ? student.preferredMajors.slice(0, 5).join('/')
+    : '--';
+
+  const passedCount = Math.max(0, candidateCount - softFailedCount);
+
+  const steps = [
+    {
+      title: '① 学生输入',
+      detail: `选科 ${subjectCombo} · 总分 ${totalScore ?? '--'} · 位次 ${
+        provincialRank?.toLocaleString('zh-CN') ?? '--'
+      }`,
+    },
+    {
+      title: '② 批次设定',
+      detail: batchName ?? '未选批次',
+    },
+    {
+      title: '③ 硬过滤(选科+体检+生源地)',
+      detail: '由后端硬过滤剔除不符合硬条件的院校组',
+    },
+    {
+      title: '④ 软规则过滤(意向+加分等)',
+      detail: `意向城市 ${cityPrefs} · 意向专业 ${majorPrefs};软规则命中 ${softFailedCount} 个院校组(降权显示)`,
+    },
+    {
+      title: '⑤ 候选池规模',
+      detail: `共 ${candidateCount} 个院校专业组(${passedCount} 完全匹配 + ${softFailedCount} 软命中)`,
+    },
+    {
+      title: '⑥ 当前已选',
+      detail: `老师已选 ${selectedCount} 个志愿,${selectedCount > 0 ? '可继续添加 / 调整' : '尚未添加'}`,
+    },
+  ];
+
+  return (
+    <Drawer
+      title="算法路径解释"
+      open={open}
+      onClose={onClose}
+      width={420}
+      placement="right"
+    >
+      <p className="mb-4 text-sm text-text-muted">
+        此页推荐结果基于以下决策路径生成。可作为给家长解释方案逻辑的参考。
+      </p>
+      <ol className="m-0 list-none space-y-3 p-0">
+        {steps.map((step, i) => (
+          <li key={i} className="border-l-2 border-l-primary bg-bg/30 p-3">
+            <p className="m-0 text-sm font-medium text-text">{step.title}</p>
+            <p className="m-0 mt-1 text-xs text-text-muted">{step.detail}</p>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-6 rounded-md border border-dashed border-border bg-bg/30 p-3 text-xs text-text-muted">
+        <strong>免责提示:</strong>{' '}
+        算法基于历史录取数据 + 当年招生计划计算,实际录取可能受当年志愿填报情况影响。
+      </div>
+    </Drawer>
   );
 }
