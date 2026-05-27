@@ -4,6 +4,7 @@ import type { UniversityListItem } from '@/services/university';
 import { Tags } from '../shared/Tags';
 import { TierBadge, RankDistance } from '../shared/TierBadge';
 import type { Tier } from '../../lib/tier';
+import { pickBackgroundTags } from '../../lib/backgrounds';
 import { getTier, classifyRank } from '@/utils/classify-rank';
 
 /**
@@ -67,6 +68,17 @@ export function ListCard({
               专科
             </span>
           )}
+          {/* 院校背景 tags(C9联盟 / 卓越工程师 / 原邮电部直属 等)。
+              accent 配色,跟 type/省/性质 等常规 info chip 区分开。 */}
+          {pickBackgroundTags(uni.tags).map((t) => (
+            <span
+              key={t}
+              className="chip-mini"
+              style={{ background: 'var(--accent-fixed)', color: 'var(--accent)', fontWeight: 500 }}
+            >
+              {t}
+            </span>
+          ))}
         </div>
         <div className="meta">
           {uni.softRanking != null && (
