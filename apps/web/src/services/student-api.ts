@@ -226,6 +226,16 @@ export const studentApi = {
   },
 
   /**
+   * 导出学生服务报告 PDF(返回 Blob)
+   */
+  async exportServiceReport(studentId: number | string) {
+    const res = await api.get(`/students/${studentId}/service-report.pdf`, {
+      responseType: 'blob',
+    });
+    return res.data as Blob;
+  },
+
+  /**
    * 获取学生资料字段变更日志(按时间倒序)
    */
   async getChangeLogs(

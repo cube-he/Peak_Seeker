@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type BonusItem, type UpdateStudentDto } from '@/services/student-api';
+import { planApi } from '@/services/plan-api';
 import ProgressBar from '@/components/student/ProgressBar';
 import BonusCalcCard from '@/components/policy/BonusCalcCard';
 import { useProvinceOptions } from '@/components/student/picker/options/useProvinceOptions';
@@ -629,7 +630,12 @@ export default function StudentDetailPage() {
               {
                 key: 'external',
                 label: '对外材料',
-                children: <ComingSoonTabContent module="对外材料" />,
+                children: (
+                  <ExternalMaterialsTabContent
+                    studentId={studentId}
+                    student={student}
+                  />
+                ),
               },
               {
                 key: 'log',
@@ -1355,5 +1361,122 @@ function KeyDataPanel({ student }: { student: any }) {
         </div>
       </div>
     </Card>
+  );
+}
+
+function ExternalMaterialsTabContent({
+  studentId,
+  student,
+}: {
+  studentId: string | number;
+  student: any;
+}) {
+  const [exporting, setExporting] = useState<string | null>(null);
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportServiceReport = async () => {
+    setExporting('service-report');
+    try {
+      const blob = await studentApi.exportServiceReport(studentId);
+      const name = student?.user?.realName ?? student?.username ?? 'student';
+      downloadBlob(blob, `${name}-服务报告.pdf`);
+      message.success('服务报告已导出');
+    } catch (e: any) {
+      message.error(`导出失败:${e?.message ?? '未知错误'}`);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const plans: any[] = student?.volunteerPlans ?? [];
+
+  return (
+    <div className="space-y-4 pt-2">
+      <Card title="对外材料" size="small">
+        <div className="space-y-3">
+          <div className="rounded-md border border-border-subtle p-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <div>
+                <p className="m-0 font-medium text-text">服务报告 PDF</p>
+                <p className="m-0 text-xs text-text-muted">
+                  含学生信息 · 方案版本历史 · 资料更新统计 · 服务天数
+                </p>
+              </div>
+              <Button
+                type="primary"
+                loading={exporting === 'service-report'}
+                onClick={exportServiceReport}
+              >
+                导出
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-border-subtle p-3">
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <div>
+                <p className="m-0 font-medium text-text">方案 PDF</p>
+                <p className="m-0 text-xs text-text-muted">
+                  逐方案版本独立 PDF(志愿表 + 推荐理由 + 审核意见)
+                </p>
+              </div>
+              <span className="text-xs text-text-muted">{plans.length} 个方案</span>
+            </div>
+            {plans.length === 0 ? (
+              <p className="m-0 text-xs text-text-muted">暂无方案</p>
+            ) : (
+              <ul className="m-0 list-none space-y-1 p-0">
+                {plans.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center justify-between border-t border-border-subtle pt-1"
+                  >
+                    <span className="text-sm text-text">
+                      v{p.versionNo}{p.versionNote ? ` (${p.versionNote})` : ''} · {p.status}
+                      {p.isFinal ? ' · 终稿' : ''}
+                    </span>
+                    <Button
+                      size="small"
+                      type="text"
+                      onClick={async () => {
+                        const key = `plan-${p.id}`;
+                        setExporting(key);
+                        try {
+                          const blob = await planApi.exportPdf(p.id);
+                          const name = student?.user?.realName ?? 'student';
+                          downloadBlob(blob, `${name}-v${p.versionNo}-方案.pdf`);
+                          message.success('方案 PDF 已导出');
+                        } catch (e: any) {
+                          message.error(`导出失败:${e?.message ?? '未知错误'}`);
+                        } finally {
+                          setExporting(null);
+                        }
+                      }}
+                      loading={exporting === `plan-${p.id}`}
+                    >
+                      导出 PDF
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-md border border-dashed border-border bg-bg/30 p-3 text-xs text-text-muted">
+            提示:服务报告 PDF 内沟通统计 / 风险评估章节会在后续模块上线后自动补充。
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }

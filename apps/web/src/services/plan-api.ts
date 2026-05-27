@@ -199,6 +199,13 @@ export const planApi = {
     return api.get(`/plans/${id}/export.pdf`, { responseType: 'blob' }) as any;
   },
 
+  async exportPdf(planId: number | string) {
+    const res = await api.get(`/plans/${planId}/export.pdf`, {
+      responseType: 'blob',
+    });
+    return res.data as Blob;
+  },
+
   // Student endpoints
   getMyPlans(): Promise<any> {
     return api.get('/plans/mine') as any;
