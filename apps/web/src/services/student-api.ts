@@ -226,17 +226,6 @@ export const studentApi = {
   },
 
   /**
-   * 导出学生服务报告 PDF(返回 Blob)
-   * NOTE: api.ts interceptor already returns response.data; for blob responseType
-   * that IS the Blob, so just cast the awaited value.
-   */
-  async exportServiceReport(studentId: number | string) {
-    return (await api.get(`/students/${studentId}/service-report.pdf`, {
-      responseType: 'blob',
-    })) as unknown as Blob;
-  },
-
-  /**
    * 获取学生资料字段变更日志(按时间倒序)
    */
   async getChangeLogs(

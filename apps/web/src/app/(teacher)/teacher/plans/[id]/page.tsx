@@ -359,12 +359,12 @@ export default function PlanDetailPage() {
   });
 
   const exportMutation = useMutation({
-    mutationFn: () => planApi.exportPlan(planId),
+    mutationFn: () => planApi.exportExcel(planId),
     onSuccess: (blob) => {
       const url = URL.createObjectURL(blob as Blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `plan-${planId}.pdf`;
+      a.download = `plan-${planId}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     },

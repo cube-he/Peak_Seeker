@@ -12,10 +12,8 @@ import {
   Res,
   ParseIntPipe,
 } from '@nestjs/common';
-import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { PlanService } from './plan.service';
-import { PlanExportService } from './plan-export.service';
 import { PlanReviewDraftService } from './plan-review-draft.service';
 import { RiskEngineService } from './risk-engine/risk-engine.service';
 import { UpsertReviewDraftDto } from './dto/upsert-review-draft.dto';
@@ -32,7 +30,6 @@ import { PoliciesGuard, CheckPolicies } from '../casl';
 export class PlanController {
   constructor(
     private planService: PlanService,
-    private exportService: PlanExportService,
     private draftService: PlanReviewDraftService,
     private riskEngine: RiskEngineService,
   ) {}
@@ -144,21 +141,6 @@ export class PlanController {
     @Request() req: any,
   ) {
     return this.planService.startReview(id, req.user.id);
-  }
-
-  @Get(':id/export.pdf')
-  @ApiOperation({ summary: '导出方案 PDF（需服务端已安装 puppeteer）' })
-  @ApiParam({ name: 'id', type: Number })
-  async exportPdf(
-    @Param('id', ParseIntPipe) id: number,
-    @Res() res: Response,
-  ) {
-    const buf = await this.exportService.exportPdf(id);
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename=plan-${id}.pdf`,
-    });
-    res.send(buf);
   }
 
   @Post(':id/finalize')

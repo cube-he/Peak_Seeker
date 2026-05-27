@@ -1381,20 +1381,6 @@ function ExternalMaterialsTabContent({
     URL.revokeObjectURL(url);
   };
 
-  const exportServiceReport = async () => {
-    setExporting('service-report');
-    try {
-      const blob = await studentApi.exportServiceReport(studentId);
-      const name = student?.user?.realName ?? student?.username ?? 'student';
-      downloadBlob(blob, `${name}-服务报告.pdf`);
-      message.success('服务报告已导出');
-    } catch (e: any) {
-      message.error(`导出失败:${e?.message ?? '未知错误'}`);
-    } finally {
-      setExporting(null);
-    }
-  };
-
   const plans: any[] = student?.volunteerPlans ?? [];
 
   return (
@@ -1402,29 +1388,11 @@ function ExternalMaterialsTabContent({
       <Card title="对外材料" size="small">
         <div className="space-y-3">
           <div className="rounded-md border border-border-subtle p-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <div>
-                <p className="m-0 font-medium text-text">服务报告 PDF</p>
-                <p className="m-0 text-xs text-text-muted">
-                  含学生信息 · 方案版本历史 · 资料更新统计 · 服务天数
-                </p>
-              </div>
-              <Button
-                type="primary"
-                loading={exporting === 'service-report'}
-                onClick={exportServiceReport}
-              >
-                导出
-              </Button>
-            </div>
-          </div>
-
-          <div className="rounded-md border border-border-subtle p-3">
             <div className="mb-2 flex items-baseline justify-between gap-2">
               <div>
-                <p className="m-0 font-medium text-text">方案 PDF</p>
+                <p className="m-0 font-medium text-text">方案 Excel</p>
                 <p className="m-0 text-xs text-text-muted">
-                  逐方案版本独立 PDF(志愿表 + 推荐理由 + 审核意见)
+                  按版本独立导出 (A3 横版 24 列 · 冲稳保彩色分组 · 可在 Excel 内继续微调)
                 </p>
               </div>
               <span className="text-xs text-text-muted">{plans.length} 个方案</span>
@@ -1449,10 +1417,10 @@ function ExternalMaterialsTabContent({
                         const key = `plan-${p.id}`;
                         setExporting(key);
                         try {
-                          const blob = await planApi.exportPdf(p.id);
+                          const blob = await planApi.exportExcel(p.id);
                           const name = student?.user?.realName ?? 'student';
-                          downloadBlob(blob, `${name}-v${p.versionNo}-方案.pdf`);
-                          message.success('方案 PDF 已导出');
+                          downloadBlob(blob, `${name}-v${p.versionNo}-方案.xlsx`);
+                          message.success('方案 Excel 已导出');
                         } catch (e: any) {
                           message.error(`导出失败:${e?.message ?? '未知错误'}`);
                         } finally {
@@ -1461,16 +1429,12 @@ function ExternalMaterialsTabContent({
                       }}
                       loading={exporting === `plan-${p.id}`}
                     >
-                      导出 PDF
+                      导出 Excel
                     </Button>
                   </li>
                 ))}
               </ul>
             )}
-          </div>
-
-          <div className="rounded-md border border-dashed border-border bg-bg/30 p-3 text-xs text-text-muted">
-            提示:服务报告 PDF 内沟通统计 / 风险评估章节会在后续模块上线后自动补充。
           </div>
         </div>
       </Card>

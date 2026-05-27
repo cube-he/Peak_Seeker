@@ -193,15 +193,16 @@ export const planApi = {
     return api.post(`/plans/${id}/finalize`) as any;
   },
 
-  exportPlan(id: string): Promise<any> {
-    return api.get(`/plans/${id}/export.pdf`, { responseType: 'blob' }) as any;
-  },
-
-  async exportPdf(planId: number | string) {
-    // interceptor returns response.data, which IS the Blob for blob responseType.
-    return (await api.get(`/plans/${planId}/export.pdf`, {
-      responseType: 'blob',
-    })) as unknown as Blob;
+  /**
+   * 导出方案 Excel(走 recommend 模块的 exceljs 实现, 不依赖 puppeteer/chrome)
+   * format: excel_full = A3 24 列完整版; excel_compact = A4 12 列精简版
+   */
+  async exportExcel(planId: number | string, format: 'excel_full' | 'excel_compact' = 'excel_full') {
+    return (await api.post(
+      `/recommend/plans/${planId}/export`,
+      { format },
+      { responseType: 'blob' },
+    )) as unknown as Blob;
   },
 
   async getRisks(planId: number | string) {

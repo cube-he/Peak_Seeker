@@ -6,7 +6,6 @@ import { PlanReviewDraftService } from './plan-review-draft.service';
 import { StudentPlansController } from './student-plans.controller';
 import { PlanItemsController } from './plan-items.controller';
 import { PlanItemService } from './plan-item.service';
-import { PlanExportService } from './plan-export.service';
 import { RiskEngineService } from './risk-engine/risk-engine.service';
 
 @Module({
@@ -15,7 +14,6 @@ import { RiskEngineService } from './risk-engine/risk-engine.service';
     PlanService,
     PlanStateMachineService,
     PlanItemService,
-    PlanExportService,
     PlanReviewDraftService,
     RiskEngineService,
   ],
