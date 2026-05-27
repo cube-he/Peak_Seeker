@@ -488,9 +488,23 @@ export default function StudentDetailPage() {
             items={[
               {
                 key: 'profile',
-                label: '资料',
+                label: (() => {
+                  const checks = getFieldChecks(student);
+                  const missingCount = checks.filter((c) => !c.passed).length;
+                  return (
+                    <span>
+                      资料
+                      {missingCount > 0 ? (
+                        <span className="ml-1 inline-block rounded-full bg-rush px-1.5 text-[10px] font-medium text-white">
+                          {missingCount}
+                        </span>
+                      ) : null}
+                    </span>
+                  );
+                })(),
                 children: (
                   <div className="space-y-4 pt-2">
+                    <DataCompletenessHeader student={student} />
                     <Card className="rounded-2xl shadow-card">
                       <Form
                         form={form}
@@ -1041,6 +1055,108 @@ function ComingSoonTabContent({ module }: { module: string }) {
       <p className="m-0 mt-2 text-xs text-text-muted">
         将在后续 plan 中实装(沟通预约 / 方案版本对比 / PDF 报告 / 变更日志)
       </p>
+    </div>
+  );
+}
+
+interface FieldCheckInfo {
+  key: string;
+  label: string;
+  passed: boolean;
+}
+
+function getFieldChecks(student: any): FieldCheckInfo[] {
+  return [
+    {
+      key: 'subjects',
+      label: '选科组合',
+      passed:
+        !!student?.examType &&
+        !!student?.firstChoice &&
+        Array.isArray(student?.reChoices) &&
+        student.reChoices.length > 0,
+    },
+    {
+      key: 'totalScore',
+      label: '模考分',
+      passed: typeof student?.totalScore === 'number' && student.totalScore > 0,
+    },
+    {
+      key: 'rank',
+      label: '预测位次',
+      passed: typeof student?.provincialRank === 'number' && student.provincialRank > 0,
+    },
+    {
+      key: 'cities',
+      label: '意向城市',
+      passed:
+        (Array.isArray(student?.preferredCities) && student.preferredCities.length > 0) ||
+        (Array.isArray(student?.excludedCities) && student.excludedCities.length > 0) ||
+        !!student?.stayPreference,
+    },
+    {
+      key: 'majors',
+      label: '意向专业',
+      passed:
+        (Array.isArray(student?.preferredMajors) && student.preferredMajors.length > 0) ||
+        (Array.isArray(student?.preferredMajorCategories) &&
+          student.preferredMajorCategories.length > 0),
+    },
+    {
+      key: 'bonusStatus',
+      label: '加分政策',
+      passed: !!student?.bonusPolicyStatus,
+    },
+    {
+      key: 'health',
+      label: '体检关键项',
+      passed:
+        typeof student?.colorBlind === 'boolean' && typeof student?.colorWeak === 'boolean',
+    },
+    {
+      key: 'location',
+      label: '生源地',
+      passed: !!student?.province && !!student?.city,
+    },
+  ];
+}
+
+function DataCompletenessHeader({ student }: { student: any }) {
+  const checks = getFieldChecks(student);
+  const passedCount = checks.filter((c) => c.passed).length;
+  const total = checks.length;
+  const missing = checks.filter((c) => !c.passed);
+  const percent = total > 0 ? Math.round((passedCount / total) * 100) : 0;
+  const isRecommendable = passedCount === total;
+
+  return (
+    <div className="mb-4 rounded-lg border border-border-subtle bg-bg/30 px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="m-0 text-sm">
+          <span className="font-medium text-text">
+            {isRecommendable ? (
+              <span className="text-safe">关键资料就绪</span>
+            ) : (
+              <span className="text-rush">还缺 {missing.length} 项关键资料</span>
+            )}
+          </span>
+          <span className="ml-2 text-text-muted">
+            {passedCount}/{total} 字段 · 完整度 {percent}%
+          </span>
+        </p>
+      </div>
+      {missing.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {missing.map((m) => (
+            <span
+              key={m.key}
+              className="inline-block rounded border border-rush bg-rush/10 px-2 py-0.5 text-[11px] font-medium text-rush"
+            >
+              {m.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
