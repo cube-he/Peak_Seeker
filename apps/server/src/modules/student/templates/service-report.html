@@ -123,7 +123,29 @@
   {{/if}}
 
   <h2>方案风险评估</h2>
-  <p class="placeholder">(风险评估模块上线后,此处将展示已识别风险及解决方案)</p>
+  {{#if risks.counts.critical}}
+  <p>严重 <strong>{{risks.counts.critical}}</strong> 项 · 中度 <strong>{{risks.counts.moderate}}</strong> 项 · 轻微 <strong>{{risks.counts.minor}}</strong> 项</p>
+  {{else}}
+    {{#if risks.counts.moderate}}
+  <p>中度 <strong>{{risks.counts.moderate}}</strong> 项 · 轻微 <strong>{{risks.counts.minor}}</strong> 项</p>
+    {{else}}
+      {{#if risks.counts.minor}}
+  <p>轻微 <strong>{{risks.counts.minor}}</strong> 项</p>
+      {{else}}
+  <p class="placeholder">未识别到任何风险</p>
+      {{/if}}
+    {{/if}}
+  {{/if}}
+  {{#if risks.items.length}}
+  <table class="history">
+    <thead><tr><th>等级</th><th>志愿</th><th>风险说明</th></tr></thead>
+    <tbody>
+      {{#each risks.items}}
+      <tr><td>{{severity}}</td><td>{{item}}</td><td>{{message}}</td></tr>
+      {{/each}}
+    </tbody>
+  </table>
+  {{/if}}
 
   <div class="footer">
     本报告由 VolunteerHelper 系统于 {{generatedAt}} 自动生成 · 仅供参考

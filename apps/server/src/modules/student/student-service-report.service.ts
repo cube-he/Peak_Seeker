@@ -97,6 +97,33 @@ export class StudentServiceReportService {
       consultationsByChannel[c.channel] = (consultationsByChannel[c.channel] ?? 0) + 1;
     }
 
+    // 风险评估统计(服务期内所有方案的未解决风险)
+    const studentPlanIds = student.volunteerPlans.map((p) => p.id);
+    const risks = studentPlanIds.length > 0
+      ? await this.prisma.planItemRisk.findMany({
+          where: {
+            planItem: { planId: { in: studentPlanIds } },
+            resolvedAt: null,
+          },
+          include: {
+            planItem: {
+              select: {
+                sequence: true,
+                universityName: true,
+                majorName: true,
+                planId: true,
+              },
+            },
+          },
+          orderBy: [{ severity: 'asc' }, { id: 'asc' }],
+          take: 20,
+        })
+      : [];
+    const riskCounts: Record<string, number> = { critical: 0, moderate: 0, minor: 0 };
+    for (const r of risks) {
+      riskCounts[r.severity] = (riskCounts[r.severity] ?? 0) + 1;
+    }
+
     const signedAt = student.createdAt;
     const now = new Date();
     const daysServed = Math.floor(
@@ -154,6 +181,19 @@ export class StudentServiceReportService {
                     ? '视频'
                     : k,
           count: v,
+        })),
+      },
+      risks: {
+        counts: {
+          critical: riskCounts.critical,
+          moderate: riskCounts.moderate,
+          minor: riskCounts.minor,
+        },
+        items: risks.slice(0, 10).map((r) => ({
+          severity:
+            r.severity === 'critical' ? '严重' : r.severity === 'moderate' ? '中度' : '轻微',
+          message: r.message,
+          item: `#${r.planItem.sequence} ${r.planItem.universityName} · ${r.planItem.majorName}`,
         })),
       },
       generatedAt: now.toLocaleString('zh-CN'),
