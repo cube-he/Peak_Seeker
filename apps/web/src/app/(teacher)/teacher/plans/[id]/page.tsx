@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useDebouncedCallback } from 'use-debounce';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -87,9 +88,38 @@ function formatRelativeTime(date: Date | null, now: Date) {
   return date.toLocaleString('zh-CN');
 }
 
-// 历史最低分：优先 25 年专业级，依次回退专业组、旧 lastYearMinScore
-function getHistoricalScore(item: any): number | null {
-  return item?.score25Major ?? item?.score25Group ?? item?.lastYearMinScore ?? null;
+// 历史录取分来源枚举(供 UI 标注当前算法在用哪档)
+export type HistoricalScoreSource = 'major25' | 'group25' | 'major24' | 'legacy';
+
+export interface HistoricalScoreResult {
+  score: number;
+  source: HistoricalScoreSource;
+}
+
+// 来源标签:在单元格小字和 tooltip 里显示哪档数据
+const SOURCE_LABEL: Record<HistoricalScoreSource, string> = {
+  major25: '25 年专业级',
+  group25: '25 年组级',
+  major24: '24 年专业级',
+  legacy: '旧字段(兼容)',
+};
+
+// 来源配色:让老师一眼区分数据质量; text-primary=navy(最优), text-safe=green(次优), muted=兜底
+const SOURCE_TONE: Record<HistoricalScoreSource, string> = {
+  major25: 'text-primary',       // 最优先,深蓝
+  group25: 'text-text-secondary', // 较粗,深灰
+  major24: 'text-safe',           // 较旧但精确,绿色
+  legacy: 'text-text-muted',      // 兜底,弱化
+};
+
+// 历史最低分:返回 { score, source } 让 UI 能告诉老师当前是哪个维度的数据
+// 优先级:25 年专业级 > 25 年专业组级 > 24 年专业级 > 旧字段
+function getHistoricalScore(item: any): HistoricalScoreResult | null {
+  if (item?.score25Major != null) return { score: item.score25Major, source: 'major25' };
+  if (item?.score25Group != null) return { score: item.score25Group, source: 'group25' };
+  if (item?.score24Major != null) return { score: item.score24Major, source: 'major24' };
+  if (item?.lastYearMinScore != null) return { score: item.lastYearMinScore, source: 'legacy' };
+  return null;
 }
 
 function getHistoricalRank(item: any): number | null {
@@ -112,6 +142,9 @@ export default function PlanDetailPage() {
   const [reviewComment, setReviewComment] = useState('');
   // 教师对每个志愿的逐项批注：sequence -> annotation；提交审核时打包发送
   const [annotations, setAnnotations] = useState<Record<number, string>>({});
+  // 标记是否已从 draft 恢复初值,避免后续 draftData 重新拉取(如 React Query refetch)时
+  // 覆盖用户已经输入的内容
+  const [draftLoaded, setDraftLoaded] = useState(false);
   // 预案一览表默认折叠；用户可点击展开内联预览，或点全屏按钮弹 Modal
   const [showPreparationFullscreen, setShowPreparationFullscreen] = useState(false);
   // 客户端启动后再产生 now，避免 SSR / 客户端时间不一致 hydration 警告
@@ -128,6 +161,29 @@ export default function PlanDetailPage() {
   const plan = unwrap<Record<string, any>>(data);
   const items: any[] = plan?.items ?? [];
 
+  // 拉取当前审核人对此方案的草稿:用于在审核中断后恢复未提交的批注/总体意见
+  const { data: draftData } = useQuery({
+    queryKey: ['plan-review-draft', planId],
+    queryFn: () => planApi.getReviewDraft(planId),
+    // 只在能审核的状态拉取,避免 DRAFT 状态(老师做方案中)误拉
+    enabled: !!plan && (plan.status === 'PENDING_REVIEW' || plan.status === 'REVIEWING'),
+  });
+
+  // 从服务端 draft 恢复:仅首次加载时填入,之后用户编辑不被覆盖
+  useEffect(() => {
+    if (draftLoaded) return;
+    if (!draftData) return;
+    if (draftData.comment) setReviewComment(draftData.comment);
+    if (Array.isArray(draftData.itemAnnotations)) {
+      const restored: Record<number, string> = {};
+      for (const a of draftData.itemAnnotations) {
+        restored[a.sequence] = a.annotation;
+      }
+      setAnnotations(restored);
+    }
+    setDraftLoaded(true);
+  }, [draftData, draftLoaded]);
+
   // 「审下一份」依赖当前教师 PENDING_REVIEW 队列；只在审核相关状态拉
   const { data: queueData } = useQuery({
     queryKey: ['teacher-review-queue'],
@@ -139,6 +195,32 @@ export default function PlanDetailPage() {
   const nextInQueue = currentIdx >= 0 ? reviewQueue[currentIdx + 1] : reviewQueue[0];
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+
+  // 草稿保存:由 debounce 触发,失败不打扰用户(返回 toast 即可)
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const saveDraftMutation = useMutation({
+    mutationFn: (payload: {
+      comment?: string;
+      itemAnnotations?: { sequence: number; annotation: string }[];
+    }) => planApi.upsertReviewDraft(planId, payload),
+    onSuccess: () => setDraftSavedAt(new Date()),
+    // 草稿保存失败不弹错;静默(下次还会重试)
+    onError: () => {},
+  });
+
+  // 800ms 内连续输入只触发一次保存;避免每次按键都发请求
+  const debouncedSave = useDebouncedCallback(
+    (comment: string, annotations: Record<number, string>) => {
+      const itemAnnotations = Object.entries(annotations)
+        .filter(([, anno]) => anno && anno.trim())
+        .map(([seq, annotation]) => ({ sequence: Number(seq), annotation: annotation.trim() }));
+      saveDraftMutation.mutate({
+        comment: comment || undefined,
+        itemAnnotations: itemAnnotations.length ? itemAnnotations : undefined,
+      });
+    },
+    800,
+  );
 
   const submitMutation = useMutation({
     mutationFn: () => planApi.submitForReview(planId),
@@ -172,6 +254,9 @@ export default function PlanDetailPage() {
     onSuccess: () => {
       setReviewComment('');
       setAnnotations({});
+      setDraftSavedAt(null);
+      // 后端事务已删 draft,此处刷新 draft query 让 cache 一致(返回 null)
+      void queryClient.invalidateQueries({ queryKey: ['plan-review-draft', planId] });
       void message.success('审核已提交');
       refresh();
     },
@@ -246,11 +331,20 @@ export default function PlanDetailPage() {
             rows={4}
             placeholder="填写总体审核意见（可选）"
             defaultValue={reviewComment}
-            onChange={(e) => setReviewComment(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setReviewComment(val);
+              debouncedSave(val, annotations);
+            }}
           />
           {annotationCount > 0 ? (
             <p className="text-xs text-text-muted">
               已对 {annotationCount} 个志愿填写逐项批注，将随本次审核一起提交。
+            </p>
+          ) : null}
+          {draftSavedAt ? (
+            <p className="text-xs text-text-muted">
+              草稿已保存于 {draftSavedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
             </p>
           ) : null}
         </div>
@@ -289,7 +383,7 @@ export default function PlanDetailPage() {
     const margins = items
       .map((it) => {
         const hist = getHistoricalScore(it);
-        return studentScore != null && hist != null ? studentScore - hist : null;
+        return studentScore != null && hist != null ? studentScore - hist.score : null;
       })
       .filter((m): m is number => m !== null);
     const avgMargin = margins.length
@@ -375,8 +469,8 @@ export default function PlanDetailPage() {
           </>
         );
       case 'APPROVED':
-        return <Tag color="processing">等待学生确认</Tag>;
-      case 'STUDENT_CONFIRMED':
+        return <Tag color="processing">等待家长确认</Tag>;
+      case 'PARENT_CONFIRMED':
         return (
           <Button
             type="primary"
@@ -443,15 +537,49 @@ export default function PlanDetailPage() {
       title: '历史录取',
       key: 'historical',
       width: 110,
-      render: (_, item) => {
-        const score = getHistoricalScore(item);
+      render: (_: unknown, item: any) => {
+        const active = getHistoricalScore(item);  // 当前算法用的那一档
         const rank = getHistoricalRank(item);
-        if (score === null && rank === null) {
+
+        // 收集所有可用档位用于 hover/tooltip
+        const all: { source: HistoricalScoreSource; score: number }[] = [];
+        if (item.score25Major != null) all.push({ source: 'major25', score: item.score25Major });
+        if (item.score25Group != null) all.push({ source: 'group25', score: item.score25Group });
+        if (item.score24Major != null) all.push({ source: 'major24', score: item.score24Major });
+        if (all.length === 0 && item.lastYearMinScore != null) {
+          all.push({ source: 'legacy', score: item.lastYearMinScore });
+        }
+
+        if (active == null && rank === null) {
           return <span className="text-xs text-text-faint">--</span>;
         }
         return (
-          <div className="text-sm">
-            {score !== null ? <div className="font-medium text-text">{score} 分</div> : null}
+          <div className="space-y-0.5">
+            {active != null ? (
+              <Tooltip
+                title={
+                  <div className="space-y-1 text-xs">
+                    <div className="font-medium">历史录取分(各维度)</div>
+                    {all.map((d) => (
+                      <div key={d.source} className={d.source === active.source ? 'font-medium' : 'opacity-70'}>
+                        {SOURCE_LABEL[d.source]}: {d.score}
+                        {d.source === active.source ? ' ← 当前算法' : ''}
+                      </div>
+                    ))}
+                    <div className="border-t border-white/20 pt-1 text-white/60">
+                      数据来源:四川省教育考试院历年录取数据
+                    </div>
+                  </div>
+                }
+              >
+                <div className="flex flex-col leading-tight cursor-default">
+                  <span className={`text-sm font-medium ${SOURCE_TONE[active.source]}`}>
+                    {active.score} 分
+                  </span>
+                  <span className="text-[10px] text-text-muted">{SOURCE_LABEL[active.source]}</span>
+                </div>
+              </Tooltip>
+            ) : null}
             {rank !== null ? <div className="text-xs text-text-muted">{formatNumber(rank)} 位</div> : null}
           </div>
         );
@@ -462,20 +590,22 @@ export default function PlanDetailPage() {
       key: 'margin',
       width: 80,
       sorter: (a, b) => {
-        const sa = summary.studentScore != null && getHistoricalScore(a) != null
-          ? summary.studentScore - (getHistoricalScore(a) as number)
+        const histA = getHistoricalScore(a);
+        const histB = getHistoricalScore(b);
+        const sa = summary.studentScore != null && histA != null
+          ? summary.studentScore - histA.score
           : Number.POSITIVE_INFINITY;
-        const sb = summary.studentScore != null && getHistoricalScore(b) != null
-          ? summary.studentScore - (getHistoricalScore(b) as number)
+        const sb = summary.studentScore != null && histB != null
+          ? summary.studentScore - histB.score
           : Number.POSITIVE_INFINITY;
         return sa - sb;
       },
       render: (_, item) => {
-        const score = getHistoricalScore(item);
-        if (summary.studentScore == null || score == null) {
+        const hist = getHistoricalScore(item);
+        if (summary.studentScore == null || hist == null) {
           return <span className="text-xs text-text-faint">--</span>;
         }
-        const margin = summary.studentScore - score;
+        const margin = summary.studentScore - hist.score;
         const colorClass =
           margin < 0 ? 'text-rush' : margin >= 20 ? 'text-safe' : 'text-accent';
         return (
@@ -623,24 +753,36 @@ export default function PlanDetailPage() {
         />
       </section>
 
-      {/* 学生退回意见或定稿提示 */}
-      {plan.studentChangeRequest ? (
+      {/* 家长退回意见或定稿提示 */}
+      {plan.parentChangeRequest ? (
         <Alert
           type="warning"
           showIcon
-          message="学生退回修改意见"
-          description={plan.studentChangeRequest}
+          message="家长退回修改意见"
+          description={plan.parentChangeRequest}
         />
       ) : null}
       {status === 'APPROVED' ? (
-        <Alert type="info" showIcon message="主管已通过，等待学生确认或退回修改。" />
+        <Alert type="info" showIcon message="主管已通过，等待家长确认或退回修改。" />
       ) : null}
       {status === 'FINALIZED' ? (
         <Alert type="success" showIcon message="方案已定稿，后续修改请派生新版本。" />
       ) : null}
 
       {/* C · 志愿明细 */}
-      <Card title="志愿明细" className="rounded-2xl shadow-card">
+      <Card
+        title={
+          <span>
+            志愿明细
+            {draftSavedAt ? (
+              <span className="ml-2 text-xs text-text-muted">
+                · 草稿已保存 {draftSavedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            ) : null}
+          </span>
+        }
+        className="rounded-2xl shadow-card"
+      >
         <Table
           rowKey="id"
           columns={columns}
@@ -654,9 +796,14 @@ export default function PlanDetailPage() {
                 planStatus={status}
                 editable={status === 'DRAFT' || status === 'PENDING_REVIEW'}
                 annotation={annotations[item.sequence] ?? ''}
-                onAnnotationChange={(val) =>
-                  setAnnotations((prev) => ({ ...prev, [item.sequence]: val }))
-                }
+                onAnnotationChange={(val) => {
+                  setAnnotations((prev) => {
+                    const next = { ...prev, [item.sequence]: val };
+                    // 同步触发草稿保存(取最新的 reviewComment 和 next annotations)
+                    debouncedSave(reviewComment, next);
+                    return next;
+                  });
+                }}
                 showAnnotationInput={isReviewing}
                 saving={updateMajorSelectionMutation.isPending}
                 onSaveMajors={(payload) =>

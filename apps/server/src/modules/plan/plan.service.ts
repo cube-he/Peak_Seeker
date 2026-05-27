@@ -110,8 +110,8 @@ export class PlanService {
       version: plan.versionNo ?? 1,
       itemCount: plan._count?.planItems ?? plan.planItems?.length ?? 0,
       isFinal: plan.isFinal,
-      studentConfirmedAt: plan.studentConfirmedAt,
-      studentChangeRequest: plan.studentChangeRequest,
+      parentConfirmedAt: plan.parentConfirmedAt,
+      parentChangeRequest: plan.parentChangeRequest,
       createdAt: plan.createdAt,
       updatedAt: plan.updatedAt,
     };
@@ -402,9 +402,9 @@ export class PlanService {
       where: { id: planId },
       data: {
         status: next,
-        studentConfirmedAt: null,
-        studentChangeRequestedAt: null,
-        studentChangeRequest: null,
+        parentConfirmedAt: null,
+        parentChangeRequestedAt: null,
+        parentChangeRequest: null,
       },
     });
   }
@@ -414,8 +414,8 @@ export class PlanService {
     if (plan.createdById !== userId) {
       throw new ForbiddenException('只有出方案老师可以定稿');
     }
-    if (plan.status !== 'STUDENT_CONFIRMED') {
-      throw new ConflictException('学生确认后才能定稿');
+    if (plan.status !== 'PARENT_CONFIRMED') {
+      throw new ConflictException('家长确认后才能定稿');
     }
     const next = this.sm.transition(plan.status, 'FINALIZE');
     if (!plan.batchConfigId) {
@@ -537,9 +537,9 @@ export class PlanService {
         data: {
           status: next,
           currentReviewerId: dto.action === 'COMMENT' ? supervisorUserId : null,
-          studentConfirmedAt: null,
-          studentChangeRequestedAt: null,
-          studentChangeRequest: null,
+          parentConfirmedAt: null,
+          parentChangeRequestedAt: null,
+          parentChangeRequest: null,
         },
       });
       await tx.planReview.create({
@@ -552,11 +552,16 @@ export class PlanService {
           itemAnnotations: (dto.itemAnnotations as any) ?? undefined,
         },
       });
+      // 审核动作成功后清空该审核人对该方案的草稿
+      // 用 tx 而非 this.prisma 确保原子性:如果 planReview.create 失败,事务回滚,draft 仍保留
+      await tx.planReviewDraft.deleteMany({
+        where: { planId, reviewerId: supervisorUserId },
+      });
       return updated;
     });
   }
 
-  async studentConfirm(planId: number, studentUserId: number) {
+  async parentConfirm(planId: number, studentUserId: number) {
     const plan = await this.prisma.volunteerPlan.findUnique({
       where: { id: planId },
       include: { student: true },
@@ -565,16 +570,16 @@ export class PlanService {
     if (plan.student.userId !== studentUserId) {
       throw new ForbiddenException('只能确认自己的方案');
     }
-    const next = this.sm.transition(plan.status, 'STUDENT_CONFIRM');
+    const next = this.sm.transition(plan.status, 'PARENT_CONFIRM');
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.volunteerPlan.update({
         where: { id: planId },
         data: {
           status: next,
-          studentConfirmedAt: new Date(),
-          studentChangeRequestedAt: null,
-          studentChangeRequest: null,
+          parentConfirmedAt: new Date(),
+          parentChangeRequestedAt: null,
+          parentChangeRequest: null,
         },
       });
       await tx.planReview.create({
@@ -582,15 +587,15 @@ export class PlanService {
           planId,
           reviewerId: studentUserId,
           reviewerRole: 'STUDENT',
-          action: 'STUDENT_CONFIRM',
-          comment: '学生已确认方案',
+          action: 'PARENT_CONFIRM',
+          comment: '家长已确认方案',
         },
       });
       return updated;
     });
   }
 
-  async studentRequestChange(planId: number, studentUserId: number, comment: string) {
+  async parentRequestChange(planId: number, studentUserId: number, comment: string) {
     const plan = await this.prisma.volunteerPlan.findUnique({
       where: { id: planId },
       include: { student: true },
@@ -599,16 +604,16 @@ export class PlanService {
     if (plan.student.userId !== studentUserId) {
       throw new ForbiddenException('只能退回自己的方案');
     }
-    const next = this.sm.transition(plan.status, 'STUDENT_REQUEST_CHANGE');
+    const next = this.sm.transition(plan.status, 'PARENT_REQUEST_CHANGE');
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.volunteerPlan.update({
         where: { id: planId },
         data: {
           status: next,
-          studentConfirmedAt: null,
-          studentChangeRequestedAt: new Date(),
-          studentChangeRequest: comment,
+          parentConfirmedAt: null,
+          parentChangeRequestedAt: new Date(),
+          parentChangeRequest: comment,
         },
       });
       await tx.planReview.create({
@@ -616,7 +621,7 @@ export class PlanService {
           planId,
           reviewerId: studentUserId,
           reviewerRole: 'STUDENT',
-          action: 'STUDENT_REQUEST_CHANGE',
+          action: 'PARENT_REQUEST_CHANGE',
           comment,
         },
       });

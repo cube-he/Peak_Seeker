@@ -43,7 +43,7 @@ enum PlanStatus {
   PENDING_REVIEW
   REVIEWING
   APPROVED
-  STUDENT_CONFIRMED
+  PARENT_CONFIRMED
   REJECTED
   FINALIZED
   PUBLISHED
@@ -153,8 +153,8 @@ enum ReviewAction {
   REJECT
   REQUEST_CHANGE
   COMMENT
-  STUDENT_CONFIRM
-  STUDENT_REQUEST_CHANGE
+  PARENT_CONFIRM
+  PARENT_REQUEST_CHANGE
 }
 
 enum RecommendType {
@@ -607,6 +607,7 @@ model User {
   studentProfile StudentProfile?
   createdPlans   VolunteerPlan[] @relation("PlanCreator")
   reviews        PlanReview[]
+  reviewDrafts   PlanReviewDraft[]
   notifications  Notification[]
   auditLogs      AuditLog[]
 
@@ -868,9 +869,9 @@ model VolunteerPlan {
   isFinal     Boolean   @default(false) @map("is_final")
   finalizedAt DateTime? @map("finalized_at")
   finalizedBy Int?      @map("finalized_by")
-  studentConfirmedAt DateTime? @map("student_confirmed_at")
-  studentChangeRequestedAt DateTime? @map("student_change_requested_at")
-  studentChangeRequest String? @map("student_change_request") @db.Text
+  parentConfirmedAt DateTime? @map("parent_confirmed_at")
+  parentChangeRequestedAt DateTime? @map("parent_change_requested_at")
+  parentChangeRequest String? @map("parent_change_request") @db.Text
   exportCount Int       @default(0) @map("export_count")
   dataVersion Int       @default(0) @map("data_version")
 
@@ -881,6 +882,7 @@ model VolunteerPlan {
   // 新关联
   planItems   PlanItem[]
   reviews     PlanReview[]
+  reviewDrafts PlanReviewDraft[]
   evaluations PlanEvaluation[]
 
   @@unique([studentId, batchConfigId, versionNo], name: "plan_natural_key")
@@ -1012,6 +1014,33 @@ model PlanReview {
   @@index([planId])
   @@index([reviewerId])
   @@map("plan_reviews")
+}
+
+// ==================== 方案审核草稿 ====================
+
+model PlanReviewDraft {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联方案
+  planId Int           @map("plan_id")
+  plan   VolunteerPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  // 审核人(同一审核人对同一方案只能有一份草稿)
+  reviewerId Int  @map("reviewer_id")
+  reviewer   User @relation(fields: [reviewerId], references: [id])
+
+  // 草稿内容(等同 PlanReview.comment / PlanReview.itemAnnotations,但未提交)
+  comment String? @db.Text
+
+  // 逐项批注（JSON: { sequence: number, annotation: string }[]）
+  itemAnnotations Json? @map("item_annotations")
+
+  @@unique([planId, reviewerId])
+  @@index([planId])
+  @@index([reviewerId])
+  @@map("plan_review_drafts")
 }
 
 // ==================== 方案评估（录取追踪） ====================

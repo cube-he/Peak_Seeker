@@ -22,6 +22,7 @@ describe('PlanService workflow gates', () => {
       },
       planItem: { count: jest.fn(), findMany: jest.fn() },
       planReview: { create: jest.fn() },
+      planReviewDraft: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       $transaction: jest.fn((cb: any) => cb(prisma)),
     };
 
@@ -82,7 +83,7 @@ describe('PlanService workflow gates', () => {
     expect(prisma.volunteerPlan.create).not.toHaveBeenCalled();
   });
 
-  it('studentConfirm moves an approved plan to STUDENT_CONFIRMED', async () => {
+  it('parentConfirm moves an approved plan to PARENT_CONFIRMED', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1,
       studentId: 10,
@@ -91,20 +92,20 @@ describe('PlanService workflow gates', () => {
     });
     prisma.volunteerPlan.update.mockResolvedValue({
       id: 1,
-      status: 'STUDENT_CONFIRMED',
-      studentConfirmedAt: new Date(),
+      status: 'PARENT_CONFIRMED',
+      parentConfirmedAt: new Date(),
     });
     prisma.planReview.create.mockResolvedValue({ id: 1 });
 
-    const result = await (service as any).studentConfirm(1, 100);
+    const result = await (service as any).parentConfirm(1, 100);
 
-    expect(result).toHaveProperty('status', 'STUDENT_CONFIRMED');
+    expect(result).toHaveProperty('status', 'PARENT_CONFIRMED');
     expect(prisma.volunteerPlan.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 1 },
         data: expect.objectContaining({
-          status: 'STUDENT_CONFIRMED',
-          studentConfirmedAt: expect.any(Date),
+          status: 'PARENT_CONFIRMED',
+          parentConfirmedAt: expect.any(Date),
         }),
       }),
     );
@@ -127,7 +128,7 @@ describe('PlanService workflow gates', () => {
       id: 1,
       createdById: 20,
       userId: null,
-      status: 'STUDENT_CONFIRMED',
+      status: 'PARENT_CONFIRMED',
       batchConfigId: null,
     });
 
@@ -207,6 +208,28 @@ describe('PlanService workflow gates', () => {
       maxGroupCount: 45,
       maxMajorPerGroup: 6,
       volunteerMode: 'parallel',
+    });
+  });
+
+  it('review clears reviewer draft within the same transaction', async () => {
+    // 设置当前用户为主管,且 plan 在 REVIEWING 状态
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 50,
+      status: 'REVIEWING',
+      currentReviewerId: 20,
+      versionNo: 1,
+    });
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 50, status: 'APPROVED' });
+    prisma.planReview.create.mockResolvedValue({ id: 999 });
+
+    await service.review(50, 20, {
+      action: 'APPROVE',
+      comment: 'looks good',
+      itemAnnotations: [{ sequence: 1, annotation: 'ok' }],
+    });
+
+    expect(prisma.planReviewDraft.deleteMany).toHaveBeenCalledWith({
+      where: { planId: 50, reviewerId: 20 },
     });
   });
 });

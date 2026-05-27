@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Avatar, Button, Input, Select, Space, Spin, Table, Tag, Tooltip } from 'antd';
+import { Avatar, Button, Empty, Input, Segmented, Select, Space, Spin, Table, Tag, Tooltip } from 'antd';
 import {
   FileTextOutlined,
   PlusOutlined,
@@ -14,6 +14,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { studentApi, type ProfileProgress } from '@/services/student-api';
+import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   COLLECTING: { label: '待采集', color: 'default' },
@@ -28,7 +29,7 @@ const PLAN_STATUS_LABEL: Record<string, string> = {
   PENDING_REVIEW: '待审',
   REVIEWING: '审中',
   APPROVED: '已通过',
-  STUDENT_CONFIRMED: '学生确认',
+  PARENT_CONFIRMED: '家长确认',
   REJECTED: '已退回',
   FINALIZED: '已定稿',
   PUBLISHED: '已发布',
@@ -84,6 +85,102 @@ function formatRelativeTime(date: Date, now: Date) {
   return `${Math.floor(seconds / 86_400)} 天前`;
 }
 
+// 学生当前所属的"任务轨"——与 Dashboard 三轨对齐
+type StudentTodoTrack =
+  | 'wait-me'
+  | 'wait-student-parent'
+  | 'wait-supervisor'
+  | 'sleeping'
+  | 'delivered'
+  | 'idle';
+
+function getStudentTodoTrack(student: Student, now: Date): StudentTodoTrack {
+  const status = getWorkflowStatus(student);
+  const noActionDays = daysSince(student.updatedAt, now);
+  const completeness = student.progress?.overallCompleteness ?? 0;
+
+  if (status === 'SUBMITTED') return 'delivered';
+  if (noActionDays !== null && noActionDays >= 7 && status !== 'FINALIZED') return 'sleeping';
+
+  if (
+    student.latestPlanStatus === 'PENDING_REVIEW' ||
+    student.latestPlanStatus === 'REVIEWING'
+  ) {
+    return 'wait-supervisor';
+  }
+
+  if (status === 'COLLECTING' && completeness < 60) return 'wait-me';
+  if (status === 'GENERATING') return 'wait-me';
+  if (status === 'COLLECTING' && completeness >= 60) return 'wait-student-parent';
+  if (status === 'FINALIZED') return 'wait-student-parent';
+
+  return 'idle';
+}
+
+const TRACK_LABEL: Record<StudentTodoTrack, string> = {
+  'wait-me': '等我动手',
+  'wait-student-parent': '等学生家长',
+  'wait-supervisor': '等主管审核',
+  'sleeping': '沉默',
+  'delivered': '已交付',
+  'idle': '进行中',
+};
+
+const TRACK_TONE: Record<StudentTodoTrack, string> = {
+  'wait-me': 'bg-rush text-white',
+  'wait-student-parent': 'bg-primary text-white',
+  'wait-supervisor': 'bg-accent text-white',
+  'sleeping': 'bg-rush text-white',
+  'delivered': 'bg-safe text-white',
+  'idle': 'bg-text-muted text-white',
+};
+
+function SopMiniBar({ student }: { student: Student }) {
+  const status = getWorkflowStatus(student);
+  const stages: { key: string; done: boolean; active: boolean }[] = [
+    { key: '签', done: !!student.createdAt, active: false },
+    { key: '采', done: status !== 'COLLECTING', active: status === 'COLLECTING' },
+    {
+      key: '案',
+      done: ['REVIEWING', 'FINALIZED', 'SUBMITTED'].includes(status),
+      active: status === 'GENERATING',
+    },
+    {
+      key: '审',
+      done: ['FINALIZED', 'SUBMITTED'].includes(status),
+      active: status === 'REVIEWING',
+    },
+    {
+      key: '稿',
+      done: status === 'SUBMITTED',
+      active: status === 'FINALIZED',
+    },
+    { key: '交', done: status === 'SUBMITTED', active: false },
+  ];
+
+  return (
+    <div className="flex items-center gap-1">
+      {stages.map((s, i) => (
+        <span key={s.key} className="flex items-center gap-1">
+          <span
+            aria-label={s.key}
+            className={`inline-block h-2 w-2 rounded-full ${
+              s.done
+                ? 'bg-safe'
+                : s.active
+                  ? 'bg-accent'
+                  : 'border border-text-muted bg-surface'
+            }`}
+          />
+          {i < stages.length - 1 ? (
+            <span aria-hidden className="h-px w-2 bg-border-subtle" />
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -137,6 +234,99 @@ export default function TeacherStudentsPage() {
   );
 }
 
+function StudentCardGrid({ students, now }: { students: Student[]; now: Date }) {
+  if (students.length === 0) {
+    return (
+      <div className="rounded-2xl bg-surface py-20 text-center shadow-card">
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有学生符合筛选条件" />
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {students.map((s) => (
+        <StudentCard key={s.id} student={s} now={now} />
+      ))}
+    </div>
+  );
+}
+
+function TaskChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1 text-xs transition ${
+        active
+          ? 'border-primary bg-primary text-white'
+          : 'border-border-subtle bg-surface text-text hover:border-primary'
+      }`}
+    >
+      {label} <span className="ml-1 opacity-80">{count}</span>
+    </button>
+  );
+}
+
+function StudentCard({ student, now }: { student: Student; now: Date }) {
+  const track = getStudentTodoTrack(student, now);
+  const name = getDisplayName(student);
+  const completeness = student.progress?.overallCompleteness ?? 0;
+  const lastUpdated = student.updatedAt ? new Date(student.updatedAt) : null;
+  const lastActionStr = lastUpdated ? formatRelativeTime(lastUpdated, now) : '--';
+  const totalScore = student.totalScore ?? null;
+  const provincialRank = student.provincialRank ?? null;
+  const planCount = student.planCount ?? 0;
+  const latestPlanLabel = student.latestPlanStatus
+    ? `v${student.latestPlanVersionNo ?? '?'} ${PLAN_STATUS_LABEL[student.latestPlanStatus] ?? student.latestPlanStatus}`
+    : '无方案';
+
+  // 沉默或已交付的卡片降低视觉权重，减少干扰
+  const dimClass = track === 'sleeping' || track === 'delivered' ? 'opacity-70' : '';
+
+  return (
+    <Link
+      href={`/teacher/students/${student.id}`}
+      className={`block rounded-lg border border-border-subtle bg-surface p-4 no-underline shadow-card transition hover:border-primary hover:shadow-md ${dimClass}`}
+    >
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="m-0 truncate font-medium text-text">{name}</p>
+          <p className="m-0 text-xs text-text-muted">
+            {totalScore != null ? `${totalScore} 分` : '--'} ·{' '}
+            位次 {provincialRank != null ? provincialRank.toLocaleString('zh-CN') : '--'}
+          </p>
+        </div>
+        <span
+          className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${TRACK_TONE[track]}`}
+        >
+          {TRACK_LABEL[track]}
+        </span>
+      </div>
+
+      <div className="mb-2">
+        <SopMiniBar student={student} />
+      </div>
+
+      <div className="space-y-0.5 text-xs text-text-muted">
+        <p className="m-0">
+          资料 {completeness}% · 方案 {planCount} 份 · 最新 {latestPlanLabel}
+        </p>
+        <p className="m-0">上次动作 {lastActionStr}</p>
+      </div>
+    </Link>
+  );
+}
+
 function TeacherStudentsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -150,9 +340,24 @@ function TeacherStudentsPageInner() {
   // 顶部快捷 chip 引入的两个独立 flag（其他 chip 复用 statusFilter / progressFilter）
   const [noPlanOnly, setNoPlanOnly] = useState(false);
   const [highScoreOnly, setHighScoreOnly] = useState(false);
+  const [trackFilter, setTrackFilter] = useState<StudentTodoTrack | 'all'>('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   // 客户端启动后再产生 now / updatedAt，避免 SSR 时间不一致 hydration 警告
   const [clock, setClock] = useState<{ now: Date; updatedAt: Date } | null>(null);
+  const [generateForStudent, setGenerateForStudent] = useState<Student | null>(null);
+
+  // 视图切换:卡片 / 表格。默认卡片,localStorage 记忆上次选择
+  const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
+    if (typeof window === 'undefined') return 'card';
+    const saved = window.localStorage.getItem('teacher-students-view') as 'card' | 'table' | null;
+    return saved ?? 'card';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('teacher-students-view', viewMode);
+    }
+  }, [viewMode]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['teacher-students', search],
@@ -170,6 +375,10 @@ function TeacherStudentsPageInner() {
 
   const students = useMemo(() => {
     let list = allStudents;
+    const now = clock?.now;
+    if (trackFilter !== 'all' && now) {
+      list = list.filter((s) => getStudentTodoTrack(s, now) === trackFilter);
+    }
     if (statusFilter) {
       list = list.filter((s) => getWorkflowStatus(s) === statusFilter);
     }
@@ -194,7 +403,7 @@ function TeacherStudentsPageInner() {
     if (noPlanOnly) list = list.filter((s) => !s.planCount);
     if (highScoreOnly) list = list.filter((s) => (s.totalScore ?? 0) >= 640);
     return list;
-  }, [allStudents, statusFilter, progressFilter, noPlanOnly, highScoreOnly]);
+  }, [allStudents, statusFilter, progressFilter, noPlanOnly, highScoreOnly, trackFilter, clock?.now]);
 
   const counts = useMemo(
     () => ({
@@ -206,6 +415,26 @@ function TeacherStudentsPageInner() {
     }),
     [allStudents],
   );
+
+  const trackCounts = useMemo(() => {
+    const now = clock?.now;
+    if (!now) {
+      return { 'wait-me': 0, 'wait-student-parent': 0, 'wait-supervisor': 0, sleeping: 0, delivered: 0, idle: 0 };
+    }
+    const c: Record<StudentTodoTrack, number> = {
+      'wait-me': 0,
+      'wait-student-parent': 0,
+      'wait-supervisor': 0,
+      sleeping: 0,
+      delivered: 0,
+      idle: 0,
+    };
+    allStudents.forEach((s) => {
+      const t = getStudentTodoTrack(s, now);
+      c[t] += 1;
+    });
+    return c;
+  }, [allStudents, clock?.now]);
 
   const noActiveFilter =
     !statusFilter && progressFilter === 'all' && !noPlanOnly && !highScoreOnly;
@@ -223,6 +452,7 @@ function TeacherStudentsPageInner() {
     setProgressFilter('all');
     setNoPlanOnly(false);
     setHighScoreOnly(false);
+    setTrackFilter('all');
   }
 
   function clickChip(chip: keyof typeof chipActive) {
@@ -386,11 +616,14 @@ function TeacherStudentsPageInner() {
       width: 110,
       render: (_, record) => (
         <Space size="small" onClick={(event) => event.stopPropagation()}>
-          <Link href={`/teacher/plans/generate/${record.id}`}>
-            <Button type="text" size="small" icon={<FileTextOutlined />}>
-              生成方案
-            </Button>
-          </Link>
+          <Button
+            type="text"
+            size="small"
+            icon={<FileTextOutlined />}
+            onClick={() => setGenerateForStudent(record)}
+          >
+            生成方案
+          </Button>
         </Space>
       ),
     },
@@ -465,11 +698,60 @@ function TeacherStudentsPageInner() {
               { value: 'recommendable', label: '可推荐' },
             ]}
           />
+          <Segmented
+            value={viewMode}
+            onChange={(val) => setViewMode(val as 'card' | 'table')}
+            options={[
+              { label: '卡片', value: 'card' },
+              { label: '表格', value: 'table' },
+            ]}
+          />
           <div className="text-sm text-text-muted xl:ml-auto">
             当前显示 <strong className="text-text">{students.length}</strong> 名
           </div>
         </div>
       </section>
+
+      {/* 任务维度 chip — 与 Dashboard 三轨对齐 */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-text-muted">按任务:</span>
+        <TaskChip
+          label="全部"
+          count={allStudents.length}
+          active={trackFilter === 'all'}
+          onClick={() => setTrackFilter('all')}
+        />
+        <TaskChip
+          label="🔴 等我"
+          count={trackCounts['wait-me']}
+          active={trackFilter === 'wait-me'}
+          onClick={() => setTrackFilter('wait-me')}
+        />
+        <TaskChip
+          label="📤 等学生家长"
+          count={trackCounts['wait-student-parent']}
+          active={trackFilter === 'wait-student-parent'}
+          onClick={() => setTrackFilter('wait-student-parent')}
+        />
+        <TaskChip
+          label="⏳ 等主管"
+          count={trackCounts['wait-supervisor']}
+          active={trackFilter === 'wait-supervisor'}
+          onClick={() => setTrackFilter('wait-supervisor')}
+        />
+        <TaskChip
+          label="⚠️ 沉默"
+          count={trackCounts['sleeping']}
+          active={trackFilter === 'sleeping'}
+          onClick={() => setTrackFilter('sleeping')}
+        />
+        <TaskChip
+          label="✓ 已交付"
+          count={trackCounts['delivered']}
+          active={trackFilter === 'delivered'}
+          onClick={() => setTrackFilter('delivered')}
+        />
+      </div>
 
       {/* 快捷筛选 chip — 可点 */}
       <div className="flex flex-wrap gap-2">
@@ -522,27 +804,39 @@ function TeacherStudentsPageInner() {
         </div>
       ) : null}
 
-      <Table
-        columns={columns}
-        dataSource={students}
-        loading={isLoading}
-        rowKey="id"
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys),
-        }}
-        pagination={{
-          pageSize: 20,
-          showSizeChanger: true,
-          showTotal: (total) => `共 ${total} 名学生`,
-        }}
-        scroll={{ x: 980 }}
-        className="rounded-2xl bg-surface shadow-card"
-        onRow={(record) => ({
-          className: 'cursor-pointer',
-          onClick: () => router.push(`/teacher/students/${record.id}`),
-        })}
-      />
+      {viewMode === 'table' ? (
+        <Table
+          columns={columns}
+          dataSource={students}
+          loading={isLoading}
+          rowKey="id"
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys),
+          }}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 名学生`,
+          }}
+          scroll={{ x: 980 }}
+          className="rounded-2xl bg-surface shadow-card"
+          onRow={(record) => ({
+            className: 'cursor-pointer',
+            onClick: () => router.push(`/teacher/students/${record.id}`),
+          })}
+        />
+      ) : (
+        <StudentCardGrid students={students} now={clock?.now ?? new Date()} />
+      )}
+
+      {generateForStudent ? (
+        <PrerequisiteCheckModal
+          open={!!generateForStudent}
+          student={generateForStudent}
+          onCancel={() => setGenerateForStudent(null)}
+        />
+      ) : null}
     </div>
   );
 }

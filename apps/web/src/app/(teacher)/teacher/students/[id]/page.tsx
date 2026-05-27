@@ -1,8 +1,9 @@
 'use client';
 
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { Alert, Button, Card, Cascader, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, Tag, message } from 'antd';
+import { useParams, useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
+import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
+import { Alert, Button, Card, Cascader, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, message } from 'antd';
 import {
   ArrowLeftOutlined,
   DownloadOutlined,
@@ -53,6 +54,14 @@ const BONUS_ITEM_OPTIONS: Array<SelectOption & { bonusValue: number }> = [
   { label: '司法行政人民警察子女优先录取', value: 'PRIORITY_JUDICIAL_POLICE_CHILD', bonusValue: 0 },
 ];
 
+// 考试类型中文标签
+const EXAM_TYPE_LABEL: Record<string, string> = {
+  PHYSICS: '物理',
+  HISTORY: '历史',
+  COMPREHENSIVE_LIBERAL: '文科',
+  COMPREHENSIVE_SCIENCE: '理科',
+};
+
 function toSelectValues(items?: BonusItem[] | string[]): string[] {
   if (!Array.isArray(items)) return [];
   return items
@@ -85,6 +94,158 @@ function pickerSelectProps(options: SelectOption[]) {
 
 function formatRank(rank: number | null | undefined) {
   return rank == null ? '-' : rank.toLocaleString('zh-CN');
+}
+
+// ── SOP 服务节点 ──
+type SopNodeStatus = 'done' | 'active' | 'pending' | 'skipped';
+
+interface SopNode {
+  key: string;
+  label: string;
+  status: SopNodeStatus;
+  timestamp?: Date | null;
+  detail?: string;
+}
+
+function deriveSopNodes(student: any): SopNode[] {
+  const intakeStatus = student?.intakeStatus;
+  const plans: any[] = student?.volunteerPlans ?? [];
+  const latestPlan = plans.reduce(
+    (acc: any, p: any) =>
+      !acc || (p.versionNo ?? 0) > (acc.versionNo ?? 0) ? p : acc,
+    null,
+  );
+  const planStatus = latestPlan?.status;
+  const planVersionNo = latestPlan?.versionNo;
+
+  const signedAt = student?.createdAt ? new Date(student.createdAt) : null;
+  const intakeSubmittedAt = student?.intakeSubmittedAt
+    ? new Date(student.intakeSubmittedAt)
+    : null;
+  const planCreatedAt = latestPlan?.createdAt ? new Date(latestPlan.createdAt) : null;
+  const planFinalizedAt = latestPlan?.finalizedAt
+    ? new Date(latestPlan.finalizedAt)
+    : null;
+
+  // 节点 1: 签约
+  const sign: SopNode = signedAt
+    ? { key: 'sign', label: '签约', status: 'done', timestamp: signedAt }
+    : { key: 'sign', label: '签约', status: 'pending' };
+
+  // 节点 2: 资料采集
+  let intake: SopNode;
+  if (intakeStatus === 'VERIFIED') {
+    intake = { key: 'intake', label: '资料采集', status: 'done', timestamp: intakeSubmittedAt };
+  } else if (intakeStatus === 'SUBMITTED' || intakeStatus === 'NEEDS_CHANGES') {
+    intake = {
+      key: 'intake',
+      label: '资料采集',
+      status: 'active',
+      timestamp: intakeSubmittedAt,
+      detail: intakeStatus === 'NEEDS_CHANGES' ? '需修改' : '待审',
+    };
+  } else {
+    intake = { key: 'intake', label: '资料采集', status: 'pending' };
+  }
+
+  // 节点 3: 方案制作
+  let drafting: SopNode;
+  if (!latestPlan) {
+    drafting = { key: 'drafting', label: '方案制作', status: 'pending' };
+  } else if (planStatus === 'DRAFT') {
+    drafting = {
+      key: 'drafting',
+      label: '方案制作',
+      status: 'active',
+      timestamp: planCreatedAt,
+      detail: `v${planVersionNo} 草稿`,
+    };
+  } else {
+    drafting = {
+      key: 'drafting',
+      label: '方案制作',
+      status: 'done',
+      timestamp: planCreatedAt,
+      detail: `v${planVersionNo}`,
+    };
+  }
+
+  // 节点 4: 主管审核
+  let supReview: SopNode;
+  if (!latestPlan || planStatus === 'DRAFT') {
+    supReview = { key: 'supervisor-review', label: '主管审核', status: 'pending' };
+  } else if (planStatus === 'PENDING_REVIEW' || planStatus === 'REVIEWING') {
+    supReview = {
+      key: 'supervisor-review',
+      label: '主管审核',
+      status: 'active',
+      detail: planStatus === 'REVIEWING' ? '审核中' : '待审核',
+    };
+  } else if (planStatus === 'REJECTED') {
+    supReview = {
+      key: 'supervisor-review',
+      label: '主管审核',
+      status: 'active',
+      detail: '已退回 待修改',
+    };
+  } else {
+    supReview = { key: 'supervisor-review', label: '主管审核', status: 'done' };
+  }
+
+  // 节点 5: 家长确认
+  let parentConfirm: SopNode;
+  if (
+    !latestPlan ||
+    ['DRAFT', 'PENDING_REVIEW', 'REVIEWING', 'REJECTED'].includes(planStatus)
+  ) {
+    parentConfirm = { key: 'parent-confirm', label: '家长确认', status: 'pending' };
+  } else if (planStatus === 'APPROVED') {
+    parentConfirm = {
+      key: 'parent-confirm',
+      label: '家长确认',
+      status: 'active',
+      detail: '等家长确认',
+    };
+  } else {
+    parentConfirm = { key: 'parent-confirm', label: '家长确认', status: 'done' };
+  }
+
+  // 节点 6: 终稿
+  let finalize: SopNode;
+  if (
+    !latestPlan ||
+    ['DRAFT', 'PENDING_REVIEW', 'REVIEWING', 'REJECTED', 'APPROVED'].includes(planStatus)
+  ) {
+    finalize = { key: 'finalize', label: '终稿', status: 'pending' };
+  } else if (planStatus === 'PARENT_CONFIRMED') {
+    finalize = { key: 'finalize', label: '终稿', status: 'active', detail: '待定稿' };
+  } else if (planStatus === 'FINALIZED' || planStatus === 'PUBLISHED') {
+    finalize = {
+      key: 'finalize',
+      label: '终稿',
+      status: 'done',
+      timestamp: planFinalizedAt,
+    };
+  } else {
+    finalize = { key: 'finalize', label: '终稿', status: 'pending' };
+  }
+
+  // 节点 7: 已提交
+  let submit: SopNode;
+  if (planStatus === 'PUBLISHED') {
+    submit = { key: 'submit', label: '已提交', status: 'done' };
+  } else if (planStatus === 'FINALIZED') {
+    submit = {
+      key: 'submit',
+      label: '已提交',
+      status: 'active',
+      detail: '待提交考试院',
+    };
+  } else {
+    submit = { key: 'submit', label: '已提交', status: 'pending' };
+  }
+
+  return [sign, intake, drafting, supReview, parentConfirm, finalize, submit];
 }
 
 function RankCheckExtra({ rankCheck }: { rankCheck?: RankCheck }) {
@@ -127,8 +288,10 @@ function RankCheckExtra({ rankCheck }: { rankCheck?: RankCheck }) {
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
   const studentId = params.id;
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
+  const [showPrereqModal, setShowPrereqModal] = useState(false);
 
   const { data: studentData, isLoading } = useQuery({
     queryKey: ['student-detail', studentId],
@@ -205,6 +368,24 @@ export default function StudentDetailPage() {
     }
   };
 
+  const plansSummary = useMemo(() => {
+    const plans = student?.volunteerPlans;
+    if (!Array.isArray(plans) || plans.length === 0) {
+      return null;
+    }
+    const latest = plans.reduce(
+      (acc: any, p: any) => (!acc || (p.versionNo ?? 0) > (acc.versionNo ?? 0) ? p : acc),
+      null,
+    );
+    return {
+      activePlanCount: plans.length,
+      latestPlanStatus: latest?.status ?? null,
+      latestPlanVersionNo: latest?.versionNo ?? null,
+    };
+  }, [student?.volunteerPlans]);
+
+  const sopNodes = useMemo(() => deriveSopNodes(student), [student]);
+
   if (isLoading || !student) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -214,143 +395,147 @@ export default function StudentDetailPage() {
   }
 
   const progress = student.progress;
-  const studentName = student.user?.realName || student.realName || student.user?.username || student.username || '学生详情';
 
   return (
     <div className="mx-auto max-w-[1040px] space-y-5">
-      <header className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-        <div>
-          <Link href="/teacher/students" className="mb-2 inline-flex items-center gap-2 text-sm text-text-tertiary no-underline hover:text-primary">
-            <ArrowLeftOutlined /> 返回学生列表
-          </Link>
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-[2px] text-accent">Student Archive</p>
-          <h1 className="font-serif text-3xl font-semibold text-text">{studentName}</h1>
-          <div className="mt-2 flex items-center gap-2">
-            <Tag color={student.status === 'FINALIZED' ? 'green' : 'blue'}>{student.status || 'ACTIVE'}</Tag>
-            <Tag color={student.intakeStatus === 'VERIFIED' ? 'green' : student.intakeStatus === 'SUBMITTED' ? 'orange' : 'default'}>
-              资料：{student.intakeStatus || 'DRAFT'}
-            </Tag>
-            <span className="text-sm text-text-muted">{student.highSchool || '学校待补充'}</span>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Button icon={<DownloadOutlined />} onClick={onExportIntake}>
-            导出登记表
-          </Button>
-          {student.intakeStatus !== 'VERIFIED' ? (
-            <>
-              <Button onClick={onRequestIntakeChange} loading={reviewIntakeMutation.isPending}>
-                退回资料
-              </Button>
-              <Button
-                type="primary"
-                onClick={() => reviewIntakeMutation.mutate({ action: 'VERIFY', comment: '资料已核验' })}
-                loading={reviewIntakeMutation.isPending}
-              >
-                确认资料
-              </Button>
-            </>
-          ) : null}
-          <Link href={`/teacher/plans/generate/${studentId}`}>
-            <Button
-              icon={<FileTextOutlined />}
-              type="primary"
-              disabled={(progress && !progress.isRecommendable) || student.intakeStatus !== 'VERIFIED'}
-              title={student.intakeStatus !== 'VERIFIED' ? '需先确认学生资料' : progress && !progress.isRecommendable ? '档案未达到可推荐阈值，请先补全关键字段' : ''}
-              className="border-0"
-            >
-              生成方案
+      {/* 顶部摘要条 */}
+      <StudentSummaryBar
+        student={student}
+        plansSummary={plansSummary}
+        onBack={() => router.back()}
+        onSave={() => form.validateFields().then((values) => saveMutation.mutate(values))}
+        saving={saveMutation.isPending}
+      />
+
+      {/* 原有操作栏：导出/退回/确认/生成方案 */}
+      <div className="flex flex-wrap gap-3">
+        <Button icon={<DownloadOutlined />} onClick={onExportIntake}>
+          导出登记表
+        </Button>
+        {student.intakeStatus !== 'VERIFIED' ? (
+          <>
+            <Button onClick={onRequestIntakeChange} loading={reviewIntakeMutation.isPending}>
+              退回资料
             </Button>
-          </Link>
-        </div>
-      </header>
-
-      {progress ? (
-        <Card className="rounded-2xl shadow-card">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <ProgressBar label="学生自填进度" percent={progress.studentSelfCompleteness} />
-            <ProgressBar label="老师录入进度" percent={progress.teacherDataCompleteness} />
-          </div>
-          <div className="mt-3">
-            <ProgressBar label="档案总进度" percent={progress.overallCompleteness} />
-          </div>
-          {!progress.isRecommendable && progress.missingFieldsForRecommend?.length > 0 ? (
-            <p className="mt-3 text-xs text-text-faint">
-              未达可推荐阈值，缺：
-              <span className="ml-1 text-text-secondary">
-                {progress.missingFieldsForRecommend.slice(0, 8).join('、')}
-                {progress.missingFieldsForRecommend.length > 8 ? ' 等' : ''}
-              </span>
-            </p>
-          ) : null}
-        </Card>
-      ) : null}
-
-      <Card className="rounded-2xl shadow-card">
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            ...student,
-            ...student.user,
-            provincialRank: student.provincialRank ?? student.rankCheck?.calculatedRank ?? undefined,
-          }}
-          requiredMark="optional"
+            <Button
+              type="primary"
+              onClick={() => reviewIntakeMutation.mutate({ action: 'VERIFY', comment: '资料已核验' })}
+              loading={reviewIntakeMutation.isPending}
+            >
+              确认资料
+            </Button>
+          </>
+        ) : null}
+        <Button
+          icon={<FileTextOutlined />}
+          type="primary"
+          disabled={(progress && !progress.isRecommendable) || student.intakeStatus !== 'VERIFIED'}
+          title={student.intakeStatus !== 'VERIFIED' ? '需先确认学生资料' : progress && !progress.isRecommendable ? '档案未达到可推荐阈值，请先补全关键字段' : ''}
+          className="border-0"
+          onClick={() => setShowPrereqModal(true)}
         >
-          <Collapse
-            defaultActiveKey={['basic', 'exam', 'preference']}
-            items={[
-              { key: 'basic', label: '基础信息', children: <BasicFields /> },
-              {
-                key: 'household',
-                label: (
-                  <span className="flex items-center gap-1">
-                    <LockOutlined /> 户籍与高考所在地
-                  </span>
-                ),
-                children: <HouseholdFields />,
-              },
-              { key: 'exam', label: '考试成绩', children: <ExamFields rankCheck={student.rankCheck} /> },
-              {
-                key: 'bonus',
-                label: (
-                  <span className="flex items-center gap-1">
-                    <LockOutlined /> 加分政策
-                  </span>
-                ),
-                children: (
-                  <div className="space-y-4">
-                    <BonusFields />
-                    <BonusCalcCard studentProfileId={Number(studentId)} />
-                  </div>
-                ),
-              },
-              { key: 'health', label: '健康条件', children: <HealthFields /> },
-              { key: 'preference', label: '偏好与规划', children: <PreferenceFields /> },
-            ]}
-          />
+          生成方案
+        </Button>
+      </div>
 
-          <div className="mt-6 flex justify-end border-t border-border-subtle pt-4">
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              onClick={() => form.validateFields().then((values) => saveMutation.mutate(values))}
-              loading={saveMutation.isPending}
-              size="large"
-              className="border-0"
+      {/* 左主右副两栏 */}
+      <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
+        {/* 主区 */}
+        <div className="space-y-4">
+          {/* SOP 时间轴 */}
+          <SopTimeline nodes={sopNodes} />
+
+          {/* 进度条 */}
+          {progress ? (
+            <Card className="rounded-2xl shadow-card">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <ProgressBar label="学生自填进度" percent={progress.studentSelfCompleteness} />
+                <ProgressBar label="老师录入进度" percent={progress.teacherDataCompleteness} />
+              </div>
+              <div className="mt-3">
+                <ProgressBar label="档案总进度" percent={progress.overallCompleteness} />
+              </div>
+              {!progress.isRecommendable && progress.missingFieldsForRecommend?.length > 0 ? (
+                <p className="mt-3 text-xs text-text-faint">
+                  未达可推荐阈值，缺：
+                  <span className="ml-1 text-text-secondary">
+                    {progress.missingFieldsForRecommend.slice(0, 8).join('、')}
+                    {progress.missingFieldsForRecommend.length > 8 ? ' 等' : ''}
+                  </span>
+                </p>
+              ) : null}
+            </Card>
+          ) : null}
+
+          {/* 原 6 个折叠区 Field Cards 保留在主区 */}
+          <Card className="rounded-2xl shadow-card">
+            <Form
+              form={form}
+              layout="vertical"
+              initialValues={{
+                ...student,
+                ...student.user,
+                provincialRank: student.provincialRank ?? student.rankCheck?.calculatedRank ?? undefined,
+              }}
+              requiredMark="optional"
             >
-              保存
-            </Button>
-          </div>
-        </Form>
-      </Card>
+              <Collapse
+                defaultActiveKey={['basic', 'exam', 'preference']}
+                items={[
+                  { key: 'basic', label: '基础信息', children: <BasicFields /> },
+                  {
+                    key: 'household',
+                    label: (
+                      <span className="flex items-center gap-1">
+                        <LockOutlined /> 户籍与高考所在地
+                      </span>
+                    ),
+                    children: <HouseholdFields />,
+                  },
+                  { key: 'exam', label: '考试成绩', children: <ExamFields rankCheck={student.rankCheck} /> },
+                  {
+                    key: 'bonus',
+                    label: (
+                      <span className="flex items-center gap-1">
+                        <LockOutlined /> 加分政策
+                      </span>
+                    ),
+                    children: (
+                      <div className="space-y-4">
+                        <BonusFields />
+                        <BonusCalcCard studentProfileId={Number(studentId)} />
+                      </div>
+                    ),
+                  },
+                  { key: 'health', label: '健康条件', children: <HealthFields /> },
+                  { key: 'preference', label: '偏好与规划', children: <PreferenceFields /> },
+                ]}
+              />
+            </Form>
+          </Card>
 
-      {progress && !progress.isRecommendable ? (
-        <Alert
-          type="info"
-          showIcon
-          message="档案未达到“可推荐”阈值"
-          description="补完整分数、位次、加分、选科等关键字段后，生成方案按钮才会启用。"
+          {progress && !progress.isRecommendable ? (
+            <Alert
+              type="info"
+              showIcon
+              message={'档案未达到“可推荐”阈值'}
+              description="补完整分数、位次、加分、选科等关键字段后，生成方案按钮才会启用。"
+            />
+          ) : null}
+        </div>
+
+        {/* 副区 */}
+        <div className="space-y-4">
+          <ContactPanel student={student} />
+          <KeyDataPanel student={student} />
+        </div>
+      </div>
+
+      {showPrereqModal && student ? (
+        <PrerequisiteCheckModal
+          open={showPrereqModal}
+          student={student}
+          onCancel={() => setShowPrereqModal(false)}
         />
       ) : null}
     </div>
@@ -632,5 +817,241 @@ function PreferenceFields() {
       <Form.Item name="careerDirection" label="职业方向"><Input.TextArea rows={2} /></Form.Item>
       <Form.Item name="otherRequirements" label="其他要求"><Input.TextArea rows={2} /></Form.Item>
     </>
+  );
+}
+
+// ── 顶部摘要条:身份 + 关键摘要 + 操作 ──
+function StudentSummaryBar({
+  student,
+  plansSummary,
+  onBack,
+  onSave,
+  saving,
+}: {
+  student: any;
+  plansSummary: { activePlanCount: number; latestPlanStatus: string | null; latestPlanVersionNo: number | null } | null;
+  onBack: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const name = student?.user?.realName || student?.realName || student?.username || '学生';
+  const examType = student?.examType ? EXAM_TYPE_LABEL[student.examType] ?? student.examType : '--';
+  const totalScore = student?.totalScore ?? null;
+  const provincialRank = student?.provincialRank ?? null;
+  const signedAt = student?.createdAt ? new Date(student.createdAt) : null;
+  const daysServed = signedAt
+    ? Math.floor((Date.now() - signedAt.getTime()) / 86_400_000)
+    : null;
+
+  return (
+    <header className="rounded-2xl bg-surface px-6 py-4 shadow-card">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} aria-label="返回" />
+            <h1 className="m-0 text-xl font-semibold text-text">{name}</h1>
+            <span className="text-sm text-text-muted">· {examType}</span>
+            {totalScore != null ? (
+              <span className="text-sm text-text-muted">· 总分 {totalScore}</span>
+            ) : null}
+            {provincialRank != null ? (
+              <span className="text-sm text-text-muted">
+                · 位次 {provincialRank.toLocaleString('zh-CN')}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-text-muted">
+            {signedAt ? <span>签约 {signedAt.toLocaleDateString('zh-CN')}</span> : null}
+            {daysServed != null ? <span>· 服务 {daysServed} 天</span> : null}
+            {plansSummary?.latestPlanStatus ? (
+              <span>
+                · 当前方案 v{plansSummary.latestPlanVersionNo ?? '?'} · {plansSummary.latestPlanStatus}
+              </span>
+            ) : null}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>
+            保存
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function SopTimeline({ nodes }: { nodes: SopNode[] }) {
+  return (
+    <Card title="服务进度" size="small">
+      <ol className="m-0 list-none space-y-3 p-0">
+        {nodes.map((node, i) => {
+          const isLast = i === nodes.length - 1;
+          return (
+            <li key={node.key} className="relative pl-6">
+              <span
+                aria-hidden
+                className={`absolute left-0 top-1 inline-flex h-4 w-4 items-center justify-center rounded-full ${
+                  node.status === 'done'
+                    ? 'bg-safe text-white'
+                    : node.status === 'active'
+                      ? 'bg-accent text-white'
+                      : node.status === 'skipped'
+                        ? 'bg-text-muted text-white'
+                        : 'border-2 border-text-muted bg-surface'
+                }`}
+              >
+                {node.status === 'done' ? '✓' : node.status === 'active' ? '●' : ''}
+              </span>
+              {!isLast ? (
+                <span
+                  aria-hidden
+                  className="absolute left-[7px] top-5 h-full w-0.5 bg-border-subtle"
+                />
+              ) : null}
+              <div>
+                <p
+                  className={`m-0 text-sm ${
+                    node.status === 'active' ? 'font-medium text-text' : 'text-text'
+                  }`}
+                >
+                  {node.label}
+                  {node.detail ? (
+                    <span className="ml-2 text-xs text-text-muted">{node.detail}</span>
+                  ) : null}
+                </p>
+                {node.timestamp ? (
+                  <p className="m-0 text-xs text-text-muted">
+                    {node.timestamp.toLocaleDateString('zh-CN')}
+                  </p>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
+  );
+}
+
+function ContactPanel({ student }: { student: any }) {
+  const studentPhone = student?.user?.phone ?? null;
+  const parentPhone = student?.parentPhone ?? null;
+
+  const callPhone = (phone: string) => {
+    window.location.href = `tel:${phone}`;
+  };
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      message.success(`${label}已复制`);
+    } catch {
+      message.error('复制失败');
+    }
+  };
+
+  return (
+    <Card title="联系方式" size="small">
+      <div className="space-y-3">
+        <div>
+          <p className="m-0 text-xs font-medium text-text-muted">学生</p>
+          {studentPhone ? (
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <span className="font-mono text-sm">{studentPhone}</span>
+              <div className="flex gap-1">
+                <Button size="small" onClick={() => callPhone(studentPhone)}>拨号</Button>
+                <Button size="small" onClick={() => copyToClipboard(studentPhone, '学生电话')}>复制</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="m-0 text-sm text-text-muted">--</p>
+          )}
+        </div>
+        <div>
+          <p className="m-0 text-xs font-medium text-text-muted">家长</p>
+          {parentPhone ? (
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <span className="font-mono text-sm">{parentPhone}</span>
+              <div className="flex gap-1">
+                <Button size="small" onClick={() => callPhone(parentPhone)}>拨号</Button>
+                <Button size="small" onClick={() => copyToClipboard(parentPhone, '家长电话')}>复制</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="m-0 text-sm text-text-muted">--</p>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function KeyDataPanel({ student }: { student: any }) {
+  // 第一组:分数·位次
+  const examType = student?.examType
+    ? EXAM_TYPE_LABEL[student.examType] ?? student.examType
+    : '--';
+  const firstChoice = student?.firstChoice ?? '--';
+  const reChoices = Array.isArray(student?.reChoices) ? student.reChoices.join('/') : '--';
+  const subjectStr = student?.examType ? `${examType}·${firstChoice}·${reChoices}` : '--';
+  const totalScore = student?.totalScore ?? null;
+  const provincialRank = student?.provincialRank ?? null;
+
+  // 第二组:资格条件
+  const bonusList = Array.isArray(student?.bonusItems) ? student.bonusItems : [];
+  const bonusValue = bonusList.reduce(
+    (sum: number, b: any) => sum + (b?.value ?? 0),
+    0,
+  );
+  const bonusLabel = bonusList.length === 0 ? '无' : `+${bonusValue} (${bonusList.length} 项)`;
+  const ethnicity = student?.user?.ethnicity ?? '--';
+  const sourceLoc =
+    [student?.province, student?.city, student?.county].filter(Boolean).join('·') || '--';
+
+  // 第三组:意向
+  const prefCities = Array.isArray(student?.preferredCities) ? student.preferredCities : [];
+  const prefMajors = Array.isArray(student?.preferredMajors) ? student.preferredMajors : [];
+  const prefCitiesStr =
+    prefCities.length === 0
+      ? '未填'
+      : prefCities.slice(0, 3).join('/') + (prefCities.length > 3 ? '...' : '');
+  const prefMajorsStr =
+    prefMajors.length === 0
+      ? '未填'
+      : prefMajors.slice(0, 3).join('/') + (prefMajors.length > 3 ? '...' : '');
+
+  return (
+    <Card title="关键数据" size="small">
+      <div className="space-y-4 text-sm">
+        <div>
+          <p className="m-0 mb-1 text-xs font-medium text-text-muted">分数·位次</p>
+          <p className="m-0 leading-relaxed">
+            <span>选科 {subjectStr}</span>
+            <br />
+            <span>最近模考 {totalScore ?? '--'}</span>
+            <br />
+            <span>预测位次 {provincialRank != null ? provincialRank.toLocaleString('zh-CN') : '--'}</span>
+          </p>
+        </div>
+        <div className="border-t border-border-subtle pt-3">
+          <p className="m-0 mb-1 text-xs font-medium text-text-muted">资格条件</p>
+          <p className="m-0 leading-relaxed">
+            <span>加分 {bonusLabel}</span>
+            <br />
+            <span>民族 {ethnicity}</span>
+            <br />
+            <span>生源地 {sourceLoc}</span>
+          </p>
+        </div>
+        <div className="border-t border-border-subtle pt-3">
+          <p className="m-0 mb-1 text-xs font-medium text-text-muted">意向</p>
+          <p className="m-0 leading-relaxed">
+            <span>意向城市 {prefCitiesStr}</span>
+            <br />
+            <span>目标专业 {prefMajorsStr}</span>
+          </p>
+        </div>
+      </div>
+    </Card>
   );
 }

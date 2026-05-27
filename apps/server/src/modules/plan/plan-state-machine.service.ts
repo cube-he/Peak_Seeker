@@ -3,8 +3,8 @@ import { PlanStatus } from '@prisma/client';
 
 export type PlanAction =
   | 'SUBMIT_REVIEW' | 'START_REVIEW' | 'APPROVE' | 'REJECT'
-  | 'REQUEST_CHANGE' | 'COMMENT' | 'STUDENT_CONFIRM'
-  | 'STUDENT_REQUEST_CHANGE' | 'FINALIZE';
+  | 'REQUEST_CHANGE' | 'COMMENT' | 'PARENT_CONFIRM'
+  | 'PARENT_REQUEST_CHANGE' | 'FINALIZE';
 
 interface TransitionContext {
   itemCount?: number;
@@ -28,17 +28,17 @@ export class PlanStateMachineService {
       if (action === 'COMMENT') return 'REVIEWING';
     }
     if (from === 'APPROVED') {
-      if (action === 'STUDENT_CONFIRM') return 'STUDENT_CONFIRMED' as PlanStatus;
-      if (action === 'STUDENT_REQUEST_CHANGE') return 'DRAFT';
+      if (action === 'PARENT_CONFIRM') return 'PARENT_CONFIRMED';
+      if (action === 'PARENT_REQUEST_CHANGE') return 'DRAFT';
     }
-    if (from === ('STUDENT_CONFIRMED' as PlanStatus) && action === 'FINALIZE') {
+    if (from === 'PARENT_CONFIRMED' && action === 'FINALIZE') {
       return 'FINALIZED';
     }
     throw new BadRequestException(`不允许的状态转移：${from} -- ${action}`);
   }
 
   canDeriveVersion(from: PlanStatus): boolean {
-    return from === 'APPROVED' || from === ('STUDENT_CONFIRMED' as PlanStatus) || from === 'REJECTED' || from === 'FINALIZED';
+    return from === 'APPROVED' || from === 'PARENT_CONFIRMED' || from === 'REJECTED' || from === 'FINALIZED';
   }
 
   canEditItems(from: PlanStatus): boolean {

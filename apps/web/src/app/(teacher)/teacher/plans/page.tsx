@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Button, Card, Empty, Input, Modal, Segmented, Select, Space, Spin, Table, Tag, message } from 'antd';
+import { Button, Input, Modal, Segmented, Select, Space, Spin, Table, Tag, message } from 'antd';
 import {
   AppstoreOutlined,
   DeleteOutlined,
@@ -58,6 +58,51 @@ function formatDate(value?: string) {
   });
 }
 
+// 方案当前所属的"任务轨"——与 Dashboard 三轨对齐
+type PlanTrack =
+  | 'wait-teacher'
+  | 'wait-parent'
+  | 'wait-supervisor'
+  | 'delivered';
+
+function getPlanTrack(plan: Plan): PlanTrack {
+  const status = plan.status;
+  if (status === 'PENDING_REVIEW' || status === 'REVIEWING') return 'wait-supervisor';
+  if (status === 'APPROVED' || status === 'PARENT_CONFIRMED') return 'wait-parent';
+  if (status === 'FINALIZED' || status === 'PUBLISHED' || status === 'OUTDATED') return 'delivered';
+  return 'wait-teacher';
+}
+
+const TRACK_META: Record<
+  PlanTrack,
+  { label: string; emoji: string; toneClass: string; emptyText: string }
+> = {
+  'wait-teacher': {
+    label: '等老师动手',
+    emoji: '🔴',
+    toneClass: 'text-rush',
+    emptyText: '老师侧无待办',
+  },
+  'wait-parent': {
+    label: '等学生家长',
+    emoji: '📤',
+    toneClass: 'text-primary',
+    emptyText: '家长侧无待办',
+  },
+  'wait-supervisor': {
+    label: '等主管审核',
+    emoji: '⏳',
+    toneClass: 'text-accent',
+    emptyText: '主管侧无待审',
+  },
+  'delivered': {
+    label: '终稿/已提交',
+    emoji: '✓',
+    toneClass: 'text-safe',
+    emptyText: '尚无已交付方案',
+  },
+};
+
 export default function TeacherPlansPage() {
   // useSearchParams 要求外层包 Suspense，否则 Next 14 build 会 prerender 失败
   return (
@@ -75,7 +120,20 @@ export default function TeacherPlansPage() {
 
 function TeacherPlansPageInner() {
   const searchParams = useSearchParams();
-  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>(() => {
+    if (typeof window === 'undefined') return 'kanban';
+    const saved = window.localStorage.getItem('teacher-plans-view') as
+      | 'table'
+      | 'kanban'
+      | null;
+    return saved ?? 'kanban';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('teacher-plans-view', viewMode);
+    }
+  }, [viewMode]);
   // Dashboard 跳转过来时会带 ?status=PENDING_REVIEW 或 ?batch=xxx 作为初始 filter
   const [search, setSearch] = useState(() => searchParams.get('keyword') ?? '');
   const [batchFilter, setBatchFilter] = useState<string | undefined>(
@@ -103,6 +161,19 @@ function TeacherPlansPageInner() {
     }),
     [plans],
   );
+
+  const trackCounts = useMemo(() => {
+    const c: Record<PlanTrack, number> = {
+      'wait-teacher': 0,
+      'wait-parent': 0,
+      'wait-supervisor': 0,
+      'delivered': 0,
+    };
+    plans.forEach((p) => {
+      c[getPlanTrack(p)] += 1;
+    });
+    return c;
+  }, [plans]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => planApi.deletePlan(id),
@@ -221,19 +292,25 @@ function TeacherPlansPageInner() {
         </Button>
       </header>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
-        {[
-          ['全部', counts.all, 'border-l-primary'],
-          ['待审核', counts.pending, 'border-l-rush'],
-          ['已通过', counts.approved, 'border-l-accent'],
-          ['已定稿', counts.finalized, 'border-l-safe'],
-          ['已退回', counts.rejected, 'border-l-border'],
-        ].map(([label, count, tone]) => (
-          <div key={label as string} className={`rounded-2xl border-l-[3px] ${tone} bg-surface px-4 py-3 shadow-card`}>
-            <p className="text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">{label}</p>
-            <p className="mt-1 font-serif text-2xl font-semibold text-text">{count}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {(['wait-teacher', 'wait-parent', 'wait-supervisor', 'delivered'] as PlanTrack[]).map(
+          (track) => {
+            const meta = TRACK_META[track];
+            return (
+              <div
+                key={track}
+                className="rounded-2xl border-l-[3px] border-l-primary bg-surface px-4 py-3 shadow-card"
+              >
+                <p className="text-[11px] font-medium uppercase tracking-[1.4px] text-text-muted">
+                  {meta.emoji} {meta.label}
+                </p>
+                <p className="mt-1 font-serif text-2xl font-semibold text-text">
+                  {trackCounts[track]}
+                </p>
+              </div>
+            );
+          },
+        )}
       </div>
 
       <section className="rounded-2xl bg-surface px-4 py-4 shadow-card">
@@ -265,11 +342,11 @@ function TeacherPlansPageInner() {
           <div className="xl:ml-auto">
             <Segmented
               options={[
-                { value: 'table', icon: <UnorderedListOutlined /> },
-                { value: 'card', icon: <AppstoreOutlined /> },
+                { label: '看板', value: 'kanban', icon: <AppstoreOutlined /> },
+                { label: '表格', value: 'table', icon: <UnorderedListOutlined /> },
               ]}
               value={viewMode}
-              onChange={(value) => setViewMode(value as 'table' | 'card')}
+              onChange={(value) => setViewMode(value as 'table' | 'kanban')}
             />
           </div>
         </div>
@@ -289,70 +366,125 @@ function TeacherPlansPageInner() {
           className="rounded-2xl bg-surface shadow-card"
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {plans.length === 0 ? (
-            <div className="col-span-full rounded-2xl bg-surface py-16 shadow-card">
-              <Empty description="暂无方案" />
-            </div>
-          ) : (
-            plans.map((plan) => (
-              <Card
-                key={plan.id}
-                hoverable
-                size="small"
-                className="h-full border-l-[3px] border-l-accent"
-                bodyStyle={{ padding: '16px' }}
-              >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-text">{plan.studentName}</p>
-                    <p className="mt-1 text-xs text-text-muted">
-                      {getBatchLabel(plan.batch)} · v{plan.version}
-                    </p>
-                  </div>
-                  <PlanStatusBadge status={plan.status} />
-                </div>
-                <div className="grid grid-cols-3 rounded-xl bg-bg py-3 text-center">
-                  <div className="border-r border-border-subtle px-2">
-                    <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">志愿</p>
-                    <p className="font-serif text-lg font-semibold text-text">{plan.itemCount}</p>
-                  </div>
-                  <div className="border-r border-border-subtle px-2">
-                    <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">来源</p>
-                    <p className="text-xs text-text-secondary">{plan.examSource === 'GAOKAO' ? '高考' : '模拟'}</p>
-                  </div>
-                  <div className="px-2">
-                    <p className="text-[10px] uppercase tracking-[1.2px] text-text-muted">更新</p>
-                    <p className="text-xs text-text-secondary">{formatDate(plan.updatedAt)}</p>
-                  </div>
-                </div>
-                <Space className="mt-4" size={8}>
-                  <Link href={`/teacher/plans/${plan.id}`}>
-                    <Button size="small" icon={<EyeOutlined />}>
-                      查看
-                    </Button>
-                  </Link>
-                  {plan.status === 'DRAFT' ? (
-                    <Button
-                      danger
-                      size="small"
-                      icon={<DeleteOutlined />}
-                      loading={deleteMutation.isPending && deleteMutation.variables === plan.id}
-                      onClick={() => confirmDeletePlan(plan)}
-                    >
-                      删除草稿
-                    </Button>
-                  ) : null}
-                </Space>
-              </Card>
-            ))
-          )}
-        </div>
+        <KanbanBoard
+          plans={plans}
+          onDelete={confirmDeletePlan}
+          deletePendingId={
+            deleteMutation.isPending ? (deleteMutation.variables as number | undefined) : undefined
+          }
+        />
       )}
 
       <div className="rounded-2xl border border-dashed border-border bg-surface px-5 py-4 text-sm text-text-muted">
         批量审核、导出全量报告需要后端补充批处理接口；当前已保留单方案查看与筛选能力。
       </div>
+    </div>
+  );
+}
+
+function KanbanBoard({
+  plans,
+  onDelete,
+  deletePendingId,
+}: {
+  plans: Plan[];
+  onDelete: (plan: Plan) => void;
+  deletePendingId: number | undefined;
+}) {
+  const grouped: Record<PlanTrack, Plan[]> = {
+    'wait-teacher': [],
+    'wait-parent': [],
+    'wait-supervisor': [],
+    'delivered': [],
+  };
+  plans.forEach((p) => {
+    grouped[getPlanTrack(p)].push(p);
+  });
+
+  (Object.keys(grouped) as PlanTrack[]).forEach((track) => {
+    grouped[track].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+  });
+
+  const tracks: PlanTrack[] = ['wait-teacher', 'wait-parent', 'wait-supervisor', 'delivered'];
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {tracks.map((track) => {
+        const meta = TRACK_META[track];
+        const items = grouped[track];
+        return (
+          <div key={track} className="rounded-2xl bg-surface p-3 shadow-card">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h3 className={`m-0 text-sm font-semibold ${meta.toneClass}`}>
+                {meta.emoji} {meta.label}
+              </h3>
+              <span className="text-xs text-text-muted">{items.length}</span>
+            </div>
+            <div className="space-y-2">
+              {items.length === 0 ? (
+                <p className="m-0 px-2 py-4 text-xs text-text-muted">{meta.emptyText}</p>
+              ) : (
+                items.map((plan) => (
+                  <PlanCard
+                    key={plan.id}
+                    plan={plan}
+                    onDelete={onDelete}
+                    deletePending={deletePendingId === plan.id}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlanCard({
+  plan,
+  onDelete,
+  deletePending,
+}: {
+  plan: Plan;
+  onDelete: (plan: Plan) => void;
+  deletePending: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-border-subtle bg-bg/30 p-3 transition hover:border-primary hover:bg-surface">
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <Link
+          href={`/teacher/plans/${plan.id}`}
+          className="truncate text-sm font-medium text-text no-underline hover:text-primary"
+        >
+          {plan.studentName}
+        </Link>
+        <span className="flex-shrink-0 text-[10px] text-text-muted">v{plan.version}</span>
+      </div>
+      <div className="mb-2 flex items-center justify-between">
+        <PlanStatusBadge status={plan.status} />
+        <span className="text-[10px] text-text-muted">{getBatchLabel(plan.batch)}</span>
+      </div>
+      <div className="flex items-center justify-between text-[11px] text-text-muted">
+        <span>志愿 {plan.itemCount} 条</span>
+        <span>{formatDate(plan.updatedAt)}</span>
+      </div>
+      {plan.status === 'DRAFT' ? (
+        <div className="mt-2 flex justify-end">
+          <Button
+            danger
+            type="text"
+            size="small"
+            icon={<DeleteOutlined />}
+            loading={deletePending}
+            onClick={() => onDelete(plan)}
+          >
+            删除草稿
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
