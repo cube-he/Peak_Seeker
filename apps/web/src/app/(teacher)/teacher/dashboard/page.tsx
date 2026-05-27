@@ -280,13 +280,29 @@ export default function TeacherDashboardPage() {
   }, [timelineEvents]);
 
   const deadlineDate = useMemo(() => {
-    // 本科批截止是教培老师最关心的;提前批/专科批截止可在副位展示(Task 后续可扩展)
     const regular = timelineEvents.find((e) => e.key === 'volunteer_deadline_regular');
     return new Date(regular?.startDate ?? FALLBACK_DEADLINE_REGULAR);
   }, [timelineEvents]);
 
+  // Plan 1 设计: 三批次截止全部 chip 显示, 让老师对节奏一目了然
+  const earlyDeadlineDate = useMemo(() => {
+    const early = timelineEvents.find((e) => e.key === 'volunteer_deadline_early');
+    return early?.startDate ? new Date(early.startDate) : null;
+  }, [timelineEvents]);
+
+  const vocationalDeadlineDate = useMemo(() => {
+    const voc = timelineEvents.find((e) => e.key === 'volunteer_deadline_vocational');
+    return voc?.startDate ? new Date(voc.startDate) : null;
+  }, [timelineEvents]);
+
   const examDaysLeft = Math.max(0, daysUntil(examDate, now));
   const deadlineDaysLeft = Math.max(0, daysUntil(deadlineDate, now));
+  const earlyDeadlineDaysLeft = earlyDeadlineDate
+    ? Math.max(0, daysUntil(earlyDeadlineDate, now))
+    : null;
+  const vocationalDeadlineDaysLeft = vocationalDeadlineDate
+    ? Math.max(0, daysUntil(vocationalDeadlineDate, now))
+    : null;
 
   const totalStudents = students.length;
 
@@ -346,9 +362,19 @@ export default function TeacherDashboardPage() {
           <span className="inline-flex items-center gap-1.5 rounded-md bg-primary-fixed px-3 py-1.5 text-primary">
             距高考 <strong className="text-base">{examDaysLeft}</strong> 天
           </span>
+          {earlyDeadlineDaysLeft !== null ? (
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-rush/15 px-3 py-1.5 text-rush">
+              提前批截止 <strong className="text-base">{earlyDeadlineDaysLeft}</strong> 天
+            </span>
+          ) : null}
           <span className="inline-flex items-center gap-1.5 rounded-md bg-accent-fixed px-3 py-1.5 text-accent">
-            距志愿填报截止 <strong className="text-base">{deadlineDaysLeft}</strong> 天
+            本科批截止 <strong className="text-base">{deadlineDaysLeft}</strong> 天
           </span>
+          {vocationalDeadlineDaysLeft !== null ? (
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-safe/15 px-3 py-1.5 text-safe">
+              专科批截止 <strong className="text-base">{vocationalDeadlineDaysLeft}</strong> 天
+            </span>
+          ) : null}
         </div>
 
         {/* 快捷操作 */}

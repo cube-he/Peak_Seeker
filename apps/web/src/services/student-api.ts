@@ -195,7 +195,9 @@ export const studentApi = {
     return api.put('/students/me', data) as any;
   },
 
-  getMyProgress(): Promise<{ data: ProfileProgress }> {
+  // 实际后端直接返回 ProfileProgress 对象 (无 {data: ...} 包装).
+  // 类型签名之前是 {data: ProfileProgress} 是误标, 已和后端 curl 对齐.
+  getMyProgress(): Promise<ProfileProgress> {
     return api.get('/students/me/progress') as any;
   },
 

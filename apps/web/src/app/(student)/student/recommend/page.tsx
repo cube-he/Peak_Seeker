@@ -70,7 +70,8 @@ export default function StudentRecommendPage() {
     queryFn: () => studentApi.getMyProfile(),
   });
 
-  const profile = profileData?.data;
+  // axios interceptor 已 unwrap response.data, getMyProfile 直接是 profile 对象
+  const profile = profileData;
   const effectiveScore = score ?? profile?.totalScore ?? null;
   const hasPreferences =
     Boolean(profile?.priorityMode) ||

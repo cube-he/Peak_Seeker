@@ -1020,9 +1020,11 @@ function SopTimeline({ nodes }: { nodes: SopNode[] }) {
                 {node.status === 'done' ? '✓' : node.status === 'active' ? '●' : ''}
               </span>
               {!isLast ? (
+                // 之前 h-full 只到 li 底端, 跨不过 space-y-3 (12px) gap, 视觉断开.
+                // -bottom-3 让连线延伸到下一节点圆位置, 形成完整 timeline 线
                 <span
                   aria-hidden
-                  className="absolute left-[7px] top-5 h-full w-0.5 bg-border-subtle"
+                  className="absolute left-[7px] top-5 -bottom-3 w-0.5 bg-border-subtle"
                 />
               ) : null}
               <div>

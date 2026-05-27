@@ -92,12 +92,14 @@ export default function StudentDashboardPage() {
     queryFn: () => planApi.getMyPlans(),
   });
 
-  const profile = profileData?.data;
+  // NOTE: axios interceptor 已 unwrap response.data, 后端 /students/me 和
+  // /students/me/progress 直接返回对象 (无 .data 包装), /plans/mine 才包 {data:[]}
+  const profile = profileData;
   const plans: Plan[] = plansData?.data || [];
   const currentPlan = plans[0];
   const currentStep = STATUS_TO_STEP[profile?.status || 'COLLECTING'] ?? 0;
   const completion =
-    progressData?.data?.overallCompleteness ??
+    progressData?.overallCompleteness ??
     Math.min(100, Math.round(((currentStep + 1) / 5) * 100));
 
   const currentYear = useMemo(() => new Date().getFullYear(), []);
@@ -155,13 +157,13 @@ export default function StudentDashboardPage() {
   ];
 
   const missingRecommendFieldsCount =
-    progressData?.data?.missingFieldsForRecommend?.length;
+    progressData?.missingFieldsForRecommend?.length;
 
   const rail = (
     <StudentSummaryRail
       activePathname={pathname}
       profile={profile}
-      progress={progressData?.data}
+      progress={progressData}
       plansCount={plans.length}
     />
   );
@@ -427,8 +429,8 @@ export default function StudentDashboardPage() {
                 <span>
                   <span className="block text-sm font-medium text-text">完善个人信息后，推荐会更稳定</span>
                   <span className="mt-1 block text-xs text-text-muted">
-                    {progressData?.data?.missingFieldsForRecommend?.length
-                      ? `仍有 ${progressData.data.missingFieldsForRecommend.length} 项关键信息待补充`
+                    {progressData?.missingFieldsForRecommend?.length
+                      ? `仍有 ${progressData.missingFieldsForRecommend.length} 项关键信息待补充`
                       : '成绩、选科和偏好越完整，方案越贴近真实填报'}
                   </span>
                 </span>
