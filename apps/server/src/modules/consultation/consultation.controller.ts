@@ -15,6 +15,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger'
 import { ConsultationService } from './consultation.service';
 import { CreateConsultationDto } from './dto/create-consultation.dto';
 import { UpdateConsultationDto } from './dto/update-consultation.dto';
+import { RequestConsultationDto } from './dto/request-consultation.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PoliciesGuard } from '../casl';
 
@@ -73,6 +74,42 @@ export class ConsultationController {
     @Query('studentId', ParseIntPipe) studentId: number,
   ) {
     return this.service.listByStudent(req.user.id, studentId);
+  }
+
+  @Post('request')
+  @ApiOperation({ summary: '学生侧申请预约(status=requested)' })
+  async requestByParent(@Request() req: any, @Body() dto: RequestConsultationDto) {
+    return this.service.requestByParent(req.user.id, dto);
+  }
+
+  @Post(':id/confirm')
+  @ApiOperation({ summary: '老师确认家长申请的预约' })
+  @ApiParam({ name: 'id', type: Number })
+  async confirmRequest(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
+    return this.service.confirmRequest(req.user.id, id);
+  }
+
+  @Post(':id/reject')
+  @ApiOperation({ summary: '老师拒绝家长申请的预约' })
+  @ApiParam({ name: 'id', type: Number })
+  async rejectRequest(
+    @Request() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { reason?: string },
+  ) {
+    return this.service.rejectRequest(req.user.id, id, body.reason);
+  }
+
+  @Get('pending-requests')
+  @ApiOperation({ summary: '老师待确认的家长申请列表' })
+  async listPendingRequests(@Request() req: any) {
+    return this.service.listPendingRequests(req.user.id);
+  }
+
+  @Get('mine')
+  @ApiOperation({ summary: '学生侧:自己的预约列表' })
+  async listMine(@Request() req: any) {
+    return this.service.listMine(req.user.id);
   }
 
   @Delete(':id')

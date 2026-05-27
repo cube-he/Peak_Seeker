@@ -9,7 +9,8 @@ export interface Consultation {
   durationAct: number | null;
   channel: 'phone' | 'wechat' | 'in_person' | 'video';
   purpose: string | null;
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
+  status: 'requested' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
+  createdByActor?: 'teacher' | 'student' | null;
   notes: string | null;
   startedAt: string | null;
   endedAt: string | null;
@@ -64,5 +65,36 @@ export const consultationApi = {
   async remove(id: number) {
     const res = await api.delete(`/consultations/${id}`);
     return res.data;
+  },
+
+  async requestByParent(payload: {
+    scheduledAt: string;
+    durationEst?: number;
+    channel: 'phone' | 'wechat' | 'in_person' | 'video';
+    purpose?: string;
+    notes?: string;
+  }) {
+    const res = await api.post('/consultations/request', payload);
+    return res.data as Consultation;
+  },
+
+  async confirmRequest(id: number) {
+    const res = await api.post(`/consultations/${id}/confirm`);
+    return res.data as Consultation;
+  },
+
+  async rejectRequest(id: number, reason?: string) {
+    const res = await api.post(`/consultations/${id}/reject`, { reason });
+    return res.data as Consultation;
+  },
+
+  async listPendingRequests() {
+    const res = await api.get('/consultations/pending-requests');
+    return res.data as Consultation[];
+  },
+
+  async listMine() {
+    const res = await api.get('/consultations/mine');
+    return res.data as Consultation[];
   },
 };

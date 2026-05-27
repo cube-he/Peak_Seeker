@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateConsultationDto } from './dto/create-consultation.dto';
 import { UpdateConsultationDto } from './dto/update-consultation.dto';
+import { RequestConsultationDto } from './dto/request-consultation.dto';
 
 @Injectable()
 export class ConsultationService {
@@ -117,6 +118,81 @@ export class ConsultationService {
         },
       },
       orderBy: { scheduledAt: 'asc' },
+    });
+  }
+
+  async requestByParent(userId: number, dto: RequestConsultationDto) {
+    const studentProfile = await this.prisma.studentProfile.findFirst({
+      where: { userId },
+    });
+    if (!studentProfile) throw new ForbiddenException('当前用户没有学生档案');
+    if (!studentProfile.teacherId) throw new ForbiddenException('该学生未关联老师,无法申请预约');
+
+    return this.prisma.consultationAppointment.create({
+      data: {
+        studentId: studentProfile.id,
+        teacherId: studentProfile.teacherId,
+        scheduledAt: new Date(dto.scheduledAt),
+        durationEst: dto.durationEst,
+        channel: dto.channel,
+        purpose: dto.purpose,
+        notes: dto.notes,
+        status: 'requested',
+        createdByActor: 'student',
+      },
+    });
+  }
+
+  async confirmRequest(userId: number, id: number) {
+    const teacherId = await this.resolveTeacherId(userId);
+    const appt = await this.prisma.consultationAppointment.findUnique({ where: { id } });
+    if (!appt) throw new NotFoundException('预约不存在');
+    if (appt.teacherId !== teacherId) throw new ForbiddenException('无权操作');
+    if (appt.status !== 'requested') throw new ForbiddenException('当前状态不可确认');
+
+    return this.prisma.consultationAppointment.update({
+      where: { id },
+      data: { status: 'scheduled' },
+    });
+  }
+
+  async rejectRequest(userId: number, id: number, reason?: string) {
+    const teacherId = await this.resolveTeacherId(userId);
+    const appt = await this.prisma.consultationAppointment.findUnique({ where: { id } });
+    if (!appt) throw new NotFoundException('预约不存在');
+    if (appt.teacherId !== teacherId) throw new ForbiddenException('无权操作');
+
+    return this.prisma.consultationAppointment.update({
+      where: { id },
+      data: {
+        status: 'cancelled',
+        notes: reason ? `[已拒绝] ${reason}` : `[已拒绝]`,
+      },
+    });
+  }
+
+  async listPendingRequests(userId: number) {
+    const teacherId = await this.resolveTeacherId(userId);
+    return this.prisma.consultationAppointment.findMany({
+      where: { teacherId, status: 'requested' },
+      include: {
+        student: {
+          include: { user: { select: { realName: true, username: true } } },
+        },
+      },
+      orderBy: { scheduledAt: 'asc' },
+    });
+  }
+
+  async listMine(userId: number) {
+    const studentProfile = await this.prisma.studentProfile.findFirst({
+      where: { userId },
+    });
+    if (!studentProfile) throw new ForbiddenException('当前用户没有学生档案');
+
+    return this.prisma.consultationAppointment.findMany({
+      where: { studentId: studentProfile.id },
+      orderBy: { scheduledAt: 'desc' },
     });
   }
 

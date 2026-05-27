@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Button, Input, Spin } from 'antd';
+import { Button, Input, Spin, message } from 'antd';
 import {
   CheckCircleOutlined,
   FileTextOutlined,
@@ -12,7 +12,7 @@ import {
   SearchOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi } from '@/services/student-api';
 import { planApi } from '@/services/plan-api';
 import { timelineApi, type TimelineEvent } from '@/services/timeline-api';
@@ -374,6 +374,7 @@ export default function TeacherDashboardPage() {
         </div>
       ) : (
         <>
+          <PendingRequestsSection />
           <TodayConsultationsSection />
           <ThreeTrackTodoSection
             waitMe={categorized.waitMe}
@@ -494,6 +495,77 @@ function TodoCard({ item, dim }: { item: TodoItem; dim?: boolean }) {
         {item.primaryAction.label}
       </Button>
     </Link>
+  );
+}
+
+function PendingRequestsSection() {
+  const qc = useQueryClient();
+  const { data: list = [] } = useQuery({
+    queryKey: ['pending-requests'],
+    queryFn: () => consultationApi.listPendingRequests(),
+  });
+
+  const confirmMutation = useMutation({
+    mutationFn: (id: number) => consultationApi.confirmRequest(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pending-requests'] });
+      qc.invalidateQueries({ queryKey: ['consultations-today'] });
+      message.success('已确认');
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (id: number) => consultationApi.rejectRequest(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pending-requests'] });
+      message.success('已拒绝');
+    },
+  });
+
+  if (list.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border-l-[3px] border-l-accent bg-surface shadow-card">
+      <div className="border-b border-border-subtle px-6 py-4">
+        <h2 className="m-0 text-lg font-semibold text-accent">家长申请预约 ({list.length})</h2>
+      </div>
+      <div className="divide-y divide-border-subtle">
+        {list.map((c: any) => {
+          const name = c.student?.user?.realName ?? c.student?.user?.username ?? '学生';
+          const when = new Date(c.scheduledAt).toLocaleString('zh-CN');
+          return (
+            <div key={c.id} className="flex items-center justify-between gap-3 px-6 py-3">
+              <div className="min-w-0">
+                <p className="m-0 text-sm font-medium text-text">{name} · {when}</p>
+                <p className="m-0 text-xs text-text-muted">
+                  {c.channel === 'phone' ? '电话' : c.channel === 'wechat' ? '微信' : c.channel === 'in_person' ? '线下' : '视频'}
+                  {c.purpose ? ` · ${c.purpose}` : ''}
+                  {c.durationEst ? ` · 估 ${c.durationEst} 分` : ''}
+                </p>
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  size="small"
+                  type="primary"
+                  loading={confirmMutation.isPending && confirmMutation.variables === c.id}
+                  onClick={() => confirmMutation.mutate(c.id)}
+                >
+                  确认
+                </Button>
+                <Button
+                  size="small"
+                  danger
+                  loading={rejectMutation.isPending && rejectMutation.variables === c.id}
+                  onClick={() => rejectMutation.mutate(c.id)}
+                >
+                  拒绝
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
