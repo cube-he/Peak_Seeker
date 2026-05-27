@@ -2,87 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import type { ExamType } from '@/services/score-segment';
+import { deriveYearly, type AdmissionRecordLike } from '../../lib/admission';
 
 /**
- * 详情页"近 N 年录取走势"主角卡。
- *
- * 数据:从 admissionRecords[] 按 examType groupBy year,取每年该科类最低门槛(取
- *   多条记录里的最低 minScore / minRank)。
- *
- * 视觉重做(2025-05-26 反馈):
- *   - SVG 去掉 preserveAspectRatio="none" 改默认 meet,横向拉伸时数字不变形
- *   - score-label / rank-label 间距拉开(避免几个数字糊在一起)
- *   - 顶部 trend-banner-head 加物理/历史 chip 切换,数据按当前科类筛
- *   - 没数据时显示"暂无 {subject}类数据"占位,而不是空白
+ * 详情页"近 N 年录取走势"主角卡。数据/算法见 lib/admission.ts (deriveYearly)。
+ * 跟顶部 stats strip 共享同一份 helper,确保"2025 最低分"等数字一致。
  */
-
-interface YearPoint {
-  year: number;
-  score: number;
-  rank: number;
-}
-
-interface AdmissionRecordLike {
-  year?: number | null;
-  // 实际 API 字段叫 subjects(复数,值 "物理"/"历史"),少数路径可能有 subject/examType
-  subjects?: string | null;
-  subject?: string | null;
-  examType?: string | null;
-  // 分数 / 位次 4 个口径,优先级:
-  //   投档 filing > 院校 university > 组 group > 专业 major
-  // (院校最低分最常用,清华 2025 主要走 filingMinScore)
-  filingMinScore?: number | null;
-  filingMinRank?: number | null;
-  universityMinScore?: number | null;
-  universityMinRank?: number | null;
-  groupMinScore?: number | null;
-  groupMinRank?: number | null;
-  majorMinScore?: number | null;
-  majorMinRank?: number | null;
-  // 老接口偶尔用 minScore / minRank
-  minScore?: number | null;
-  minRank?: number | null;
-}
-
-/** 从一条 admission record 抽出最优 (score, rank) 二元组 */
-function pickScoreRank(r: AdmissionRecordLike): { score: number; rank: number } | null {
-  const score =
-    r.filingMinScore ??
-    r.universityMinScore ??
-    r.groupMinScore ??
-    r.majorMinScore ??
-    r.minScore ??
-    null;
-  const rank =
-    r.filingMinRank ??
-    r.universityMinRank ??
-    r.groupMinRank ??
-    r.majorMinRank ??
-    r.minRank ??
-    null;
-  if (score == null || rank == null) return null;
-  return { score, rank };
-}
-
-function deriveYearly(records: AdmissionRecordLike[], subject: ExamType): YearPoint[] {
-  if (!records?.length) return [];
-  // 按科类筛(subjects / subject / examType 任意命中)
-  const matched = records.filter((r) => {
-    const t = (r.subjects ?? r.subject ?? r.examType ?? '') as string;
-    return t.includes(subject);
-  });
-  if (matched.length === 0) return [];
-  // 同年多条 → 取最低 score 那条(代表该科类该年录取门槛)
-  const m = new Map<number, YearPoint>();
-  for (const r of matched) {
-    if (!r.year) continue;
-    const sr = pickScoreRank(r);
-    if (!sr) continue;
-    const cur = m.get(r.year);
-    if (!cur || sr.score < cur.score) m.set(r.year, { year: r.year, score: sr.score, rank: sr.rank });
-  }
-  return Array.from(m.values()).sort((a, b) => a.year - b.year);
-}
 
 interface TrendBannerProps {
   admissions: AdmissionRecordLike[];
