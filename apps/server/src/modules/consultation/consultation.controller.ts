@@ -1,0 +1,84 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  Request,
+  UseGuards,
+  ParseIntPipe,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { ConsultationService } from './consultation.service';
+import { CreateConsultationDto } from './dto/create-consultation.dto';
+import { UpdateConsultationDto } from './dto/update-consultation.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PoliciesGuard } from '../casl';
+
+@ApiTags('沟通预约')
+@Controller('consultations')
+@UseGuards(JwtAuthGuard, PoliciesGuard)
+@ApiBearerAuth()
+export class ConsultationController {
+  constructor(private service: ConsultationService) {}
+
+  @Post()
+  @ApiOperation({ summary: '创建预约' })
+  async create(@Request() req: any, @Body() dto: CreateConsultationDto) {
+    return this.service.create(req.user.id, dto);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: '更新预约' })
+  @ApiParam({ name: 'id', type: Number })
+  async update(
+    @Request() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateConsultationDto,
+  ) {
+    return this.service.update(req.user.id, id, dto);
+  }
+
+  @Post(':id/start')
+  @ApiOperation({ summary: '开始沟通(打点)' })
+  @ApiParam({ name: 'id', type: Number })
+  async start(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
+    return this.service.start(req.user.id, id);
+  }
+
+  @Post(':id/end')
+  @ApiOperation({ summary: '结束沟通(打点 + 自动算时长)' })
+  @ApiParam({ name: 'id', type: Number })
+  async end(
+    @Request() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { notes?: string },
+  ) {
+    return this.service.end(req.user.id, id, body.notes);
+  }
+
+  @Get('today')
+  @ApiOperation({ summary: '今日沟通(Dashboard 用)' })
+  async listToday(@Request() req: any) {
+    return this.service.listToday(req.user.id);
+  }
+
+  @Get()
+  @ApiOperation({ summary: '按学生列出预约' })
+  async listByStudent(
+    @Request() req: any,
+    @Query('studentId', ParseIntPipe) studentId: number,
+  ) {
+    return this.service.listByStudent(req.user.id, studentId);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: '删除预约' })
+  @ApiParam({ name: 'id', type: Number })
+  async remove(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
+    return this.service.remove(req.user.id, id);
+  }
+}
