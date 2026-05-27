@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
 import { Alert, Button, Card, Cascader, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, message } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -291,6 +291,7 @@ export default function StudentDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
+  const [showPrereqModal, setShowPrereqModal] = useState(false);
 
   const { data: studentData, isLoading } = useQuery({
     queryKey: ['student-detail', studentId],
@@ -425,17 +426,16 @@ export default function StudentDetailPage() {
             </Button>
           </>
         ) : null}
-        <Link href={`/teacher/plans/generate/${studentId}`}>
-          <Button
-            icon={<FileTextOutlined />}
-            type="primary"
-            disabled={(progress && !progress.isRecommendable) || student.intakeStatus !== 'VERIFIED'}
-            title={student.intakeStatus !== 'VERIFIED' ? '需先确认学生资料' : progress && !progress.isRecommendable ? '档案未达到可推荐阈值，请先补全关键字段' : ''}
-            className="border-0"
-          >
-            生成方案
-          </Button>
-        </Link>
+        <Button
+          icon={<FileTextOutlined />}
+          type="primary"
+          disabled={(progress && !progress.isRecommendable) || student.intakeStatus !== 'VERIFIED'}
+          title={student.intakeStatus !== 'VERIFIED' ? '需先确认学生资料' : progress && !progress.isRecommendable ? '档案未达到可推荐阈值，请先补全关键字段' : ''}
+          className="border-0"
+          onClick={() => setShowPrereqModal(true)}
+        >
+          生成方案
+        </Button>
       </div>
 
       {/* 左主右副两栏 */}
@@ -530,6 +530,14 @@ export default function StudentDetailPage() {
           <KeyDataPanel student={student} />
         </div>
       </div>
+
+      {showPrereqModal && student ? (
+        <PrerequisiteCheckModal
+          open={showPrereqModal}
+          student={student}
+          onCancel={() => setShowPrereqModal(false)}
+        />
+      ) : null}
     </div>
   );
 }

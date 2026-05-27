@@ -14,6 +14,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnsType } from 'antd/es/table';
 import { studentApi, type ProfileProgress } from '@/services/student-api';
+import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   COLLECTING: { label: '待采集', color: 'default' },
@@ -343,6 +344,7 @@ function TeacherStudentsPageInner() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   // 客户端启动后再产生 now / updatedAt，避免 SSR 时间不一致 hydration 警告
   const [clock, setClock] = useState<{ now: Date; updatedAt: Date } | null>(null);
+  const [generateForStudent, setGenerateForStudent] = useState<Student | null>(null);
 
   // 视图切换:卡片 / 表格。默认卡片,localStorage 记忆上次选择
   const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
@@ -614,11 +616,14 @@ function TeacherStudentsPageInner() {
       width: 110,
       render: (_, record) => (
         <Space size="small" onClick={(event) => event.stopPropagation()}>
-          <Link href={`/teacher/plans/generate/${record.id}`}>
-            <Button type="text" size="small" icon={<FileTextOutlined />}>
-              生成方案
-            </Button>
-          </Link>
+          <Button
+            type="text"
+            size="small"
+            icon={<FileTextOutlined />}
+            onClick={() => setGenerateForStudent(record)}
+          >
+            生成方案
+          </Button>
         </Space>
       ),
     },
@@ -824,6 +829,14 @@ function TeacherStudentsPageInner() {
       ) : (
         <StudentCardGrid students={students} now={clock?.now ?? new Date()} />
       )}
+
+      {generateForStudent ? (
+        <PrerequisiteCheckModal
+          open={!!generateForStudent}
+          student={generateForStudent}
+          onCancel={() => setGenerateForStudent(null)}
+        />
+      ) : null}
     </div>
   );
 }
