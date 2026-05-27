@@ -3,7 +3,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
-import { Alert, Button, Card, Cascader, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, Tabs, message } from 'antd';
+import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Spin, Tabs, message } from 'antd';
 import {
   ArrowLeftOutlined,
   DownloadOutlined,
@@ -15,6 +15,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type BonusItem, type UpdateStudentDto } from '@/services/student-api';
 import { planApi } from '@/services/plan-api';
+import { consultationApi, type Consultation } from '@/services/consultation-api';
 import ProgressBar from '@/components/student/ProgressBar';
 import BonusCalcCard from '@/components/policy/BonusCalcCard';
 import { useProvinceOptions } from '@/components/student/picker/options/useProvinceOptions';
@@ -620,7 +621,7 @@ export default function StudentDetailPage() {
               {
                 key: 'comm',
                 label: '沟通记录',
-                children: <ComingSoonTabContent module="沟通记录" />,
+                children: <CommunicationTabContent studentId={studentId} />,
               },
               {
                 key: 'plan',
@@ -1478,5 +1479,221 @@ function ExternalMaterialsTabContent({
         </div>
       </Card>
     </div>
+  );
+}
+
+const CHANNEL_LABEL: Record<string, string> = {
+  phone: '电话',
+  wechat: '微信',
+  in_person: '线下',
+  video: '视频',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  scheduled: '待开始',
+  in_progress: '进行中',
+  completed: '已完成',
+  cancelled: '已取消',
+  no_show: '缺席',
+};
+
+function CommunicationTabContent({ studentId }: { studentId: string | number }) {
+  const qc = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const { data: list, isLoading } = useQuery({
+    queryKey: ['consultations', studentId],
+    queryFn: () => consultationApi.listByStudent(studentId),
+    enabled: !!studentId,
+  });
+
+  const startMutation = useMutation({
+    mutationFn: (id: number) => consultationApi.start(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consultations', studentId] });
+      message.success('已开始沟通');
+    },
+  });
+
+  const endMutation = useMutation({
+    mutationFn: ({ id, notes }: { id: number; notes?: string }) =>
+      consultationApi.end(id, notes),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consultations', studentId] });
+      message.success('已结束沟通');
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="rounded-lg bg-bg/30 py-12 text-center">
+        <Spin />
+      </div>
+    );
+  }
+
+  const items = list ?? [];
+  const totalMinutes = items.reduce((acc, c) => acc + (c.durationAct ?? 0), 0);
+
+  return (
+    <div className="pt-2 space-y-3">
+      <div className="flex items-baseline justify-between">
+        <p className="m-0 text-sm font-medium text-text">
+          共 {items.length} 次 · 累计 {Math.floor(totalMinutes / 60)}h{totalMinutes % 60}m
+        </p>
+        <Button type="primary" size="small" onClick={() => setCreateOpen(true)}>
+          新建预约
+        </Button>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border bg-bg/30 p-12 text-center">
+          <p className="m-0 text-text-muted">暂无沟通记录</p>
+        </div>
+      ) : (
+        <ol className="m-0 list-none space-y-2 p-0">
+          {items.map((c) => (
+            <ConsultationRow
+              key={c.id}
+              consultation={c}
+              onStart={() => startMutation.mutate(c.id)}
+              onEnd={(notes) => endMutation.mutate({ id: c.id, notes })}
+            />
+          ))}
+        </ol>
+      )}
+
+      <CreateConsultationModal
+        open={createOpen}
+        studentId={Number(studentId)}
+        onCancel={() => setCreateOpen(false)}
+        onSuccess={() => {
+          setCreateOpen(false);
+          qc.invalidateQueries({ queryKey: ['consultations', studentId] });
+          message.success('预约已创建');
+        }}
+      />
+    </div>
+  );
+}
+
+function ConsultationRow({
+  consultation,
+  onStart,
+  onEnd,
+}: {
+  consultation: Consultation;
+  onStart: () => void;
+  onEnd: (notes?: string) => void;
+}) {
+  const c = consultation;
+  const when = new Date(c.scheduledAt).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const channelLabel = CHANNEL_LABEL[c.channel] ?? c.channel;
+  const statusLabel = STATUS_LABEL[c.status] ?? c.status;
+
+  return (
+    <li className="rounded-md border border-border-subtle bg-surface px-3 py-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="min-w-0">
+          <p className="m-0 text-sm font-medium text-text">
+            {when} · {channelLabel}
+            {c.purpose ? ` · ${c.purpose}` : ''}
+          </p>
+          <p className="m-0 text-xs text-text-muted">
+            状态:{statusLabel}
+            {c.durationEst != null ? ` · 预估 ${c.durationEst} 分` : ''}
+            {c.durationAct != null ? ` · 实际 ${c.durationAct} 分` : ''}
+          </p>
+        </div>
+        <div className="flex gap-1">
+          {c.status === 'scheduled' ? (
+            <Button size="small" type="primary" onClick={onStart}>
+              开始
+            </Button>
+          ) : null}
+          {c.status === 'in_progress' ? (
+            <Button size="small" type="primary" onClick={() => onEnd()}>
+              结束
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      {c.notes ? (
+        <p className="m-0 mt-1 text-xs text-text-muted">{c.notes}</p>
+      ) : null}
+    </li>
+  );
+}
+
+function CreateConsultationModal({
+  open,
+  studentId,
+  onCancel,
+  onSuccess,
+}: {
+  open: boolean;
+  studentId: number;
+  onCancel: () => void;
+  onSuccess: () => void;
+}) {
+  const [form] = Form.useForm();
+  const createMutation = useMutation({
+    mutationFn: (payload: any) => consultationApi.create(payload),
+    onSuccess: () => {
+      form.resetFields();
+      onSuccess();
+    },
+    onError: (e: any) => message.error(e?.response?.data?.message ?? '创建失败'),
+  });
+
+  return (
+    <Modal
+      title="新建沟通预约"
+      open={open}
+      onCancel={onCancel}
+      onOk={() =>
+        form.validateFields().then((values) => {
+          createMutation.mutate({
+            studentId,
+            scheduledAt: values.scheduledAt.toISOString(),
+            durationEst: values.durationEst,
+            channel: values.channel,
+            purpose: values.purpose,
+            notes: values.notes,
+          });
+        })
+      }
+      confirmLoading={createMutation.isPending}
+    >
+      <Form form={form} layout="vertical" initialValues={{ channel: 'phone', durationEst: 30 }}>
+        <Form.Item name="scheduledAt" label="预约时间" rules={[{ required: true }]}>
+          <DatePicker showTime style={{ width: '100%' }} />
+        </Form.Item>
+        <Form.Item name="channel" label="沟通方式" rules={[{ required: true }]}>
+          <Select
+            options={[
+              { label: '电话', value: 'phone' },
+              { label: '微信', value: 'wechat' },
+              { label: '线下', value: 'in_person' },
+              { label: '视频', value: 'video' },
+            ]}
+          />
+        </Form.Item>
+        <Form.Item name="durationEst" label="预估时长(分钟)">
+          <InputNumber min={5} max={300} style={{ width: '100%' }} />
+        </Form.Item>
+        <Form.Item name="purpose" label="沟通目的">
+          <Input placeholder="例:方案讲解 / 家长反馈 / 催进度" />
+        </Form.Item>
+        <Form.Item name="notes" label="备注">
+          <Input.TextArea rows={2} />
+        </Form.Item>
+      </Form>
+    </Modal>
   );
 }
