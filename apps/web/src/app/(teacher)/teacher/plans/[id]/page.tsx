@@ -13,6 +13,7 @@ import {
   Empty,
   Input,
   Modal,
+  Radio,
   Select,
   Space,
   Spin,
@@ -215,6 +216,8 @@ export default function PlanDetailPage() {
   const [now, setNow] = useState<Date | null>(null);
   // 对比模式:选另一版本对比当前版本
   const [compareVersionId, setCompareVersionId] = useState<number | null>(null);
+  // 风险处理弹窗:记录当前要处理的 riskId
+  const [resolveRiskId, setResolveRiskId] = useState<number | null>(null);
 
   useEffect(() => {
     setNow(new Date());
@@ -884,6 +887,12 @@ export default function PlanDetailPage() {
         <Alert type="success" showIcon message="方案已定稿，后续修改请派生新版本。" />
       ) : null}
 
+      {/* C-0 · 风险摘要面板（有风险时才显示） */}
+      <RiskSummaryPanel
+        planId={planId}
+        onRowClick={(id) => setResolveRiskId(id)}
+      />
+
       {/* C · 志愿明细 */}
       <Card
         title={
@@ -1039,6 +1048,16 @@ export default function PlanDetailPage() {
           )}
         </div>
       ) : null}
+
+      <RiskResolveModal
+        riskId={resolveRiskId}
+        open={resolveRiskId !== null}
+        onCancel={() => setResolveRiskId(null)}
+        onSuccess={() => {
+          setResolveRiskId(null);
+          queryClient.invalidateQueries({ queryKey: ['plan-risks', planId] });
+        }}
+      />
     </div>
   );
 }
@@ -1226,5 +1245,136 @@ function ComparePanelRow({ row }: { row: DiffRow }) {
         )}
       </div>
     </>
+  );
+}
+
+const SEVERITY_LABEL: Record<string, string> = {
+  critical: '严重',
+  moderate: '中度',
+  minor: '轻微',
+};
+
+const SEVERITY_TONE: Record<string, string> = {
+  critical: 'bg-rush text-white',
+  moderate: 'bg-amber-500 text-white',
+  minor: 'bg-text-muted text-white',
+};
+
+function RiskSummaryPanel({
+  planId,
+  onRowClick,
+}: {
+  planId: string | number;
+  onRowClick: (riskId: number) => void;
+}) {
+  const { data: risks = [] } = useQuery({
+    queryKey: ['plan-risks', planId],
+    queryFn: () => planApi.getRisks(planId),
+  });
+
+  if (risks.length === 0) return null;
+
+  const counts = risks.reduce(
+    (acc: Record<string, number>, r) => {
+      acc[r.severity] = (acc[r.severity] ?? 0) + 1;
+      return acc;
+    },
+    { critical: 0, moderate: 0, minor: 0 } as Record<string, number>,
+  );
+
+  return (
+    <Card
+      title={
+        <span>
+          风险摘要
+          {counts.critical > 0 ? (
+            <span className="ml-2 text-rush">严重 {counts.critical}</span>
+          ) : null}
+          {counts.moderate > 0 ? (
+            <span className="ml-2 text-amber-600">中度 {counts.moderate}</span>
+          ) : null}
+          {counts.minor > 0 ? (
+            <span className="ml-2 text-text-muted">轻微 {counts.minor}</span>
+          ) : null}
+        </span>
+      }
+      size="small"
+    >
+      <ol className="m-0 list-none space-y-1 p-0">
+        {risks.map((r) => (
+          <li
+            key={r.id}
+            className="flex items-center justify-between rounded-md border border-border-subtle px-3 py-2 cursor-pointer hover:border-primary"
+            onClick={() => onRowClick(r.id)}
+          >
+            <div className="min-w-0 flex-1">
+              <p className="m-0 text-sm">
+                <span className={`mr-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${SEVERITY_TONE[r.severity]}`}>
+                  {SEVERITY_LABEL[r.severity]}
+                </span>
+                #{r.planItem.sequence} {r.planItem.universityName} · {r.planItem.majorName}
+              </p>
+              <p className="m-0 text-xs text-text-muted">{r.message}</p>
+            </div>
+            <Button size="small" type="text">处理</Button>
+          </li>
+        ))}
+      </ol>
+    </Card>
+  );
+}
+
+function RiskResolveModal({
+  riskId,
+  open,
+  onCancel,
+  onSuccess,
+}: {
+  riskId: number | null;
+  open: boolean;
+  onCancel: () => void;
+  onSuccess: () => void;
+}) {
+  const [resolution, setResolution] = useState<'accepted' | 'replaced' | 'ignored'>('accepted');
+  const [note, setNote] = useState('');
+
+  const resolveMutation = useMutation({
+    mutationFn: () => planApi.resolveRisk(riskId!, resolution, note || undefined),
+    onSuccess: () => {
+      message.success('已处理');
+      setNote('');
+      onSuccess();
+    },
+    onError: (e: any) => message.error(e?.response?.data?.message ?? '处理失败'),
+  });
+
+  return (
+    <Modal
+      title="处理风险"
+      open={open}
+      onCancel={onCancel}
+      onOk={() => resolveMutation.mutate()}
+      confirmLoading={resolveMutation.isPending}
+    >
+      <div className="space-y-3">
+        <div>
+          <p className="m-0 mb-1 text-sm font-medium">处理方式:</p>
+          <Radio.Group value={resolution} onChange={(e) => setResolution(e.target.value)}>
+            <Radio value="accepted">接受风险(综合判断可承受)</Radio>
+            <Radio value="replaced">已替换志愿</Radio>
+            <Radio value="ignored">暂时忽略</Radio>
+          </Radio.Group>
+        </div>
+        <div>
+          <p className="m-0 mb-1 text-sm font-medium">备注(可选):</p>
+          <Input.TextArea
+            rows={2}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="例:学生家长有特殊背景 / 已和家长沟通"
+          />
+        </div>
+      </div>
+    </Modal>
   );
 }

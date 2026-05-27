@@ -206,6 +206,32 @@ export const planApi = {
     return res.data as Blob;
   },
 
+  async getRisks(planId: number | string) {
+    const res = await api.get(`/plans/${planId}/risks`);
+    return res.data as Array<{
+      id: number;
+      planItemId: number;
+      ruleCode: string;
+      severity: 'critical' | 'moderate' | 'minor';
+      category: string;
+      message: string;
+      detail: any;
+      resolvedAt: string | null;
+      resolution: string | null;
+      planItem: { sequence: number; universityName: string; majorName: string };
+    }>;
+  },
+
+  async recomputeRisks(planId: number | string) {
+    const res = await api.post(`/plans/${planId}/risks/recompute`);
+    return res.data;
+  },
+
+  async resolveRisk(riskId: number, resolution: 'accepted' | 'replaced' | 'ignored', note?: string) {
+    const res = await api.post(`/plans/risks/${riskId}/resolve`, { resolution, note });
+    return res.data;
+  },
+
   // Student endpoints
   getMyPlans(): Promise<any> {
     return api.get('/plans/mine') as any;
