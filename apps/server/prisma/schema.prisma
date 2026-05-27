@@ -1890,11 +1890,22 @@ model ConsultationAppointment {
 
   notes String? @db.Text
 
+  // 创建者角色:teacher / student(家长共用学生账号)
+  createdByActor String @default("teacher") @map("created_by_actor") @db.VarChar(20)
+
+  // 坐诊喊号序号(仅在坐诊模式启用时填,普通预约为 null)
+  queueNumber Int? @map("queue_number")
+  // 取号时间
+  queuedAt    DateTime? @map("queued_at")
+  // 叫号时间
+  calledAt    DateTime? @map("called_at")
+
   startedAt DateTime? @map("started_at")
   endedAt   DateTime? @map("ended_at")
 
   @@index([studentId, scheduledAt])
   @@index([teacherId, scheduledAt])
+  @@index([teacherId, scheduledAt, queueNumber])
   @@index([status])
   @@map("consultation_appointments")
 }
