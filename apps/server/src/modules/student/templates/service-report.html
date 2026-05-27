@@ -97,7 +97,30 @@
   {{/if}}
 
   <h2>沟通服务统计</h2>
-  <p class="placeholder">(沟通预约模块上线后,此处将展示沟通次数、总时长、关键沟通节点)</p>
+  {{#if consultations.count}}
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="num">{{consultations.count}}</div>
+      <div class="label">沟通次数</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">{{consultations.hours}}<span style="font-size:14pt;">h</span>{{consultations.mins}}<span style="font-size:14pt;">m</span></div>
+      <div class="label">累计时长</div>
+    </div>
+  </div>
+  {{#if consultations.byChannel.length}}
+  <table class="history">
+    <thead><tr><th>沟通方式</th><th>次数</th></tr></thead>
+    <tbody>
+      {{#each consultations.byChannel}}
+      <tr><td>{{channel}}</td><td>{{count}}</td></tr>
+      {{/each}}
+    </tbody>
+  </table>
+  {{/if}}
+  {{else}}
+  <p class="placeholder">服务期内暂无完成的沟通记录</p>
+  {{/if}}
 
   <h2>方案风险评估</h2>
   <p class="placeholder">(风险评估模块上线后,此处将展示已识别风险及解决方案)</p>

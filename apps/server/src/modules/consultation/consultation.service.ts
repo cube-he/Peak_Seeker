@@ -273,4 +273,79 @@ export class ConsultationService {
       estimation: { avgEst, avgAct, sampleSize: withBoth.length },
     };
   }
+
+  /**
+   * 主管报表:所有老师的工时榜 + 异常告警(产量偏低)。需要主管权限。
+   */
+  async getTeamInsights(userId: number, range: 'week' | 'month' = 'month') {
+    const teacher = await this.prisma.teacherProfile.findFirst({
+      where: { userId },
+    });
+    if (!teacher?.isSupervisor) throw new ForbiddenException('需要主管权限');
+
+    const now = new Date();
+    const start = new Date(now);
+    if (range === 'week') start.setDate(now.getDate() - 7);
+    else start.setMonth(now.getMonth() - 1);
+
+    const completed = await this.prisma.consultationAppointment.findMany({
+      where: {
+        status: 'completed',
+        endedAt: { gte: start },
+      },
+      include: {
+        teacher: {
+          include: { user: { select: { realName: true, username: true } } },
+        },
+      },
+    });
+
+    const byTeacherMap = new Map<
+      number,
+      { name: string; count: number; minutes: number; studentSet: Set<number> }
+    >();
+    for (const c of completed) {
+      const tid = c.teacherId;
+      const name = c.teacher?.user?.realName ?? c.teacher?.user?.username ?? `老师${tid}`;
+      const cur = byTeacherMap.get(tid) ?? {
+        name,
+        count: 0,
+        minutes: 0,
+        studentSet: new Set<number>(),
+      };
+      cur.count += 1;
+      cur.minutes += c.durationAct ?? 0;
+      cur.studentSet.add(c.studentId);
+      byTeacherMap.set(tid, cur);
+    }
+
+    const byTeacher = Array.from(byTeacherMap.entries())
+      .map(([teacherId, v]) => ({
+        teacherId,
+        name: v.name,
+        count: v.count,
+        minutes: v.minutes,
+        studentCount: v.studentSet.size,
+      }))
+      .sort((a, b) => b.minutes - a.minutes);
+
+    const lowProductivityThresholdMinutes = range === 'week' ? 60 : 240;
+    const lowProductivity = byTeacher.filter((t) => t.minutes < lowProductivityThresholdMinutes);
+
+    return {
+      range,
+      totalTeachers: byTeacher.length,
+      totalCount: completed.length,
+      totalMinutes: completed.reduce((a, c) => a + (c.durationAct ?? 0), 0),
+      byTeacher,
+      alerts: {
+        lowProductivity: lowProductivity.map((t) => ({
+          teacherId: t.teacherId,
+          name: t.name,
+          minutes: t.minutes,
+        })),
+        threshold: lowProductivityThresholdMinutes,
+      },
+    };
+  }
 }

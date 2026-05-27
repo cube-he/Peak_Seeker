@@ -109,4 +109,25 @@ export const consultationApi = {
       estimation: { avgEst: number | null; avgAct: number | null; sampleSize: number };
     };
   },
+
+  async getTeamInsights(range: 'week' | 'month' = 'month') {
+    const res = await api.get(`/consultations/insights/team?range=${range}`);
+    return res.data as {
+      range: 'week' | 'month';
+      totalTeachers: number;
+      totalCount: number;
+      totalMinutes: number;
+      byTeacher: Array<{
+        teacherId: number;
+        name: string;
+        count: number;
+        minutes: number;
+        studentCount: number;
+      }>;
+      alerts: {
+        lowProductivity: Array<{ teacherId: number; name: string; minutes: number }>;
+        threshold: number;
+      };
+    };
+  },
 };

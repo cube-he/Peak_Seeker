@@ -67,6 +67,12 @@ export class ConsultationController {
     return this.service.getMyInsights(req.user.id, (range as 'week' | 'month') ?? 'month');
   }
 
+  @Get('insights/team')
+  @ApiOperation({ summary: '主管报表(需主管权限)' })
+  async getTeamInsights(@Request() req: any, @Query('range') range?: string) {
+    return this.service.getTeamInsights(req.user.id, (range as 'week' | 'month') ?? 'month');
+  }
+
   @Get('today')
   @ApiOperation({ summary: '今日沟通(Dashboard 用)' })
   async listToday(@Request() req: any) {

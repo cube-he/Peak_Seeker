@@ -80,6 +80,23 @@ export class StudentServiceReportService {
       where: { studentId },
     });
 
+    // 沟通统计(服务期内的所有 completed consultations)
+    const consultations = await this.prisma.consultationAppointment.findMany({
+      where: {
+        studentId,
+        status: 'completed',
+      },
+    });
+    const consultationCount = consultations.length;
+    const consultationMinutes = consultations.reduce(
+      (a, c) => a + (c.durationAct ?? 0),
+      0,
+    );
+    const consultationsByChannel: Record<string, number> = {};
+    for (const c of consultations) {
+      consultationsByChannel[c.channel] = (consultationsByChannel[c.channel] ?? 0) + 1;
+    }
+
     const signedAt = student.createdAt;
     const now = new Date();
     const daysServed = Math.floor(
@@ -120,6 +137,25 @@ export class StudentServiceReportService {
         changedByName:
           log.changedBy.realName ?? log.changedBy.username,
       })),
+      consultations: {
+        count: consultationCount,
+        totalMinutes: consultationMinutes,
+        hours: Math.floor(consultationMinutes / 60),
+        mins: consultationMinutes % 60,
+        byChannel: Object.entries(consultationsByChannel).map(([k, v]) => ({
+          channel:
+            k === 'phone'
+              ? '电话'
+              : k === 'wechat'
+                ? '微信'
+                : k === 'in_person'
+                  ? '线下'
+                  : k === 'video'
+                    ? '视频'
+                    : k,
+          count: v,
+        })),
+      },
       generatedAt: now.toLocaleString('zh-CN'),
     };
   }
