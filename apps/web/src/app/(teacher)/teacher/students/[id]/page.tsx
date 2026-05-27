@@ -628,10 +628,7 @@ export default function StudentDetailPage() {
                 key: 'external',
                 label: '对外材料',
                 children: (
-                  <ExternalMaterialsTabContent
-                    studentId={studentId}
-                    student={student}
-                  />
+                  <ExternalMaterialsTabContent student={student} />
                 ),
               },
               {
@@ -1362,10 +1359,8 @@ function KeyDataPanel({ student }: { student: any }) {
 }
 
 function ExternalMaterialsTabContent({
-  studentId,
   student,
 }: {
-  studentId: string | number;
   student: any;
 }) {
   const [exporting, setExporting] = useState<string | null>(null);
