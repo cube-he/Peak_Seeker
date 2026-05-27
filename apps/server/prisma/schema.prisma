@@ -634,7 +634,8 @@ model TeacherProfile {
   isSupervisor Boolean @default(false) @map("is_supervisor")
 
   // 关联学生
-  students StudentProfile[]
+  students                 StudentProfile[]
+  consultationAppointments ConsultationAppointment[]
 
   @@map("teacher_profiles")
 }
@@ -781,8 +782,9 @@ model StudentProfile {
   examLocationUpdatedAt DateTime? @map("exam_location_updated_at")
 
   // 关联
-  volunteerPlans  VolunteerPlan[]
-  fieldChangeLogs StudentFieldChangeLog[]
+  volunteerPlans           VolunteerPlan[]
+  fieldChangeLogs          StudentFieldChangeLog[]
+  consultationAppointments ConsultationAppointment[]
 
   @@index([teacherId])
   @@index([province])
@@ -1861,4 +1863,38 @@ model StudentFieldChangeLog {
   @@index([fieldKey])
   @@index([changedById])
   @@map("student_field_change_logs")
+}
+
+// ==================== 沟通预约 ====================
+
+model ConsultationAppointment {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  studentId Int            @map("student_id")
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  teacherId Int            @map("teacher_id")
+  teacher   TeacherProfile @relation(fields: [teacherId], references: [id])
+
+  scheduledAt DateTime @map("scheduled_at")
+
+  durationEst Int? @map("duration_est")
+  durationAct Int? @map("duration_act")
+
+  channel String  @db.VarChar(20)
+  purpose String? @db.VarChar(50)
+
+  status String @default("scheduled") @db.VarChar(20)
+
+  notes String? @db.Text
+
+  startedAt DateTime? @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+
+  @@index([studentId, scheduledAt])
+  @@index([teacherId, scheduledAt])
+  @@index([status])
+  @@map("consultation_appointments")
 }
