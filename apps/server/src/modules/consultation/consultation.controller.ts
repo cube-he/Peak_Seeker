@@ -61,6 +61,18 @@ export class ConsultationController {
     return this.service.end(req.user.id, id, body.notes);
   }
 
+  @Get('clinic/state')
+  @ApiOperation({ summary: '坐诊面板状态(今日队列)' })
+  async getClinicState(@Request() req: any) {
+    return this.service.getClinicState(req.user.id);
+  }
+
+  @Post('clinic/call-next')
+  @ApiOperation({ summary: '叫下一号(结束当前 + 开始下一个)' })
+  async callNext(@Request() req: any, @Body() body: { currentNotes?: string }) {
+    return this.service.callNext(req.user.id, body.currentNotes);
+  }
+
   @Get('insights/me')
   @ApiOperation({ summary: '老师个人复盘统计' })
   async getMyInsights(@Request() req: any, @Query('range') range?: string) {
@@ -92,6 +104,13 @@ export class ConsultationController {
   @ApiOperation({ summary: '学生侧申请预约(status=requested)' })
   async requestByParent(@Request() req: any, @Body() dto: RequestConsultationDto) {
     return this.service.requestByParent(req.user.id, dto);
+  }
+
+  @Post(':id/enqueue')
+  @ApiOperation({ summary: '坐诊取号' })
+  @ApiParam({ name: 'id', type: Number })
+  async enqueue(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
+    return this.service.enqueue(req.user.id, id);
   }
 
   @Post(':id/confirm')

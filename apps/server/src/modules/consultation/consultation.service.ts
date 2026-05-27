@@ -275,6 +275,123 @@ export class ConsultationService {
   }
 
   /**
+   * 坐诊模式 - 取号:为今天某个学生的预约分配 queueNumber(同一老师同一天递增)。
+   */
+  async enqueue(userId: number, appointmentId: number) {
+    const teacherId = await this.resolveTeacherId(userId);
+    const appt = await this.prisma.consultationAppointment.findUnique({
+      where: { id: appointmentId },
+    });
+    if (!appt) throw new NotFoundException('预约不存在');
+    if (appt.teacherId !== teacherId) throw new ForbiddenException('无权操作');
+    if (appt.queueNumber != null) return appt;
+
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(start.getTime() + 86_400_000);
+    const max = await this.prisma.consultationAppointment.aggregate({
+      where: {
+        teacherId,
+        scheduledAt: { gte: start, lt: end },
+        queueNumber: { not: null },
+      },
+      _max: { queueNumber: true },
+    });
+    const next = (max._max.queueNumber ?? 0) + 1;
+
+    return this.prisma.consultationAppointment.update({
+      where: { id: appointmentId },
+      data: { queueNumber: next, queuedAt: new Date() },
+    });
+  }
+
+  /**
+   * 坐诊面板:获取今天的队列状态
+   */
+  async getClinicState(userId: number) {
+    const teacherId = await this.resolveTeacherId(userId);
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(start.getTime() + 86_400_000);
+
+    const all = await this.prisma.consultationAppointment.findMany({
+      where: {
+        teacherId,
+        scheduledAt: { gte: start, lt: end },
+        queueNumber: { not: null },
+      },
+      include: {
+        student: {
+          include: { user: { select: { realName: true, username: true } } },
+        },
+      },
+      orderBy: { queueNumber: 'asc' },
+    });
+
+    const inProgress = all.find((a) => a.status === 'in_progress') ?? null;
+    const waiting = all.filter(
+      (a) => a.status === 'scheduled' && a.id !== inProgress?.id,
+    );
+    const done = all.filter((a) => a.status === 'completed');
+
+    return { inProgress, waiting, done };
+  }
+
+  /**
+   * 坐诊面板 - 叫下一号:事务内结束当前 + 启动队列第一个等待的
+   */
+  async callNext(userId: number, currentNotes?: string) {
+    const teacherId = await this.resolveTeacherId(userId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.consultationAppointment.findFirst({
+        where: { teacherId, status: 'in_progress' },
+      });
+      if (current) {
+        const endedAt = new Date();
+        const durationAct = current.startedAt
+          ? Math.round((endedAt.getTime() - current.startedAt.getTime()) / 60000)
+          : null;
+        await tx.consultationAppointment.update({
+          where: { id: current.id },
+          data: {
+            status: 'completed',
+            endedAt,
+            durationAct,
+            ...(currentNotes !== undefined && { notes: currentNotes }),
+          },
+        });
+      }
+
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfDay = new Date(startOfDay.getTime() + 86_400_000);
+      const next = await tx.consultationAppointment.findFirst({
+        where: {
+          teacherId,
+          status: 'scheduled',
+          queueNumber: { not: null },
+          scheduledAt: { gte: startOfDay, lt: endOfDay },
+        },
+        orderBy: { queueNumber: 'asc' },
+      });
+
+      if (next) {
+        await tx.consultationAppointment.update({
+          where: { id: next.id },
+          data: {
+            status: 'in_progress',
+            startedAt: new Date(),
+            calledAt: new Date(),
+          },
+        });
+      }
+
+      return { endedId: current?.id, startedId: next?.id };
+    });
+  }
+
+  /**
    * 主管报表:所有老师的工时榜 + 异常告警(产量偏低)。需要主管权限。
    */
   async getTeamInsights(userId: number, range: 'week' | 'month' = 'month') {

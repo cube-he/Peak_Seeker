@@ -110,6 +110,25 @@ export const consultationApi = {
     };
   },
 
+  async enqueue(id: number) {
+    const res = await api.post(`/consultations/${id}/enqueue`);
+    return res.data;
+  },
+
+  async getClinicState() {
+    const res = await api.get('/consultations/clinic/state');
+    return res.data as {
+      inProgress: any | null;
+      waiting: any[];
+      done: any[];
+    };
+  },
+
+  async callNext(currentNotes?: string) {
+    const res = await api.post('/consultations/clinic/call-next', { currentNotes });
+    return res.data as { endedId?: number; startedId?: number };
+  },
+
   async getTeamInsights(range: 'week' | 'month' = 'month') {
     const res = await api.get(`/consultations/insights/team?range=${range}`);
     return res.data as {
