@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { universityService, type UniversityQueryParams } from '@/services/university';
 import { FilterChipRow } from '../shared/FilterChipRow';
+import { BACKGROUND_TAGS } from '../../lib/backgrounds';
 
 /**
  * 全部院校 tab 的可折叠筛选面板。
@@ -90,6 +91,13 @@ export function ListFiltersPanel({ filters, setFilters, studentRank }: Props) {
         ]}
         value={featureValue}
         onChange={setFeature}
+      />
+      <FilterChipRow
+        label="院校背景"
+        options={BACKGROUND_TAGS.map((t) => ({ value: t, label: t }))}
+        value={filters.hasTag as string | undefined}
+        onChange={(v) => setFilters({ ...filters, hasTag: v as never, page: 1 })}
+        maxVisible={10}
       />
 
       {expanded && (

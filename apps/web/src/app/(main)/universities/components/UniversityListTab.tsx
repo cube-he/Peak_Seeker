@@ -92,6 +92,7 @@ export function UniversityListTab() {
       const m = { rush: '冲一冲', stable: '稳一稳', safe: '保一保' } as const;
       items.push({ key: 'tierFilter', label: `录取概率:${m[filters.tierFilter as keyof typeof m]}` });
     }
+    if (filters.hasTag) items.push({ key: 'hasTag', label: filters.hasTag });
     return items;
   }, [filters]);
 

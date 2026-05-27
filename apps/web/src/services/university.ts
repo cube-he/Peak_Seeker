@@ -47,6 +47,8 @@ export interface UniversityQueryParams {
   examType?: '物理' | '历史';
   tierFilter?: 'rush' | 'stable' | 'safe';
   userRank?: number;
+  /** 院校背景 tag(C9联盟 / 卓越工程师 / 原邮电部直属 等),后端通过 array_contains 匹配 tags 字段 */
+  hasTag?: string;
 }
 
 export interface UniversityListItem {
@@ -70,6 +72,8 @@ export interface UniversityListItem {
   softCategory: string | null;
   softCategoryRank: number | null;
   softRankYear: number | null;
+  /** 院校 tags(JSON 数组,如 ["985","211","双一流","C9联盟","卓越工程师"]) */
+  tags?: string[] | null;
 }
 
 export interface UniversityListResponse {

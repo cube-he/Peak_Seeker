@@ -113,4 +113,8 @@ export class QueryUniversityDto {
   @IsInt()
   @Min(1)
   userRank?: number;
+
+  @ApiPropertyOptional({ description: '院校背景 tag(如 C9联盟 / 卓越工程师 / 原邮电部直属)' })
+  @IsOptional()
+  hasTag?: string;
 }
