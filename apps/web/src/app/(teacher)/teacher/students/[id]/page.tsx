@@ -64,6 +64,60 @@ const EXAM_TYPE_LABEL: Record<string, string> = {
   COMPREHENSIVE_SCIENCE: '理科',
 };
 
+// 字段 key → 中文 label 映射(与后端 student-change-log.config.ts 保持一致)
+const CHANGE_LOG_FIELD_LABEL: Record<string, string> = {
+  examType: '选科类型',
+  examYear: '高考年份',
+  totalScore: '模考总分',
+  provincialRank: '预测位次',
+  firstChoice: '首选科目',
+  reChoices: '再选科目',
+  subjectScores: '科目成绩',
+  bonusPolicyStatus: '加分政策状态',
+  bonusItems: '加分项目',
+  province: '省份',
+  city: '城市',
+  county: '区县',
+  isRural: '农村户口',
+  examLocationProvince: '高考所在省',
+  examLocationCity: '高考所在市',
+  examLocationCounty: '高考所在县',
+  preferredProvinces: '意向省份',
+  preferredCities: '意向城市',
+  preferredMajors: '意向专业',
+  preferredMajorCategories: '意向专业类别',
+  preferredUniversities: '意向院校',
+  excludedCities: '排除城市',
+  excludedMajors: '排除专业',
+  stayPreference: '留省偏好',
+  acceptLevel: '调剂接受度',
+  colorBlind: '色盲',
+  colorWeak: '色弱',
+  height: '身高',
+  weight: '体重',
+  visionLeft: '左眼视力',
+  visionRight: '右眼视力',
+  careerPlan: '升学规划',
+  priorityMode: '优先模式',
+  tuitionBudget: '学费预算',
+};
+
+function formatFieldValue(value: string | null): string {
+  if (value === null) return '空';
+  if (value.startsWith('[') || value.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.length === 0 ? '空' : parsed.slice(0, 3).join(', ') + (parsed.length > 3 ? '...' : '');
+      }
+      return JSON.stringify(parsed);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
 function toSelectValues(items?: BonusItem[] | string[]): string[] {
   if (!Array.isArray(items)) return [];
   return items
@@ -580,7 +634,7 @@ export default function StudentDetailPage() {
               {
                 key: 'log',
                 label: '变更日志',
-                children: <ComingSoonTabContent module="资料变更日志" />,
+                children: <ChangeLogTabContent studentId={studentId} />,
               },
             ]}
           />
@@ -1157,6 +1211,79 @@ function DataCompletenessHeader({ student }: { student: any }) {
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function ChangeLogTabContent({ studentId }: { studentId: string | number }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['student-change-logs', studentId],
+    queryFn: () => studentApi.getChangeLogs(studentId, { limit: 100 }),
+    enabled: !!studentId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="rounded-lg bg-bg/30 py-12 text-center">
+        <Spin />
+      </div>
+    );
+  }
+
+  const logs = data?.logs ?? [];
+  if (logs.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-bg/30 p-12 text-center">
+        <p className="m-0 text-text-muted">暂无变更记录</p>
+        <p className="m-0 mt-2 text-xs text-text-muted">
+          学生 / 老师修改关键字段时会在这里显示
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-2">
+      <div className="mb-3 flex items-baseline justify-between">
+        <p className="m-0 text-sm font-medium text-text">
+          共 {data?.total ?? logs.length} 条变更
+        </p>
+        <p className="m-0 text-xs text-text-muted">按时间倒序</p>
+      </div>
+      <ol className="m-0 list-none space-y-2 p-0">
+        {logs.map((log) => {
+          const fieldLabel = CHANGE_LOG_FIELD_LABEL[log.fieldKey] ?? log.fieldKey;
+          const actorLabel = log.actor === 'student' ? '学生 / 家长' : '老师';
+          const actorName = log.changedBy?.realName ?? log.changedBy?.username ?? '未知';
+          const when = new Date(log.createdAt).toLocaleString('zh-CN', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          return (
+            <li
+              key={log.id}
+              className="rounded-md border border-border-subtle bg-surface px-3 py-2"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="m-0 text-sm">
+                  <span className="font-medium text-text">{fieldLabel}</span>
+                  <span className="ml-2 text-xs text-text-muted">
+                    {actorLabel}({actorName})
+                  </span>
+                </p>
+                <span className="text-xs text-text-muted">{when}</span>
+              </div>
+              <p className="m-0 mt-1 text-xs text-text-muted">
+                <span className="text-rush">{formatFieldValue(log.oldValue)}</span>
+                {' -> '}
+                <span className="text-safe">{formatFieldValue(log.newValue)}</span>
+              </p>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
