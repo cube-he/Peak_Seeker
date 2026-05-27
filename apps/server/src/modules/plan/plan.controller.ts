@@ -17,6 +17,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger'
 import { PlanService } from './plan.service';
 import { PlanExportService } from './plan-export.service';
 import { PlanReviewDraftService } from './plan-review-draft.service';
+import { RiskEngineService } from './risk-engine/risk-engine.service';
 import { UpsertReviewDraftDto } from './dto/upsert-review-draft.dto';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
@@ -33,6 +34,7 @@ export class PlanController {
     private planService: PlanService,
     private exportService: PlanExportService,
     private draftService: PlanReviewDraftService,
+    private riskEngine: RiskEngineService,
   ) {}
 
   @Post()
@@ -59,11 +61,36 @@ export class PlanController {
     return this.planService.findTeacherPlans(req.user, query);
   }
 
+  @Post('risks/:riskId/resolve')
+  @ApiOperation({ summary: '解决某条风险' })
+  @ApiParam({ name: 'riskId', type: Number })
+  async resolveRisk(
+    @Request() req: any,
+    @Param('riskId', ParseIntPipe) riskId: number,
+    @Body() body: { resolution: 'accepted' | 'replaced' | 'ignored'; note?: string },
+  ) {
+    return this.riskEngine.resolve(req.user.id, riskId, body.resolution, body.note);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: '获取方案详情' })
   @ApiParam({ name: 'id', type: Number })
   async findById(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
     return this.planService.findById(id, req.user.id);
+  }
+
+  @Get(':id/risks')
+  @ApiOperation({ summary: '获取方案所有风险(按 severity 排序)' })
+  @ApiParam({ name: 'id', type: Number })
+  async getRisks(@Param('id', ParseIntPipe) planId: number) {
+    return this.riskEngine.getPlanRisks(planId);
+  }
+
+  @Post(':id/risks/recompute')
+  @ApiOperation({ summary: '手动触发风险重算' })
+  @ApiParam({ name: 'id', type: Number })
+  async recomputeRisks(@Param('id', ParseIntPipe) planId: number) {
+    return this.riskEngine.recomputeForPlan(planId);
   }
 
   @Get(':id/full')

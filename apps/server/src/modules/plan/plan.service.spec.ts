@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { PlanService } from './plan.service';
 import { PlanStateMachineService } from './plan-state-machine.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RiskEngineService } from './risk-engine/risk-engine.service';
 
 describe('PlanService workflow gates', () => {
   let service: PlanService;
@@ -21,6 +22,13 @@ describe('PlanService workflow gates', () => {
         updateMany: jest.fn(),
       },
       planItem: { count: jest.fn(), findMany: jest.fn() },
+      planItemRisk: {
+        deleteMany: jest.fn(),
+        createMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+        update: jest.fn(),
+      },
       planReview: { create: jest.fn() },
       planReviewDraft: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       $transaction: jest.fn((cb: any) => cb(prisma)),
@@ -31,6 +39,13 @@ describe('PlanService workflow gates', () => {
         PlanService,
         PlanStateMachineService,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: RiskEngineService,
+          useValue: {
+            recomputeForPlan: jest.fn().mockResolvedValue({ evaluated: 0, totalFindings: 0 }),
+            countByPlan: jest.fn().mockResolvedValue({ critical: 0, moderate: 0, minor: 0 }),
+          },
+        },
       ],
     }).compile();
     service = mod.get(PlanService);

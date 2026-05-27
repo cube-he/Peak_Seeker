@@ -10,12 +10,14 @@ import { PlanStateMachineService } from './plan-state-machine.service';
 import { AddPlanItemDto } from './dto/add-plan-item.dto';
 import { UpdatePlanItemDto } from './dto/update-plan-item.dto';
 import { calcGradient } from '../plan-candidate/gradient-calculator';
+import { RiskEngineService } from './risk-engine/risk-engine.service';
 
 @Injectable()
 export class PlanItemService {
   constructor(
     private prisma: PrismaService,
     private sm: PlanStateMachineService,
+    private riskEngine: RiskEngineService,
   ) {}
 
   private async getEditablePlan(
@@ -162,7 +164,7 @@ export class PlanItemService {
         }
       : undefined;
 
-    return this.prisma.planItem.create({
+    const created = await this.prisma.planItem.create({
       data: {
         planId,
         sequence: dto.sequence ?? count + 1,
@@ -197,6 +199,9 @@ export class PlanItemService {
         overrideReason: dto.overrideReason ?? null,
       },
     });
+    // 触发风险重算(非阻塞)
+    this.riskEngine.recomputeForPlan(planId).catch(() => {});
+    return created;
   }
 
   async update(planId: number, itemId: number, dto: UpdatePlanItemDto, actorUserId?: number) {
@@ -217,6 +222,7 @@ export class PlanItemService {
       data: majorSelectionUpdate ?? { ...legacyDto, isManuallyModified: true },
     });
 
+    let result: any;
     if (majorSelectionUpdate && plan.status === 'PENDING_REVIEW') {
       const [updated] = await this.prisma.$transaction([
         itemUpdate,
@@ -225,17 +231,23 @@ export class PlanItemService {
           data: { status: 'DRAFT', currentReviewerId: null },
         }),
       ]);
-      return updated;
+      result = updated;
+    } else {
+      result = await itemUpdate;
     }
-
-    return itemUpdate;
+    // 触发风险重算(非阻塞)
+    this.riskEngine.recomputeForPlan(planId).catch(() => {});
+    return result;
   }
 
   async remove(planId: number, itemId: number, actorUserId?: number) {
     await this.getEditablePlan(planId, actorUserId);
     const item = await this.prisma.planItem.findUnique({ where: { id: itemId } });
     if (!item || item.planId !== planId) throw new NotFoundException('志愿项不存在');
-    return this.prisma.planItem.delete({ where: { id: itemId } });
+    const deleted = await this.prisma.planItem.delete({ where: { id: itemId } });
+    // 触发风险重算(非阻塞)
+    this.riskEngine.recomputeForPlan(planId).catch(() => {});
+    return deleted;
   }
 
   async reorder(planId: number, itemIds: number[], actorUserId?: number) {
@@ -249,6 +261,8 @@ export class PlanItemService {
         this.prisma.planItem.update({ where: { id }, data: { sequence: idx + 1 } }),
       ),
     );
+    // 触发风险重算(非阻塞)
+    this.riskEngine.recomputeForPlan(planId).catch(() => {});
     return { ok: true, count: itemIds.length };
   }
 }

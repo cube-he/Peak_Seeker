@@ -10,12 +10,14 @@ import { UpdatePlanDto } from './dto/update-plan.dto';
 import { CreatePlanV2Dto } from './dto/create-plan-v2.dto';
 import { ReviewPlanDto } from './dto/review-plan.dto';
 import { PlanStateMachineService, PlanAction } from './plan-state-machine.service';
+import { RiskEngineService } from './risk-engine/risk-engine.service';
 
 @Injectable()
 export class PlanService {
   constructor(
     private prisma: PrismaService,
     private sm: PlanStateMachineService,
+    private riskEngine: RiskEngineService,
   ) {}
 
   async create(userId: number, dto: CreatePlanDto) {
@@ -166,7 +168,15 @@ export class PlanService {
       where: { id },
       include: {
         student: { include: { user: true } },
-        planItems: { orderBy: { sequence: 'asc' } },
+        planItems: {
+          orderBy: { sequence: 'asc' },
+          include: {
+            risks: {
+              where: { resolvedAt: null },
+              orderBy: [{ severity: 'asc' }, { id: 'asc' }],
+            },
+          },
+        },
         reviews: {
           orderBy: { createdAt: 'desc' },
           include: { reviewer: { select: { id: true, realName: true, username: true } } },
@@ -422,6 +432,13 @@ export class PlanService {
     const plan = await this.findById(planId, userId);
     if (plan.createdById !== userId) {
       throw new ForbiddenException('只有出方案老师可以提交审核');
+    }
+    // 严重风险数 = 0 才能送审
+    const riskCounts = await this.riskEngine.countByPlan(planId);
+    if (riskCounts.critical > 0) {
+      throw new ConflictException(
+        `存在 ${riskCounts.critical} 条严重风险未解决,无法提交审核`,
+      );
     }
     const itemCount = await this.prisma.planItem.count({ where: { planId } });
     let maxGroupCount = 0;

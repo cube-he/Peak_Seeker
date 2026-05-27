@@ -3,6 +3,7 @@ import { PlanItemService } from './plan-item.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanStateMachineService } from './plan-state-machine.service';
 import { BadRequestException, ConflictException } from '@nestjs/common';
+import { RiskEngineService } from './risk-engine/risk-engine.service';
 
 describe('PlanItemService.add', () => {
   let service: PlanItemService;
@@ -28,8 +29,17 @@ describe('PlanItemService.add', () => {
     };
     sm = new PlanStateMachineService();
     const mod = await Test.createTestingModule({
-      providers: [PlanItemService, { provide: PrismaService, useValue: prisma },
-                  { provide: PlanStateMachineService, useValue: sm }],
+      providers: [
+        PlanItemService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: PlanStateMachineService, useValue: sm },
+        {
+          provide: RiskEngineService,
+          useValue: {
+            recomputeForPlan: jest.fn().mockResolvedValue({ evaluated: 0, totalFindings: 0 }),
+          },
+        },
+      ],
     }).compile();
     service = mod.get(PlanItemService);
   });
