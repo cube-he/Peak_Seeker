@@ -80,6 +80,16 @@ export class PlanController {
     return this.planService.getVersionTree(id);
   }
 
+  @Get(':id/versions')
+  @ApiOperation({ summary: '获取该方案所属学生+批次的所有版本' })
+  @ApiParam({ name: 'id', type: Number })
+  async getVersions(
+    @Request() req: any,
+    @Param('id', ParseIntPipe) planId: number,
+  ) {
+    return this.planService.getVersionsForPlan(planId, req.user.id);
+  }
+
   @Put(':id')
   @ApiOperation({ summary: '更新方案' })
   @ApiParam({ name: 'id', type: Number })

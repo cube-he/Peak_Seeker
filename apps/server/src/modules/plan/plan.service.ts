@@ -249,6 +249,43 @@ export class PlanService {
     });
   }
 
+  /**
+   * 列出该方案所属学生 + 批次下的全部版本(用于版本切换器和对比)
+   * 只返回基本信息,不含 items(items 通过 findById 单独拉)
+   */
+  async getVersionsForPlan(planId: number, _userId: number) {
+    const plan = await this.prisma.volunteerPlan.findUnique({
+      where: { id: planId },
+      select: {
+        id: true,
+        studentId: true,
+        batchConfigId: true,
+      },
+    });
+    if (!plan) {
+      throw new NotFoundException('方案不存在');
+    }
+    const versions = await this.prisma.volunteerPlan.findMany({
+      where: {
+        studentId: plan.studentId,
+        batchConfigId: plan.batchConfigId,
+      },
+      select: {
+        id: true,
+        versionNo: true,
+        versionNote: true,
+        status: true,
+        parentVersionId: true,
+        createdAt: true,
+        updatedAt: true,
+        name: true,
+        isFinal: true,
+      },
+      orderBy: { versionNo: 'desc' },
+    });
+    return { current: planId, versions };
+  }
+
   async deleteDraft(id: number, userId: number) {
     const plan = await this.findById(id, userId);
     if (plan.createdById !== userId) {
