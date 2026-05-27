@@ -56,12 +56,12 @@ export class PlanExportService {
   async exportPdf(planId: number): Promise<Buffer> {
     const ctx = await this.buildContext(planId);
     const html = this.renderHtml(ctx);
-    // Dynamic import — Puppeteer is an optional runtime dep. Install with `pnpm add puppeteer` to enable.
-    // @ts-ignore — puppeteer is optional; not installed by default
+    // Dynamic import — Puppeteer is now a regular dep (see apps/server/package.json).
+    // Dynamic import is kept to avoid loading the Chromium binary at module init.
     const puppeteer = await import('puppeteer');
     const browser = await puppeteer.launch({
-      headless: 'new' as any,
-      args: ['--no-sandbox'],
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     try {
       const page = await browser.newPage();

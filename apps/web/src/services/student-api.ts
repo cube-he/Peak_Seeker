@@ -227,12 +227,13 @@ export const studentApi = {
 
   /**
    * 导出学生服务报告 PDF(返回 Blob)
+   * NOTE: api.ts interceptor already returns response.data; for blob responseType
+   * that IS the Blob, so just cast the awaited value.
    */
   async exportServiceReport(studentId: number | string) {
-    const res = await api.get(`/students/${studentId}/service-report.pdf`, {
+    return (await api.get(`/students/${studentId}/service-report.pdf`, {
       responseType: 'blob',
-    });
-    return res.data as Blob;
+    })) as unknown as Blob;
   },
 
   /**
@@ -247,10 +248,9 @@ export const studentApi = {
     if (params.offset) search.set('offset', String(params.offset));
     if (params.fieldKey) search.set('fieldKey', params.fieldKey);
     const qs = search.toString();
-    const res = await api.get(
+    return (await api.get(
       `/students/${studentId}/change-logs${qs ? `?${qs}` : ''}`,
-    );
-    return res.data as {
+    )) as unknown as {
       logs: Array<{
         id: number;
         createdAt: string;

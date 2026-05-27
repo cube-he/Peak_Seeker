@@ -21,6 +21,9 @@ export interface Consultation {
   };
 }
 
+// NOTE: axios response interceptor in ./api.ts already unwraps response.data.
+// All methods below MUST `return (await api.xxx(...)) as T` (NOT res.data) —
+// otherwise the second .data access returns undefined and breaks every caller.
 export const consultationApi = {
   async create(payload: {
     studentId: number;
@@ -30,41 +33,34 @@ export const consultationApi = {
     purpose?: string;
     notes?: string;
   }) {
-    const res = await api.post('/consultations', payload);
-    return res.data as Consultation;
+    return (await api.post('/consultations', payload)) as unknown as Consultation;
   },
 
   async update(
     id: number,
     payload: Partial<Omit<Consultation, 'id' | 'studentId' | 'teacherId' | 'createdAt' | 'updatedAt'>>,
   ) {
-    const res = await api.put(`/consultations/${id}`, payload);
-    return res.data as Consultation;
+    return (await api.put(`/consultations/${id}`, payload)) as unknown as Consultation;
   },
 
   async start(id: number) {
-    const res = await api.post(`/consultations/${id}/start`);
-    return res.data as Consultation;
+    return (await api.post(`/consultations/${id}/start`)) as unknown as Consultation;
   },
 
   async end(id: number, notes?: string) {
-    const res = await api.post(`/consultations/${id}/end`, { notes });
-    return res.data as Consultation;
+    return (await api.post(`/consultations/${id}/end`, { notes })) as unknown as Consultation;
   },
 
   async listByStudent(studentId: number | string) {
-    const res = await api.get(`/consultations?studentId=${studentId}`);
-    return res.data as Consultation[];
+    return (await api.get(`/consultations?studentId=${studentId}`)) as unknown as Consultation[];
   },
 
   async listToday() {
-    const res = await api.get('/consultations/today');
-    return res.data as Consultation[];
+    return (await api.get('/consultations/today')) as unknown as Consultation[];
   },
 
   async remove(id: number) {
-    const res = await api.delete(`/consultations/${id}`);
-    return res.data;
+    return await api.delete(`/consultations/${id}`);
   },
 
   async requestByParent(payload: {
@@ -74,33 +70,27 @@ export const consultationApi = {
     purpose?: string;
     notes?: string;
   }) {
-    const res = await api.post('/consultations/request', payload);
-    return res.data as Consultation;
+    return (await api.post('/consultations/request', payload)) as unknown as Consultation;
   },
 
   async confirmRequest(id: number) {
-    const res = await api.post(`/consultations/${id}/confirm`);
-    return res.data as Consultation;
+    return (await api.post(`/consultations/${id}/confirm`)) as unknown as Consultation;
   },
 
   async rejectRequest(id: number, reason?: string) {
-    const res = await api.post(`/consultations/${id}/reject`, { reason });
-    return res.data as Consultation;
+    return (await api.post(`/consultations/${id}/reject`, { reason })) as unknown as Consultation;
   },
 
   async listPendingRequests() {
-    const res = await api.get('/consultations/pending-requests');
-    return res.data as Consultation[];
+    return (await api.get('/consultations/pending-requests')) as unknown as Consultation[];
   },
 
   async listMine() {
-    const res = await api.get('/consultations/mine');
-    return res.data as Consultation[];
+    return (await api.get('/consultations/mine')) as unknown as Consultation[];
   },
 
   async getMyInsights(range: 'week' | 'month' = 'month') {
-    const res = await api.get(`/consultations/insights/me?range=${range}`);
-    return res.data as {
+    return (await api.get(`/consultations/insights/me?range=${range}`)) as unknown as {
       range: 'week' | 'month';
       totalCount: number;
       totalMinutes: number;
@@ -111,13 +101,11 @@ export const consultationApi = {
   },
 
   async enqueue(id: number) {
-    const res = await api.post(`/consultations/${id}/enqueue`);
-    return res.data;
+    return await api.post(`/consultations/${id}/enqueue`);
   },
 
   async getClinicState() {
-    const res = await api.get('/consultations/clinic/state');
-    return res.data as {
+    return (await api.get('/consultations/clinic/state')) as unknown as {
       inProgress: any | null;
       waiting: any[];
       done: any[];
@@ -125,13 +113,14 @@ export const consultationApi = {
   },
 
   async callNext(currentNotes?: string) {
-    const res = await api.post('/consultations/clinic/call-next', { currentNotes });
-    return res.data as { endedId?: number; startedId?: number };
+    return (await api.post('/consultations/clinic/call-next', { currentNotes })) as unknown as {
+      endedId?: number;
+      startedId?: number;
+    };
   },
 
   async getTeamInsights(range: 'week' | 'month' = 'month') {
-    const res = await api.get(`/consultations/insights/team?range=${range}`);
-    return res.data as {
+    return (await api.get(`/consultations/insights/team?range=${range}`)) as unknown as {
       range: 'week' | 'month';
       totalTeachers: number;
       totalCount: number;

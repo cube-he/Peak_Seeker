@@ -203,11 +203,10 @@ export class StudentServiceReportService {
   async exportPdf(studentId: number): Promise<Buffer> {
     const ctx = await this.buildContext(studentId);
     const html = this.renderHtml(ctx);
-    // @ts-ignore — puppeteer is optional
     const puppeteer = await import('puppeteer');
     const browser = await puppeteer.launch({
-      headless: 'new' as any,
-      args: ['--no-sandbox'],
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     try {
       const page = await browser.newPage();

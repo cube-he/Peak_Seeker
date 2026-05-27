@@ -141,6 +141,8 @@ export const planApi = {
   },
 
   // 获取当前用户对该方案的审核草稿，返回 null 表示未保存过草稿
+  // NOTE: api.ts response interceptor already returns response.data; do NOT
+  // re-access .data on the awaited value — that yields undefined.
   async getReviewDraft(planId: number | string): Promise<null | {
     id: number;
     planId: number;
@@ -149,8 +151,7 @@ export const planApi = {
     itemAnnotations: { sequence: number; annotation: string }[] | null;
     updatedAt: string;
   }> {
-    const res = await api.get(`/plans/${planId}/review-draft`);
-    return res.data;
+    return (await api.get(`/plans/${planId}/review-draft`)) as any;
   },
 
   async upsertReviewDraft(
@@ -160,18 +161,15 @@ export const planApi = {
       itemAnnotations?: { sequence: number; annotation: string }[];
     },
   ): Promise<any> {
-    const res = await api.put(`/plans/${planId}/review-draft`, payload);
-    return res.data;
+    return await api.put(`/plans/${planId}/review-draft`, payload);
   },
 
   async deleteReviewDraft(planId: number | string): Promise<{ ok: true }> {
-    const res = await api.delete(`/plans/${planId}/review-draft`);
-    return res.data;
+    return (await api.delete(`/plans/${planId}/review-draft`)) as unknown as { ok: true };
   },
 
   async getVersions(planId: number | string) {
-    const res = await api.get(`/plans/${planId}/versions`);
-    return res.data as {
+    return (await api.get(`/plans/${planId}/versions`)) as unknown as {
       current: number;
       versions: Array<{
         id: number;
@@ -200,15 +198,14 @@ export const planApi = {
   },
 
   async exportPdf(planId: number | string) {
-    const res = await api.get(`/plans/${planId}/export.pdf`, {
+    // interceptor returns response.data, which IS the Blob for blob responseType.
+    return (await api.get(`/plans/${planId}/export.pdf`, {
       responseType: 'blob',
-    });
-    return res.data as Blob;
+    })) as unknown as Blob;
   },
 
   async getRisks(planId: number | string) {
-    const res = await api.get(`/plans/${planId}/risks`);
-    return res.data as Array<{
+    return (await api.get(`/plans/${planId}/risks`)) as unknown as Array<{
       id: number;
       planItemId: number;
       ruleCode: string;
@@ -223,13 +220,11 @@ export const planApi = {
   },
 
   async recomputeRisks(planId: number | string) {
-    const res = await api.post(`/plans/${planId}/risks/recompute`);
-    return res.data;
+    return await api.post(`/plans/${planId}/risks/recompute`);
   },
 
   async resolveRisk(riskId: number, resolution: 'accepted' | 'replaced' | 'ignored', note?: string) {
-    const res = await api.post(`/plans/risks/${riskId}/resolve`, { resolution, note });
-    return res.data;
+    return await api.post(`/plans/risks/${riskId}/resolve`, { resolution, note });
   },
 
   // Student endpoints

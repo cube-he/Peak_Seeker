@@ -526,13 +526,9 @@ export default function StudentDetailPage() {
               <div className="mt-3">
                 <ProgressBar label="档案总进度" percent={progress.overallCompleteness} />
               </div>
-              {!progress.isRecommendable && progress.missingFieldsForRecommend?.length > 0 ? (
+              {!progress.isRecommendable ? (
                 <p className="mt-3 text-xs text-text-faint">
-                  未达可推荐阈值，缺：
-                  <span className="ml-1 text-text-secondary">
-                    {progress.missingFieldsForRecommend.slice(0, 8).join('、')}
-                    {progress.missingFieldsForRecommend.length > 8 ? ' 等' : ''}
-                  </span>
+                  未达可推荐阈值。具体缺项见下方"还缺 X 项关键资料"chip 列表。
                 </p>
               ) : null}
             </Card>
