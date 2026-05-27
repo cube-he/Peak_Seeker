@@ -224,4 +224,37 @@ export const studentApi = {
   patchMyProfile(data: Partial<UpdateStudentDto>): Promise<any> {
     return api.put('/students/me', data) as any;
   },
+
+  /**
+   * 获取学生资料字段变更日志(按时间倒序)
+   */
+  async getChangeLogs(
+    studentId: number | string,
+    params: { limit?: number; offset?: number; fieldKey?: string } = {},
+  ) {
+    const search = new URLSearchParams();
+    if (params.limit) search.set('limit', String(params.limit));
+    if (params.offset) search.set('offset', String(params.offset));
+    if (params.fieldKey) search.set('fieldKey', params.fieldKey);
+    const qs = search.toString();
+    const res = await api.get(
+      `/students/${studentId}/change-logs${qs ? `?${qs}` : ''}`,
+    );
+    return res.data as {
+      logs: Array<{
+        id: number;
+        createdAt: string;
+        studentId: number;
+        changedById: number;
+        actor: string;
+        fieldKey: string;
+        oldValue: string | null;
+        newValue: string | null;
+        changedBy: { id: number; realName: string | null; username: string };
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    };
+  },
 };

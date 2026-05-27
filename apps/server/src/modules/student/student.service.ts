@@ -799,6 +799,33 @@ export class StudentService {
     });
   }
 
+  async getChangeLogs(
+    studentId: number,
+    query: { limit?: number; offset?: number; fieldKey?: string } = {},
+  ) {
+    const limit = Math.min(query.limit ?? 50, 200);
+    const offset = query.offset ?? 0;
+    const where: { studentId: number; fieldKey?: string } = { studentId };
+    if (query.fieldKey) where.fieldKey = query.fieldKey;
+
+    const [logs, total] = await Promise.all([
+      this.prisma.studentFieldChangeLog.findMany({
+        where,
+        include: {
+          changedBy: {
+            select: { id: true, realName: true, username: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.studentFieldChangeLog.count({ where }),
+    ]);
+
+    return { logs, total, limit, offset };
+  }
+
   async updateMyProfile(userId: number, dto: UpdateStudentProfileDto) {
     for (const f of TEACHER_ONLY_FIELDS) {
       if ((dto as Record<string, any>)[f] !== undefined) {

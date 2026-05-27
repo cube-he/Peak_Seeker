@@ -13,7 +13,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsInt, IsOptional, Min } from 'class-validator';
 import { StudentService } from './student.service';
@@ -202,5 +202,20 @@ export class StudentController {
       'Content-Disposition': `attachment; filename="intake_${id}_${today}.xlsx"; filename*=UTF-8''${filenameStar}`,
     });
     res.end(Buffer.from(buffer));
+  }
+
+  @Get(':id/change-logs')
+  @ApiOperation({ summary: '获取学生资料字段变更日志' })
+  @ApiParam({ name: 'id', type: Number })
+  @CheckPolicies((ability) => ability.can('read', 'StudentProfile'))
+  async getChangeLogs(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: Record<string, string>,
+  ) {
+    return this.studentService.getChangeLogs(id, {
+      limit: query.limit ? Number(query.limit) : undefined,
+      offset: query.offset ? Number(query.offset) : undefined,
+      fieldKey: query.fieldKey || undefined,
+    });
   }
 }
