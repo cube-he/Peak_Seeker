@@ -1,9 +1,9 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
-import { Alert, Button, Card, Cascader, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, message } from 'antd';
+import { Alert, Button, Card, Cascader, Checkbox, Collapse, Form, Input, InputNumber, Modal, Radio, Select, Spin, Tabs, message } from 'antd';
 import {
   ArrowLeftOutlined,
   DownloadOutlined,
@@ -34,6 +34,8 @@ interface RankCheck {
   isEstimated?: boolean;
   source: 'score-segment' | 'missing-input' | 'unavailable';
 }
+
+type DetailTab = 'profile' | 'comm' | 'plan' | 'external' | 'log';
 
 const BONUS_ITEM_OPTIONS: Array<SelectOption & { bonusValue: number }> = [
   { label: '自主就业退役士兵 +10', value: 'VETERAN_SELF_EMPLOYED', bonusValue: 10 },
@@ -386,6 +388,19 @@ export default function StudentDetailPage() {
 
   const sopNodes = useMemo(() => deriveSopNodes(student), [student]);
 
+  // Tab state: 资料/沟通/方案/对外材料/变更日志
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get('tab') as DetailTab) || 'profile';
+  const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
+
+  const handleTabChange = (key: string) => {
+    const next = key as DetailTab;
+    setActiveTab(next);
+    const sp = new URLSearchParams(window.location.search);
+    sp.set('tab', next);
+    router.replace(`?${sp.toString()}`, { scroll: false });
+  };
+
   if (isLoading || !student) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -467,61 +482,94 @@ export default function StudentDetailPage() {
             </Card>
           ) : null}
 
-          {/* 原 6 个折叠区 Field Cards 保留在主区 */}
-          <Card className="rounded-2xl shadow-card">
-            <Form
-              form={form}
-              layout="vertical"
-              initialValues={{
-                ...student,
-                ...student.user,
-                provincialRank: student.provincialRank ?? student.rankCheck?.calculatedRank ?? undefined,
-              }}
-              requiredMark="optional"
-            >
-              <Collapse
-                defaultActiveKey={['basic', 'exam', 'preference']}
-                items={[
-                  { key: 'basic', label: '基础信息', children: <BasicFields /> },
-                  {
-                    key: 'household',
-                    label: (
-                      <span className="flex items-center gap-1">
-                        <LockOutlined /> 户籍与高考所在地
-                      </span>
-                    ),
-                    children: <HouseholdFields />,
-                  },
-                  { key: 'exam', label: '考试成绩', children: <ExamFields rankCheck={student.rankCheck} /> },
-                  {
-                    key: 'bonus',
-                    label: (
-                      <span className="flex items-center gap-1">
-                        <LockOutlined /> 加分政策
-                      </span>
-                    ),
-                    children: (
-                      <div className="space-y-4">
-                        <BonusFields />
-                        <BonusCalcCard studentProfileId={Number(studentId)} />
-                      </div>
-                    ),
-                  },
-                  { key: 'health', label: '健康条件', children: <HealthFields /> },
-                  { key: 'preference', label: '偏好与规划', children: <PreferenceFields /> },
-                ]}
-              />
-            </Form>
-          </Card>
+          <Tabs
+            activeKey={activeTab}
+            onChange={handleTabChange}
+            items={[
+              {
+                key: 'profile',
+                label: '资料',
+                children: (
+                  <div className="space-y-4 pt-2">
+                    <Card className="rounded-2xl shadow-card">
+                      <Form
+                        form={form}
+                        layout="vertical"
+                        initialValues={{
+                          ...student,
+                          ...student.user,
+                          provincialRank: student.provincialRank ?? student.rankCheck?.calculatedRank ?? undefined,
+                        }}
+                        requiredMark="optional"
+                      >
+                        <Collapse
+                          defaultActiveKey={['basic', 'exam', 'preference']}
+                          items={[
+                            { key: 'basic', label: '基础信息', children: <BasicFields /> },
+                            {
+                              key: 'household',
+                              label: (
+                                <span className="flex items-center gap-1">
+                                  <LockOutlined /> 户籍与高考所在地
+                                </span>
+                              ),
+                              children: <HouseholdFields />,
+                            },
+                            { key: 'exam', label: '考试成绩', children: <ExamFields rankCheck={student.rankCheck} /> },
+                            {
+                              key: 'bonus',
+                              label: (
+                                <span className="flex items-center gap-1">
+                                  <LockOutlined /> 加分政策
+                                </span>
+                              ),
+                              children: (
+                                <div className="space-y-4">
+                                  <BonusFields />
+                                  <BonusCalcCard studentProfileId={Number(studentId)} />
+                                </div>
+                              ),
+                            },
+                            { key: 'health', label: '健康条件', children: <HealthFields /> },
+                            { key: 'preference', label: '偏好与规划', children: <PreferenceFields /> },
+                          ]}
+                        />
+                      </Form>
+                    </Card>
 
-          {progress && !progress.isRecommendable ? (
-            <Alert
-              type="info"
-              showIcon
-              message={'档案未达到“可推荐”阈值'}
-              description="补完整分数、位次、加分、选科等关键字段后，生成方案按钮才会启用。"
-            />
-          ) : null}
+                    {progress && !progress.isRecommendable ? (
+                      <Alert
+                        type="info"
+                        showIcon
+                        message={'档案未达到"可推荐"阈值'}
+                        description="补完整分数、位次、加分、选科等关键字段后，生成方案按钮才会启用。"
+                      />
+                    ) : null}
+                  </div>
+                ),
+              },
+              {
+                key: 'comm',
+                label: '沟通记录',
+                children: <ComingSoonTabContent module="沟通记录" />,
+              },
+              {
+                key: 'plan',
+                label: '方案',
+                children: <ComingSoonTabContent module="方案版本" />,
+              },
+              {
+                key: 'external',
+                label: '对外材料',
+                children: <ComingSoonTabContent module="对外材料" />,
+              },
+              {
+                key: 'log',
+                label: '变更日志',
+                children: <ComingSoonTabContent module="资料变更日志" />,
+              },
+            ]}
+          />
         </div>
 
         {/* 副区 */}
@@ -983,6 +1031,17 @@ function ContactPanel({ student }: { student: any }) {
         </div>
       </div>
     </Card>
+  );
+}
+
+function ComingSoonTabContent({ module }: { module: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-bg/30 p-12 text-center">
+      <p className="m-0 text-text-muted">{module}模块敬请期待</p>
+      <p className="m-0 mt-2 text-xs text-text-muted">
+        将在后续 plan 中实装(沟通预约 / 方案版本对比 / PDF 报告 / 变更日志)
+      </p>
+    </div>
   );
 }
 
