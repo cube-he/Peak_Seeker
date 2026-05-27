@@ -169,6 +169,24 @@ export const planApi = {
     return res.data;
   },
 
+  async getVersions(planId: number | string) {
+    const res = await api.get(`/plans/${planId}/versions`);
+    return res.data as {
+      current: number;
+      versions: Array<{
+        id: number;
+        versionNo: number;
+        versionNote: string | null;
+        status: string;
+        parentVersionId: number | null;
+        createdAt: string;
+        updatedAt: string;
+        name: string;
+        isFinal: boolean;
+      }>;
+    };
+  },
+
   approvePlan(id: string, comment?: string): Promise<any> {
     return api.post(`/plans/${id}/review`, { action: 'APPROVE', comment }) as any;
   },

@@ -13,6 +13,7 @@ import {
   Empty,
   Input,
   Modal,
+  Select,
   Space,
   Spin,
   Table,
@@ -149,6 +150,8 @@ export default function PlanDetailPage() {
   const [showPreparationFullscreen, setShowPreparationFullscreen] = useState(false);
   // 客户端启动后再产生 now，避免 SSR / 客户端时间不一致 hydration 警告
   const [now, setNow] = useState<Date | null>(null);
+  // 对比模式:选另一版本对比当前版本
+  const [compareVersionId, setCompareVersionId] = useState<number | null>(null);
 
   useEffect(() => {
     setNow(new Date());
@@ -160,6 +163,14 @@ export default function PlanDetailPage() {
   });
   const plan = unwrap<Record<string, any>>(data);
   const items: any[] = plan?.items ?? [];
+
+  // 拉同学生同批次的所有版本(用于切换器)
+  const { data: versionsData } = useQuery({
+    queryKey: ['plan-versions', planId],
+    queryFn: () => planApi.getVersions(planId),
+    enabled: !!plan,
+  });
+  const versions = versionsData?.versions ?? [];
 
   // 拉取当前审核人对此方案的草稿:用于在审核中断后恢复未提交的批注/总体意见
   const { data: draftData } = useQuery({
@@ -688,6 +699,30 @@ export default function PlanDetailPage() {
               <span className="text-sm text-text-muted">v{plan.version}</span>
               <PlanStatusBadge status={status} />
             </h1>
+            {versions.length > 1 ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border-subtle bg-bg/30 px-3 py-2">
+                <span className="text-sm text-text-muted">对比版本:</span>
+                <Select
+                  size="small"
+                  allowClear
+                  placeholder="选择另一版本对比"
+                  value={compareVersionId}
+                  onChange={(val) => setCompareVersionId(val ?? null)}
+                  style={{ minWidth: 220 }}
+                  options={versions
+                    .filter((v) => v.id !== Number(planId))
+                    .map((v) => ({
+                      label: `v${v.versionNo}${v.versionNote ? ` (${v.versionNote})` : ''} · ${v.status}`,
+                      value: v.id,
+                    }))}
+                />
+                {compareVersionId !== null ? (
+                  <Button size="small" onClick={() => setCompareVersionId(null)}>
+                    退出对比
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <Space wrap>
             {renderPrimaryActions()}
