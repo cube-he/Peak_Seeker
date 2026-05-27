@@ -31,6 +31,10 @@ describe('StudentService', () => {
       count: jest.Mock;
       update: jest.Mock;
     };
+    studentFieldChangeLog: {
+      createMany: jest.Mock;
+    };
+    $transaction: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -48,6 +52,10 @@ describe('StudentService', () => {
         count: jest.fn(),
         update: jest.fn(),
       },
+      studentFieldChangeLog: {
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      $transaction: jest.fn().mockImplementation((fn: any) => fn(prisma)),
     };
 
     scoreSegmentService = {
