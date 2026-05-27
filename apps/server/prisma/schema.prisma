@@ -607,8 +607,9 @@ model User {
   studentProfile StudentProfile?
   createdPlans   VolunteerPlan[] @relation("PlanCreator")
   reviews        PlanReview[]
-  reviewDrafts   PlanReviewDraft[]
-  notifications  Notification[]
+  reviewDrafts        PlanReviewDraft[]
+  studentFieldChanges StudentFieldChangeLog[]
+  notifications       Notification[]
   auditLogs      AuditLog[]
 
   @@index([province])
@@ -780,7 +781,8 @@ model StudentProfile {
   examLocationUpdatedAt DateTime? @map("exam_location_updated_at")
 
   // 关联
-  volunteerPlans VolunteerPlan[]
+  volunteerPlans  VolunteerPlan[]
+  fieldChangeLogs StudentFieldChangeLog[]
 
   @@index([teacherId])
   @@index([province])
@@ -1834,4 +1836,29 @@ model UniversityGeoIssue {
   @@index([status])
   @@index([issueType])
   @@map("university_geo_issues")
+}
+
+// ==================== 学生资料变更日志 ====================
+
+model StudentFieldChangeLog {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  studentId Int            @map("student_id")
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  changedById Int  @map("changed_by_id")
+  changedBy   User @relation(fields: [changedById], references: [id])
+
+  actor String @db.VarChar(20)
+
+  fieldKey String @map("field_key") @db.VarChar(100)
+
+  oldValue String? @map("old_value") @db.Text
+  newValue String? @map("new_value") @db.Text
+
+  @@index([studentId, createdAt])
+  @@index([fieldKey])
+  @@index([changedById])
+  @@map("student_field_change_logs")
 }
