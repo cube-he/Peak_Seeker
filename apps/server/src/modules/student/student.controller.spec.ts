@@ -12,7 +12,7 @@ describe('StudentController', () => {
     studentService = {
       updateProfile: jest.fn(),
     };
-    controller = new StudentController(studentService as any, {} as any);
+    controller = new StudentController(studentService as any, {} as any, {} as any);
   });
 
   function getPutRoutes() {

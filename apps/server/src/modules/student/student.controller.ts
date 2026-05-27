@@ -18,6 +18,7 @@ import { Transform } from 'class-transformer';
 import { IsInt, IsOptional, Min } from 'class-validator';
 import { StudentService } from './student.service';
 import { IntakeExportService } from './intake-export.service';
+import { StudentServiceReportService } from './student-service-report.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
@@ -42,6 +43,7 @@ export class StudentController {
   constructor(
     private studentService: StudentService,
     private intakeExportService: IntakeExportService,
+    private serviceReportService: StudentServiceReportService,
   ) {}
 
   @Post()
@@ -217,5 +219,20 @@ export class StudentController {
       offset: query.offset ? Number(query.offset) : undefined,
       fieldKey: query.fieldKey || undefined,
     });
+  }
+
+  @Get(':id/service-report.pdf')
+  @ApiOperation({ summary: '导出学生服务报告 PDF' })
+  @ApiParam({ name: 'id', type: Number })
+  async exportServiceReport(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    const buf = await this.serviceReportService.exportPdf(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=student-${id}-service-report.pdf`,
+    });
+    res.send(buf);
   }
 }
