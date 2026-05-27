@@ -61,6 +61,12 @@ export class ConsultationController {
     return this.service.end(req.user.id, id, body.notes);
   }
 
+  @Get('insights/me')
+  @ApiOperation({ summary: '老师个人复盘统计' })
+  async getMyInsights(@Request() req: any, @Query('range') range?: string) {
+    return this.service.getMyInsights(req.user.id, (range as 'week' | 'month') ?? 'month');
+  }
+
   @Get('today')
   @ApiOperation({ summary: '今日沟通(Dashboard 用)' })
   async listToday(@Request() req: any) {

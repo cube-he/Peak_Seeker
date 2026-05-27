@@ -97,4 +97,16 @@ export const consultationApi = {
     const res = await api.get('/consultations/mine');
     return res.data as Consultation[];
   },
+
+  async getMyInsights(range: 'week' | 'month' = 'month') {
+    const res = await api.get(`/consultations/insights/me?range=${range}`);
+    return res.data as {
+      range: 'week' | 'month';
+      totalCount: number;
+      totalMinutes: number;
+      byStudent: Array<{ studentId: number; name: string; count: number; minutes: number }>;
+      byChannel: Record<string, { count: number; minutes: number }>;
+      estimation: { avgEst: number | null; avgAct: number | null; sampleSize: number };
+    };
+  },
 };

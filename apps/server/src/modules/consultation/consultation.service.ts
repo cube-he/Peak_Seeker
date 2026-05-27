@@ -205,4 +205,72 @@ export class ConsultationService {
     await this.prisma.consultationAppointment.delete({ where: { id } });
     return { ok: true };
   }
+
+  /**
+   * 老师个人复盘:按周/月统计沟通次数、总时长、按学生分布、按沟通类型分布、预估 vs 实际偏差。
+   */
+  async getMyInsights(userId: number, range: 'week' | 'month' = 'month') {
+    const teacherId = await this.resolveTeacherId(userId);
+    const now = new Date();
+    const start = new Date(now);
+    if (range === 'week') {
+      start.setDate(now.getDate() - 7);
+    } else {
+      start.setMonth(now.getMonth() - 1);
+    }
+
+    const completed = await this.prisma.consultationAppointment.findMany({
+      where: {
+        teacherId,
+        status: 'completed',
+        endedAt: { gte: start },
+      },
+      include: {
+        student: {
+          include: { user: { select: { realName: true, username: true } } },
+        },
+      },
+    });
+
+    const totalCount = completed.length;
+    const totalMinutes = completed.reduce((acc, c) => acc + (c.durationAct ?? 0), 0);
+
+    const byStudentMap = new Map<number, { name: string; count: number; minutes: number }>();
+    for (const c of completed) {
+      const sid = c.studentId;
+      const name = c.student?.user?.realName ?? c.student?.user?.username ?? `学生${sid}`;
+      const cur = byStudentMap.get(sid) ?? { name, count: 0, minutes: 0 };
+      cur.count += 1;
+      cur.minutes += c.durationAct ?? 0;
+      byStudentMap.set(sid, cur);
+    }
+    const byStudent = Array.from(byStudentMap.entries())
+      .map(([studentId, v]) => ({ studentId, ...v }))
+      .sort((a, b) => b.minutes - a.minutes);
+
+    const byChannel: Record<string, { count: number; minutes: number }> = {};
+    for (const c of completed) {
+      const k = c.channel;
+      if (!byChannel[k]) byChannel[k] = { count: 0, minutes: 0 };
+      byChannel[k].count += 1;
+      byChannel[k].minutes += c.durationAct ?? 0;
+    }
+
+    const withBoth = completed.filter((c) => c.durationEst != null && c.durationAct != null);
+    const avgEst = withBoth.length
+      ? Math.round(withBoth.reduce((a, c) => a + (c.durationEst ?? 0), 0) / withBoth.length)
+      : null;
+    const avgAct = withBoth.length
+      ? Math.round(withBoth.reduce((a, c) => a + (c.durationAct ?? 0), 0) / withBoth.length)
+      : null;
+
+    return {
+      range,
+      totalCount,
+      totalMinutes,
+      byStudent,
+      byChannel,
+      estimation: { avgEst, avgAct, sampleSize: withBoth.length },
+    };
+  }
 }
