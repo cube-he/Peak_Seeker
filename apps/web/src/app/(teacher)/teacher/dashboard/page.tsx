@@ -94,7 +94,9 @@ function daysSince(date: string | undefined, now: Date) {
   if (!date) return null;
   const past = new Date(date);
   if (Number.isNaN(past.getTime())) return null;
-  return Math.floor((now.getTime() - past.getTime()) / 86_400_000);
+  // Math.max 兜底: 极个别情况 updatedAt 比客户端 now 还晚 (服务器/客户端时钟漂移
+  // 或刚刚 update 完页面立即渲染) 会出现负数, 显示成"沉默 -1 天"伤体感
+  return Math.max(0, Math.floor((now.getTime() - past.getTime()) / 86_400_000));
 }
 
 function formatRelativeTime(date: Date, now: Date) {

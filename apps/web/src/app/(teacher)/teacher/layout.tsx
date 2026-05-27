@@ -16,6 +16,9 @@ import {
   BellOutlined,
   MenuOutlined,
   CloseOutlined,
+  MessageOutlined,
+  BarChartOutlined,
+  PieChartOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import BrandLogo from '@/components/layout/BrandLogo';
@@ -24,6 +27,14 @@ const mainNavItems = [
   { href: '/teacher/dashboard', icon: <AppstoreOutlined />, label: '看板' },
   { href: '/teacher/students', icon: <TeamOutlined />, label: '学生管理' },
   { href: '/teacher/plans', icon: <FileTextOutlined />, label: '方案管理' },
+];
+
+// 沟通相关三大入口 (Plan 12). 主管报表对普通老师会返回 403, 但暂不前端隐藏
+// (User 接口缺 isSupervisor; 加判断要改 authStore, 工作量超本次外科手术范围)
+const commNavItems = [
+  { href: '/teacher/clinic', icon: <MessageOutlined />, label: '坐诊面板' },
+  { href: '/teacher/insights/me', icon: <BarChartOutlined />, label: '我的复盘' },
+  { href: '/teacher/insights/team', icon: <PieChartOutlined />, label: '团队报表' },
 ];
 
 const browseNavItems = [
@@ -66,6 +77,29 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
           工作台
         </div>
         {mainNavItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={() => setSidebarOpen(false)}
+            className={`
+              flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 no-underline text-sm transition-colors duration-200
+              ${isActive(item.href)
+                ? 'bg-primary-fixed text-primary font-medium'
+                : 'text-text-tertiary hover:bg-surface-dim'
+              }
+            `}
+          >
+            <span className="text-base">{item.icon}</span>
+            {item.label}
+          </Link>
+        ))}
+
+        <div className="border-t border-border-subtle my-3" />
+
+        <div className="text-[10px] uppercase tracking-wider text-text-faint font-medium px-3 mb-2">
+          沟通
+        </div>
+        {commNavItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
@@ -622,7 +623,7 @@ export default function StudentDetailPage() {
               {
                 key: 'plan',
                 label: '方案',
-                children: <ComingSoonTabContent module="方案版本" />,
+                children: <PlanListTabContent student={student} />,
               },
               {
                 key: 'external',
@@ -1102,13 +1103,50 @@ function ContactPanel({ student }: { student: any }) {
   );
 }
 
-function ComingSoonTabContent({ module }: { module: string }) {
+// MVP 实装 (Plan 10 版本对比按需后做): 列出该学生所有方案版本, 点击跳转到方案详情页
+function PlanListTabContent({ student }: { student: any }) {
+  const plans: any[] = student?.volunteerPlans ?? [];
+  if (plans.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-bg/30 p-12 text-center">
+        <p className="m-0 text-text-muted">还没有方案</p>
+        <p className="m-0 mt-2 text-xs text-text-muted">
+          补全学生关键资料后, 用顶部"生成方案"按钮自动出方案
+        </p>
+      </div>
+    );
+  }
   return (
-    <div className="rounded-lg border border-dashed border-border bg-bg/30 p-12 text-center">
-      <p className="m-0 text-text-muted">{module}模块敬请期待</p>
-      <p className="m-0 mt-2 text-xs text-text-muted">
-        将在后续 plan 中实装(沟通预约 / 方案版本对比 / PDF 报告 / 变更日志)
-      </p>
+    <div className="pt-2">
+      <ul className="m-0 list-none space-y-2 p-0">
+        {plans.map((p) => (
+          <li
+            key={p.id}
+            className="flex items-center justify-between rounded-md border border-border-subtle bg-surface px-3 py-2"
+          >
+            <div>
+              <p className="m-0 text-sm font-medium text-text">
+                v{p.versionNo}
+                {p.versionNote ? ` · ${p.versionNote}` : ''}
+                {p.isFinal ? (
+                  <span className="ml-2 inline-block rounded bg-safe/15 px-1.5 text-[10px] font-medium text-safe">
+                    终稿
+                  </span>
+                ) : null}
+              </p>
+              <p className="m-0 text-xs text-text-muted">
+                {p.status} · 更新于 {new Date(p.updatedAt).toLocaleString('zh-CN')}
+              </p>
+            </div>
+            <Link
+              href={`/teacher/plans/${p.id}`}
+              className="text-sm text-primary no-underline hover:underline"
+            >
+              查看 →
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
