@@ -134,6 +134,69 @@ function isItemRisky(item: any): boolean {
   return false;
 }
 
+type DiffKind = 'same' | 'modified' | 'added' | 'removed' | 'reordered';
+
+interface DiffRow {
+  sequence: number;
+  current: any | null;
+  compare: any | null;
+  kind: DiffKind;
+}
+
+function diffPlanItems(currentItems: any[], compareItems: any[]): DiffRow[] {
+  const currentBySeq = new Map<number, any>();
+  currentItems.forEach((it) => currentBySeq.set(it.sequence, it));
+  const compareBySeq = new Map<number, any>();
+  compareItems.forEach((it) => compareBySeq.set(it.sequence, it));
+
+  const allSeqs = new Set<number>([
+    ...Array.from(currentBySeq.keys()),
+    ...Array.from(compareBySeq.keys()),
+  ]);
+  const sortedSeqs = Array.from(allSeqs).sort((a, b) => a - b);
+
+  const currentKey = (it: any) => `${it.universityId}-${it.majorId}`;
+  const compareKey = (it: any) => `${it.universityId}-${it.majorId}`;
+  const currentKeys = new Set(currentItems.map(currentKey));
+  const compareKeys = new Set(compareItems.map(compareKey));
+
+  return sortedSeqs.map((seq) => {
+    const cur = currentBySeq.get(seq) ?? null;
+    const cmp = compareBySeq.get(seq) ?? null;
+    if (cur && cmp) {
+      if (currentKey(cur) === compareKey(cmp)) {
+        return { sequence: seq, current: cur, compare: cmp, kind: 'same' };
+      }
+      const curInCompare = compareKeys.has(currentKey(cur));
+      const cmpInCurrent = currentKeys.has(compareKey(cmp));
+      if (curInCompare && cmpInCurrent) {
+        return { sequence: seq, current: cur, compare: cmp, kind: 'reordered' };
+      }
+      return { sequence: seq, current: cur, compare: cmp, kind: 'modified' };
+    }
+    if (cur && !cmp) {
+      return { sequence: seq, current: cur, compare: null, kind: 'added' };
+    }
+    return { sequence: seq, current: null, compare: cmp, kind: 'removed' };
+  });
+}
+
+const DIFF_BG: Record<DiffKind, string> = {
+  same: 'bg-surface',
+  modified: 'bg-amber-50',
+  added: 'bg-green-50',
+  removed: 'bg-red-50',
+  reordered: 'bg-amber-50',
+};
+
+const DIFF_LABEL: Record<DiffKind, string> = {
+  same: '',
+  modified: '已修改',
+  added: '新增',
+  removed: '删除',
+  reordered: '顺序变',
+};
+
 export default function PlanDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -171,6 +234,15 @@ export default function PlanDetailPage() {
     enabled: !!plan,
   });
   const versions = versionsData?.versions ?? [];
+
+  // 当用户选择对比版本时,加载该版本的 items
+  const { data: compareData } = useQuery({
+    queryKey: ['plan-compare', compareVersionId],
+    queryFn: () => planApi.getById(String(compareVersionId)),
+    enabled: !!compareVersionId,
+  });
+  const comparePlan = unwrap<Record<string, any>>(compareData);
+  const compareItems = comparePlan?.items ?? [];
 
   // 拉取当前审核人对此方案的草稿:用于在审核中断后恢复未提交的批注/总体意见
   const { data: draftData } = useQuery({
@@ -723,6 +795,14 @@ export default function PlanDetailPage() {
                 ) : null}
               </div>
             ) : null}
+            {compareVersionId !== null && compareItems.length > 0 ? (
+              <ComparePanel
+                currentItems={items}
+                compareItems={compareItems}
+                currentLabel={`v${plan?.versionNo ?? '?'}`}
+                compareLabel={`v${comparePlan?.versionNo ?? '?'}`}
+              />
+            ) : null}
           </div>
           <Space wrap>
             {renderPrimaryActions()}
@@ -1064,5 +1144,87 @@ function InfoBlock({
       <p className="m-0 text-[11px] font-medium uppercase tracking-wider text-text-muted">{label}</p>
       <p className="m-0 mt-1 whitespace-pre-line text-xs text-text-secondary">{content}</p>
     </div>
+  );
+}
+
+function ComparePanel({
+  currentItems,
+  compareItems,
+  currentLabel,
+  compareLabel,
+}: {
+  currentItems: any[];
+  compareItems: any[];
+  currentLabel: string;
+  compareLabel: string;
+}) {
+  const rows = diffPlanItems(currentItems, compareItems);
+  const summary = rows.reduce(
+    (acc, r) => {
+      acc[r.kind] = (acc[r.kind] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<DiffKind, number>,
+  );
+
+  return (
+    <div className="rounded-lg border border-border-subtle bg-surface p-4 shadow-card">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h3 className="m-0 text-base font-semibold text-text">版本对比</h3>
+        <p className="m-0 text-xs text-text-muted">
+          相同 {summary.same ?? 0} · 修改 {summary.modified ?? 0} · 顺序变{' '}
+          {summary.reordered ?? 0} · 新增 {summary.added ?? 0} · 删除{' '}
+          {summary.removed ?? 0}
+        </p>
+      </div>
+      <div className="grid grid-cols-[60px_1fr_1fr] gap-1 text-xs">
+        <div className="font-medium text-text-muted">#</div>
+        <div className="font-medium text-text">{currentLabel}(当前)</div>
+        <div className="font-medium text-text">{compareLabel}(对比)</div>
+        {rows.map((row) => (
+          <ComparePanelRow key={row.sequence} row={row} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ComparePanelRow({ row }: { row: DiffRow }) {
+  const bg = DIFF_BG[row.kind];
+  return (
+    <>
+      <div className={`flex items-start gap-1 rounded-l py-2 pl-2 ${bg}`}>
+        <span className="text-text">{row.sequence}</span>
+        {row.kind !== 'same' ? (
+          <span className="rounded bg-text-muted/20 px-1 text-[10px] text-text-muted">
+            {DIFF_LABEL[row.kind]}
+          </span>
+        ) : null}
+      </div>
+      <div className={`px-2 py-2 ${bg}`}>
+        {row.current ? (
+          <div>
+            <p className="m-0 truncate text-sm">{row.current.universityName}</p>
+            <p className="m-0 text-[11px] text-text-muted">
+              {row.current.groupName} · {row.current.majorName}
+            </p>
+          </div>
+        ) : (
+          <span className="text-text-muted">--</span>
+        )}
+      </div>
+      <div className={`rounded-r px-2 py-2 ${bg}`}>
+        {row.compare ? (
+          <div>
+            <p className="m-0 truncate text-sm">{row.compare.universityName}</p>
+            <p className="m-0 text-[11px] text-text-muted">
+              {row.compare.groupName} · {row.compare.majorName}
+            </p>
+          </div>
+        ) : (
+          <span className="text-text-muted">--</span>
+        )}
+      </div>
+    </>
   );
 }
