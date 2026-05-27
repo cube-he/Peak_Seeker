@@ -1,12 +1,32 @@
 'use client';
 
-import { useState } from 'react';
-import type { RankingBoard } from '@/services/university';
+import { useState, useMemo } from 'react';
+import type { RankingBoard, RankedUniversity } from '@/services/university';
 import type { BoardGroup } from '../lib/groupBoards';
 import { RankRow } from './RankRow';
 import { StarIcon, LocIcon, GridIcon, BooksIcon } from './shared/Icon';
 
 const PREVIEW_COUNT = 10;
+
+/**
+ * 排行榜 client-side 去重:同一所大学的多个校区(如「电子科技大学」跟
+ * 「电子科技大学(沙河校区)」)在同一榜单里只保留 rank 最高的那个。
+ *   - 去除括号取 root name → 比对
+ *   - 重新算 rank 让行号 1,2,3 连续(原本可能因为某个 rank 被吃掉跳号)
+ *   - softRanking 字段不动,「软科 本科#N」caption 仍显示真实软科名次
+ */
+function dedupByRootName(items: RankedUniversity[]): RankedUniversity[] {
+  const seen = new Set<string>();
+  const result: RankedUniversity[] = [];
+  for (const item of items) {
+    // 去除中英文括号及内部内容,得到"主名"
+    const root = item.name.replace(/[（(][^）)]*[）)]/g, '').trim();
+    if (seen.has(root)) continue;
+    seen.add(root);
+    result.push(item);
+  }
+  return result.map((u, i) => ({ ...u, rank: i + 1 }));
+}
 
 /**
  * 后端 groupKey → 设计稿视觉变体(决定左侧识别色条 + group-ic 配色)
@@ -60,7 +80,8 @@ function deriveColLabel(board: RankingBoard, group: BoardGroup): string {
 
 function BoardColumn({ board, label }: { board: RankingBoard; label: string | null }) {
   const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? board.items : board.items.slice(0, PREVIEW_COUNT);
+  const items = useMemo(() => dedupByRootName(board.items), [board.items]);
+  const visible = expanded ? items : items.slice(0, PREVIEW_COUNT);
 
   return (
     <div style={{ minWidth: 0 }}>
@@ -81,9 +102,9 @@ function BoardColumn({ board, label }: { board: RankingBoard; label: string | nu
           该榜暂无数据
         </div>
       )}
-      {board.items.length > PREVIEW_COUNT && (
+      {items.length > PREVIEW_COUNT && (
         <button type="button" className="board-expand" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? '收起' : `查看完整榜单 (共 ${board.items.length} 所)`}
+          {expanded ? '收起' : `查看完整榜单 (共 ${items.length} 所)`}
         </button>
       )}
     </div>
