@@ -146,15 +146,22 @@ function mapGender(s: string | null): 'MALE' | 'FEMALE' | null {
   return null;
 }
 
+// vision_left/right DB 列是 Decimal(3,1), 最大 9.9. Excel 数据格式混乱:
+// "5.0,5.0" 新标准 (合法) / "150,200" 旧标准未除以 100 (1.5/2.0 录成 150/200) /
+// "300,400" (3.0/4.0 录成 300/400) / "4.8 4.6" 等. 策略: >10 视为乘了 100,
+// 自动除 100; 仍 >9.9 视作脏数据置 null.
 function parseVision(s: string | null): { left: number | null; right: number | null } {
   if (!s) return { left: null, right: null };
   const parts = s.split(/[,，\s]+/).map((p) => p.trim()).filter(Boolean);
   if (parts.length < 2) return { left: null, right: null };
-  const toNum = (p: string) => {
-    const n = Number(p);
-    return Number.isFinite(n) ? n : null;
+  const norm = (p: string): number | null => {
+    let n = Number(p);
+    if (!Number.isFinite(n)) return null;
+    if (n > 10) n = n / 100; // 150 → 1.5, 5000 → 50 (50 仍非法, 下一步过滤)
+    if (n < 0 || n > 9.9) return null;
+    return Math.round(n * 10) / 10; // 1 decimal
   };
-  return { left: toNum(parts[0]), right: toNum(parts[1]) };
+  return { left: norm(parts[0]), right: norm(parts[1]) };
 }
 
 interface ParsedRow {
@@ -370,9 +377,11 @@ async function main() {
   let createdStudents = 0;
   let skippedStudents = 0;
   let createdAttachments = 0;
+  let failedStudents = 0;
 
   for (const plan of plans) {
     const r = plan.row;
+    try {
 
     // 重复检查: realName + teacher + examYear
     const existing = await prisma.studentProfile.findFirst({
@@ -399,8 +408,12 @@ async function main() {
       10,
     );
 
-    const user = await prisma.user.create({
-      data: {
+    // upsert: 重试场景下前一次 user 创建成功但 profile 失败留下孤儿,
+    // 这次直接复用同 username 的 user.
+    const user = await prisma.user.upsert({
+      where: { username: safeUsername },
+      update: {},
+      create: {
         username: safeUsername,
         passwordHash: randomPassword,
         realName: r.realName,
@@ -500,10 +513,14 @@ async function main() {
       `  ✅ 创建: ${r.realName} (student id=${profile.id}, ${plan.attachments.length} 个附件)`,
     );
     createdStudents++;
+    } catch (err: any) {
+      failedStudents++;
+      console.error(`  ❌ 失败 ${r.realName}: ${err.message?.slice(0, 200)}`);
+    }
   }
 
   console.log(
-    `\n✅ 完成: 创建 ${createdStudents} 个学生, 跳过 ${skippedStudents} 已存在, ${createdAttachments} 个附件入库.`,
+    `\n✅ 完成: 创建 ${createdStudents}, 跳过 ${skippedStudents}, 失败 ${failedStudents}, 附件入库 ${createdAttachments}.`,
   );
   await prisma.$disconnect();
 }

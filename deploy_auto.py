@@ -170,13 +170,31 @@ def connect_ssh():
         return None
 
 
+def _is_manifest_file(name: str) -> bool:
+    """这些文件每次 build 内容会变 (引用新 chunk hash) 但 size 经常不变,
+    增量 size 比对会漏掉, 导致 SSR 引用旧 chunk 让前端拿到旧版 UI.
+    匹配上的强制全量传, 不参与 size 跳过.
+
+    覆盖 next.js 的 BUILD_ID / app-build-manifest.json / *-manifest.json /
+    *_client-reference-manifest.js / SSR 静态产物 *.html / RSC payload *.rsc.
+    """
+    if name == 'BUILD_ID':
+        return True
+    if name.endswith('.html') or name.endswith('.rsc'):
+        return True
+    if name.endswith('-manifest.json') or name.endswith('_client-reference-manifest.js'):
+        return True
+    return False
+
+
 def upload_directory(sftp, local_dir, remote_dir, incremental=True, stats=None):
     """递归上传目录.
 
     incremental=True (默认): 远端已有同 size 文件就跳过. 大幅减少 .next/dist 重传量
     (next build 后大部分 chunk hash 文件 size 一致, 只新增/修改少量).
-    arity-同 size 内容不同的边界情况几乎不会发生 - chunk 是 hash 命名, 内容变 hash 变.
-    incremental=False: 全量传 (旧行为).
+    例外: manifest / BUILD_ID / *.html / *.rsc 等"内容变但 size 常不变"的文件
+    强制全量传 (见 _is_manifest_file).
+    incremental=False: 全部强制全量传 (旧行为).
     """
     if stats is None:
         stats = {'uploaded': 0, 'skipped': 0}
@@ -194,7 +212,7 @@ def upload_directory(sftp, local_dir, remote_dir, incremental=True, stats=None):
             continue
 
         if os.path.isfile(local_path):
-            if incremental:
+            if incremental and not _is_manifest_file(item):
                 try:
                     rstat = sftp.stat(remote_path)
                     if rstat.st_size == os.path.getsize(local_path):
