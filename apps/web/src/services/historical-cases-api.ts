@@ -20,6 +20,9 @@ export interface HistoricalCaseListItem {
     scoreDiff: number | null;
     sequenceNo: number | null;
     batchName: string | null;
+    admittedMajorGroupCode: string | null;
+    admittedMajorCode: string | null;
+    admittedMajorName: string | null;
   } | null;
   teacher: { user: { realName: string | null; username: string } } | null;
 }

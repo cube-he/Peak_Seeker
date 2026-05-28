@@ -158,6 +158,25 @@ export default function HistoricalCaseDetailPage() {
             <Descriptions.Item label="批次">
               <Tag color="blue">{ar.batchName ?? '--'}</Tag>
             </Descriptions.Item>
+            <Descriptions.Item label="录取专业组">
+              {ar.admittedMajorGroupCode ? (
+                <Tag color="cyan">{ar.admittedMajorGroupCode}</Tag>
+              ) : (
+                <span className="text-text-muted">--</span>
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="录取专业" span={2}>
+              {ar.admittedMajorName ? (
+                <span className="font-medium">
+                  {ar.admittedMajorCode ? (
+                    <span className="text-text-muted mr-1">[{ar.admittedMajorCode}]</span>
+                  ) : null}
+                  {ar.admittedMajorName}
+                </span>
+              ) : (
+                <span className="text-text-muted">--</span>
+              )}
+            </Descriptions.Item>
             <Descriptions.Item label="录取最低分">{ar.admittedMinScore ?? '--'}</Descriptions.Item>
             <Descriptions.Item label="录取最低位次">{ar.admittedMinRank ?? '--'}</Descriptions.Item>
             <Descriptions.Item label="分差">

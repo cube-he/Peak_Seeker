@@ -97,6 +97,29 @@ export default function HistoricalCasesPage() {
         }
         return <span>{ar.admittedUniName}</span>;
       },
+      width: 180,
+    },
+    {
+      title: '专业组',
+      render: (_: any, row: HistoricalCaseListItem) => {
+        const code = row.admissionResult?.admittedMajorGroupCode;
+        return code ? <Tag color="cyan">{code}</Tag> : <span className="text-text-muted">--</span>;
+      },
+      width: 80,
+    },
+    {
+      title: '录取专业',
+      render: (_: any, row: HistoricalCaseListItem) => {
+        const name = row.admissionResult?.admittedMajorName;
+        const code = row.admissionResult?.admittedMajorCode;
+        if (!name) return <span className="text-text-muted">--</span>;
+        return (
+          <span className="text-sm">
+            {code ? <span className="text-text-muted">[{code}] </span> : null}
+            {name}
+          </span>
+        );
+      },
       width: 200,
     },
     {

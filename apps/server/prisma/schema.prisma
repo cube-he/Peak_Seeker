@@ -944,6 +944,14 @@ model StudentAdmissionResult {
   // 录取批次 (e.g. 本科批次B段, 专科批次)
   batchName String? @map("batch_name") @db.VarChar(100)
 
+  // 录取专业 (来自录取凭证截图; Excel 不含, 通过 vision 读图补录)
+  // 专业组号 e.g. "101", "103", "1V" — 部分省高考有字母编码
+  admittedMajorGroupCode String? @map("admitted_major_group_code") @db.VarChar(10)
+  // 专业代号 e.g. "37", "1V", "0E"
+  admittedMajorCode      String? @map("admitted_major_code") @db.VarChar(10)
+  // 专业中文名 e.g. "汉语言文学"
+  admittedMajorName      String? @map("admitted_major_name") @db.VarChar(200)
+
   @@index([admittedUniId])
   @@index([batchName])
   @@map("student_admission_results")
