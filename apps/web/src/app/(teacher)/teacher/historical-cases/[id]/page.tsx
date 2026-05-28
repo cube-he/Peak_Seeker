@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import Link from 'next/link';
 import { Card, Descriptions, Spin, Empty, Tag, Button, Alert, Image, Modal } from 'antd';
 import { ArrowLeftOutlined, DownloadOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons';
 import { historicalCasesApi } from '@/services/historical-cases-api';
@@ -143,7 +144,16 @@ export default function HistoricalCaseDetailPage() {
         ) : (
           <Descriptions column={{ xs: 1, sm: 2, lg: 3 }} size="small" bordered>
             <Descriptions.Item label="录取大学" span={2}>
-              <span className="font-medium text-safe">{ar.admittedUniName}</span>
+              {ar.admittedUniId ? (
+                <Link
+                  href={`/universities/${ar.admittedUniId}`}
+                  className="font-medium text-safe"
+                >
+                  {ar.admittedUniName} →
+                </Link>
+              ) : (
+                <span className="font-medium text-safe">{ar.admittedUniName}</span>
+              )}
             </Descriptions.Item>
             <Descriptions.Item label="批次">
               <Tag color="blue">{ar.batchName ?? '--'}</Tag>

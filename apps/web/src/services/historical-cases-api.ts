@@ -14,6 +14,7 @@ export interface HistoricalCaseListItem {
   user: { realName: string | null; username: string; gender: string | null };
   admissionResult: {
     admittedUniName: string;
+    admittedUniId: number | null;
     admittedMinScore: number | null;
     admittedMinRank: number | null;
     scoreDiff: number | null;

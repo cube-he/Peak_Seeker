@@ -85,8 +85,18 @@ export default function HistoricalCasesPage() {
     { title: '位次', dataIndex: 'provincialRank', width: 90 },
     {
       title: '录取大学',
-      render: (_: any, row: HistoricalCaseListItem) =>
-        row.admissionResult?.admittedUniName ?? <span className="text-text-muted">未录取</span>,
+      render: (_: any, row: HistoricalCaseListItem) => {
+        const ar = row.admissionResult;
+        if (!ar) return <span className="text-text-muted">未录取</span>;
+        if (ar.admittedUniId) {
+          return (
+            <Link href={`/universities/${ar.admittedUniId}`} className="text-primary">
+              {ar.admittedUniName}
+            </Link>
+          );
+        }
+        return <span>{ar.admittedUniName}</span>;
+      },
       width: 200,
     },
     {
