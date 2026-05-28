@@ -159,19 +159,32 @@ def connect_ssh():
                 return None
             ssh.connect(HOST, username=USER, password=password, timeout=30)
             print('[OK] 已连接 (密码)')
+        # 上传 .next/dist 经常 5+ 分钟, 没 keepalive 服务器会因 idle 断 SFTP 连接
+        # (paramiko EOFError "Server connection dropped"). 30s 心跳保活解决.
+        transport = ssh.get_transport()
+        if transport:
+            transport.set_keepalive(30)
         return ssh
     except Exception as e:
         print(f'[FAIL] 连接失败: {e}')
         return None
 
 
-def upload_directory(sftp, local_dir, remote_dir):
-    """递归上传目录"""
+def upload_directory(sftp, local_dir, remote_dir, incremental=True, stats=None):
+    """递归上传目录.
+
+    incremental=True (默认): 远端已有同 size 文件就跳过. 大幅减少 .next/dist 重传量
+    (next build 后大部分 chunk hash 文件 size 一致, 只新增/修改少量).
+    arity-同 size 内容不同的边界情况几乎不会发生 - chunk 是 hash 命名, 内容变 hash 变.
+    incremental=False: 全量传 (旧行为).
+    """
+    if stats is None:
+        stats = {'uploaded': 0, 'skipped': 0}
+
     if not os.path.exists(local_dir):
         print(f'    跳过 (不存在): {local_dir}')
         return 0
 
-    count = 0
     for item in os.listdir(local_dir):
         local_path = os.path.join(local_dir, item)
         remote_path = f'{remote_dir}/{item}'
@@ -181,16 +194,24 @@ def upload_directory(sftp, local_dir, remote_dir):
             continue
 
         if os.path.isfile(local_path):
+            if incremental:
+                try:
+                    rstat = sftp.stat(remote_path)
+                    if rstat.st_size == os.path.getsize(local_path):
+                        stats['skipped'] += 1
+                        continue
+                except FileNotFoundError:
+                    pass
             sftp.put(local_path, remote_path)
-            count += 1
+            stats['uploaded'] += 1
         elif os.path.isdir(local_path):
             try:
                 sftp.stat(remote_path)
             except FileNotFoundError:
                 sftp.mkdir(remote_path)
-            count += upload_directory(sftp, local_path, remote_path)
+            upload_directory(sftp, local_path, remote_path, incremental, stats)
 
-    return count
+    return stats['uploaded']
 
 
 def build_project(skip_tests=False):
@@ -259,9 +280,13 @@ def validate_build_artifacts():
     return True
 
 
-def deploy(ssh, run_enriched_import=False):
-    """部署到服务器"""
+def deploy(ssh, run_enriched_import=False, full_upload=False):
+    """部署到服务器. full_upload=True 时强制 rm-rf 远端目录 + 全量传"""
     print('\n=== 部署到服务器 ===')
+    if full_upload:
+        print('  [模式] 全量上传 (强制清空远端)')
+    else:
+        print('  [模式] 增量上传 (size 相同的文件跳过)')
     sftp = ssh.open_sftp()
 
     # 1. 确保远程目录存在
@@ -303,9 +328,13 @@ def deploy(ssh, run_enriched_import=False):
             print(f'  [{key}] 跳过 (不存在)')
             continue
 
-        # 需要先清理旧文件的目录
-        if conf.get('clean_first'):
+        # clean_first: 仅在 full_upload 模式才 rm-rf 重建. 增量模式保留旧文件让 size
+        # 比对去重 (孤儿文件会残留, 但不影响功能; 每月手动清一次即可).
+        if conf.get('clean_first') and full_upload:
             run_remote(ssh, f'rm -rf {remote_dir}')
+            run_remote(ssh, f'mkdir -p {remote_dir}')
+        else:
+            # 保证目录存在
             run_remote(ssh, f'mkdir -p {remote_dir}')
 
         # 只上传指定文件
@@ -318,8 +347,9 @@ def deploy(ssh, run_enriched_import=False):
             continue
 
         print(f'  [{key}] 上传中...')
-        count = upload_directory(sftp, local_dir, remote_dir)
-        print(f'  [{key}] [OK] {count} 个文件')
+        stats = {'uploaded': 0, 'skipped': 0}
+        upload_directory(sftp, local_dir, remote_dir, incremental=not full_upload, stats=stats)
+        print(f'  [{key}] [OK] 上传 {stats["uploaded"]} / 跳过 {stats["skipped"]}')
 
     sftp.close()
 
@@ -403,6 +433,7 @@ def main():
     parser.add_argument('--build-only', action='store_true', help='只构建不部署')
     parser.add_argument('--setup', action='store_true', help='首次服务器初始化')
     parser.add_argument('--import-enriched', action='store_true', help='部署后导入丰富数据（体检/地区资格/院校专业增强）')
+    parser.add_argument('--full-upload', action='store_true', help='强制全量上传 (清空远端再传). 默认增量传, 远端 size 相同的文件跳过')
     args = parser.parse_args()
 
     print('==========================================')
@@ -427,7 +458,7 @@ def main():
         try:
             if args.setup:
                 setup_server(ssh)
-            if not deploy(ssh, run_enriched_import=args.import_enriched):
+            if not deploy(ssh, run_enriched_import=args.import_enriched, full_upload=args.full_upload):
                 print('\n[FAIL] 部署失败')
                 sys.exit(1)
         finally:
