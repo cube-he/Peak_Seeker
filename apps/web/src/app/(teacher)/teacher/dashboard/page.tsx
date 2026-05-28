@@ -241,11 +241,20 @@ function categorizeStudents(
 
 export default function TeacherDashboardPage() {
   const router = useRouter();
-  // 订阅 user, 派生 isSupervisor 作为 prop 下传到 ThreeTrackTodoSection.
-  // 之前在 section 内部 useAuthStore 不能稳定 re-render (zustand persist hydrate
-  // 完成后 selector cache 不刷), prop 传递保证父组件 re-render 时子组件也 re-render.
-  const authUser = useAuthStore((s) => s.user);
-  const isSupervisor = authUser?.teacherProfile?.isSupervisor === true;
+  // useAuthStore selector 在 hard navigation 后第一次 render 拿到 user=null,
+  // zustand persist 异步 hydrate 完成后理论上触发 re-render 但实测不稳定 (可能跟
+  // useSyncExternalStore 在 hydration phase 的 cache 行为有关).
+  // 改用 useEffect + zustand.subscribe 显式同步: mount 立即读最新 state, 之后
+  // 监听 store 变化. 100% 可靠.
+  const [isSupervisor, setIsSupervisor] = useState(false);
+  useEffect(() => {
+    const sync = () => {
+      const u = useAuthStore.getState().user;
+      setIsSupervisor(u?.teacherProfile?.isSupervisor === true);
+    };
+    sync(); // 立即同步 mount 时的最新 state
+    return useAuthStore.subscribe(sync);
+  }, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchInput, setSearchInput] = useState('');
   // 客户端启动后再产生 now / updatedAt，避免 SSR / 客户端时间不一致导致 hydration 警告
