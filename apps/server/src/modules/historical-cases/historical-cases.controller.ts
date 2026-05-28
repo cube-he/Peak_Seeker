@@ -76,14 +76,32 @@ export class HistoricalCasesController {
   }
 
   @Get('attachments/:id/download')
-  @ApiOperation({ summary: '下载附件 (PDF/JPG)' })
+  @ApiOperation({ summary: '下载附件 (强制保存到本地)' })
   async downloadAttachment(
     @Param('id', ParseIntPipe) id: number,
     @Request() req: any,
     @Res() res: Response,
   ) {
-    const att = await this.service.getAttachmentForDownload(id, req.user.id);
-    // 物理路径: uploads_root + storagePath. uploads_root 用环境变量, 默认 ./uploads
+    return this.streamAttachment(id, req.user.id, res, 'attachment');
+  }
+
+  @Get('attachments/:id/preview')
+  @ApiOperation({ summary: '预览附件 (浏览器内打开, 图片直接渲染, PDF 用内置 viewer)' })
+  async previewAttachment(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+    @Res() res: Response,
+  ) {
+    return this.streamAttachment(id, req.user.id, res, 'inline');
+  }
+
+  private async streamAttachment(
+    id: number,
+    userId: number,
+    res: Response,
+    disposition: 'attachment' | 'inline',
+  ) {
+    const att = await this.service.getAttachmentForDownload(id, userId);
     const uploadsRoot =
       process.env.UPLOADS_ROOT || path.join(process.cwd(), 'uploads');
     const filePath = path.join(uploadsRoot, att.storagePath);
@@ -92,7 +110,7 @@ export class HistoricalCasesController {
     }
     res.set({
       'Content-Type': att.mimeType ?? 'application/octet-stream',
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(att.originalName)}`,
+      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(att.originalName)}`,
     });
     fs.createReadStream(filePath).pipe(res);
   }

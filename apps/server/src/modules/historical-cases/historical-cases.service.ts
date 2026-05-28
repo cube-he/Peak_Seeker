@@ -12,6 +12,16 @@ interface ListQuery {
   pageSize?: number;
 }
 
+// 清洗 admissionResult: 若 admittedMinScore 缺失则 scoreDiff 也置 null.
+// 原因: Excel 数据存在"无录取分但分差列填了总分"的脏数据, 没有 admittedMinScore
+// 就没法定义有意义的分差; 显示出来 (如 +453) 反而误导.
+function cleanScoreDiff<T extends { admissionResult: any | null }>(s: T): T {
+  if (s.admissionResult && s.admissionResult.admittedMinScore == null) {
+    s.admissionResult.scoreDiff = null;
+  }
+  return s;
+}
+
 @Injectable()
 export class HistoricalCasesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -59,7 +69,7 @@ export class HistoricalCasesService {
       this.prisma.studentProfile.count({ where }),
     ]);
 
-    return { data, total, page, pageSize };
+    return { data: data.map(cleanScoreDiff), total, page, pageSize };
   }
 
   /** 详情: 含 user / plan / admissionResult / attachments */
@@ -78,7 +88,7 @@ export class HistoricalCasesService {
       },
     });
     if (!student) throw new NotFoundException('历史案例不存在');
-    return student;
+    return cleanScoreDiff(student);
   }
 
   /** 统计概览 */
@@ -100,7 +110,13 @@ export class HistoricalCasesService {
       if (s.examType) byExamType[s.examType] = (byExamType[s.examType] ?? 0) + 1;
       const batch = s.admissionResult?.batchName ?? '未填';
       byBatch[batch] = (byBatch[batch] ?? 0) + 1;
-      if (s.admissionResult?.scoreDiff != null) scoreDiffs.push(s.admissionResult.scoreDiff);
+      // 只统计有完整数据 (admittedMinScore 存在 + scoreDiff 不为 null) 的分差
+      if (
+        s.admissionResult?.scoreDiff != null &&
+        s.admissionResult?.admittedMinScore != null
+      ) {
+        scoreDiffs.push(s.admissionResult.scoreDiff);
+      }
       const uni = s.admissionResult?.admittedUniName;
       if (uni) uniNameCounts[uni] = (uniNameCounts[uni] ?? 0) + 1;
     }

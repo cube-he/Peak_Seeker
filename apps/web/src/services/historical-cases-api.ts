@@ -87,8 +87,13 @@ export const historicalCasesApi = {
     return (await api.get('/historical-cases/similar', { params })) as unknown as HistoricalCaseListItem[];
   },
 
-  /** 返回浏览器可直接 window.open() 的 URL */
+  /** 强制下载到本地 (Content-Disposition: attachment) */
   attachmentDownloadUrl(attachmentId: number) {
     return `/api/v1/historical-cases/attachments/${attachmentId}/download`;
+  },
+
+  /** 浏览器内预览 (Content-Disposition: inline). 图片直出, PDF 走内置 viewer. */
+  attachmentPreviewUrl(attachmentId: number) {
+    return `/api/v1/historical-cases/attachments/${attachmentId}/preview`;
   },
 };

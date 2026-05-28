@@ -7,6 +7,20 @@ import { RedisService } from '../../../redis/redis.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtPayloadUser, PermissionOverride } from '../../casl/types';
 
+// 从 cookie header 提取 access_token (无 cookie-parser 依赖, 手工 parse).
+// 让浏览器原生标签 (<a href> 下载 / <img src> 图片) 也能走 HttpOnly cookie 鉴权.
+function extractTokenFromCookie(req: Request): string | null {
+  const cookieHeader = req?.headers?.cookie;
+  if (!cookieHeader) return null;
+  const m = cookieHeader.match(/(?:^|;\s*)access_token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+const tokenExtractor = ExtractJwt.fromExtractors([
+  ExtractJwt.fromAuthHeaderAsBearerToken(),
+  extractTokenFromCookie,
+]);
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -15,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private prisma: PrismaService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: tokenExtractor,
       ignoreExpiration: false,
       secretOrKey: configService.get('JWT_SECRET'),
       passReqToCallback: true,
@@ -23,7 +37,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(req: Request, payload: any): Promise<JwtPayloadUser> {
-    const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+    const token = tokenExtractor(req);
 
     // Check if token is blacklisted (user has logged out)
     if (token) {

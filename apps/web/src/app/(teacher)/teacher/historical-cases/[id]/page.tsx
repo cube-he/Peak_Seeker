@@ -2,8 +2,9 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Descriptions, Spin, Empty, Tag, Button, Alert } from 'antd';
-import { ArrowLeftOutlined, DownloadOutlined, FileTextOutlined, PictureOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { Card, Descriptions, Spin, Empty, Tag, Button, Alert, Image, Modal } from 'antd';
+import { ArrowLeftOutlined, DownloadOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons';
 import { historicalCasesApi } from '@/services/historical-cases-api';
 
 const EXAM_TYPE_LABEL: Record<string, string> = { PHYSICS: '物理类', HISTORY: '历史类' };
@@ -15,9 +16,53 @@ const CATEGORY_LABEL: Record<string, string> = {
   other: '其他',
 };
 
+// 附件 endpoint 现在双重鉴权 (Authorization header 或 access_token cookie),
+// 浏览器原生 <img src> / <iframe src> 同源请求自动带 HttpOnly cookie 即可.
+function ImageAttachment({ previewUrl, alt }: { previewUrl: string; alt: string }) {
+  return (
+    <Image
+      src={previewUrl}
+      alt={alt}
+      width={36}
+      height={36}
+      style={{ objectFit: 'cover', borderRadius: 4 }}
+      preview={{ src: previewUrl, mask: <EyeOutlined /> }}
+    />
+  );
+}
+
+function PdfPreviewModal({
+  preview,
+  onClose,
+}: {
+  preview: { url: string; name: string } | null;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      open={!!preview}
+      title={preview?.name}
+      width="80vw"
+      style={{ top: 20 }}
+      onCancel={onClose}
+      footer={null}
+      destroyOnClose
+    >
+      {preview ? (
+        <iframe
+          src={preview.url}
+          title={preview.name}
+          style={{ width: '100%', height: '80vh', border: 'none' }}
+        />
+      ) : null}
+    </Modal>
+  );
+}
+
 export default function HistoricalCaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; name: string } | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['historical-case', id],
@@ -145,37 +190,59 @@ export default function HistoricalCaseDetailPage() {
           <Empty description="无附件" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
           <ul className="m-0 grid list-none gap-2 p-0 md:grid-cols-2">
-            {data.attachments.map((a) => (
-              <li
-                key={a.id}
-                className="flex items-center justify-between rounded-md border border-border-subtle bg-surface px-3 py-2"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-text-muted">
-                    {a.mimeType?.startsWith('image/') ? <PictureOutlined /> : <FileTextOutlined />}
-                  </span>
-                  <div>
-                    <p className="m-0 text-sm">{CATEGORY_LABEL[a.category] ?? a.category}</p>
-                    <p className="m-0 text-xs text-text-muted">
-                      {a.originalName}
-                      {a.fileSize ? ` · ${(a.fileSize / 1024).toFixed(1)} KB` : ''}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  size="small"
-                  icon={<DownloadOutlined />}
-                  href={historicalCasesApi.attachmentDownloadUrl(a.id)}
-                  target="_blank"
-                  rel="noreferrer"
+            {data.attachments.map((a) => {
+              const isImage = a.mimeType?.startsWith('image/');
+              const previewUrl = historicalCasesApi.attachmentPreviewUrl(a.id);
+              return (
+                <li
+                  key={a.id}
+                  className="flex items-center justify-between rounded-md border border-border-subtle bg-surface px-3 py-2"
                 >
-                  下载
-                </Button>
-              </li>
-            ))}
+                  <div className="flex items-center gap-2 min-w-0">
+                    {isImage ? (
+                      <ImageAttachment previewUrl={previewUrl} alt={a.originalName} />
+                    ) : (
+                      <span className="text-text-muted text-base">
+                        <FileTextOutlined />
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <p className="m-0 text-sm">{CATEGORY_LABEL[a.category] ?? a.category}</p>
+                      <p className="m-0 truncate text-xs text-text-muted">
+                        {a.originalName}
+                        {a.fileSize ? ` · ${(a.fileSize / 1024).toFixed(1)} KB` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 ml-2">
+                    {/* PDF 预览走 modal iframe; 图片预览交给 antd Image 上面已绑定 */}
+                    {!isImage ? (
+                      <Button
+                        size="small"
+                        icon={<EyeOutlined />}
+                        onClick={() => setPdfPreview({ url: previewUrl, name: a.originalName })}
+                      >
+                        预览
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="small"
+                      icon={<DownloadOutlined />}
+                      href={historicalCasesApi.attachmentDownloadUrl(a.id)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      下载
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
+
+      <PdfPreviewModal preview={pdfPreview} onClose={() => setPdfPreview(null)} />
     </div>
   );
 }
