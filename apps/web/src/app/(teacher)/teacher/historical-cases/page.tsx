@@ -110,15 +110,24 @@ export default function HistoricalCasesPage() {
     {
       title: '录取专业',
       render: (_: any, row: HistoricalCaseListItem) => {
-        const name = row.admissionResult?.admittedMajorName;
-        const code = row.admissionResult?.admittedMajorCode;
+        const ar = row.admissionResult;
+        const name = ar?.admittedMajorName;
+        const code = ar?.admittedMajorCode;
         if (!name) return <span className="text-text-muted">--</span>;
-        return (
-          <span className="text-sm">
+        const inner = (
+          <>
             {code ? <span className="text-text-muted">[{code}] </span> : null}
             {name}
-          </span>
+          </>
         );
+        if (ar?.admittedMajorId) {
+          return (
+            <Link href={`/majors/${ar.admittedMajorId}`} className="text-sm text-primary">
+              {inner}
+            </Link>
+          );
+        }
+        return <span className="text-sm">{inner}</span>;
       },
       width: 200,
     },

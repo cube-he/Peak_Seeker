@@ -167,12 +167,24 @@ export default function HistoricalCaseDetailPage() {
             </Descriptions.Item>
             <Descriptions.Item label="录取专业" span={2}>
               {ar.admittedMajorName ? (
-                <span className="font-medium">
-                  {ar.admittedMajorCode ? (
-                    <span className="text-text-muted mr-1">[{ar.admittedMajorCode}]</span>
-                  ) : null}
-                  {ar.admittedMajorName}
-                </span>
+                ar.admittedMajorId ? (
+                  <Link
+                    href={`/majors/${ar.admittedMajorId}`}
+                    className="font-medium text-primary"
+                  >
+                    {ar.admittedMajorCode ? (
+                      <span className="text-text-muted mr-1">[{ar.admittedMajorCode}]</span>
+                    ) : null}
+                    {ar.admittedMajorName} →
+                  </Link>
+                ) : (
+                  <span className="font-medium">
+                    {ar.admittedMajorCode ? (
+                      <span className="text-text-muted mr-1">[{ar.admittedMajorCode}]</span>
+                    ) : null}
+                    {ar.admittedMajorName}
+                  </span>
+                )
               ) : (
                 <span className="text-text-muted">--</span>
               )}

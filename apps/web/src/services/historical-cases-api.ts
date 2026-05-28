@@ -23,6 +23,7 @@ export interface HistoricalCaseListItem {
     admittedMajorGroupCode: string | null;
     admittedMajorCode: string | null;
     admittedMajorName: string | null;
+    admittedMajorId: number | null;
   } | null;
   teacher: { user: { realName: string | null; username: string } } | null;
 }

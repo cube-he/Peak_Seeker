@@ -951,6 +951,8 @@ model StudentAdmissionResult {
   admittedMajorCode      String? @map("admitted_major_code") @db.VarChar(10)
   // 专业中文名 e.g. "汉语言文学"
   admittedMajorName      String? @map("admitted_major_name") @db.VarChar(200)
+  // link to majors 表 (按 name 匹配); 用于前端跳专业详情页
+  admittedMajorId        Int?    @map("admitted_major_id")
 
   @@index([admittedUniId])
   @@index([batchName])
