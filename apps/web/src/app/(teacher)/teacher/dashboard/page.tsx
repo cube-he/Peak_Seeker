@@ -241,6 +241,11 @@ function categorizeStudents(
 
 export default function TeacherDashboardPage() {
   const router = useRouter();
+  // 订阅 user, 派生 isSupervisor 作为 prop 下传到 ThreeTrackTodoSection.
+  // 之前在 section 内部 useAuthStore 不能稳定 re-render (zustand persist hydrate
+  // 完成后 selector cache 不刷), prop 传递保证父组件 re-render 时子组件也 re-render.
+  const authUser = useAuthStore((s) => s.user);
+  const isSupervisor = authUser?.teacherProfile?.isSupervisor === true;
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchInput, setSearchInput] = useState('');
   // 客户端启动后再产生 now / updatedAt，避免 SSR / 客户端时间不一致导致 hydration 警告
@@ -417,6 +422,7 @@ export default function TeacherDashboardPage() {
             waitStudentParent={categorized.waitStudentParent}
             waitSupervisor={categorized.waitSupervisor}
             sleeping={categorized.sleeping}
+            isSupervisor={isSupervisor}
           />
         </>
       )}
@@ -430,18 +436,14 @@ function ThreeTrackTodoSection({
   waitStudentParent,
   waitSupervisor,
   sleeping,
+  isSupervisor,
 }: {
   waitMe: TodoItem[];
   waitStudentParent: TodoItem[];
   waitSupervisor: TodoItem[];
   sleeping: TodoItem[];
+  isSupervisor: boolean;
 }) {
-  // 订阅整个 user 对象 (而非派生的 boolean), 让 zustand persist rehydrate
-  // 把 user 从 null 切到实际对象时触发 re-render. 之前订阅布尔时 hydrate 后
-  // selector 仍返回 false (因为先于 hydrate 完成时已 mount), 直到 store
-  // 显式 setAuth 才更新.
-  const user = useAuthStore((s) => s.user);
-  const isSupervisor = user?.teacherProfile?.isSupervisor === true;
   return (
     <section className="rounded-2xl bg-surface shadow-card">
       <div className="border-b border-border-subtle px-6 py-4">
