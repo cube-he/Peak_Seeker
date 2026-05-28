@@ -36,10 +36,17 @@ export default function StudentLayout({ children }: StudentLayoutProps) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
 
+  // 登出后硬跳到 /login (见 teacher/layout 同样修复, 避免 zustand hydrate race
+  // 导致下个用户看到上个用户的 nav).
+  const handleLogout = () => {
+    logout();
+    if (typeof window !== 'undefined') window.location.assign('/login');
+  };
+
   const userMenuItems = [
     { key: 'profile', label: <Link href="/student/profile">个人信息</Link> },
     { type: 'divider' as const },
-    { key: 'logout', label: '退出登录', onClick: logout },
+    { key: 'logout', label: '退出登录', onClick: handleLogout },
   ];
 
   return (

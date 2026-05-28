@@ -60,10 +60,17 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
+  // 登出后硬跳到 /login, 让 layout / SSR 整体重挂载, 避免下个用户登录后
+  // 看到上个用户残留的 nav (zustand hydrate 慢于 client navigation 的 race).
+  const handleLogout = () => {
+    logout();
+    if (typeof window !== 'undefined') window.location.assign('/login');
+  };
+
   const userMenuItems = [
     { key: 'profile', label: <Link href="/profile">个人中心</Link> },
     { type: 'divider' as const },
-    { key: 'logout', label: '退出登录', onClick: logout },
+    { key: 'logout', label: '退出登录', onClick: handleLogout },
   ];
 
   const sidebarContent = (
@@ -172,7 +179,7 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
           <QuestionCircleOutlined /> 帮助支持
         </button>
         <button
-          onClick={logout}
+          onClick={handleLogout}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-secondary border-0 bg-transparent cursor-pointer transition-colors"
         >
           <LogoutOutlined /> 退出登录

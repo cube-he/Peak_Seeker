@@ -29,16 +29,20 @@ export default function LoginPage() {
       });
       message.success('登录成功');
       const role = data.user?.role;
-      // 直接跳到 role-specific dashboard, 不用 '/' 走 middleware 二次重定向
-      // (避免 cookie race: 旧 token cookie 还没被新 cookie 覆盖时 middleware 会按
-      //  旧角色重定向, 出现 STUDENT 短暂跳到 /teacher/dashboard 的诡异现象).
-      // 用 router.replace 而非 push, 浏览器后退不会回到登录页.
+      // 直接跳到 role-specific dashboard, 不用 '/' 走 middleware 二次重定向.
+      // 用 location.assign 硬刷新而非 router.replace 客户端 navigation —— 否则切换
+      // 账号时 layout (含主管入口判断) 沿用上一次 render 的 isSupervisor, 用户必须 F5
+      // 才看到正确导航. 硬跳转代价是失去客户端路由动画, 但解决了 hydrate race.
       const dashboards: Record<string, string> = {
         ADMIN: '/admin/dashboard',
         TEACHER: '/teacher/dashboard',
         STUDENT: '/student/dashboard',
       };
-      router.replace(dashboards[role] || '/');
+      if (typeof window !== 'undefined') {
+        window.location.assign(dashboards[role] || '/');
+      } else {
+        router.replace(dashboards[role] || '/');
+      }
     },
     onError: (error: any) => {
       const msg = error.response?.data?.message;
