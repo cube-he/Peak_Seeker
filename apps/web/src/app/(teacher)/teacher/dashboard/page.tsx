@@ -436,7 +436,12 @@ function ThreeTrackTodoSection({
   waitSupervisor: TodoItem[];
   sleeping: TodoItem[];
 }) {
-  const isSupervisor = useAuthStore((s) => s.user?.teacherProfile?.isSupervisor === true);
+  // 订阅整个 user 对象 (而非派生的 boolean), 让 zustand persist rehydrate
+  // 把 user 从 null 切到实际对象时触发 re-render. 之前订阅布尔时 hydrate 后
+  // selector 仍返回 false (因为先于 hydrate 完成时已 mount), 直到 store
+  // 显式 setAuth 才更新.
+  const user = useAuthStore((s) => s.user);
+  const isSupervisor = user?.teacherProfile?.isSupervisor === true;
   return (
     <section className="rounded-2xl bg-surface shadow-card">
       <div className="border-b border-border-subtle px-6 py-4">
