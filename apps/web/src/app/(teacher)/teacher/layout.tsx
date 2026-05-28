@@ -29,11 +29,12 @@ const mainNavItems = [
   { href: '/teacher/plans', icon: <FileTextOutlined />, label: '方案管理' },
 ];
 
-// 沟通相关三大入口 (Plan 12). 主管报表对普通老师会返回 403, 但暂不前端隐藏
-// (User 接口缺 isSupervisor; 加判断要改 authStore, 工作量超本次外科手术范围)
+// 沟通相关入口 (Plan 12). 团队报表只对主管展示.
 const commNavItems = [
   { href: '/teacher/clinic', icon: <MessageOutlined />, label: '坐诊面板' },
   { href: '/teacher/insights/me', icon: <BarChartOutlined />, label: '我的复盘' },
+];
+const supervisorOnlyCommNavItems = [
   { href: '/teacher/insights/team', icon: <PieChartOutlined />, label: '团队报表' },
 ];
 
@@ -52,6 +53,10 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isSupervisor = user?.teacherProfile?.isSupervisor === true;
+  const visibleCommNavItems = isSupervisor
+    ? [...commNavItems, ...supervisorOnlyCommNavItems]
+    : commNavItems;
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
@@ -99,7 +104,7 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
         <div className="text-[10px] uppercase tracking-wider text-text-faint font-medium px-3 mb-2">
           沟通
         </div>
-        {commNavItems.map((item) => (
+        {visibleCommNavItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}

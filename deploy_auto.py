@@ -296,6 +296,12 @@ def deploy(ssh, run_enriched_import=False, full_upload=False):
         run_remote(ssh, f'mkdir -p {remote}')
     run_remote(ssh, f'mkdir -p {REMOTE_PATH}/scripts')
 
+    # 停掉 vh-web, 避免上传期间 rm -rf .next 但旧进程仍 serve 触发
+    # "Cannot find module .../page.js" 500. vh-server 不停 (db migrate 等需要),
+    # 但上传 server/dist 会让旧进程吃到混合代码 — 改 server 时建议同时停掉.
+    print('\n[预处理] 停止 vh-web 避免上传期间 module-not-found...')
+    run_remote(ssh, 'pm2 stop vh-web 2>&1 | tail -3')
+
     # 2. 上传根目录配置文件
     print('\n[2/7] 上传配置文件...')
     for f in ROOT_FILES:
@@ -378,6 +384,16 @@ def deploy(ssh, run_enriched_import=False, full_upload=False):
     run_remote(ssh, 'pm2 delete vh-server vh-web vh-ocr 2>/dev/null || true')
     run_remote(ssh, f'cd {REMOTE_PATH} && pm2 start ecosystem.config.js 2>&1')
     run_remote(ssh, 'pm2 list 2>&1 | head -20')
+
+    # Warm-up: PM2 起来后 next.js 第一次访问 page 才 require 对应 module,
+    # 此时如果 deploy 有 file 变动而进程内存未刷, 偶发 "Cannot find module".
+    # curl 公共路由 (/login 不需要 token) 主动触发 module 加载, 减少真实用户撞坑.
+    print('\n[warmup] 触发 next.js 主要路由加载...')
+    run_remote(
+        ssh,
+        'sleep 5; for u in /login / /universities /majors; do '
+        'curl -s -o /dev/null -w "  %{http_code} $u\\n" "http://localhost:3004$u"; done',
+    )
 
     print('\n[OK] 部署完成')
     return True

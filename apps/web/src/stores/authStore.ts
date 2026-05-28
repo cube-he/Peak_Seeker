@@ -12,6 +12,13 @@ interface User {
   rank?: number;
   vipLevel?: string;
   role?: string;
+  // backend 在 login response 里以嵌套形式返回; 前端读 user.teacherProfile?.isSupervisor
+  // 判断主管, 用于 dashboard 区分 / nav 入口隐藏等
+  teacherProfile?: {
+    id?: number;
+    school?: string | null;
+    isSupervisor?: boolean;
+  } | null;
 }
 
 interface AuthState {

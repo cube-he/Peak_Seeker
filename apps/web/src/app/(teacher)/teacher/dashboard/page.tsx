@@ -17,6 +17,7 @@ import { studentApi } from '@/services/student-api';
 import { planApi } from '@/services/plan-api';
 import { timelineApi, type TimelineEvent } from '@/services/timeline-api';
 import { consultationApi, type Consultation } from '@/services/consultation-api';
+import { useAuthStore } from '@/stores/authStore';
 
 // 兜底日期:仅在 timeline API 加载失败或事件缺失时使用。来源:四川省教育考试院 2026 年通知。
 const FALLBACK_EXAM_DATE = '2026-06-07T09:00:00+08:00';
@@ -435,6 +436,7 @@ function ThreeTrackTodoSection({
   waitSupervisor: TodoItem[];
   sleeping: TodoItem[];
 }) {
+  const isSupervisor = useAuthStore((s) => s.user?.teacherProfile?.isSupervisor === true);
   return (
     <section className="rounded-2xl bg-surface shadow-card">
       <div className="border-b border-border-subtle px-6 py-4">
@@ -454,9 +456,9 @@ function ThreeTrackTodoSection({
           accentClass="text-primary"
         />
         <TodoTrack
-          title="⏳ 等主管审核"
+          title={isSupervisor ? '⏳ 待我审核' : '⏳ 等主管审核'}
           items={waitSupervisor}
-          emptyText="无方案在主管手上"
+          emptyText={isSupervisor ? '暂无方案待我审核' : '无方案在主管手上'}
           accentClass="text-accent"
         />
       </div>
