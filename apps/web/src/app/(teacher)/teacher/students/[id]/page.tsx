@@ -567,7 +567,6 @@ export default function StudentDetailPage() {
                           ...student.user,
                           provincialRank: student.provincialRank ?? student.rankCheck?.calculatedRank ?? undefined,
                         }}
-                        requiredMark="optional"
                       >
                         <Collapse
                           defaultActiveKey={['basic', 'exam', 'preference']}

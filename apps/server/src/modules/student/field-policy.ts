@@ -80,6 +80,21 @@ export const STAGE_1_REQUIRED = [
 ] as const;
 
 /**
+ * 推荐算法的硬约束字段 — 生成方案的最小集合.
+ * 业务定义 (2026-05-28): 只要这些字段填齐 + provincialRank 算好, 就可生成方案.
+ * 其他 stage1 字段 (民族/政治面貌/分科分数/填表人) 是"完整档案", 但不阻塞推荐.
+ */
+export const CORE_FOR_RECOMMEND = [
+  'realName',
+  'phone',
+  'parentPhone',
+  'examType',
+  'firstChoice',
+  'reChoices',
+  'totalScore',
+] as const;
+
+/**
  * W3 阶段 2：完善字段
  */
 export const STAGE_2_FIELDS = [

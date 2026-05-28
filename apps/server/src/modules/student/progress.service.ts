@@ -5,6 +5,7 @@ import {
   STAGE_2_FIELDS,
   STAGE_3_FIELDS,
   STUDENT_ONLY_FIELDS,
+  CORE_FOR_RECOMMEND,
 } from './field-policy';
 
 export interface StageStatus {
@@ -86,16 +87,16 @@ export class ProgressService {
       teacherDataCompleteness * 0.4 + studentSelfCompleteness * 0.6,
     );
 
+    // 推荐硬约束: 老师录入字段 100% + CORE_FOR_RECOMMEND 7 字段全填.
+    // 其他 stage1 字段 (民族/政治面貌/填表人/6 科分数) 缺也允许推荐, 仍在 stageProgress
+    // 里反映完整度供进度条用, 但不阻塞"生成方案"按钮.
     const missingFieldsForRecommend: string[] = TEACHER_ONLY_FIELDS.filter(
       (f) => !this.isFilled(profile[f]),
     );
-    if (!stageProgress.stage1.completed) {
-      for (const f of STAGE_1_REQUIRED) {
-        if (!this.isFilled(profile[f])) missingFieldsForRecommend.push(f);
-      }
+    for (const f of CORE_FOR_RECOMMEND) {
+      if (!this.isFilled(profile[f])) missingFieldsForRecommend.push(f);
     }
-    const isRecommendable =
-      teacherDataCompleteness === 100 && stageProgress.stage1.completed;
+    const isRecommendable = missingFieldsForRecommend.length === 0;
 
     return {
       studentSelfCompleteness,
