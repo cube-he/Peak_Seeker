@@ -57,14 +57,28 @@ async function main() {
     );
     matched++;
     if (apply) {
+      // 自动 lookup majorId (跳详情页用), 找不到就置 null. 不阻断写入.
+      const majorMatch =
+        (await prisma.major.findFirst({
+          where: { name: r.majorName },
+          select: { id: true },
+        })) ||
+        (await prisma.major.findFirst({
+          where: { name: { contains: r.majorName } },
+          select: { id: true },
+        }));
       await prisma.studentAdmissionResult.update({
         where: { id: student.admissionResult.id },
         data: {
           admittedMajorGroupCode: r.groupCode,
           admittedMajorCode: r.majorCode,
           admittedMajorName: r.majorName,
+          admittedMajorId: majorMatch?.id,
         },
       });
+      if (!majorMatch) {
+        console.log(`     ⚠️  "${r.majorName}" 未匹配 majors 表, 链接不可用 (建议手动指定 majorId)`);
+      }
     }
   }
   console.log(`\n完成: 匹配 ${matched} / 失败 ${failed} (共 ${RECORDS.length})`);

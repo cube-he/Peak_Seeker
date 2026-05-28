@@ -195,6 +195,11 @@ interface ParsedRow {
   admittedMinRank: number | null;
   scoreDiff: number | null;
   sequenceNo: number | null;
+  // 录取专业 (可选 Excel 列, 当前模板没这几列就是 null;
+  // 未来 Excel 模板加"录取专业组""录取专业代号""录取专业"列时自动读取并链接)
+  admittedMajorGroupCode: string | null;
+  admittedMajorCode: string | null;
+  admittedMajorName: string | null;
 }
 
 function parseExcel(filePath: string): Promise<ParsedRow[]> {
@@ -255,6 +260,11 @@ function parseExcel(filePath: string): Promise<ParsedRow[]> {
         admittedMinRank: numCell(row, COL.admittedMinRank),
         scoreDiff: numCell(row, COL.scoreDiff),
         sequenceNo: numCell(row, COL.sequenceNo),
+        // 当前 Excel 模板不含这 3 列, 暂置 null. 录取专业从录取凭证截图人工读取
+        // (用 fill-admitted-major-from-proof.ts) 或未来 Excel 模板加列后扩展 parseExcel.
+        admittedMajorGroupCode: null,
+        admittedMajorCode: null,
+        admittedMajorName: null,
       });
     });
     return out;
@@ -474,17 +484,53 @@ async function main() {
 
     // 创建 StudentAdmissionResult
     if (r.admittedUniName) {
+      // 自动 resolve admittedUniId (link 到 universities 表) 让前端列表/详情
+      // 直接展示为跳详情页链接, 不需要后续手动跑 backfill 脚本.
+      const uniMatch =
+        (await prisma.university.findFirst({
+          where: { name: r.admittedUniName },
+          select: { id: true },
+        })) ||
+        (await prisma.university.findFirst({
+          where: { name: { contains: r.admittedUniName } },
+          select: { id: true },
+        }));
+      // admittedMajorName 当前 Excel 不含 (留待后续 fill-admitted-major-from-proof.ts
+      // 从录取凭证图补录). 但如果未来 Excel 加了这列, 这里也能自动 resolve majorId.
+      let majorMatch: { id: number } | null = null;
+      if (r.admittedMajorName) {
+        majorMatch =
+          (await prisma.major.findFirst({
+            where: { name: r.admittedMajorName },
+            select: { id: true },
+          })) ||
+          (await prisma.major.findFirst({
+            where: { name: { contains: r.admittedMajorName } },
+            select: { id: true },
+          }));
+      }
       await prisma.studentAdmissionResult.create({
         data: {
           studentId: profile.id,
           admittedUniName: r.admittedUniName,
+          admittedUniId: uniMatch?.id,
           admittedMinScore: r.admittedMinScore,
           admittedMinRank: r.admittedMinRank,
           scoreDiff: r.scoreDiff,
           sequenceNo: r.sequenceNo,
           batchName: r.fillBatch,
+          admittedMajorGroupCode: r.admittedMajorGroupCode,
+          admittedMajorCode: r.admittedMajorCode,
+          admittedMajorName: r.admittedMajorName,
+          admittedMajorId: majorMatch?.id,
         },
       });
+      if (!uniMatch) {
+        console.log(`  ⚠️  ${r.realName} 录取大学 "${r.admittedUniName}" 在 universities 表未匹配, 链接不可用`);
+      }
+      if (r.admittedMajorName && !majorMatch) {
+        console.log(`  ⚠️  ${r.realName} 录取专业 "${r.admittedMajorName}" 在 majors 表未匹配, 链接不可用`);
+      }
     }
 
     // 拷贝附件 + 创建 StudentAttachment 记录
