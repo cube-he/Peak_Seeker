@@ -254,7 +254,8 @@ export class StudentService {
       teacherProfileId: assignedTeacherProfileId,
     } = query;
 
-    const where: Prisma.StudentProfileWhereInput = {};
+    // 默认过滤归档学生 (历史届): 它们走 historical-cases 模块, 不在活跃学生列表
+    const where: Prisma.StudentProfileWhereInput = { isArchived: false };
 
     if (teacherProfileId !== undefined) {
       where.teacherId = teacherProfileId;

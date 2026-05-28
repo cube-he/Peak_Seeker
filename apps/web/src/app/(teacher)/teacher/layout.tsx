@@ -19,6 +19,7 @@ import {
   MessageOutlined,
   BarChartOutlined,
   PieChartOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import BrandLogo from '@/components/layout/BrandLogo';
@@ -27,6 +28,7 @@ const mainNavItems = [
   { href: '/teacher/dashboard', icon: <AppstoreOutlined />, label: '看板' },
   { href: '/teacher/students', icon: <TeamOutlined />, label: '学生管理' },
   { href: '/teacher/plans', icon: <FileTextOutlined />, label: '方案管理' },
+  { href: '/teacher/historical-cases', icon: <HistoryOutlined />, label: '历史案例' },
 ];
 
 // 沟通相关入口 (Plan 12). 团队报表只对主管展示.

@@ -769,6 +769,11 @@ model StudentProfile {
   serviceYear Int   @default(2026) @map("service_year") @db.SmallInt
   dataVersion Int   @default(0) @map("data_version")
 
+  // --- 历史档案标记 (2026-05-28 新增) ---
+  // 历史届学生 (如 25 届已录取) 不进活跃学生列表, 但保留作参考案例.
+  // 列表 / dashboard 默认过滤 isArchived=false; 历史案例页 isArchived=true.
+  isArchived  Boolean @default(false) @map("is_archived")
+
   // --- 填表元信息（V1 新增）---
   formFiller        FormFiller? @map("form_filler")
   parentSignedAt    DateTime?   @map("parent_signed_at")
@@ -786,6 +791,8 @@ model StudentProfile {
   volunteerPlans           VolunteerPlan[]
   fieldChangeLogs          StudentFieldChangeLog[]
   consultationAppointments ConsultationAppointment[]
+  admissionResult          StudentAdmissionResult?
+  attachments              StudentAttachment[]
 
   @@index([teacherId])
   @@index([province])
@@ -794,6 +801,7 @@ model StudentProfile {
   @@index([intakeStatus])
   @@index([examType, totalScore])
   @@index([serviceYear])
+  @@index([isArchived, examYear])
   @@map("student_profiles")
 }
 
@@ -890,6 +898,9 @@ model VolunteerPlan {
   reviewDrafts PlanReviewDraft[]
   evaluations PlanEvaluation[]
 
+  // 历史档案标记 (2026-05-28): 历史导入的已完成方案 (区别于在跑的方案)
+  isHistorical Boolean @default(false) @map("is_historical")
+
   @@unique([studentId, batchConfigId, versionNo], name: "plan_natural_key")
   @@index([studentId])
   @@index([createdById])
@@ -899,7 +910,71 @@ model VolunteerPlan {
   @@index([parentVersionId])
   @@index([batchConfigId])
   @@index([currentReviewerId])
+  @@index([isHistorical])
   @@map("volunteer_plans")
+}
+
+// ==================== 学生录取结果 (历史档案 1:1) ====================
+
+// 1:1 关联 StudentProfile, 记录实际录取结果. 主要用于历史届归档 (从 Excel 导入),
+// 也可用于在读学生最终录取登记.
+model StudentAdmissionResult {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  studentId Int            @unique @map("student_id")
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  // 录取大学 - 文本 + 可选 link 到 University 表
+  admittedUniName String  @map("admitted_uni_name") @db.VarChar(200)
+  admittedUniId   Int?    @map("admitted_uni_id")
+
+  // 录取分数线信息 (从历史 Excel 来; 在读学生录取后由老师填)
+  admittedMinScore Int?    @map("admitted_min_score") @db.SmallInt
+  admittedMinRank  Int?    @map("admitted_min_rank")
+  // 分差 = student.totalScore - admittedMinScore (允许 null, 因为可能没数据)
+  scoreDiff        Int?    @map("score_diff") @db.SmallInt
+  // 第几志愿被录取 (从录取凭证 / 用户填)
+  sequenceNo       Int?    @map("sequence_no") @db.SmallInt
+
+  // 录取凭证文件 (路径见 StudentAttachment, 这里冗余存一份方便快速展示)
+  proofAttachmentId Int? @map("proof_attachment_id")
+
+  // 录取批次 (e.g. 本科批次B段, 专科批次)
+  batchName String? @map("batch_name") @db.VarChar(100)
+
+  @@index([admittedUniId])
+  @@index([batchName])
+  @@map("student_admission_results")
+}
+
+// ==================== 学生附件 (1:N) ====================
+
+// 通用学生附件表: 咨询单 / 志愿填报截图 / 录取凭证 / 其他.
+// 文件物理存储在 apps/server/uploads/ 下, storagePath 是相对路径 (e.g. historical/12/consultation_xxx.pdf).
+model StudentAttachment {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  studentId Int            @map("student_id")
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  // 'consultation' (咨询单 PDF) | 'submission_screenshot' (志愿填报截图) |
+  // 'admission_proof' (录取凭证 JPG) | 'other'
+  category     String  @db.VarChar(40)
+  originalName String  @map("original_name") @db.VarChar(255)
+  storagePath  String  @map("storage_path") @db.VarChar(500)
+  mimeType     String? @map("mime_type") @db.VarChar(100)
+  fileSize     Int?    @map("file_size")
+
+  // 上传方 (teacher_id, 历史导入是脚本 = NULL)
+  uploadedById Int? @map("uploaded_by_id")
+
+  @@index([studentId, category])
+  @@index([category])
+  @@map("student_attachments")
 }
 
 // ==================== 方案志愿项 ====================

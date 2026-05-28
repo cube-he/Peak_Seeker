@@ -35,6 +35,7 @@ import { BatchConfigModule } from './modules/batch-config/batch-config.module';
 import { PlanCandidateModule } from './modules/plan-candidate/plan-candidate.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { ConsultationModule } from './modules/consultation/consultation.module';
+import { HistoricalCasesModule } from './modules/historical-cases/historical-cases.module';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { ConsultationModule } from './modules/consultation/consultation.module';
     PlanCandidateModule,
     StatsModule,
     ConsultationModule,
+    HistoricalCasesModule,
   ],
   providers: [
     // 全局应用限流守卫
