@@ -32,6 +32,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 interface StudentCard {
   id: number;
+  // 后端用嵌套结构: { user: {realName, username} }; 旧的 listMine 接口也可能返回顶层 realName
+  user?: { realName?: string; username?: string };
   realName?: string;
   username?: string;
   // 后端派生的工作流状态：COLLECTING/GENERATING/REVIEWING/FINALIZED/SUBMITTED
@@ -141,7 +143,10 @@ function categorizeStudents(
 
   students.forEach((student) => {
     const status = getWorkflowStatus(student);
-    const name = student.realName || student.username || '学生';
+    // backend 返回的 student 真实姓名在 student.user 嵌套对象里, 不在 student 顶层;
+    // 之前直接读 student.realName 永远 undefined → 全部 fallback "学生" / initial "学"
+    const name =
+      student.user?.realName || student.user?.username || student.realName || student.username || '学生';
     const initial = name.charAt(0);
     const studentId = student.id;
     const noActionDays = daysSince(student.updatedAt, now);
@@ -352,7 +357,7 @@ export default function TeacherDashboardPage() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onPressEnter={handleSearch}
-            className="lg:w-[320px]"
+            className="w-full max-w-[320px]"
             allowClear
           />
         </div>
@@ -379,11 +384,13 @@ export default function TeacherDashboardPage() {
 
         {/* 快捷操作 */}
         <div className="flex flex-wrap gap-2">
-          <Link href="/teacher/plans?status=PENDING_REVIEW">
-            <Button type="primary" icon={<CheckCircleOutlined />} className="border-0">
-              处理 {pendingPlans.length} 份待审
-            </Button>
-          </Link>
+          {pendingPlans.length > 0 ? (
+            <Link href="/teacher/plans?status=PENDING_REVIEW">
+              <Button type="primary" icon={<CheckCircleOutlined />} className="border-0">
+                处理 {pendingPlans.length} 份待审
+              </Button>
+            </Link>
+          ) : null}
           <Link href="/teacher/students/create">
             <Button icon={<PlusOutlined />}>新建学生</Button>
           </Link>

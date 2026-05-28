@@ -13,7 +13,6 @@ import {
   ClockCircleOutlined,
   ExclamationCircleOutlined,
   FileTextOutlined,
-  MessageOutlined,
   RightOutlined,
   StarOutlined,
 } from '@ant-design/icons';
@@ -147,13 +146,7 @@ export default function StudentDashboardPage() {
       icon: <BarChartOutlined />,
       tone: 'bg-[#dcfce7] text-[#166534]',
     },
-    {
-      href: '#',
-      label: 'AI 答疑',
-      icon: <MessageOutlined />,
-      tone: 'bg-[#fee2e2] text-[#991b1b]',
-      disabled: true,
-    },
+    // AI 答疑功能未上线, 移除占位避免误导用户. 上线时再加回来.
   ];
 
   const missingRecommendFieldsCount =
@@ -316,32 +309,19 @@ export default function StudentDashboardPage() {
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-serif text-lg font-semibold text-text">快捷功能</h2>
         </div>
-        <div className="grid grid-cols-4 gap-2">
-          {quickActions.map((action) =>
-            action.disabled ? (
-              <div
-                key={action.label}
-                className="rounded-xl bg-surface px-2 py-3 text-center opacity-70 shadow-card"
-              >
-                <span className={`mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-[10px] text-base ${action.tone}`}>
-                  {action.icon}
-                </span>
-                <p className="text-[11px] font-medium text-text">{action.label}</p>
-                <p className="mt-1 text-[9px] text-text-muted">待接入</p>
-              </div>
-            ) : (
-              <Link
-                key={action.label}
-                href={action.href}
-                className="rounded-xl bg-surface px-2 py-3 text-center no-underline shadow-card transition-transform hover:-translate-y-0.5"
-              >
-                <span className={`mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-[10px] text-base ${action.tone}`}>
-                  {action.icon}
-                </span>
-                <p className="text-[11px] font-medium text-text">{action.label}</p>
-              </Link>
-            ),
-          )}
+        <div className="grid grid-cols-3 gap-2">
+          {quickActions.map((action) => (
+            <Link
+              key={action.label}
+              href={action.href}
+              className="rounded-xl bg-surface px-2 py-3 text-center no-underline shadow-card transition-transform hover:-translate-y-0.5"
+            >
+              <span className={`mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-[10px] text-base ${action.tone}`}>
+                {action.icon}
+              </span>
+              <p className="text-[11px] font-medium text-text">{action.label}</p>
+            </Link>
+          ))}
         </div>
       </section>
 

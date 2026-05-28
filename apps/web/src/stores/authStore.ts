@@ -25,14 +25,11 @@ interface AuthState {
   logout: () => void;
 }
 
-// Sync token to cookie so Next.js middleware can read it for auth routing
-function setTokenCookie(token: string | null) {
-  if (typeof document === 'undefined') return;
-  if (token) {
-    document.cookie = `access_token=${token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
-  } else {
-    document.cookie = 'access_token=; path=/; max-age=0';
-  }
+// access_token cookie 现在由后端 Set-Cookie (HttpOnly) 写入和清理, 见
+// apps/server/src/modules/auth/auth.controller.ts. 前端不再 document.cookie 直接写,
+// 避免 XSS 偷 token. 留下这个 no-op 函数作为兼容点; 旧的 onRehydrateStorage 调用不会爆炸.
+function setTokenCookie(_token: string | null) {
+  // intentionally empty - cookie managed by backend Set-Cookie HttpOnly
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -66,7 +63,13 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        setTokenCookie(null);
+        // 通知后端清 HttpOnly cookie (best effort, 失败不阻断本地清理)
+        if (typeof fetch !== 'undefined') {
+          void fetch('/api/v1/auth/logout', {
+            method: 'POST',
+            credentials: 'include',
+          }).catch(() => undefined);
+        }
         // 清空跟当前用户绑定的学生位次缓存（避免共享设备污染）
         try {
           if (typeof localStorage !== 'undefined') {

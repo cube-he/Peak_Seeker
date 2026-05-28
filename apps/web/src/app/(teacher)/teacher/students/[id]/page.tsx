@@ -1335,7 +1335,13 @@ function KeyDataPanel({ student }: { student: any }) {
     : '--';
   const firstChoice = student?.firstChoice ?? '--';
   const reChoices = Array.isArray(student?.reChoices) ? student.reChoices.join('/') : '--';
-  const subjectStr = student?.examType ? `${examType}·${firstChoice}·${reChoices}` : '--';
+  // examType 跟 firstChoice 语义经常重叠 (examType=PHYSICS, firstChoice='物理'),
+  // 重叠时只显示一份避免"物理·物理·化学/生物"那种冗余
+  const subjectStr = student?.examType
+    ? examType === firstChoice
+      ? `${examType}·${reChoices}`
+      : `${examType}·${firstChoice}·${reChoices}`
+    : '--';
   const totalScore = student?.totalScore ?? null;
   const provincialRank = student?.provincialRank ?? null;
 
