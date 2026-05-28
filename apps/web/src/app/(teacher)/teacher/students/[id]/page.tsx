@@ -24,6 +24,7 @@ import { useCityOptions } from '@/components/student/picker/options/useCityOptio
 import { useUniversityOptions } from '@/components/student/picker/options/useUniversityOptions';
 import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
 import { getRegionCascaderOptions, type CascaderOption } from '@/data/student-options';
+import { fieldLabel } from '@/components/student/stage-fields';
 
 type SelectOption = { label: string; value: string };
 
@@ -329,10 +330,26 @@ function RankCheckExtra({ rankCheck }: { rankCheck?: RankCheck }) {
       : '';
 
   if (rankCheck.isMismatch && rankCheck.currentRank != null) {
+    // 偏差 >20% 时升级到 banner 样式 (背景色), 防止老师漏看小红字
+    const absDiff = Math.abs(rankCheck.difference ?? 0);
+    const ratio =
+      rankCheck.calculatedRank && rankCheck.calculatedRank > 0
+        ? absDiff / rankCheck.calculatedRank
+        : 0;
+    const isBigGap = ratio > 0.2;
+    if (isBigGap) {
+      return (
+        <span className="mt-1 inline-block rounded border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-700">
+          ⚠️ {sourceLabel}：{formatRank(rankCheck.calculatedRank)} 位{estimateNote}；
+          当前填写：{formatRank(rankCheck.currentRank)} 位；
+          相差 {formatRank(absDiff)} 位 ({Math.round(ratio * 100)}%)，请核对录入是否正确。
+        </span>
+      );
+    }
     return (
       <span className="font-medium text-red-600">
         {sourceLabel}：{formatRank(rankCheck.calculatedRank)} 位{estimateNote}；当前填写：{formatRank(rankCheck.currentRank)} 位；
-        相差 {formatRank(Math.abs(rankCheck.difference ?? 0))} 位，请核对。
+        相差 {formatRank(absDiff)} 位，请核对。
       </span>
     );
   }
@@ -1215,12 +1232,15 @@ function getFieldChecks(student: any): FieldCheckInfo[] {
 }
 
 function DataCompletenessHeader({ student }: { student: any }) {
-  const checks = getFieldChecks(student);
-  const passedCount = checks.filter((c) => c.passed).length;
-  const total = checks.length;
-  const missing = checks.filter((c) => !c.passed);
-  const percent = total > 0 ? Math.round((passedCount / total) * 100) : 0;
-  const isRecommendable = passedCount === total;
+  // 统一用后端 progress 数据 (与顶部 ProgressBar 同源, 避免 18 字段 vs 8 字段两套数字打架).
+  // 用 fieldLabel 把英文 key 翻译成中文 chip.
+  const progress = student?.progress;
+  const missing: string[] = Array.isArray(progress?.missingFieldsForRecommend)
+    ? progress.missingFieldsForRecommend
+    : [];
+  const isRecommendable = !!progress?.isRecommendable;
+  const overallPercent: number | null =
+    typeof progress?.overallCompleteness === 'number' ? progress.overallCompleteness : null;
 
   return (
     <div className="mb-4 rounded-lg border border-border-subtle bg-bg/30 px-4 py-3">
@@ -1233,19 +1253,19 @@ function DataCompletenessHeader({ student }: { student: any }) {
               <span className="text-rush">还缺 {missing.length} 项关键资料</span>
             )}
           </span>
-          <span className="ml-2 text-text-muted">
-            {passedCount}/{total} 字段 · 完整度 {percent}%
-          </span>
+          {overallPercent != null ? (
+            <span className="ml-2 text-text-muted">档案完整度 {overallPercent}%</span>
+          ) : null}
         </p>
       </div>
       {missing.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {missing.map((m) => (
+          {missing.map((key: string) => (
             <span
-              key={m.key}
+              key={key}
               className="inline-block rounded border border-rush bg-rush/10 px-2 py-0.5 text-[11px] font-medium text-rush"
             >
-              {m.label}
+              {fieldLabel(key)}
             </span>
           ))}
         </div>
@@ -1398,6 +1418,17 @@ function KeyDataPanel({ student }: { student: any }) {
             <span>目标专业 {prefMajorsStr}</span>
           </p>
         </div>
+        {/* 历史案例参考 (需要 examType + totalScore 才能算 ±20 分范围). */}
+        {student?.examType && totalScore != null ? (
+          <div className="border-t border-border-subtle pt-3">
+            <Link
+              href={`/teacher/historical-cases?examType=${student.examType}&scoreFrom=${totalScore - 20}&scoreTo=${totalScore + 20}`}
+              className="text-xs text-primary no-underline hover:underline"
+            >
+              📚 查看 ±20 分相似历史案例 →
+            </Link>
+          </div>
+        ) : null}
       </div>
     </Card>
   );
@@ -1490,6 +1521,7 @@ const CHANNEL_LABEL: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
+  requested: '待老师确认',
   scheduled: '待开始',
   in_progress: '进行中',
   completed: '已完成',

@@ -7,6 +7,7 @@ import { Button, Input, Spin, message } from 'antd';
 import {
   CheckCircleOutlined,
   FileTextOutlined,
+  PieChartOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -397,7 +398,7 @@ export default function TeacherDashboardPage() {
           ) : null}
         </div>
 
-        {/* 快捷操作 */}
+        {/* 快捷操作 — 主管不直接管学生, 这些按钮对主管角色无意义 */}
         <div className="flex flex-wrap gap-2">
           {pendingPlans.length > 0 ? (
             <Link href="/teacher/plans?status=PENDING_REVIEW">
@@ -406,15 +407,23 @@ export default function TeacherDashboardPage() {
               </Button>
             </Link>
           ) : null}
-          <Link href="/teacher/students/create">
-            <Button icon={<PlusOutlined />}>新建学生</Button>
-          </Link>
-          <Button icon={<UploadOutlined />} disabled title="批量导入功能待接入">
-            批量导入
-          </Button>
-          <Link href="/teacher/students">
-            <Button icon={<FileTextOutlined />}>班级清单</Button>
-          </Link>
+          {!isSupervisor ? (
+            <>
+              <Link href="/teacher/students/create">
+                <Button icon={<PlusOutlined />}>新建学生</Button>
+              </Link>
+              <Button icon={<UploadOutlined />} disabled title="批量导入功能待接入">
+                批量导入
+              </Button>
+              <Link href="/teacher/students">
+                <Button icon={<FileTextOutlined />}>班级清单</Button>
+              </Link>
+            </>
+          ) : (
+            <Link href="/teacher/insights/team">
+              <Button icon={<PieChartOutlined />}>团队报表</Button>
+            </Link>
+          )}
         </div>
       </header>
 
@@ -623,10 +632,13 @@ function PendingRequestsSection() {
 }
 
 function TodayConsultationsSection() {
-  const { data: list = [] } = useQuery({
+  const { data: rawList = [] } = useQuery({
     queryKey: ['consultations-today'],
     queryFn: () => consultationApi.listToday(),
   });
+  // requested 状态是家长申请待老师确认, 已经在 PendingRequestsSection 单独展示,
+  // 不在"今日沟通"里复读 (否则会被 fallback 显示成"缺席"误导).
+  const list = rawList.filter((c: Consultation) => c.status !== 'requested');
 
   if (list.length === 0) return null;
 
@@ -659,7 +671,11 @@ function TodayConsultationsSection() {
                   ? '已完成'
                   : c.status === 'cancelled'
                     ? '已取消'
-                    : '缺席';
+                    : c.status === 'no_show'
+                      ? '缺席'
+                      : c.status === 'requested'
+                        ? '待确认'
+                        : '--';
           const statusBg =
             c.status === 'completed'
               ? 'bg-safe'

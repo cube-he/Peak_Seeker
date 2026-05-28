@@ -67,8 +67,17 @@ export class PlanService {
     user: { id: number; role: string; isSupervisor?: boolean },
     query: Record<string, string | undefined>,
   ) {
-    const where: Record<string, any> =
-      user.role === 'ADMIN' || user.isSupervisor ? {} : { createdById: user.id };
+    const where: Record<string, any> = user.isSupervisor
+      ? {
+          // 主管视角: 只看需要审核/已审/终稿的方案; DRAFT 是老师私产, 不进主管视线
+          status: { in: ['PENDING_REVIEW', 'REVIEWING', 'APPROVED', 'PARENT_CONFIRMED', 'REJECTED', 'FINALIZED', 'PUBLISHED'] },
+        }
+      : user.role === 'ADMIN'
+        ? {}
+        : { createdById: user.id };
+    // 默认过滤历史档案方案 (isHistorical=true), 它们在 /teacher/historical-cases 页面访问.
+    // 不然每年的历史归档会持续淹没活跃方案列表.
+    where.isHistorical = false;
     const search = query.search?.trim();
     if (query.batch) where.batchName = query.batch;
     if (query.status) where.status = query.status;
