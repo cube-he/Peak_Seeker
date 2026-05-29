@@ -23,9 +23,12 @@ export class MajorService {
     sortBy?: string;           // 'salary' = 按平均薪资降序；默认按名称
   }) {
     const {
-      page = 1, pageSize = 20, keyword, category, level, discipline,
+      page: pageRaw = 1, pageSize: sizeRaw = 20, keyword, category, level, discipline,
       emerging, electiveSubject, sortBy,
     } = query;
+    // NestJS @Query 返回 string. Prisma 7 严格要求 skip/take 是 number, 显式强转
+    const page = Number(pageRaw) || 1;
+    const pageSize = Number(sizeRaw) || 20;
 
     const where: any = {};
     if (keyword) {
