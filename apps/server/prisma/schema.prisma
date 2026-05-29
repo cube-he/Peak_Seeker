@@ -283,16 +283,14 @@ model University {
   charterInfo Json? @map("charter_info")
 
   // === P1 新增：身份/资质标签 ===
-  is101Plan            Boolean @default(false) @map("is_101_plan")
-  isQiangji            Boolean @default(false) @map("is_qiangji")
+  // is101Plan/isQiangji/firstClassCategory 已由 master 后续加入(line 351+), 此处去重避免 Prisma duplicate
   hasGraduateSchool    Boolean @default(false) @map("has_graduate_school")
   hasPostgradRecommend Boolean @default(false) @map("has_postgrad_recommend")
-  firstClassCategory   String? @map("first_class_category") @db.VarChar(20)
 
   // === P1 新增：学科建设详情 ===
+  // nationalFeatureMajorCount 已由 master 后续加入(line 366), 此处去重
   keyLabCount                  Int?  @map("key_lab_count")
   doubleFirstClassSubjectCount Int?  @map("double_first_class_subject_count")
-  nationalFeatureMajorCount    Int?  @map("national_feature_major_count")
   provincialFeatureMajorCount  Int?  @map("provincial_feature_major_count")
   disciplineEvaluationDetail   Json? @map("discipline_evaluation_detail")
   nationalFeatureMajors        Json? @map("national_feature_majors")

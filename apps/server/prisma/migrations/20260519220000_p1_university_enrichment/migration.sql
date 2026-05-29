@@ -5,15 +5,13 @@
 
 ALTER TABLE `universities`
   -- 身份/资质标签
-  ADD COLUMN `is_101_plan` BOOLEAN NOT NULL DEFAULT false,
-  ADD COLUMN `is_qiangji` BOOLEAN NOT NULL DEFAULT false,
+  -- is_101_plan / is_qiangji / first_class_category 已由 master 后续 migration 加入, 此处跳过避免 duplicate column
   ADD COLUMN `has_graduate_school` BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN `has_postgrad_recommend` BOOLEAN NOT NULL DEFAULT false,
-  ADD COLUMN `first_class_category` VARCHAR(20) NULL,
   -- 学科建设详情
+  -- national_feature_major_count 已由 master 后续加入, 此处跳过
   ADD COLUMN `key_lab_count` INTEGER NULL,
   ADD COLUMN `double_first_class_subject_count` INTEGER NULL,
-  ADD COLUMN `national_feature_major_count` INTEGER NULL,
   ADD COLUMN `provincial_feature_major_count` INTEGER NULL,
   ADD COLUMN `discipline_evaluation_detail` JSON NULL,
   ADD COLUMN `national_feature_majors` JSON NULL,
