@@ -15,12 +15,25 @@ import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import { majorService, type MajorQueryParams } from '@/services/major';
 
+// 本科学科门类（13 个，含 2026 新设的交叉学科）
 const CATEGORIES = [
   '哲学', '经济学', '法学', '教育学', '文学', '历史学',
-  '理学', '工学', '农学', '医学', '管理学', '艺术学',
+  '理学', '工学', '农学', '医学', '管理学', '艺术学', '交叉学科',
+];
+
+// 高职专科 19 个专业大类
+const VOCATIONAL_CATEGORIES = [
+  '农林牧渔大类', '资源环境与安全大类', '能源动力与材料大类', '土木建筑大类',
+  '水利大类', '装备制造大类', '生物与化工大类', '轻工纺织大类',
+  '食品药品与粮食大类', '交通运输大类', '电子与信息大类', '医药卫生大类',
+  '财经商贸大类', '旅游大类', '文化艺术大类', '新闻传播大类',
+  '教育与体育大类', '公安与司法大类', '公共管理与服务大类',
 ];
 
 const LEVELS = ['本科', '专科'];
+
+// 选考建议筛选项（新高考选考科目）
+const ELECTIVE_SUBJECTS = ['物理', '历史', '化学', '生物', '政治', '地理'];
 
 const CATEGORY_COLORS: Record<string, string> = {
   哲学: '#7c3aed',
@@ -35,6 +48,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   医学: '#e11d48',
   管理学: '#0284c7',
   艺术学: '#9333ea',
+  交叉学科: '#0d9488',
 };
 
 type ActiveFilter = {
@@ -145,8 +159,15 @@ function MajorCard({ major }: { major: any }) {
           <h3 className="m-0 truncate font-serif text-[20px] font-semibold leading-tight text-text">
             {major.name}
           </h3>
-          <div className="mt-2 inline-flex rounded bg-bg px-2 py-0.5 font-mono text-[11px] text-text-muted">
-            {major.code || '暂无代码'}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="inline-flex rounded bg-bg px-2 py-0.5 font-mono text-[11px] text-text-muted">
+              {major.code || '暂无代码'}
+            </span>
+            {typeof major.setupYear === 'number' && major.setupYear >= 2024 && (
+              <span className="inline-flex rounded bg-accent px-2 py-0.5 text-[11px] font-medium text-white">
+                {major.setupYear} 新增
+              </span>
+            )}
           </div>
         </div>
         <span className="rounded-full bg-accent-fixed px-3 py-1 text-[11px] font-medium text-accent">
@@ -176,6 +197,11 @@ function MajorCard({ major }: { major: any }) {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
+        {major.electiveAdvice && (
+          <span className="rounded bg-primary-fixed px-2 py-0.5 text-[11px] font-medium text-primary">
+            选考 {major.electiveAdvice}
+          </span>
+        )}
         {tags.length > 0 ? (
           tags.map((tag) => (
             <span key={tag} className="rounded bg-bg px-2 py-0.5 text-[11px] text-text-tertiary">
@@ -183,7 +209,9 @@ function MajorCard({ major }: { major: any }) {
             </span>
           ))
         ) : (
-          <span className="rounded bg-bg px-2 py-0.5 text-[11px] text-text-faint">等待补充分类</span>
+          !major.electiveAdvice && (
+            <span className="rounded bg-bg px-2 py-0.5 text-[11px] text-text-faint">等待补充分类</span>
+          )
         )}
       </div>
 
@@ -271,8 +299,11 @@ export default function MajorsPage() {
     const items: ActiveFilter[] = [];
     if (filters.category) items.push({ key: 'category', label: filters.category });
     if (filters.level) items.push({ key: 'level', label: filters.level });
+    if (filters.emerging) items.push({ key: 'emerging', label: '新兴专业' });
+    if (filters.electiveSubject) items.push({ key: 'electiveSubject', label: `选考 ${filters.electiveSubject}` });
+    if (filters.sortBy === 'salary') items.push({ key: 'sortBy', label: '按薪资排序' });
     return items;
-  }, [filters.category, filters.level]);
+  }, [filters.category, filters.level, filters.emerging, filters.electiveSubject, filters.sortBy]);
 
   const majors = data?.data || [];
   const total = data?.pagination?.total || 0;
@@ -285,17 +316,17 @@ export default function MajorsPage() {
             Major Directory · 专业库
           </div>
           <h1 className="m-0 font-serif text-[32px] font-semibold leading-tight text-text sm:text-[36px]">
-            1,434 个本科专业
+            {total > 0 ? total.toLocaleString() : '——'} 个专业
           </h1>
           <p className="mt-2 text-sm text-text-tertiary">
-            12 大学科门类，结合就业方向、薪资中位数和对口院校，帮你判断专业的长期适配度。
+            覆盖本科与高职专科，对齐教育部最新专业目录。可按增设年份、选考建议、薪资筛选，帮你判断专业适配度。
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
           <div className="space-y-4">
             <CategoryNav
-              categories={CATEGORIES}
+              categories={filters.level === '专科' ? VOCATIONAL_CATEGORIES : CATEGORIES}
               selected={filters.category}
               onSelect={(category) => setFilters({ ...filters, category, page: 1 })}
               counts={categoryCounts}
@@ -336,14 +367,44 @@ export default function MajorsPage() {
                       {level}
                     </button>
                   ))}
-                  <button
-                    type="button"
-                    disabled
-                    className="cursor-not-allowed rounded-md border-0 bg-bg px-3.5 py-2 text-[13px] text-text-faint"
-                  >
-                    就业/薪资排序待接入
-                  </button>
                 </div>
+              </div>
+
+              {/* 第二行筛选：新兴专业 / 选考建议 / 薪资排序 */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
+                <button
+                  type="button"
+                  onClick={() => setFilters({ ...filters, emerging: filters.emerging ? undefined : true, page: 1 })}
+                  className={`rounded-md border-0 px-3.5 py-2 text-[13px] transition-colors ${
+                    filters.emerging ? 'bg-accent font-medium text-white' : 'bg-bg text-text-tertiary hover:text-primary'
+                  }`}
+                >
+                  新兴专业
+                </button>
+                <span className="mx-1 h-4 w-px bg-border" />
+                <span className="text-[12px] text-text-muted">选考</span>
+                {ELECTIVE_SUBJECTS.map((subj) => (
+                  <button
+                    key={subj}
+                    type="button"
+                    onClick={() => setFilters({ ...filters, electiveSubject: filters.electiveSubject === subj ? undefined : subj, page: 1 })}
+                    className={`rounded-md border-0 px-3 py-2 text-[13px] transition-colors ${
+                      filters.electiveSubject === subj ? 'bg-primary font-medium text-white' : 'bg-bg text-text-tertiary hover:text-primary'
+                    }`}
+                  >
+                    {subj}
+                  </button>
+                ))}
+                <span className="mx-1 h-4 w-px bg-border" />
+                <button
+                  type="button"
+                  onClick={() => setFilters({ ...filters, sortBy: filters.sortBy === 'salary' ? undefined : 'salary', page: 1 })}
+                  className={`rounded-md border-0 px-3.5 py-2 text-[13px] transition-colors ${
+                    filters.sortBy === 'salary' ? 'bg-surface-high font-medium text-text shadow-[0_1px_2px_rgba(0,0,0,0.04)]' : 'bg-bg text-text-tertiary hover:text-primary'
+                  }`}
+                >
+                  按薪资排序
+                </button>
               </div>
             </div>
 
@@ -416,7 +477,7 @@ export default function MajorsPage() {
             <div className="rounded-xl bg-surface p-5 shadow-card">
               <div className="mb-2 font-serif text-base font-semibold text-text">适配说明</div>
               <p className="m-0 text-sm leading-relaxed text-text-tertiary">
-                当前后端支持专业关键词、门类和层次筛选；设计稿中的就业率排序、薪资排序和报考热度需要新增排序字段或聚合接口，已在界面中标注为待接入。
+                专业库已对齐教育部最新专业目录，支持关键词、学科门类、层次、增设年份（新兴专业）、选考建议筛选与薪资排序。专业卡片的就业率等指标待招生统计数据接入后展示。
               </p>
             </div>
             <HotMajorsSidebar />

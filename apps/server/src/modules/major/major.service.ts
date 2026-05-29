@@ -18,8 +18,14 @@ export class MajorService {
     category?: string;
     level?: string;
     discipline?: string;
+    emerging?: boolean;        // 仅看新兴专业（2024 年起增设）
+    electiveSubject?: string;  // 按选考建议筛选（如「物理」）
+    sortBy?: string;           // 'salary' = 按平均薪资降序；默认按名称
   }) {
-    const { page = 1, pageSize = 20, keyword, category, level, discipline } = query;
+    const {
+      page = 1, pageSize = 20, keyword, category, level, discipline,
+      emerging, electiveSubject, sortBy,
+    } = query;
 
     const where: any = {};
     if (keyword) {
@@ -31,13 +37,21 @@ export class MajorService {
     if (category) where.category = category;
     if (level) where.level = level;
     if (discipline) where.discipline = discipline;
+    if (emerging) where.setupYear = { gte: 2024 };
+    if (electiveSubject) where.electiveAdvice = { contains: electiveSubject };
+
+    // 按平均薪资降序时，无薪资数据的专业排在后面
+    const orderBy =
+      sortBy === 'salary'
+        ? [{ avgSalary: { sort: 'desc' as const, nulls: 'last' as const } }, { name: 'asc' as const }]
+        : [{ name: 'asc' as const }];
 
     const [data, total] = await Promise.all([
       this.prisma.major.findMany({
         where,
         skip: (page - 1) * pageSize,
         take: pageSize,
-        orderBy: { name: 'asc' },
+        orderBy,
       }),
       this.prisma.major.count({ where }),
     ]);

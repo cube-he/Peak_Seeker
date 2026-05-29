@@ -282,6 +282,52 @@ model University {
   // 招生章程
   charterInfo Json? @map("charter_info")
 
+  // === P1 新增：身份/资质标签 ===
+  is101Plan            Boolean @default(false) @map("is_101_plan")
+  isQiangji            Boolean @default(false) @map("is_qiangji")
+  hasGraduateSchool    Boolean @default(false) @map("has_graduate_school")
+  hasPostgradRecommend Boolean @default(false) @map("has_postgrad_recommend")
+  firstClassCategory   String? @map("first_class_category") @db.VarChar(20)
+
+  // === P1 新增：学科建设详情 ===
+  keyLabCount                  Int?  @map("key_lab_count")
+  doubleFirstClassSubjectCount Int?  @map("double_first_class_subject_count")
+  nationalFeatureMajorCount    Int?  @map("national_feature_major_count")
+  provincialFeatureMajorCount  Int?  @map("provincial_feature_major_count")
+  disciplineEvaluationDetail   Json? @map("discipline_evaluation_detail")
+  nationalFeatureMajors        Json? @map("national_feature_majors")
+  provincialFeatureMajors      Json? @map("provincial_feature_majors")
+  doubleFirstClassMajors       Json? @map("double_first_class_majors")
+
+  // === P1 新增：招生章程结构化字段 ===
+  charterFilingRatio     String? @map("charter_filing_ratio") @db.VarChar(200)
+  charterMajorAssignment String? @map("charter_major_assignment") @db.Text
+  charterTiebreakRule    String? @map("charter_tiebreak_rule") @db.Text
+  charterForeignLangReq  String? @map("charter_foreign_lang_req") @db.Text
+  charterSubjectReq      String? @map("charter_subject_req") @db.Text
+  charterPhysicalLimit   String? @map("charter_physical_limit") @db.Text
+  charterBonusPolicy     String? @map("charter_bonus_policy") @db.Text
+  charterTuitionDesc     String? @map("charter_tuition_desc") @db.Text
+  charterTransferLimit   String? @map("charter_transfer_limit") @db.Text
+  charterAcceptAdjust    String? @map("charter_accept_adjust") @db.Text
+
+  // === P1 新增：就业流向 ===
+  signingRegionFlow Json?   @map("signing_region_flow")
+  signingUnitNature Json?   @map("signing_unit_nature")
+  mainEmployers     Json?   @map("main_employers")
+  mainEmployersNote String? @map("main_employers_note") @db.Text
+
+  // === P2 新增：满意度 1-5 星分布 + 网络满意度 ===
+  // satisfactionDistribution Json:
+  //   { overall: {1,2,3,4,5,count}, life: {..,count,evalCount}, environ: {..,count,evalCount} }
+  satisfactionDistribution       Json?  @map("satisfaction_distribution")
+  satisfactionOnlineOverall      Float? @map("satisfaction_online_overall")
+  satisfactionOnlineOverallCount Int?   @map("satisfaction_online_overall_count")
+  satisfactionOnlineLife         Float? @map("satisfaction_online_life")
+  satisfactionOnlineLifeCount    Int?   @map("satisfaction_online_life_count")
+  satisfactionOnlineEnviron      Float? @map("satisfaction_online_environ")
+  satisfactionOnlineEnvironCount Int?   @map("satisfaction_online_environ_count")
+
   // 备注
   notes String? @db.Text
 
@@ -334,6 +380,7 @@ model University {
   admissionRecords AdmissionRecord[]
   favorites        Favorite[]
   rankPredictions  RankPrediction[]
+  rankings         UniversityRanking[]
 
   @@index([province])
   @@index([city])
@@ -356,6 +403,35 @@ model University {
   @@map("universities")
 }
 
+// ==================== P2 院校历年排名 ====================
+
+model UniversityRanking {
+  id           Int        @id @default(autoincrement())
+  createdAt    DateTime   @default(now()) @map("created_at")
+  universityId Int        @map("university_id")
+  university   University @relation(fields: [universityId], references: [id], onDelete: Cascade)
+
+  year     Int    @db.SmallInt
+  listName String @map("list_name") @db.VarChar(50)
+  category String @db.VarChar(50)
+
+  // 排名值：rankValue 是数值（用于排序），rankText 保留原始（可能是"1-50"等区间）
+  rankValue       Int?     @map("rank_value")
+  rankText        String?  @map("rank_text") @db.VarChar(50)
+  worldRank       String?  @map("world_rank") @db.VarChar(50)
+  nationalRefRank Int?     @map("national_ref_rank")
+  score           Decimal? @db.Decimal(8, 2)
+
+  // 细分得分（10 维，仅校友会有完整数据，存 Json 节省列）
+  detailedScores Json? @map("detailed_scores")
+
+  @@unique([universityId, year, listName, category])
+  @@index([universityId])
+  @@index([year])
+  @@index([listName])
+  @@map("university_rankings")
+}
+
 // ==================== 专业相关 ====================
 
 model Major {
@@ -376,6 +452,9 @@ model Major {
   // 专业属性
   notes        String? @map("major_notes") @db.Text
   isRestricted Boolean @default(false) @map("is_restricted")
+
+  // 增设年份（教育部专业目录标注，用于识别新兴专业）
+  setupYear Int? @map("setup_year") @db.SmallInt
 
   // 专业水平和评级
   majorLevel String? @map("major_level_detail") @db.VarChar(100)
@@ -401,6 +480,47 @@ model Major {
   employmentRate      Decimal? @map("employment_rate") @db.Decimal(5, 2)
   avgSalary           Int?     @map("avg_salary")
   employmentDirection String?  @map("employment_direction") @db.Text
+
+  // === P3 新增：专业字典扩展（01_专业字典）===
+  firstImpression      String? @map("first_impression") @db.VarChar(500)
+  electiveAdvice       String? @map("elective_advice") @db.VarChar(200)
+  whatIs               String? @map("what_is") @db.Text
+  whatStudy            String? @map("what_study") @db.Text
+  whatDo               String? @map("what_do") @db.Text
+  employmentProspects  String? @map("employment_prospects") @db.Text
+  similarMajors        Json?   @map("similar_majors")
+  trainingObjective    String? @map("training_objective") @db.Text
+  trainingRequirements String? @map("training_requirements") @db.Text
+  disciplineReq        String? @map("discipline_req") @db.Text
+  knowledgeAbility     String? @map("knowledge_ability") @db.Text
+  famousPeople         Json?   @map("famous_people")
+  internshipDesc       String? @map("internship_desc") @db.Text
+  professionalCerts    Json?   @map("professional_certs")
+  postUpgradeDirection String? @map("post_upgrade_direction") @db.Text
+
+  // === P3 新增：满意度 4 维 + 评价人数 ===
+  satisfactionOverallCount    Int?   @map("satisfaction_overall_count")
+  satisfactionTeaching        Float? @map("satisfaction_teaching")
+  satisfactionTeachingCount   Int?   @map("satisfaction_teaching_count")
+  satisfactionCondition       Float? @map("satisfaction_condition")
+  satisfactionConditionCount  Int?   @map("satisfaction_condition_count")
+  satisfactionEmployment      Float? @map("satisfaction_employment")
+  satisfactionEmploymentCount Int?   @map("satisfaction_employment_count")
+
+  // === P3 新增：薪酬就业（02_专业薪酬就业）===
+  historicalSalary        Json?   @map("historical_salary")
+  salaryDistribution      Json?   @map("salary_distribution")
+  experienceDistribution  Json?   @map("experience_distribution")
+  educationDistribution   Json?   @map("education_distribution")
+  regionDistribution      Json?   @map("region_distribution")
+  industryDistribution    Json?   @map("industry_distribution")
+  positionTop             Json?   @map("position_top")
+  topRegion               String? @map("top_region") @db.VarChar(50)
+  topIndustry             String? @map("top_industry") @db.VarChar(100)
+  employmentRanking       String? @map("employment_ranking") @db.VarChar(50)
+  employmentRankingDesc   String? @map("employment_ranking_desc") @db.Text
+  employmentDirectionDesc String? @map("employment_direction_desc") @db.Text
+  yearSalaryMap           Json?   @map("year_salary_map")
 
   // 关联
   enrollmentPlans  EnrollmentPlan[]
@@ -657,20 +777,20 @@ model StudentProfile {
   teacher   TeacherProfile? @relation(fields: [teacherId], references: [id])
 
   // --- 基本信息 ---
-  province          String?       @default("四川") @db.VarChar(50)
-  city              String?       @db.VarChar(100)
-  county            String?       @db.VarChar(100)
-  highSchool        String?       @map("high_school") @db.VarChar(200)
-  classInfo         String?       @map("class_info") @db.VarChar(50)
-  status            StudentStatus       @default(ACTIVE)
-  intakeStatus      StudentIntakeStatus @default(DRAFT) @map("intake_status")
-  intakeSubmittedAt DateTime?           @map("intake_submitted_at")
-  intakeReviewedAt  DateTime?           @map("intake_reviewed_at")
-  intakeReviewedBy  Int?                @map("intake_reviewed_by")
-  intakeReviewComment String?           @map("intake_review_comment") @db.Text
-  idNumberEncrypted String?       @map("id_number_encrypted") @db.VarChar(500)
-  parentPhone       String?       @map("parent_phone") @db.VarChar(20)
-  isRural           Boolean       @default(false) @map("is_rural")
+  province            String?             @default("四川") @db.VarChar(50)
+  city                String?             @db.VarChar(100)
+  county              String?             @db.VarChar(100)
+  highSchool          String?             @map("high_school") @db.VarChar(200)
+  classInfo           String?             @map("class_info") @db.VarChar(50)
+  status              StudentStatus       @default(ACTIVE)
+  intakeStatus        StudentIntakeStatus @default(DRAFT) @map("intake_status")
+  intakeSubmittedAt   DateTime?           @map("intake_submitted_at")
+  intakeReviewedAt    DateTime?           @map("intake_reviewed_at")
+  intakeReviewedBy    Int?                @map("intake_reviewed_by")
+  intakeReviewComment String?             @map("intake_review_comment") @db.Text
+  idNumberEncrypted   String?             @map("id_number_encrypted") @db.VarChar(500)
+  parentPhone         String?             @map("parent_phone") @db.VarChar(20)
+  isRural             Boolean             @default(false) @map("is_rural")
 
   // --- 高考所在地（① 老师独占）---
   examLocationProvince String? @map("exam_location_province") @db.VarChar(50)
@@ -733,12 +853,12 @@ model StudentProfile {
   preferredTags            Json?           @map("preferred_tags")
 
   // --- 反向排除 ---
-  excludedProvinces    Json?        @map("excluded_provinces")
-  excludedCities       Json?        @map("excluded_cities")
-  excludedUniversities Json?        @map("excluded_universities")
-  excludedMajors           Json?        @map("excluded_majors")
-  excludedMajorCategories  Json?        @map("excluded_major_categories")
-  acceptLevel              AcceptLevel? @map("accept_level")
+  excludedProvinces       Json?        @map("excluded_provinces")
+  excludedCities          Json?        @map("excluded_cities")
+  excludedUniversities    Json?        @map("excluded_universities")
+  excludedMajors          Json?        @map("excluded_majors")
+  excludedMajorCategories Json?        @map("excluded_major_categories")
+  acceptLevel             AcceptLevel? @map("accept_level")
 
   // --- 加分政策（① 老师独占）---
   bonusPolicyStatus BonusPolicyStatus? @map("bonus_policy_status")
@@ -879,6 +999,7 @@ model VolunteerPlan {
   riskLevel  String?  @map("risk_level") @db.VarChar(20)
 
   // 定稿与导出
+  // (用 master 的 parent* 命名 - 那是更新的 schema; silly-saha 时期用的 student* 已过时)
   isFinal     Boolean   @default(false) @map("is_final")
   finalizedAt DateTime? @map("finalized_at")
   finalizedBy Int?      @map("finalized_by")
@@ -1065,9 +1186,9 @@ model PlanItem {
   originalItemId     Int?    @map("original_item_id")
 
   // 综合评分
-  overrideSoftFail   Boolean @default(false) @map("override_soft_fail")
-  softFailReasons    Json?   @map("soft_fail_reasons")
-  overrideReason     String? @map("override_reason") @db.VarChar(500)
+  overrideSoftFail Boolean @default(false) @map("override_soft_fail")
+  softFailReasons  Json?   @map("soft_fail_reasons")
+  overrideReason   String? @map("override_reason") @db.VarChar(500)
 
   compositeScore Decimal? @map("composite_score") @db.Decimal(6, 2)
   scoreBreakdown Json?    @map("score_breakdown")
@@ -1439,9 +1560,9 @@ model BatchConfig {
 
   // 政策约束（2026-05-07 加入，对应四川 2026 招生政策）
   // 该批次投档时是否享受加分（民语为主/加授民文/预科/不分省艺术/高水平运动队 = false）
-  bonusEligible    Boolean @default(true) @map("bonus_eligible")
+  bonusEligible   Boolean @default(true) @map("bonus_eligible")
   // 该批次允许的降分上限（分），0 = 不可降；e.g. 农村医学定向 20、川大国防预科 90
-  discountAllowed  Int     @default(0)    @map("discount_allowed")
+  discountAllowed Int     @default(0) @map("discount_allowed")
 
   @@unique([year, province, batch, examType])
   @@index([year])

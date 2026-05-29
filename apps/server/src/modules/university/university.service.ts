@@ -301,6 +301,10 @@ export class UniversityService {
           where: { geoStatus: 'verified' },
           orderBy: [{ isMain: 'desc' }, { id: 'asc' }],
         },
+        // P2: 历年排名（按年降序，前端可分榜单展示时间线）
+        rankings: {
+          orderBy: [{ year: 'desc' }, { listName: 'asc' }],
+        },
       },
     });
 
@@ -324,6 +328,12 @@ export class UniversityService {
       latitude: decimalToNumber(c.latitude),
       longitude: decimalToNumber(c.longitude),
       nearestAirportKm: decimalToNumber(c.nearestAirportKm),
+    })) ?? [];
+
+    // P2: ranking.score 是 Decimal，前端图表需要 number
+    const rankings = (university as any).rankings?.map((r: any) => ({
+      ...r,
+      score: decimalToNumber(r.score),
     })) ?? [];
 
     // 查询强基计划录取数据，按专业名+年份降序排列
@@ -374,7 +384,7 @@ export class UniversityService {
       }
     }
 
-    const result = { ...university, campuses, qiangjiAdmissions, bestPrediction };
+    const result = { ...university, campuses, rankings, qiangjiAdmissions, bestPrediction };
     await this.redis.setCache(cacheKey, result, 3600);
     return result;
   }

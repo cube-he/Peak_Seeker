@@ -18,6 +18,9 @@ export class MajorController {
     @Query('category') category?: string,
     @Query('level') level?: string,
     @Query('discipline') discipline?: string,
+    @Query('emerging') emerging?: string,
+    @Query('electiveSubject') electiveSubject?: string,
+    @Query('sortBy') sortBy?: string,
   ) {
     return this.majorService.findAll({
       page,
@@ -26,6 +29,9 @@ export class MajorController {
       category,
       level,
       discipline,
+      emerging: emerging === 'true' || emerging === '1',
+      electiveSubject,
+      sortBy,
     });
   }
 

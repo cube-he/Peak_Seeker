@@ -17,9 +17,18 @@ interface Props {
   maleRatio: number | null;
   femaleRatio: number | null;
   tags: any;
+  // P1 身份/资质标签
+  is101Plan?: boolean | null;
+  isQiangji?: boolean | null;
+  hasGraduateSchool?: boolean | null;
+  hasPostgradRecommend?: boolean | null;
+  firstClassCategory?: string | null;
 }
 
 const has = (v: any) => v != null && v !== '';
+
+// P1 资质徽章颜色：用主品牌色突出，与一般 tag 区分
+const QUALIFICATION_COLOR = 'gold';
 
 export default function OverviewCard(p: Props) {
   const items: { label: string; value: any }[] = [];
@@ -36,11 +45,18 @@ export default function OverviewCard(p: Props) {
   if (has(p.maleRatio) && has(p.femaleRatio))
     items.push({ label: '男女比', value: `${p.maleRatio} : ${p.femaleRatio}` });
 
+  const qualifications: string[] = [];
+  if (p.is101Plan) qualifications.push('101 计划');
+  if (p.isQiangji) qualifications.push('强基计划');
+  if (p.hasGraduateSchool) qualifications.push('研究生院');
+  if (p.hasPostgradRecommend) qualifications.push('保研资格');
+  if (has(p.firstClassCategory)) qualifications.push(`一流大学 ${p.firstClassCategory}`);
+
   const tagList: string[] = Array.isArray(p.tags)
     ? p.tags.filter((t) => typeof t === 'string')
     : [];
 
-  if (items.length === 0 && tagList.length === 0) return null;
+  if (items.length === 0 && tagList.length === 0 && qualifications.length === 0) return null;
 
   return (
     <Card title={<><BankOutlined className="mr-1" />概况</>} size="small">
@@ -53,13 +69,30 @@ export default function OverviewCard(p: Props) {
           ))}
         </Descriptions>
       )}
+      {qualifications.length > 0 && (
+        <div className="mt-3">
+          <div className="text-text-tertiary text-xs mb-1.5">资质</div>
+          <div className="flex flex-wrap gap-1">
+            {qualifications.map((q) => (
+              <Tag key={q} color={QUALIFICATION_COLOR}>
+                {q}
+              </Tag>
+            ))}
+          </div>
+        </div>
+      )}
       {tagList.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {tagList.map((t) => (
-            <Tag key={t} color="default">
-              {t}
-            </Tag>
-          ))}
+        <div className="mt-3">
+          {qualifications.length > 0 && (
+            <div className="text-text-tertiary text-xs mb-1.5">其他标签</div>
+          )}
+          <div className="flex flex-wrap gap-1">
+            {tagList.map((t) => (
+              <Tag key={t} color="default">
+                {t}
+              </Tag>
+            ))}
+          </div>
         </div>
       )}
     </Card>

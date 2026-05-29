@@ -7,6 +7,9 @@ export interface MajorQueryParams {
   category?: string;
   level?: string;
   discipline?: string;
+  emerging?: boolean;        // 仅看新兴专业（2024 年起增设）
+  electiveSubject?: string;  // 选考建议筛选
+  sortBy?: string;           // 'salary' = 按平均薪资降序
 }
 
 export const majorService = {

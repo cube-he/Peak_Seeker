@@ -1,13 +1,15 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Tabs, Table, Spin, Descriptions, Typography } from 'antd';
-import { BankOutlined, HistoryOutlined, RocketOutlined } from '@ant-design/icons';
+import { Tabs, Table, Spin, Descriptions, Typography, Tag } from 'antd';
+import { BankOutlined, HistoryOutlined, RocketOutlined, ReadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import { majorService } from '@/services/major';
 import CareerTab from '@/components/major/CareerTab';
+import TrainingTab from '@/components/major/TrainingTab';
+import MajorSummary from '@/components/major/MajorSummary';
 import AdmissionRow from '@/components/admission/AdmissionRow';
 import LowConfidenceBanner from '@/components/admission/LowConfidenceBanner';
 import { useUserStore } from '@/stores/userStore';
@@ -147,6 +149,23 @@ export default function MajorDetailPage() {
       ),
     },
     {
+      key: 'training',
+      label: <span><ReadOutlined className="mr-1" />培养方案</span>,
+      children: (
+        <TrainingTab
+          trainingObjective={m.trainingObjective ?? null}
+          trainingRequirements={m.trainingRequirements ?? null}
+          disciplineReq={m.disciplineReq ?? null}
+          knowledgeAbility={m.knowledgeAbility ?? null}
+          similarMajors={m.similarMajors ?? null}
+          professionalCerts={m.professionalCerts ?? null}
+          famousPeople={m.famousPeople ?? null}
+          internshipDesc={m.internshipDesc ?? null}
+          postUpgradeDirection={m.postUpgradeDirection ?? null}
+        />
+      ),
+    },
+    {
       key: 'career',
       label: <span><RocketOutlined className="mr-1" />就业与发展</span>,
       children: (
@@ -154,6 +173,20 @@ export default function MajorDetailPage() {
           careerDirections={m.careerDirections}
           postgraduateDirections={m.postgraduateDirections}
           coreCourses={m.coreCourses}
+          avgSalary={m.avgSalary ?? null}
+          topRegion={m.topRegion ?? null}
+          topIndustry={m.topIndustry ?? null}
+          employmentRanking={m.employmentRanking ?? null}
+          employmentRankingDesc={m.employmentRankingDesc ?? null}
+          employmentDirectionDesc={m.employmentDirectionDesc ?? null}
+          historicalSalary={m.historicalSalary ?? null}
+          salaryDistribution={m.salaryDistribution ?? null}
+          experienceDistribution={m.experienceDistribution ?? null}
+          educationDistribution={m.educationDistribution ?? null}
+          regionDistribution={m.regionDistribution ?? null}
+          industryDistribution={m.industryDistribution ?? null}
+          positionTop={m.positionTop ?? null}
+          yearSalaryMap={m.yearSalaryMap ?? null}
         />
       ),
     },
@@ -182,6 +215,12 @@ export default function MajorDetailPage() {
                   {m.code}
                 </span>
               )}
+              {/* 新兴专业徽章：2024 年起教育部增设的专业 */}
+              {typeof m.setupYear === 'number' && m.setupYear >= 2024 && (
+                <span className="rounded-md bg-accent px-3 py-1 text-sm font-medium text-white">
+                  新兴专业 · {m.setupYear} 年增设
+                </span>
+              )}
             </h1>
             <div className="mt-4 flex flex-wrap gap-2">
               {heroTags.map((tag) => (
@@ -208,6 +247,14 @@ export default function MajorDetailPage() {
 
       <div className="mx-auto grid max-w-[1200px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-12">
         <main className="min-w-0">
+          <MajorSummary
+            whatIs={m.whatIs ?? null}
+            electiveAdvice={m.electiveAdvice ?? null}
+            avgSalary={m.avgSalary ?? null}
+            setupYear={m.setupYear ?? null}
+            industryDistribution={m.industryDistribution ?? null}
+            employmentRanking={m.employmentRanking ?? null}
+          />
           <section className="mb-6 rounded-2xl bg-surface p-6 shadow-card sm:p-7">
             <div className="mb-2 text-[11px] uppercase tracking-[1.5px] text-accent">Overview · 专业概览</div>
             <h2 className="m-0 font-serif text-[24px] font-semibold text-text">
@@ -220,10 +267,68 @@ export default function MajorDetailPage() {
               >
                 {m.description}
               </Typography.Paragraph>
-            ) : (
+            ) : !m.whatIs && !m.whatStudy && !m.whatDo ? (
               <p className="m-0 mt-3 text-sm leading-relaxed text-text-tertiary">
                 当前专业介绍暂未补充，页面优先展示已接入的开设院校、历年录取、课程与就业方向数据。
               </p>
+            ) : null}
+
+            {(m.whatIs || m.whatStudy || m.whatDo) && (
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+                {m.whatIs && (
+                  <div className="rounded-lg bg-bg-subtle p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-accent mb-2">
+                      是什么
+                    </div>
+                    <Typography.Paragraph
+                      ellipsis={{ rows: 6, expandable: true, symbol: '展开' }}
+                      className="!mb-0 !text-[13px] !leading-6 !text-text-secondary"
+                    >
+                      {m.whatIs}
+                    </Typography.Paragraph>
+                  </div>
+                )}
+                {m.whatStudy && (
+                  <div className="rounded-lg bg-bg-subtle p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-accent mb-2">
+                      学什么
+                    </div>
+                    <Typography.Paragraph
+                      ellipsis={{ rows: 6, expandable: true, symbol: '展开' }}
+                      className="!mb-0 !text-[13px] !leading-6 !text-text-secondary"
+                    >
+                      {m.whatStudy}
+                    </Typography.Paragraph>
+                  </div>
+                )}
+                {m.whatDo && (
+                  <div className="rounded-lg bg-bg-subtle p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-accent mb-2">
+                      干什么
+                    </div>
+                    <Typography.Paragraph
+                      ellipsis={{ rows: 6, expandable: true, symbol: '展开' }}
+                      className="!mb-0 !text-[13px] !leading-6 !text-text-secondary"
+                    >
+                      {m.whatDo}
+                    </Typography.Paragraph>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {m.firstImpression && (
+              <div className="mt-4">
+                <div className="text-text-tertiary text-xs mb-1.5">第一印象 / 关键词</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {String(m.firstImpression)
+                    .split(/[,，、\s]+/)
+                    .filter(Boolean)
+                    .map((kw: string) => (
+                      <Tag key={kw}>{kw}</Tag>
+                    ))}
+                </div>
+              </div>
             )}
           </section>
 
@@ -240,6 +345,18 @@ export default function MajorDetailPage() {
               </Descriptions.Item>
               {m.degree && <Descriptions.Item label="授予学位">{m.degree}</Descriptions.Item>}
               {m.standardDuration && <Descriptions.Item label="学制">{m.standardDuration}</Descriptions.Item>}
+              {typeof m.setupYear === 'number' && (
+                <Descriptions.Item label="增设年份">
+                  <span className={m.setupYear >= 2024 ? 'font-semibold text-accent' : ''}>
+                    {m.setupYear} 年
+                  </span>
+                </Descriptions.Item>
+              )}
+              {m.electiveAdvice && (
+                <Descriptions.Item label="选考建议">
+                  <span className="font-semibold text-primary">{m.electiveAdvice}</span>
+                </Descriptions.Item>
+              )}
               {m.satisfactionScore && (
                 <Descriptions.Item label="满意度">
                   <span className="font-semibold">{Number(m.satisfactionScore).toFixed(1)}/5</span>
@@ -258,7 +375,7 @@ export default function MajorDetailPage() {
           <div className="rounded-xl bg-surface p-5 shadow-card">
             <h3 className="m-0 font-serif text-base font-semibold text-text">填报提示</h3>
             <p className="m-0 mt-2 text-sm leading-relaxed text-text-tertiary">
-              设计稿里的薪资趋势和职业分布图需要聚合统计接口。当前先复用专业详情、课程、就业方向和院校录取数据，后续接口补齐后可直接升级为图表。
+              「就业与发展」标签页含历年薪资走势、工资段与地区行业分布；「培养方案」标签页含培养目标、相近专业与职业资格证书，可作为选科与志愿排序的参考。
             </p>
           </div>
           <div className="rounded-xl bg-gradient-to-br from-primary to-primary-light p-5 text-white shadow-card">

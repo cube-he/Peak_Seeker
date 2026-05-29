@@ -7,7 +7,32 @@ interface Props {
   renameHistory: string | null;
   admissionGuide: string | null;
   charterInfo: any;
+  // P1 结构化章程
+  charterFilingRatio?: string | null;
+  charterMajorAssignment?: string | null;
+  charterTiebreakRule?: string | null;
+  charterForeignLangReq?: string | null;
+  charterSubjectReq?: string | null;
+  charterPhysicalLimit?: string | null;
+  charterBonusPolicy?: string | null;
+  charterTuitionDesc?: string | null;
+  charterTransferLimit?: string | null;
+  charterAcceptAdjust?: string | null;
 }
+
+// P1 字段在卡片里的展示顺序与中文标签
+const P1_FIELD_ORDER: { key: keyof Props; label: string }[] = [
+  { key: 'charterFilingRatio', label: '调档比例' },
+  { key: 'charterMajorAssignment', label: '专业分配规则' },
+  { key: 'charterTiebreakRule', label: '同分规则' },
+  { key: 'charterForeignLangReq', label: '外语要求' },
+  { key: 'charterSubjectReq', label: '单科要求' },
+  { key: 'charterPhysicalLimit', label: '体检限制' },
+  { key: 'charterBonusPolicy', label: '加分政策' },
+  { key: 'charterTuitionDesc', label: '学费说明' },
+  { key: 'charterTransferLimit', label: '转专业限制' },
+  { key: 'charterAcceptAdjust', label: '服从调剂' },
+];
 
 const has = (v: any) => v != null && v !== '';
 
@@ -33,6 +58,25 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 
 export default function CharterCard(p: Props) {
   const sections: React.ReactNode[] = [];
+
+  // P1: 结构化章程要点（来自 05_招生章程 解析）
+  const p1Entries = P1_FIELD_ORDER
+    .map(({ key, label }) => ({ label, value: p[key] as string | null | undefined }))
+    .filter(({ value }) => has(value));
+  if (p1Entries.length > 0) {
+    sections.push(
+      <Section key="p1-structured" label="填报章程要点">
+        <div className="space-y-2 text-[13px]">
+          {p1Entries.map(({ label, value }) => (
+            <div key={label}>
+              <div className="text-text-tertiary text-xs mb-0.5">{label}</div>
+              <div className="leading-6 whitespace-pre-wrap text-text">{value}</div>
+            </div>
+          ))}
+        </div>
+      </Section>,
+    );
+  }
 
   if (has(p.renameHistory)) {
     sections.push(
