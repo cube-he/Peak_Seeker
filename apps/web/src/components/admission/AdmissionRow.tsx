@@ -7,6 +7,7 @@ import RankDistance from './RankDistance';
 import { classifyRank, getTier, isHistorical, type RankTier } from '@/utils/classify-rank';
 
 const BAR_COLOR_BY_TIER: Record<RankTier, string> = {
+  unreachable: '#6b7280',
   rush:    '#c53030',
   stable:  '#2c5282',
   safe:    '#276749',

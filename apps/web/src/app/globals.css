@@ -1,6 +1,13 @@
+/* WillNest 设计 token (CSS var). 全局保留 — 只是变量定义, 不影响 layout. */
+@import '../styles/willnest-tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 注意: willnest-teacher.css (6969 行) 不再全局 import.
+   它含大量 element + 通用 className reset, 会污染登录页 / 学生侧.
+   改在 (teacher)/teacher/layout.tsx 单独 import, scope 到 /teacher/* 路由. */
 
 /* Root overflow containment — prevent any child from causing horizontal scroll */
 html, body {

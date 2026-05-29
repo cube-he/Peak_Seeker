@@ -4,20 +4,16 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
-import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Spin, Tabs, message } from 'antd';
+import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Spin, message } from 'antd';
 import {
-  ArrowLeftOutlined,
-  DownloadOutlined,
-  FileTextOutlined,
   LockOutlined,
-  SaveOutlined,
   SwapOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type BonusItem, type UpdateStudentDto } from '@/services/student-api';
 import { planApi } from '@/services/plan-api';
 import { consultationApi, type Consultation } from '@/services/consultation-api';
-import ProgressBar from '@/components/student/ProgressBar';
+import { Avatar as WnAvatar, TIcon } from '@/components/willnest';
 import BonusCalcCard from '@/components/policy/BonusCalcCard';
 import { useProvinceOptions } from '@/components/student/picker/options/useProvinceOptions';
 import { useCityOptions } from '@/components/student/picker/options/useCityOptions';
@@ -485,185 +481,407 @@ export default function StudentDetailPage() {
 
   const progress = student.progress;
 
+  // ---- 复刻设计稿 student-detail.jsx: sd-header + sd-intake + sop + sd-progress
+  // + missing-card + sd-tabs. 业务字段映射 / mutations / Tab content 保留. ----
+  const name =
+    student.user?.realName || student.realName || student.username || '学生';
+  const examType = student?.examType
+    ? EXAM_TYPE_LABEL[student.examType] ?? student.examType
+    : '--';
+  const totalScore = student?.totalScore ?? null;
+  const provincialRank = student?.provincialRank ?? null;
+  const signedAt = student?.createdAt ? new Date(student.createdAt) : null;
+  const daysServed = signedAt
+    ? Math.floor((Date.now() - signedAt.getTime()) / 86_400_000)
+    : null;
+  const checks = getFieldChecks(student);
+  const missingFieldsList = checks.filter((c) => !c.passed);
+  const intakeStatus: string = student.intakeStatus ?? 'DRAFT';
+  const INTAKE_INFO: Record<string, { label: string; tone: string; hint: string }> = {
+    DRAFT: { label: '资料草稿', tone: 'muted', hint: '学生还在自填' },
+    SUBMITTED: { label: '待老师确认', tone: 'accent', hint: '学生已提交,等老师核对' },
+    VERIFIED: { label: '资料已确认', tone: 'safe', hint: '可生成方案' },
+    NEEDS_CHANGES: { label: '已退回修改', tone: 'rush', hint: '需学生补正' },
+    REQUEST_CHANGE: { label: '请求修改中', tone: 'rush', hint: '老师要求重填部分字段' },
+  };
+  const intakeInfo = INTAKE_INFO[intakeStatus] ?? INTAKE_INFO.DRAFT;
+  const canGenerate =
+    !!progress?.isRecommendable && intakeStatus === 'VERIFIED';
+  const overall = progress?.overallCompleteness ?? 0;
+  const studentPct = progress?.studentSelfCompleteness ?? 0;
+  const teacherPct = progress?.teacherDataCompleteness ?? 0;
+
   return (
-    <div className="mx-auto max-w-[1040px] space-y-5">
-      {/* 顶部摘要条 */}
-      <StudentSummaryBar
-        student={student}
-        plansSummary={plansSummary}
-        onBack={() => router.back()}
-        onSave={() => form.validateFields().then((values) => saveMutation.mutate(values))}
-        saving={saveMutation.isPending}
-      />
-
-      {/* 原有操作栏：导出/退回/确认/生成方案 */}
-      <div className="flex flex-wrap gap-3">
-        <Button icon={<DownloadOutlined />} onClick={onExportIntake}>
-          导出登记表
-        </Button>
-        {student.intakeStatus !== 'VERIFIED' ? (
-          <>
-            <Button onClick={onRequestIntakeChange} loading={reviewIntakeMutation.isPending}>
-              退回资料
-            </Button>
-            <Button
-              type="primary"
-              onClick={() => reviewIntakeMutation.mutate({ action: 'VERIFY', comment: '资料已核验' })}
-              loading={reviewIntakeMutation.isPending}
-            >
-              确认资料
-            </Button>
-          </>
-        ) : null}
-        <Button
-          icon={<FileTextOutlined />}
-          type="primary"
-          disabled={(progress && !progress.isRecommendable) || student.intakeStatus !== 'VERIFIED'}
-          title={student.intakeStatus !== 'VERIFIED' ? '需先确认学生资料' : progress && !progress.isRecommendable ? '档案未达到可推荐阈值，请先补全关键字段' : ''}
-          className="border-0"
-          onClick={() => setShowPrereqModal(true)}
+    <div className="view-transition">
+      {/* —— 面包屑返回 —— */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 13,
+          color: 'var(--text-tertiary)',
+          marginBottom: 20,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => router.back()}
+          style={{
+            background: 'transparent',
+            border: 0,
+            padding: '4px 8px',
+            borderRadius: 6,
+            color: 'var(--text-tertiary)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            cursor: 'pointer',
+          }}
         >
-          生成方案
-        </Button>
+          <span style={{ width: 12, height: 12, display: 'inline-flex' }}>
+            <TIcon.chevLeft />
+          </span>{' '}
+          返回
+        </button>
+        <span style={{ color: 'var(--text-faint)' }}>/</span>
+        <span>学生详情</span>
       </div>
 
-      {/* 左主右副两栏 */}
-      <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
-        {/* 主区 */}
-        <div className="space-y-4">
-          {/* SOP 时间轴 */}
-          <SopTimeline nodes={sopNodes} />
-
-          {/* 进度条 */}
-          {progress ? (
-            <Card className="rounded-2xl shadow-card">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <ProgressBar label="学生自填进度" percent={progress.studentSelfCompleteness} />
-                <ProgressBar label="老师录入进度" percent={progress.teacherDataCompleteness} />
-              </div>
-              <div className="mt-3">
-                <ProgressBar label="档案总进度" percent={progress.overallCompleteness} />
-              </div>
-              {!progress.isRecommendable ? (
-                <p className="mt-3 text-xs text-text-faint">
-                  未达可推荐阈值。具体缺项见下方"还缺 X 项关键资料"chip 列表。
-                </p>
-              ) : null}
-            </Card>
-          ) : null}
-
-          <Tabs
-            activeKey={activeTab}
-            onChange={handleTabChange}
-            items={[
-              {
-                key: 'profile',
-                label: (() => {
-                  const checks = getFieldChecks(student);
-                  const missingCount = checks.filter((c) => !c.passed).length;
-                  return (
-                    <span>
-                      资料
-                      {missingCount > 0 ? (
-                        <span className="ml-1 inline-block rounded-full bg-rush px-1.5 text-[10px] font-medium text-white">
-                          {missingCount}
-                        </span>
-                      ) : null}
-                    </span>
-                  );
-                })(),
-                children: (
-                  <div className="space-y-4 pt-2">
-                    <DataCompletenessHeader student={student} />
-                    <Card className="rounded-2xl shadow-card">
-                      <Form
-                        form={form}
-                        layout="vertical"
-                        initialValues={{
-                          ...student,
-                          ...student.user,
-                          provincialRank: student.provincialRank ?? student.rankCheck?.calculatedRank ?? undefined,
-                        }}
-                      >
-                        <Collapse
-                          defaultActiveKey={['basic', 'exam', 'preference']}
-                          items={[
-                            { key: 'basic', label: '基础信息', children: <BasicFields /> },
-                            {
-                              key: 'household',
-                              label: (
-                                <span className="flex items-center gap-1">
-                                  <LockOutlined /> 户籍与高考所在地
-                                </span>
-                              ),
-                              children: <HouseholdFields />,
-                            },
-                            { key: 'exam', label: '考试成绩', children: <ExamFields rankCheck={student.rankCheck} /> },
-                            {
-                              key: 'bonus',
-                              label: (
-                                <span className="flex items-center gap-1">
-                                  <LockOutlined /> 加分政策
-                                </span>
-                              ),
-                              children: (
-                                <div className="space-y-4">
-                                  <BonusFields />
-                                  <BonusCalcCard studentProfileId={Number(studentId)} />
-                                </div>
-                              ),
-                            },
-                            { key: 'health', label: '健康条件', children: <HealthFields /> },
-                            { key: 'preference', label: '偏好与规划', children: <PreferenceFields /> },
-                          ]}
-                        />
-                      </Form>
-                    </Card>
-
-                    {progress && !progress.isRecommendable ? (
-                      <Alert
-                        type="info"
-                        showIcon
-                        message={'档案未达到"可推荐"阈值'}
-                        description="补完整分数、位次、加分、选科等关键字段后，生成方案按钮才会启用。"
-                      />
-                    ) : null}
-                  </div>
-                ),
-              },
-              {
-                key: 'comm',
-                label: '沟通记录',
-                children: <CommunicationTabContent studentId={studentId} />,
-              },
-              {
-                key: 'plan',
-                label: '方案',
-                children: <PlanListTabContent student={student} />,
-              },
-              {
-                key: 'external',
-                label: '对外材料',
-                children: (
-                  <ExternalMaterialsTabContent student={student} />
-                ),
-              },
-              {
-                key: 'log',
-                label: '变更日志',
-                children: <ChangeLogTabContent studentId={studentId} />,
-              },
-            ]}
+      {/* —— sd-header: avatar + 信息 + 操作 + intake pill + SOP timeline —— */}
+      <div className="sd-header fade-up d1">
+        <div className="top">
+          <WnAvatar
+            student={{
+              id: student?.id ?? 0,
+              name,
+              initials: name.charAt(0),
+              tone: 't-blue',
+            }}
+            size={64}
           />
+          <div className="who">
+            <h1>
+              {name}
+              {student?.id ? <span className="id-chip">#{student.id}</span> : null}
+            </h1>
+            <div className="info-meta">
+              <span>{examType}</span>
+              {totalScore != null ? (
+                <>
+                  <span className="sep" />
+                  <span>
+                    总分 <span className="num">{totalScore}</span>
+                  </span>
+                </>
+              ) : null}
+              {provincialRank != null ? (
+                <span>
+                  位次{' '}
+                  <span className="num">
+                    {provincialRank.toLocaleString('zh-CN')}
+                  </span>
+                </span>
+              ) : null}
+              {(signedAt || daysServed != null) ? <span className="sep" /> : null}
+              {signedAt ? (
+                <span>
+                  签约{' '}
+                  <span className="num">
+                    {signedAt.toLocaleDateString('zh-CN')}
+                  </span>
+                </span>
+              ) : null}
+              {daysServed != null ? (
+                <span>
+                  服务 <span className="num">{daysServed}</span> 天
+                </span>
+              ) : null}
+              {plansSummary?.latestPlanStatus ? (
+                <>
+                  <span className="sep" />
+                  <span>
+                    当前方案 v{plansSummary.latestPlanVersionNo ?? '?'} ·{' '}
+                    {plansSummary.latestPlanStatus}
+                  </span>
+                </>
+              ) : null}
+            </div>
+          </div>
+          <div className="actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={() =>
+                form.validateFields().then((values) => saveMutation.mutate(values))
+              }
+              disabled={saveMutation.isPending}
+            >
+              <TIcon.save /> {saveMutation.isPending ? '保存中...' : '保存'}
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={onExportIntake}
+            >
+              <TIcon.excel /> 导出登记表
+            </button>
+            {intakeStatus !== 'VERIFIED' ? (
+              <>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={onRequestIntakeChange}
+                  disabled={reviewIntakeMutation.isPending}
+                >
+                  <TIcon.alert /> 退回修改
+                </button>
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() =>
+                    reviewIntakeMutation.mutate({
+                      action: 'VERIFY',
+                      comment: '资料已核验',
+                    })
+                  }
+                  disabled={reviewIntakeMutation.isPending}
+                >
+                  <TIcon.check /> 确认资料
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              className="btn primary"
+              disabled={!canGenerate}
+              title={
+                intakeStatus !== 'VERIFIED'
+                  ? '需先确认学生资料'
+                  : progress && !progress.isRecommendable
+                  ? '档案未达到可推荐阈值,请先补全关键字段'
+                  : ''
+              }
+              onClick={() => setShowPrereqModal(true)}
+            >
+              <TIcon.sparkles /> 生成方案
+            </button>
+          </div>
         </div>
 
-        {/* 副区 */}
-        <div className="space-y-4">
-          <ContactPanel student={student} />
-          <KeyDataPanel student={student} />
+        {/* —— intakeStatus pill —— */}
+        <div className="sd-intake-row">
+          <span className={`sd-intake-pill tone-${intakeInfo.tone}`}>
+            {intakeStatus === 'VERIFIED' ? <TIcon.check /> : <TIcon.alert />}
+            {intakeInfo.label}
+          </span>
+          <span className="sd-intake-hint">{intakeInfo.hint}</span>
+        </div>
+
+        {/* —— SOP timeline (从现有 sopNodes 派生) —— */}
+        <div className="sop">
+          {sopNodes.map((node, i) => (
+            <div className={`sop-step ${node.status}`} key={node.key}>
+              <span className="dot">
+                {node.status === 'done' ? <TIcon.check /> : i + 1}
+              </span>
+              <span className="lbl">{node.label}</span>
+              {node.detail ? (
+                <span className="sub-detail">{node.detail}</span>
+              ) : null}
+            </div>
+          ))}
         </div>
       </div>
 
+      {/* —— sd-progress 3 bars —— */}
+      {progress ? (
+        <div className="sd-progress fade-up d2">
+          <div className="prg t-student">
+            <div className="k">学生自填进度</div>
+            <div
+              className={`v ${
+                studentPct === 100 ? 'full' : studentPct < 50 ? 'low' : ''
+              }`}
+            >
+              <span className="num">{studentPct}</span>
+              <span className="pc">%</span>
+            </div>
+            <div className="bar">
+              <div className="fill" style={{ width: `${studentPct}%` }} />
+            </div>
+          </div>
+          <div className="prg t-teacher">
+            <div className="k">老师录入进度</div>
+            <div
+              className={`v ${
+                teacherPct === 100 ? 'full' : teacherPct < 50 ? 'low' : ''
+              }`}
+            >
+              <span className="num">{teacherPct}</span>
+              <span className="pc">%</span>
+            </div>
+            <div className="bar">
+              <div className="fill" style={{ width: `${teacherPct}%` }} />
+            </div>
+          </div>
+          <div className="prg t-total">
+            <div className="k">档案总进度</div>
+            <div
+              className={`v ${
+                overall >= 90 ? 'full' : overall < 60 ? 'low' : ''
+              }`}
+            >
+              <span className="num">{overall}</span>
+              <span className="pc">%</span>
+            </div>
+            <div className="bar">
+              <div className="fill" style={{ width: `${overall}%` }} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* —— missing-card —— */}
+      <div
+        className={`missing-card fade-up d2 ${
+          missingFieldsList.length === 0 ? 'ok' : ''
+        }`}
+      >
+        <div className="lead">
+          {missingFieldsList.length === 0 ? (
+            <>
+              ✓ 档案已就绪 · 完整度{' '}
+              <span className="em" style={{ color: 'var(--safe)' }}>
+                {overall}%
+              </span>
+            </>
+          ) : (
+            <>
+              还缺 <span className="em">{missingFieldsList.length}</span>{' '}
+              项关键资料 · 档案完整度{' '}
+              <span className="em">{overall}%</span>
+            </>
+          )}
+        </div>
+        {missingFieldsList.length > 0 ? (
+          <div className="chips">
+            {missingFieldsList.map((c) => (
+              <span className="mchip" key={c.key}>
+                {c.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {/* —— sd-tabs (设计稿样式 5 个 Tab) —— */}
+      <div className="sd-tabs fade-up d3">
+        {(
+          [
+            { k: 'profile', label: '资料', badge: missingFieldsList.length },
+            { k: 'comm', label: '沟通记录' },
+            { k: 'plan', label: '方案' },
+            { k: 'external', label: '对外材料' },
+            { k: 'log', label: '变更日志' },
+          ] as const
+        ).map((t) => (
+          <button
+            type="button"
+            key={t.k}
+            className={`sd-tab ${activeTab === t.k ? 'is-active' : ''}`}
+            onClick={() => handleTabChange(t.k)}
+          >
+            {t.label}
+            {t.k === 'profile' && (t.badge ?? 0) > 0 ? (
+              <span className="badge">{t.badge}</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+
+      {/* —— Tab content (antd Form / Card / 子组件保留 ) —— */}
+      <div className="fade-up d4">
+        {activeTab === 'profile' && (
+          <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
+            <div className="space-y-4">
+              <DataCompletenessHeader student={student} />
+              <Card className="rounded-2xl shadow-card">
+                <Form
+                  form={form}
+                  layout="vertical"
+                  initialValues={{
+                    ...student,
+                    ...student.user,
+                    provincialRank:
+                      student.provincialRank ??
+                      student.rankCheck?.calculatedRank ??
+                      undefined,
+                  }}
+                >
+                  <Collapse
+                    defaultActiveKey={['basic', 'exam', 'preference']}
+                    items={[
+                      { key: 'basic', label: '基础信息', children: <BasicFields /> },
+                      {
+                        key: 'household',
+                        label: (
+                          <span className="flex items-center gap-1">
+                            <LockOutlined /> 户籍与高考所在地
+                          </span>
+                        ),
+                        children: <HouseholdFields />,
+                      },
+                      {
+                        key: 'exam',
+                        label: '考试成绩',
+                        children: <ExamFields rankCheck={student.rankCheck} />,
+                      },
+                      {
+                        key: 'bonus',
+                        label: (
+                          <span className="flex items-center gap-1">
+                            <LockOutlined /> 加分政策
+                          </span>
+                        ),
+                        children: (
+                          <div className="space-y-4">
+                            <BonusFields />
+                            <BonusCalcCard studentProfileId={Number(studentId)} />
+                          </div>
+                        ),
+                      },
+                      { key: 'health', label: '健康条件', children: <HealthFields /> },
+                      { key: 'preference', label: '偏好与规划', children: <PreferenceFields /> },
+                    ]}
+                  />
+                </Form>
+              </Card>
+
+              {progress && !progress.isRecommendable ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={'档案未达到"可推荐"阈值'}
+                  description="补完整分数、位次、加分、选科等关键字段后，生成方案按钮才会启用。"
+                />
+              ) : null}
+            </div>
+            <div className="space-y-4">
+              <ContactPanel student={student} />
+              <KeyDataPanel student={student} />
+            </div>
+          </div>
+        )}
+        {activeTab === 'comm' && <CommunicationTabContent studentId={studentId} />}
+        {activeTab === 'plan' && <PlanListTabContent student={student} />}
+        {activeTab === 'external' && (
+          <ExternalMaterialsTabContent student={student} />
+        )}
+        {activeTab === 'log' && <ChangeLogTabContent studentId={studentId} />}
+      </div>
+
+      {/* 原 antd Tabs + 副区 grid 已替换成 sd-tabs + Tab content 直接展开 */}
       {showPrereqModal && student ? (
         <PrerequisiteCheckModal
           open={showPrereqModal}
@@ -677,38 +895,62 @@ export default function StudentDetailPage() {
 
 function BasicFields() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <Form.Item name="realName" label="姓名" rules={[{ required: true }]}>
-        <Input placeholder="学生姓名" />
-      </Form.Item>
-      <Form.Item name="phone" label="手机号">
-        <Input placeholder="手机号" />
-      </Form.Item>
-      <Form.Item name="parentPhone" label="家长手机号">
-        <Input />
-      </Form.Item>
-      <Form.Item name="gender" label="性别">
-        <Radio.Group>
-          <Radio value="MALE">男</Radio>
-          <Radio value="FEMALE">女</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item name="ethnicity" label="民族">
-        <Input placeholder="如 汉族" />
-      </Form.Item>
-      <Form.Item name="politicalStatus" label="政治面貌">
-        <Radio.Group>
-          <Radio value="PARTY_MEMBER">党员</Radio>
-          <Radio value="LEAGUE_MEMBER">团员</Radio>
-          <Radio value="MASSES">群众</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item name="highSchool" label="高中">
-        <Input />
-      </Form.Item>
-      <Form.Item name="classInfo" label="班级">
-        <Input />
-      </Form.Item>
+    <div className="sd-form-grid">
+      <div className="field">
+        <label>姓名<span className="req">必填</span></label>
+        <Form.Item name="realName" rules={[{ required: true }]} noStyle>
+          <Input placeholder="学生姓名" />
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>手机号</label>
+        <Form.Item name="phone" noStyle>
+          <Input placeholder="手机号" />
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>家长手机号</label>
+        <Form.Item name="parentPhone" noStyle>
+          <Input placeholder="家长手机号" />
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>性别</label>
+        <Form.Item name="gender" noStyle>
+          <Radio.Group>
+            <Radio value="MALE">男</Radio>
+            <Radio value="FEMALE">女</Radio>
+          </Radio.Group>
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>民族</label>
+        <Form.Item name="ethnicity" noStyle>
+          <Input placeholder="如 汉族" />
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>政治面貌</label>
+        <Form.Item name="politicalStatus" noStyle>
+          <Radio.Group>
+            <Radio value="PARTY_MEMBER">党员</Radio>
+            <Radio value="LEAGUE_MEMBER">团员</Radio>
+            <Radio value="MASSES">群众</Radio>
+          </Radio.Group>
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>高中</label>
+        <Form.Item name="highSchool" noStyle>
+          <Input placeholder="如 成都七中" />
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>班级</label>
+        <Form.Item name="classInfo" noStyle>
+          <Input placeholder="如 高三(1)班" />
+        </Form.Item>
+      </div>
     </div>
   );
 }
@@ -726,27 +968,34 @@ function HouseholdFields() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_160px] lg:items-start">
+    <div className="sd-form-grid">
+      {/* 户籍所在地 — Cascader 保留 antd (业务下拉, 不改) */}
+      <div className="field sd-field-full">
+        <label>户籍所在地</label>
         <RegionCascaderField
-          label="户籍所在地"
           fieldKeys={['province', 'city', 'county']}
           options={regionOptions}
           placeholder="选择户籍省 / 市 / 县区"
         />
-        <Form.Item name="isRural" valuePropName="checked" className="lg:pt-[30px]">
+      </div>
+      <div className="field">
+        <label>户口性质</label>
+        <Form.Item name="isRural" valuePropName="checked" noStyle>
           <Checkbox>农村户籍</Checkbox>
         </Form.Item>
       </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_160px] lg:items-start">
+      {/* 高考报名地 — Cascader 保留 antd */}
+      <div className="field sd-field-full">
+        <label>高考报名地</label>
         <RegionCascaderField
-          label="高考报名地"
           fieldKeys={['examLocationProvince', 'examLocationCity', 'examLocationCounty']}
           options={regionOptions}
           placeholder="选择报名省 / 市 / 县区"
         />
-        <Button icon={<SwapOutlined />} onClick={copyHukouToExamLocation} className="lg:mt-[30px]">
+      </div>
+      <div className="field">
+        <label>&nbsp;</label>
+        <Button icon={<SwapOutlined />} onClick={copyHukouToExamLocation}>
           同户籍所在地
         </Button>
       </div>
@@ -755,12 +1004,10 @@ function HouseholdFields() {
 }
 
 function RegionCascaderField({
-  label,
   fieldKeys,
   options,
   placeholder,
 }: {
-  label: string;
   fieldKeys: [string, string, string];
   options: CascaderOption[];
   placeholder: string;
@@ -791,29 +1038,27 @@ function RegionCascaderField({
       <Form.Item name={fieldKeys[2]} hidden>
         <Input />
       </Form.Item>
-      <Form.Item label={label}>
-        <Cascader
-          aria-label={label}
-          value={value.length > 0 ? value : undefined}
-          onChange={handleChange}
-          options={options}
-          placeholder={placeholder}
-          changeOnSelect
-          showSearch={{
-            filter: (input, path) => path.some((option) => String(option.label).includes(input)),
-          }}
-          style={{ width: '100%' }}
-        />
-      </Form.Item>
+      <Cascader
+        value={value.length > 0 ? value : undefined}
+        onChange={handleChange}
+        options={options}
+        placeholder={placeholder}
+        changeOnSelect
+        showSearch={{
+          filter: (input, path) => path.some((option) => String(option.label).includes(input)),
+        }}
+        style={{ width: '100%' }}
+      />
     </>
   );
 }
 
 function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
   return (
-    <>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Form.Item name="examType" label="科类">
+    <div className="sd-form-grid">
+      <div className="field">
+        <label>科类</label>
+        <Form.Item name="examType" noStyle>
           <Select
             placeholder="选择科类"
             options={[
@@ -824,7 +1069,10 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
             ]}
           />
         </Form.Item>
-        <Form.Item name="examYear" label="高考年份">
+      </div>
+      <div className="field">
+        <label>高考年份</label>
+        <Form.Item name="examYear" noStyle>
           <Select
             placeholder="年份"
             options={[
@@ -834,7 +1082,10 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
             ]}
           />
         </Form.Item>
-        <Form.Item name="examSource" label="分数来源">
+      </div>
+      <div className="field">
+        <label>分数来源</label>
+        <Form.Item name="examSource" noStyle>
           <Select
             placeholder="来源"
             options={[
@@ -845,69 +1096,111 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
           />
         </Form.Item>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Form.Item name="totalScore" label="总分">
+      <div className="field">
+        <label>总分<span className="req">必填</span></label>
+        <Form.Item name="totalScore" noStyle>
           <InputNumber min={0} max={750} style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item name="provincialRank" label="全省位次" extra={<RankCheckExtra rankCheck={rankCheck} />}>
+      </div>
+      <div className="field">
+        <label>全省位次<span className="req">必填</span></label>
+        <Form.Item name="provincialRank" noStyle>
           <InputNumber min={1} style={{ width: '100%' }} />
         </Form.Item>
+        {rankCheck ? <div className="sc-hint"><RankCheckExtra rankCheck={rankCheck} /></div> : null}
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Form.Item name="scoreChinese" label="语文"><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="scoreMath" label="数学"><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="scoreEnglish" label="英语"><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="scoreFirstChoice" label="首选科目分"><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="scoreSub1" label="再选一"><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="scoreSub2" label="再选二"><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
+      <div className="field"><label>语文</label>
+        <Form.Item name="scoreChinese" noStyle><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
       </div>
-    </>
+      <div className="field"><label>数学</label>
+        <Form.Item name="scoreMath" noStyle><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
+      </div>
+      <div className="field"><label>英语</label>
+        <Form.Item name="scoreEnglish" noStyle><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
+      </div>
+      <div className="field"><label>首选科目分</label>
+        <Form.Item name="scoreFirstChoice" noStyle><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
+      </div>
+      <div className="field"><label>再选一</label>
+        <Form.Item name="scoreSub1" noStyle><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
+      </div>
+      <div className="field"><label>再选二</label>
+        <Form.Item name="scoreSub2" noStyle><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
+      </div>
+    </div>
   );
 }
 
 function BonusFields() {
   return (
-    <>
-      <Form.Item name="bonusPolicyStatus" label="加分政策状态">
-        <Radio.Group>
-          <Radio value="NONE">没有</Radio>
-          <Radio value="HAS_BONUS">有</Radio>
-          <Radio value="UNKNOWN">不清楚</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <Form.Item
-        name="bonusItems"
-        label="加分细则"
-        getValueProps={(items) => ({ value: toSelectValues(items) })}
-        normalize={(types) => toBonusItems(types)}
-      >
-        <Select
-          mode="multiple"
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          options={BONUS_ITEM_OPTIONS}
-          placeholder="选择加分或优先录取项"
-        />
-      </Form.Item>
-    </>
+    <div className="sd-form-grid">
+      <div className="field sd-field-full">
+        <label>加分政策状态</label>
+        <Form.Item name="bonusPolicyStatus" noStyle>
+          <Radio.Group>
+            <Radio value="NONE">没有</Radio>
+            <Radio value="HAS_BONUS">有</Radio>
+            <Radio value="UNKNOWN">不清楚</Radio>
+          </Radio.Group>
+        </Form.Item>
+      </div>
+      <div className="field sd-field-full">
+        <label>加分细则</label>
+        <Form.Item
+          name="bonusItems"
+          noStyle
+          getValueProps={(items) => ({ value: toSelectValues(items) })}
+          normalize={(types) => toBonusItems(types)}
+        >
+          <Select
+            mode="multiple"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            options={BONUS_ITEM_OPTIONS}
+            placeholder="选择加分或优先录取项"
+          />
+        </Form.Item>
+      </div>
+    </div>
   );
 }
 
 function HealthFields() {
   return (
-    <>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Form.Item name="height" label="身高 (cm)"><InputNumber min={100} max={250} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="weight" label="体重 (kg)"><InputNumber min={20} max={200} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="visionLeft" label="左眼裸眼视力"><InputNumber min={1} max={5.3} step={0.1} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="visionRight" label="右眼裸眼视力"><InputNumber min={1} max={5.3} step={0.1} style={{ width: '100%' }} /></Form.Item>
+    <div className="sd-form-grid">
+      <div className="field">
+        <label>身高 (cm)</label>
+        <Form.Item name="height" noStyle><InputNumber min={100} max={250} style={{ width: '100%' }} /></Form.Item>
       </div>
-      <Form.Item name="colorBlind" valuePropName="checked"><Checkbox>色盲</Checkbox></Form.Item>
-      <Form.Item name="colorWeak" valuePropName="checked"><Checkbox>色弱</Checkbox></Form.Item>
-      <Form.Item name="physicalLimits" label="体检受限项"><Select mode="tags" allowClear /></Form.Item>
-      <Form.Item name="medicalHistory" label="既往病史 / 特殊情况"><Input.TextArea rows={2} /></Form.Item>
-    </>
+      <div className="field">
+        <label>体重 (kg)</label>
+        <Form.Item name="weight" noStyle><InputNumber min={20} max={200} style={{ width: '100%' }} /></Form.Item>
+      </div>
+      <div className="field">
+        <label>左眼裸眼视力</label>
+        <Form.Item name="visionLeft" noStyle><InputNumber min={1} max={5.3} step={0.1} style={{ width: '100%' }} /></Form.Item>
+      </div>
+      <div className="field">
+        <label>右眼裸眼视力</label>
+        <Form.Item name="visionRight" noStyle><InputNumber min={1} max={5.3} step={0.1} style={{ width: '100%' }} /></Form.Item>
+      </div>
+      <div className="field">
+        <label>色觉</label>
+        <div style={{ display: 'flex', gap: 16, paddingTop: 6 }}>
+          <Form.Item name="colorBlind" valuePropName="checked" noStyle><Checkbox>色盲</Checkbox></Form.Item>
+          <Form.Item name="colorWeak" valuePropName="checked" noStyle><Checkbox>色弱</Checkbox></Form.Item>
+        </div>
+      </div>
+      <div className="field sd-field-full">
+        <label>体检受限项</label>
+        <Form.Item name="physicalLimits" noStyle><Select mode="tags" allowClear placeholder="可输入多个,回车添加" /></Form.Item>
+      </div>
+      <div className="field sd-field-full">
+        <label>既往病史 / 特殊情况</label>
+        <Form.Item name="medicalHistory" noStyle><Input.TextArea rows={2} placeholder="如有先天性疾病、过敏等请详填" /></Form.Item>
+      </div>
+    </div>
   );
 }
 
@@ -918,155 +1211,70 @@ function PreferenceFields() {
   const { data: majorOptions, isLoading: isMajorLoading } = useMajorOptions();
 
   return (
-    <>
-      <Form.Item name="priorityMode" label="优先模式">
-        <Radio.Group>
-          <Radio value="UNIVERSITY_FIRST">院校优先</Radio>
-          <Radio value="MAJOR_FIRST">专业优先</Radio>
-          <Radio value="CITY_FIRST">城市优先</Radio>
-          <Radio value="BALANCED">均衡</Radio>
-        </Radio.Group>
-      </Form.Item>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Form.Item name="preferredProvinces" label="意向省份">
+    <div className="sd-form-grid">
+      <div className="field sd-field-full">
+        <label>优先模式</label>
+        <Form.Item name="priorityMode" noStyle>
+          <Radio.Group>
+            <Radio value="UNIVERSITY_FIRST">院校优先</Radio>
+            <Radio value="MAJOR_FIRST">专业优先</Radio>
+            <Radio value="CITY_FIRST">城市优先</Radio>
+            <Radio value="BALANCED">均衡</Radio>
+          </Radio.Group>
+        </Form.Item>
+      </div>
+      {/* 院校/专业/省市 Picker 保留 antd Select (业务搜索下拉, 不改) */}
+      <div className="field">
+        <label>意向省份</label>
+        <Form.Item name="preferredProvinces" noStyle>
           <Select {...pickerSelectProps(provinceOptions)} placeholder="选择省份" />
         </Form.Item>
-        <Form.Item name="preferredCities" label="意向城市">
+      </div>
+      <div className="field">
+        <label>意向城市</label>
+        <Form.Item name="preferredCities" noStyle>
           <Select {...pickerSelectProps(cityOptions)} placeholder="选择城市" />
         </Form.Item>
-        <Form.Item name="preferredMajors" label="意向专业">
-          <Select {...pickerSelectProps(majorOptions)} loading={isMajorLoading} placeholder="搜索专业" />
-        </Form.Item>
-        <Form.Item name="preferredUniversities" label="意向院校">
-          <Select {...pickerSelectProps(universityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
-        </Form.Item>
-        <Form.Item name="excludedUniversities" label="排除院校">
-          <Select {...pickerSelectProps(universityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
-        </Form.Item>
-        <Form.Item name="excludedMajors" label="排除专业">
+      </div>
+      <div className="field">
+        <label>意向专业</label>
+        <Form.Item name="preferredMajors" noStyle>
           <Select {...pickerSelectProps(majorOptions)} loading={isMajorLoading} placeholder="搜索专业" />
         </Form.Item>
       </div>
-      <Form.Item name="careerDirection" label="职业方向"><Input.TextArea rows={2} /></Form.Item>
-      <Form.Item name="otherRequirements" label="其他要求"><Input.TextArea rows={2} /></Form.Item>
-    </>
+      <div className="field">
+        <label>意向院校</label>
+        <Form.Item name="preferredUniversities" noStyle>
+          <Select {...pickerSelectProps(universityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>排除院校</label>
+        <Form.Item name="excludedUniversities" noStyle>
+          <Select {...pickerSelectProps(universityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>排除专业</label>
+        <Form.Item name="excludedMajors" noStyle>
+          <Select {...pickerSelectProps(majorOptions)} loading={isMajorLoading} placeholder="搜索专业" />
+        </Form.Item>
+      </div>
+      <div className="field sd-field-full">
+        <label>职业方向</label>
+        <Form.Item name="careerDirection" noStyle><Input.TextArea rows={2} placeholder="可填多个方向,如电子信息 / 计算机" /></Form.Item>
+      </div>
+      <div className="field sd-field-full">
+        <label>其他要求</label>
+        <Form.Item name="otherRequirements" noStyle><Input.TextArea rows={2} placeholder="如希望保留独立招生计划院校等" /></Form.Item>
+      </div>
+    </div>
   );
 }
 
 // ── 顶部摘要条:身份 + 关键摘要 + 操作 ──
-function StudentSummaryBar({
-  student,
-  plansSummary,
-  onBack,
-  onSave,
-  saving,
-}: {
-  student: any;
-  plansSummary: { activePlanCount: number; latestPlanStatus: string | null; latestPlanVersionNo: number | null } | null;
-  onBack: () => void;
-  onSave: () => void;
-  saving: boolean;
-}) {
-  const name = student?.user?.realName || student?.realName || student?.username || '学生';
-  const examType = student?.examType ? EXAM_TYPE_LABEL[student.examType] ?? student.examType : '--';
-  const totalScore = student?.totalScore ?? null;
-  const provincialRank = student?.provincialRank ?? null;
-  const signedAt = student?.createdAt ? new Date(student.createdAt) : null;
-  const daysServed = signedAt
-    ? Math.floor((Date.now() - signedAt.getTime()) / 86_400_000)
-    : null;
-
-  return (
-    <header className="rounded-2xl bg-surface px-6 py-4 shadow-card">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} aria-label="返回" />
-            <h1 className="m-0 text-xl font-semibold text-text">{name}</h1>
-            <span className="text-sm text-text-muted">· {examType}</span>
-            {totalScore != null ? (
-              <span className="text-sm text-text-muted">· 总分 {totalScore}</span>
-            ) : null}
-            {provincialRank != null ? (
-              <span className="text-sm text-text-muted">
-                · 位次 {provincialRank.toLocaleString('zh-CN')}
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-text-muted">
-            {signedAt ? <span>签约 {signedAt.toLocaleDateString('zh-CN')}</span> : null}
-            {daysServed != null ? <span>· 服务 {daysServed} 天</span> : null}
-            {plansSummary?.latestPlanStatus ? (
-              <span>
-                · 当前方案 v{plansSummary.latestPlanVersionNo ?? '?'} · {plansSummary.latestPlanStatus}
-              </span>
-            ) : null}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>
-            保存
-          </Button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function SopTimeline({ nodes }: { nodes: SopNode[] }) {
-  return (
-    <Card title="服务进度" size="small">
-      <ol className="m-0 list-none space-y-3 p-0">
-        {nodes.map((node, i) => {
-          const isLast = i === nodes.length - 1;
-          return (
-            <li key={node.key} className="relative pl-6">
-              <span
-                aria-hidden
-                className={`absolute left-0 top-1 inline-flex h-4 w-4 items-center justify-center rounded-full ${
-                  node.status === 'done'
-                    ? 'bg-safe text-white'
-                    : node.status === 'active'
-                      ? 'bg-accent text-white'
-                      : node.status === 'skipped'
-                        ? 'bg-text-muted text-white'
-                        : 'border-2 border-text-muted bg-surface'
-                }`}
-              >
-                {node.status === 'done' ? '✓' : node.status === 'active' ? '●' : ''}
-              </span>
-              {!isLast ? (
-                // 之前 h-full 只到 li 底端, 跨不过 space-y-3 (12px) gap, 视觉断开.
-                // -bottom-3 让连线延伸到下一节点圆位置, 形成完整 timeline 线
-                <span
-                  aria-hidden
-                  className="absolute left-[7px] top-5 -bottom-3 w-0.5 bg-border-subtle"
-                />
-              ) : null}
-              <div>
-                <p
-                  className={`m-0 text-sm ${
-                    node.status === 'active' ? 'font-medium text-text' : 'text-text'
-                  }`}
-                >
-                  {node.label}
-                  {node.detail ? (
-                    <span className="ml-2 text-xs text-text-muted">{node.detail}</span>
-                  ) : null}
-                </p>
-                {node.timestamp ? (
-                  <p className="m-0 text-xs text-text-muted">
-                    {node.timestamp.toLocaleDateString('zh-CN')}
-                  </p>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-    </Card>
-  );
-}
+/* StudentSummaryBar + SopTimeline 旧子组件已被主入口 inline 替换为设计稿
+   .sd-header / .sop 结构, 删除以避免 unused 报错. */
 
 function ContactPanel({ student }: { student: any }) {
   const studentPhone = student?.user?.phone ?? null;

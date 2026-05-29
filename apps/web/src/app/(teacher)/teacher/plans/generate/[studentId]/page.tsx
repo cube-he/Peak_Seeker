@@ -1,15 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   Alert,
   Button,
   Descriptions,
   Drawer,
-  Empty,
-  Input,
   Modal,
   Pagination,
   Select,
@@ -23,18 +20,21 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   ArrowLeftOutlined,
   CheckOutlined,
+  CloseOutlined,
   DeleteOutlined,
   DownOutlined,
   FileTextOutlined,
   InfoCircleOutlined,
   PlusOutlined,
+  RightOutlined,
+  SearchOutlined,
   SendOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type EligibleBatch } from '@/services/student-api';
 import { planApi, type CandidateGroupSort } from '@/services/plan-api';
-import UniversityLogo from '@/components/university/UniversityLogo';
+import { CandidateCardV3 } from './CandidateCardV3';
 import PlanMajorSelectionEditor from '../../components/PlanMajorSelectionEditor';
 import {
   findPlanForBatch,
@@ -56,9 +56,8 @@ import {
 } from './plan-workbench-utils';
 import styles from './candidate-pool-polished.module.css';
 import {
-  MatchHeader, TrendChart, NotesChip, MetricStrip,
-  FilterBar, DEFAULT_FILTERS, HiddenCard, ComparePanel,
-  type FilterState, type FilterGradeKey, type TierFilter,
+  NotesChip,
+  HiddenCard, ComparePanel,
 } from '@/components/candidate-pool-v2';
 import compareStyles from '@/components/candidate-pool-v2/styles.module.css';
 
@@ -293,6 +292,31 @@ const GRADIENT_COLOR: Record<DynamicGradientTier, string> = {
   DIBAO: 'lime',
 };
 
+// pgv2 设计稿: 8 段动态梯度文字说明 (drawer 内 legend 使用)
+const GRAD_DESC: Record<DynamicGradientTier, string> = {
+  JI_CHONG: '位次差 > 50%,极有挑战,仅做参考',
+  CHONG: '位次差 20-50%,需要发挥',
+  XIAO_CHONG: '位次差 < 20%,有机会',
+  WEN: '位次基本匹配 ±10%',
+  WEN_BAO: '比学生位次稍低,较稳',
+  BAO: '位次差 30-50%,大概率录取',
+  QIANG_BAO: '位次差 > 50%,基本无虞',
+  DIBAO: '位次差 > 70%,兜底保命',
+};
+
+// pgv2 设计稿: 4 chip 梯度过滤
+type GradientFilterValue = 'all' | 'RUSH' | 'STABLE' | 'SAFE';
+const GRADIENT_FILTER_OPTIONS: Array<{
+  value: GradientFilterValue;
+  label: string;
+  tones: DynamicGradientTier[] | null;
+}> = [
+  { value: 'all', label: '全部', tones: null },
+  { value: 'RUSH', label: '冲档', tones: ['JI_CHONG', 'CHONG', 'XIAO_CHONG'] },
+  { value: 'STABLE', label: '稳档', tones: ['WEN', 'WEN_BAO'] },
+  { value: 'SAFE', label: '保底', tones: ['BAO', 'QIANG_BAO', 'DIBAO'] },
+];
+
 const MAJOR_SECTION_LABEL: Record<MajorDisplaySection, string> = {
   RECOMMENDED: '推荐填写',
   BACKUP: '可备选',
@@ -412,17 +436,34 @@ function renderTags(values?: string[] | null, color: string = 'default') {
   );
 }
 
-function renderHighlights(items: ReturnType<typeof getSubjectHighlights>['strengths'], color: string) {
-  if (!items.length) return <span className="text-text-faint">暂无</span>;
+// pgv2 设计稿 profile 行:左 label + 右值
+function ProfLine({ k, v }: { k: string; v: ReactNode }) {
   return (
-    <Space size={[4, 6]} wrap>
-      {items.map((item) => (
-        <Tag key={item.key} color={color} className="m-0">
-          {item.label} {item.score}/{item.maxScore}
-        </Tag>
-      ))}
-    </Space>
+    <div className="pgv2-prof-line">
+      <span className="k">{k}</span>
+      <div className="v">{v}</div>
+    </div>
   );
+}
+
+// pgv2 设计稿 5 个紧凑横排 fact (替换 stat-cluster 5 大卡)
+function Fact({ k, v, sub, tone }: { k: string; v: ReactNode; sub: ReactNode; tone?: 'accent' | 'safe' | 'rush' | 'primary' }) {
+  return (
+    <div className={`pgv2-fact ${tone ? `tone-${tone}` : ''}`}>
+      <div className="k">{k}</div>
+      <div className="v">{v}</div>
+      <div className="sub">{sub}</div>
+    </div>
+  );
+}
+
+// pgv2 设计稿 chip 渲染(产 pgv2-tag,替代 antd Tag);空数组显示"暂无"
+function pgvChips(items: any, tone: string = 'muted') {
+  const arr = getArrayValues(items);
+  if (!arr.length) return <span className="pgv2-empty">暂无</span>;
+  return arr.map((s: any, i: number) => (
+    <span key={i} className={`pgv2-tag tone-${tone}`}>{String(s)}</span>
+  ));
 }
 
 function getStudentName(student?: Record<string, any>) {
@@ -442,34 +483,7 @@ function getPhysicalLimitTags(student?: Record<string, any>) {
   ].filter((item): item is string => Boolean(item));
 }
 
-function StudentProfileBlock({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className={styles.profileBlock}>
-      <h2>{title}</h2>
-      <div className={styles.profileBlockBody}>{children}</div>
-    </div>
-  );
-}
-
-function StudentFact({
-  label,
-  value,
-  note,
-  accent = false,
-}: {
-  label: string;
-  value: ReactNode;
-  note?: ReactNode;
-  accent?: boolean;
-}) {
-  return (
-    <div className={cx(styles.profileFact, accent && styles.profileFactAccent)}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {note ? <em>{note}</em> : null}
-    </div>
-  );
-}
+/* StudentProfileBlock / StudentFact 已被 pgv2-profile-grid + pgv2-facts 替换 */
 
 function gradientTier(item: { suggestedGradient?: Gradient; dynamicGradient?: DynamicGradientDetail | null }): DynamicGradientTier {
   return item.dynamicGradient?.tier ?? item.suggestedGradient ?? 'WEN';
@@ -493,19 +507,7 @@ function tagClass(tone: 'rush' | 'stable' | 'safe' | 'muted' | 'warn' | 'extreme
   return cx(styles.tag, toneClass);
 }
 
-function formatCompetition(group: CandidateGroup) {
-  const current = group.competition?.currentCount;
-  const previous = group.competition?.previousCount;
-  if (!current && !previous) return '竞争池暂无';
-  return `${group.competition?.currentYear ?? '今年'} ${current ? current.toLocaleString() : '-'} / ${group.competition?.previousYear ?? '去年'} ${previous ? previous.toLocaleString() : '-'}`;
-}
-
-function formatSelectionCompetition(group: CandidateGroup) {
-  const detail = group.selectionCompetition;
-  if (!detail?.eligibleCount) return '选科池暂无';
-  const source = detail.sourceType === 'PUBLIC_ESTIMATE' ? `${detail.sourceYear} 参考` : detail.sourceYear ?? '当前';
-  return `选科池 ${detail.eligibleCount.toLocaleString()} 人 (${source})`;
-}
+/* formatCompetition / formatSelectionCompetition 已删 — 候选卡区改用 CandidateCardV3, 不再需要这两个 helper */
 
 function formatRankValue(value?: number | null) {
   return value ? `${value.toLocaleString()} 位` : '-';
@@ -802,10 +804,7 @@ export default function GeneratePlanPage() {
   const [searchText, setSearchText] = useState('');
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
-  // 默认显示「组最低」：后端对组最低做了 majorMin fallback，趋势连续性更好
-  // 切到「投档线」时只显示 2025 起的真投档数据（早期记录缺失 filing 字段）
-  const [trendType, setTrendType] = useState<'filing' | 'min'>('min');
-  const [poolFilters, setPoolFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  // FilterBar / 趋势 toggle 已下线: pgv2 设计稿用 4 chip 梯度 + showHidden 替代
   // 不持久化的"不考虑"集合（per-session）
   const [hiddenGroupKeys, setHiddenGroupKeys] = useState<Set<string>>(new Set());
   const hideGroup = (key: string) => setHiddenGroupKeys((prev) => new Set([...prev, key]));
@@ -836,6 +835,15 @@ export default function GeneratePlanPage() {
     });
   const [candidatePage, setCandidatePage] = useState(1);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
+  // pgv2 设计稿: profile 可折叠 + 显示已隐藏 toggle + 8 段梯度 chip 过滤
+  const [profileOpen, setProfileOpen] = useState(true);
+  const [showHidden, setShowHidden] = useState(false);
+  const [gradientFilter, setGradientFilter] = useState<GradientFilterValue>('all');
+  // pgv2 设计稿: rail 志愿层 HTML5 drag-and-drop 排序 + 单项展开
+  const [localPlanItems, setLocalPlanItems] = useState<any[]>([]);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [expandedRailItemId, setExpandedRailItemId] = useState<number | null>(null);
   const [activeDetail, setActiveDetail] = useState<{ group: CandidateGroup; major: CandidateMajor } | null>(null);
   const [stickyBarExpanded, setStickyBarExpanded] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -887,29 +895,30 @@ export default function GeneratePlanPage() {
   const candidateGroups = unwrap<CandidateGroupListResult>(groupData);
   const groups = candidateGroups?.groups ?? [];
 
-  // 前端筛选：基于 poolFilters 过滤 groups（不改变 service 返回顺序）
+  // 前端筛选: pgv2 设计稿 4 chip 梯度 + 显示已隐藏 toggle
   const visibleGroups = useMemo(() => {
     return groups.filter((group) => {
-      // 梯度筛选
-      const tier = gradientTier(group) as FilterGradeKey;
-      if (!poolFilters.grades.has(tier)) return false;
-
-      // 档次筛选
-      const cardTiers: TierFilter[] = [];
-      if (group.university?.is985) cardTiers.push('985');
-      if (group.university?.is211) cardTiers.push('211');
-      if (group.university?.isDoubleFirstClass) cardTiers.push('DFC');
-      if (cardTiers.length === 0) cardTiers.push('other');
-      const tierMatch = cardTiers.some((t) => poolFilters.tiers.has(t));
-      if (!tierMatch) return false;
-
-      // 地域筛选（依据后端计算的 prefMatch.province）
-      if (poolFilters.province === 'local' && group.prefMatch?.province !== 'match') return false;
-      if (poolFilters.province === 'outside' && group.prefMatch?.province !== 'mismatch') return false;
-
+      if (!showHidden && hiddenGroupKeys.has(group.groupKey)) return false;
+      if (gradientFilter !== 'all') {
+        const tier = gradientTier(group);
+        const opt = GRADIENT_FILTER_OPTIONS.find((o) => o.value === gradientFilter);
+        if (opt?.tones && !opt.tones.includes(tier)) return false;
+      }
       return true;
     });
-  }, [groups, poolFilters]);
+  }, [groups, hiddenGroupKeys, showHidden, gradientFilter]);
+
+  // pgv2 设计稿 rail 三段统计: 把 planItem 3-tier (CHONG/WEN/BAO) 映射到 rush/stable/safe
+  const tierStats = useMemo(() => {
+    const acc = { rush: 0, stable: 0, safe: 0 };
+    planItems.forEach((it: any) => {
+      const g = it.gradient ?? it.suggestedGradient;
+      if (g === 'CHONG') acc.rush += 1;
+      else if (g === 'WEN') acc.stable += 1;
+      else acc.safe += 1;
+    });
+    return acc;
+  }, [planItems]);
   const isUsingFallbackYear = Boolean(candidateGroups?.isFallbackYear && candidateGroups.sourceYear && candidateGroups.planYear);
   const isUsingScoreBasedRank = Boolean(
     candidateGroups?.studentRankSource === 'SCORE_SEGMENT' &&
@@ -1088,6 +1097,39 @@ export default function GeneratePlanPage() {
     },
   });
 
+  // pgv2 rail: 志愿层 drag-and-drop 持久化
+  const reorderMutation = useMutation({
+    mutationFn: (itemIds: number[]) => planApi.reorderItems(String(planId), itemIds),
+    onSuccess: () => {
+      void message.success('志愿顺序已保存');
+      queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+    },
+    onError: (error: any) => {
+      void message.error(error?.response?.data?.message ?? '志愿顺序保存失败');
+      setLocalPlanItems(planItems); // 失败回滚
+    },
+  });
+
+  // 同步 react-query 数据到本地 rail state (拖动持有本地, mutation 成功后 query 重拉同步回来)
+  useEffect(() => {
+    setLocalPlanItems(planItems);
+  }, [plan?.id, planItems.length, planItems.map((it: any) => it.id).join(',')]);
+
+  const handleRailDragEnd = () => {
+    if (dragIdx == null || dragOverIdx == null || dragIdx === dragOverIdx) {
+      setDragIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
+    const next = [...localPlanItems];
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(dragOverIdx, 0, moved);
+    setLocalPlanItems(next);
+    reorderMutation.mutate(next.map((it: any) => it.id));
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
   const batchOptions = useMemo(
     () =>
       batches.map((b) => {
@@ -1257,128 +1299,228 @@ export default function GeneratePlanPage() {
     return <div className="py-24 text-center"><Spin size="large" /></div>;
   }
 
+  // pgv2 设计稿: 顶部 eyebrow / facts / pool / toolbar / tier-bar / source-note / rail / compare-bar / drawer
+  const currentSortLabel = CANDIDATE_SORT_OPTIONS.find((item) => item.value === candidateSort)?.label ?? '综合推荐';
+  const intakeReady = student?.intakeStatus === 'VERIFIED';
   return (
-    <div className={styles.page}>
-      <Link href={`/teacher/students/${studentId}`} className={styles.backLink}>
-        <ArrowLeftOutlined /> 返回学生详情
-      </Link>
-
-      <section className={styles.compactHeader}>
-        <div className={styles.studentIdentity}>
-          <div className={styles.studentTop}>
-            <div>
-              <h1>生成方案工作台</h1>
-              <p>学生：{student?.user?.realName || student?.realName || student?.user?.username || '-'} · 当前方案按后端候选池实时计算</p>
+    <div className="view-transition pgv2-page">
+      {/* —— Region 1: pgv2-top 返回 + eyebrow + 标题 + 学生 + 批次 + 操作 —— */}
+      <div className="pgv2-top">
+        <div className="pgv2-top-l">
+          <button
+            type="button"
+            className="pgv2-back"
+            onClick={() => router.push(`/teacher/students/${studentId}`)}
+          >
+            <ArrowLeftOutlined /> 返回学生详情
+          </button>
+          <div>
+            <div className="pgv2-eyebrow">PLAN BUILDER</div>
+            <h1 className="pgv2-title">生成方案工作台</h1>
+            <div className="pgv2-sub">
+              学生:<strong>{getStudentName(student)}</strong>
+              <span className="dot" />
+              <span>当前方案按后端候选池实时计算</span>
             </div>
-            <div className={styles.headerActions}>
+          </div>
+        </div>
+        <div className="pgv2-top-r">
+          <div className="pgv2-batch">
+            <label>批次</label>
             <Select
-              placeholder="选择批次"
+              placeholder="请选择批次..."
               value={batchConfigId}
               loading={batchLoading}
               options={batchOptions}
               onChange={setBatchConfigId}
-              className="min-w-[260px]"
+              style={{ minWidth: 220 }}
             />
-            <button
-              type="button"
-              className={cx(styles.btn, styles.btnSmall, styles.btnPrimary)}
-              disabled={!batchConfigId || student?.intakeStatus !== 'VERIFIED'}
-              onClick={openOrCreatePlan}
-            >
-              <FileTextOutlined />
-              {selectedBatchPlan ? '打开已有方案' : '创建方案草稿'}
-            </button>
-            {planId ? (
-              <>
-                <button type="button" className={cx(styles.btn, styles.btnSmall)} onClick={() => router.push(`/teacher/plans/${planId}`)}>查看详情</button>
-                <button
-                  type="button"
-                  className={cx(styles.btn, styles.btnSmall, styles.btnPrimary)}
-                  disabled={plan?.status !== 'DRAFT' || !planItems.length}
-                  onClick={() => submitMutation.mutate()}
-                >
-                  <SendOutlined />
-                  提交审核
-                </button>
-              </>
-            ) : null}
-            <Button onClick={() => setAlgoDrawerOpen(true)} icon={<InfoCircleOutlined />}>
-              算法路径
-            </Button>
-            </div>
           </div>
-          <div className={styles.studentProfileGrid}>
-            <div className={styles.scoreOverview}>
-              <StudentFact label="总分" value={formatScoreValue(student?.totalScore)} note={scoreRankNote} accent />
-              <StudentFact label="档案位次" value={formatRankValue(student?.provincialRank)} note="学生档案记录" accent />
-              <StudentFact label="排序位次" value={formatRankValue(studentRankForDecision)} note={isUsingScoreBasedRank ? '已按一分一段修正' : '候选池计算口径'} accent />
-              <StudentFact label="资料状态" value={formatLabel(student?.intakeStatus || 'DRAFT', INTAKE_STATUS_LABEL)} note={student?.intakeStatus || 'DRAFT'} />
-              <StudentFact label="选科组合" value={subjectCombination} note={formatLabel(student?.examSource, EXAM_SOURCE_LABEL)} />
-            </div>
+          <Button
+            type="primary"
+            disabled={!batchConfigId || !intakeReady}
+            onClick={openOrCreatePlan}
+            icon={selectedBatchPlan ? <FileTextOutlined /> : <PlusOutlined />}
+          >
+            {selectedBatchPlan ? '打开已有方案' : '创建方案草稿'}
+          </Button>
+          {planId ? (
+            <>
+              <Button onClick={() => router.push(`/teacher/plans/${planId}`)} icon={<FileTextOutlined />}>
+                查看详情
+              </Button>
+              <Button
+                disabled={plan?.status !== 'DRAFT' || !planItems.length}
+                onClick={() => submitMutation.mutate()}
+                icon={<SendOutlined />}
+              >
+                提交审核
+              </Button>
+            </>
+          ) : null}
+          <Button onClick={() => setAlgoDrawerOpen(true)} icon={<InfoCircleOutlined />}>
+            算法路径
+          </Button>
+        </div>
+      </div>
 
-            <div className={styles.profileDetailsGrid}>
-              <StudentProfileBlock title="科目结构">
-                <div className={styles.subjectScoreGrid}>
-                  <StudentFact label="语文" value={formatScoreValue(student?.scoreChinese)} />
-                  <StudentFact label="数学" value={formatScoreValue(student?.scoreMath)} />
-                  <StudentFact label="英语" value={formatScoreValue(student?.scoreEnglish)} />
-                  <StudentFact label="首选科目" value={formatScoreValue(student?.scoreFirstChoice)} />
-                  <StudentFact label="再选一" value={formatScoreValue(student?.scoreSub1)} />
-                  <StudentFact label="再选二" value={formatScoreValue(student?.scoreSub2)} />
-                </div>
-                <div className={styles.profileLine}>
-                  <span>优势科目</span>
-                  <div>{renderHighlights(subjectHighlights.strengths, 'green')}</div>
-                </div>
-                <div className={styles.profileLine}>
-                  <span>短板科目</span>
-                  <div>{renderHighlights(subjectHighlights.weaknesses, 'orange')}</div>
-                </div>
-              </StudentProfileBlock>
-
-              <StudentProfileBlock title="意向信息">
-                <div className={styles.profileLine}><span>优先模式</span><strong>{formatLabel(student?.priorityMode, PRIORITY_MODE_LABEL)}</strong></div>
-                <div className={styles.profileLine}><span>留省偏好</span><strong>{formatLabel(student?.stayPreference, STAY_PREFERENCE_LABEL)}</strong></div>
-                <div className={styles.profileLine}><span>升学/职业</span><strong>{formatLabel(student?.careerPlan, CAREER_PLAN_LABEL)} · {formatPlainText(student?.careerDirection)}</strong></div>
-                <div className={styles.profileLine}><span>地域意向</span><div>{renderTags([...getArrayValues(student?.preferredProvinces), ...getArrayValues(student?.preferredCities)], 'blue')}</div></div>
-                <div className={styles.profileLine}><span>院校意向</span><div>{renderTags(student?.preferredUniversities, 'geekblue')}</div></div>
-                <div className={styles.profileLine}><span>专业意向</span><div>{renderTags([...getArrayValues(student?.preferredMajors), ...getArrayValues(student?.preferredMajorCategories)], 'green')}</div></div>
-                <div className={styles.profileLine}><span>意向批次</span><div>{renderTags(student?.preferredBatches, 'purple')}</div></div>
-              </StudentProfileBlock>
-
-              <StudentProfileBlock title="排除与红线">
-                <div className={styles.profileLine}><span>排除地域</span><div>{renderTags([...getArrayValues(student?.excludedProvinces), ...getArrayValues(student?.excludedCities)], 'red')}</div></div>
-                <div className={styles.profileLine}><span>排除院校</span><div>{renderTags(student?.excludedUniversities, 'red')}</div></div>
-                <div className={styles.profileLine}><span>排除专业</span><div>{renderTags([...getArrayValues(student?.excludedMajors), ...getArrayValues(student?.excludedMajorCategories)], 'volcano')}</div></div>
-                <div className={styles.profileLine}><span>接受边界</span><div>{renderTags(riskPreferenceTags, 'gold')}</div></div>
-                <div className={styles.profileLine}><span>身体限制</span><div>{renderTags(physicalLimitTags, 'orange')}</div></div>
-                <div className={styles.profileLine}><span>其他要求</span><strong>{formatPlainText(student?.otherRequirements)}</strong></div>
-              </StudentProfileBlock>
-            </div>
-          </div>
-          <div className={styles.noteRow}>
-            <span className={styles.collectionNote}>已有方案</span>
-            {existingPlansLoading ? <span className={styles.collectionNote}>加载中...</span> : null}
-            {existingPlans.length ? existingPlans.map((existingPlan) => {
-              const batchName = existingPlan.batchName ?? existingPlan.batch ?? `批次 ${existingPlan.batchConfigId ?? existingPlan.id}`;
-              return (
-                <button
-                  key={existingPlan.id}
-                  type="button"
-                  className={cx(styles.btn, styles.btnSmall, existingPlan.id === planId && styles.btnPrimary)}
-                  onClick={() => openPlan(existingPlan)}
-                >
-                  {batchName} · V{existingPlan.versionNo ?? 1} · {existingPlan.status ?? 'DRAFT'}
-                </button>
-              );
-            }) : <span className={styles.collectionNote}>暂无已创建方案</span>}
+      {/* —— 资料未确认 Alert (pgv2 设计稿风格) —— */}
+      {!intakeReady ? (
+        <div className="pgv2-alert tone-warn fade-up">
+          <span className="ic"><WarningOutlined /></span>
+          <div>
+            <strong>学生资料尚未确认</strong>
+            ,当前状态为「{formatLabel(student?.intakeStatus || 'DRAFT', INTAKE_STATUS_LABEL)}」。
+            需要先在学生详情页完成资料审核,才能进入下一步生成方案。
           </div>
         </div>
-        {student?.intakeStatus !== 'VERIFIED' ? (
-          <Alert className="mt-4" type="warning" showIcon message="学生资料尚未确认，需要先在学生详情页完成资料审核。" />
-        ) : null}
-      </section>
+      ) : null}
 
+      {/* —— 档案位次 / 一分一段 mismatch Alert —— */}
+      {isUsingScoreBasedRank ? (
+        <div className="pgv2-alert tone-info fade-up">
+          <span className="ic"><InfoCircleOutlined /></span>
+          <div>
+            档案位次 <strong>{candidateGroups?.storedRank?.toLocaleString()}</strong> 与
+            高考分 <strong>{student?.totalScore}</strong> 明显不匹配。候选排序已按 {candidateGroups?.sourceYear ?? '当前'} 年一分一段估算位次
+            <strong> {candidateGroups?.scoreBasedRank?.toLocaleString()}</strong> 计算。
+          </div>
+        </div>
+      ) : null}
+
+      {/* —— Region 2: pgv2-profile 学生 Profile 可折叠 (5 facts + 三栏 + 已有方案) —— */}
+      <div className="pgv2-profile fade-up">
+        <button
+          type="button"
+          className="pgv2-profile-head"
+          onClick={() => setProfileOpen((o) => !o)}
+        >
+          <h3>
+            <span className="ic"><FileTextOutlined /></span>
+            学生 Profile
+            <span className="muted">5 关键指标 + 科目结构 + 意向信息 + 排除红线</span>
+          </h3>
+          <span className={`pgv2-chev ${profileOpen ? 'is-open' : ''}`}><RightOutlined /></span>
+        </button>
+        {profileOpen ? (
+          <>
+            {/* —— Region: pgv2-facts 5 紧凑横排 —— */}
+            <div className="pgv2-facts">
+              <Fact
+                k="总分"
+                v={formatScoreValue(student?.totalScore)}
+                sub={scoreRankNote || '高考实考'}
+              />
+              <Fact
+                k="档案位次"
+                v={formatRankValue(student?.provincialRank)}
+                sub="学生档案记录"
+              />
+              <Fact
+                k="排序位次"
+                v={formatRankValue(studentRankForDecision)}
+                sub={isUsingScoreBasedRank ? '已按一分一段修正' : '候选池计算口径'}
+                tone="accent"
+              />
+              <Fact
+                k="资料状态"
+                v={
+                  <span style={{ color: intakeReady ? 'var(--safe)' : 'var(--rush)' }}>
+                    {formatLabel(student?.intakeStatus || 'DRAFT', INTAKE_STATUS_LABEL)}
+                  </span>
+                }
+                sub={intakeReady ? '可生成方案' : '需先确认'}
+              />
+              <Fact
+                k="选科组合"
+                v={subjectCombination}
+                sub={formatLabel(student?.examSource, EXAM_SOURCE_LABEL)}
+              />
+            </div>
+
+            {/* —— 三栏 profile (科目结构 / 意向信息 / 排除红线) —— */}
+            <div className="pgv2-profile-grid">
+              <div className="pgv2-profile-col">
+                <h5>科目结构</h5>
+                <div className="pgv2-subj-grid">
+                  {[
+                    ['语文', student?.scoreChinese],
+                    ['数学', student?.scoreMath],
+                    ['英语', student?.scoreEnglish],
+                    ['首选', student?.scoreFirstChoice],
+                    ['再选一', student?.scoreSub1],
+                    ['再选二', student?.scoreSub2],
+                  ].map(([lbl, v]) => (
+                    <div className="pgv2-subj" key={String(lbl)}>
+                      <span className="lbl">{lbl}</span>
+                      <span className="num">{v == null ? '—' : String(v)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="pgv2-chips-row">
+                  <span className="pgv2-chip-label">优势</span>
+                  <div>{pgvChips(subjectHighlights.strengths, 'safe')}</div>
+                </div>
+                <div className="pgv2-chips-row">
+                  <span className="pgv2-chip-label">短板</span>
+                  <div>{pgvChips(subjectHighlights.weaknesses, 'rush')}</div>
+                </div>
+              </div>
+
+              <div className="pgv2-profile-col">
+                <h5>意向信息</h5>
+                <ProfLine k="优先模式" v={<strong>{formatLabel(student?.priorityMode, PRIORITY_MODE_LABEL)}</strong>} />
+                <ProfLine k="留省偏好" v={formatLabel(student?.stayPreference, STAY_PREFERENCE_LABEL)} />
+                <ProfLine k="升学/职业" v={`${formatLabel(student?.careerPlan, CAREER_PLAN_LABEL)} · ${formatPlainText(student?.careerDirection)}`} />
+                <ProfLine k="地域意向" v={pgvChips([...getArrayValues(student?.preferredProvinces), ...getArrayValues(student?.preferredCities)], 'primary')} />
+                <ProfLine k="院校意向" v={pgvChips(student?.preferredUniversities, 'primary')} />
+                <ProfLine k="专业意向" v={pgvChips([...getArrayValues(student?.preferredMajors), ...getArrayValues(student?.preferredMajorCategories)], 'safe')} />
+                <ProfLine k="意向批次" v={pgvChips(student?.preferredBatches, 'accent')} />
+              </div>
+
+              <div className="pgv2-profile-col">
+                <h5>排除与红线</h5>
+                <ProfLine k="排除地域" v={pgvChips([...getArrayValues(student?.excludedProvinces), ...getArrayValues(student?.excludedCities)], 'rush')} />
+                <ProfLine k="排除院校" v={pgvChips(student?.excludedUniversities, 'rush')} />
+                <ProfLine k="排除专业" v={pgvChips([...getArrayValues(student?.excludedMajors), ...getArrayValues(student?.excludedMajorCategories)], 'rush')} />
+                <ProfLine k="接受边界" v={pgvChips(riskPreferenceTags, 'accent')} />
+                <ProfLine k="身体限制" v={pgvChips(physicalLimitTags, 'rush')} />
+                <ProfLine k="其他要求" v={<strong>{formatPlainText(student?.otherRequirements)}</strong>} />
+              </div>
+            </div>
+
+            {/* —— 已有方案 chips —— */}
+            <div className="pgv2-existing-row">
+              <span className="pgv2-existing-label">已有方案</span>
+              {existingPlansLoading ? (
+                <span className="pgv2-existing-empty">加载中...</span>
+              ) : existingPlans.length === 0 ? (
+                <span className="pgv2-existing-empty">暂无已创建方案</span>
+              ) : (
+                existingPlans.map((existingPlan) => {
+                  const batchName = existingPlan.batchName ?? existingPlan.batch ?? `批次 ${existingPlan.batchConfigId ?? existingPlan.id}`;
+                  const isActive = existingPlan.id === planId;
+                  const isFinal = existingPlan.status === 'FINALIZED';
+                  return (
+                    <button
+                      key={existingPlan.id}
+                      type="button"
+                      className={`pgv2-existing-chip ${isActive ? 'is-active' : ''}`}
+                      onClick={() => openPlan(existingPlan)}
+                    >
+                      <span className="bch">{batchName}</span>
+                      <span className="ver">V{existingPlan.versionNo ?? 1}</span>
+                      <span className={`st st-${(existingPlan.status || 'draft').toLowerCase()}`}>{isFinal ? '终稿' : '草稿'}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      {/* —— sticky bar (现有实现, 不在 9 区块改造范围) —— */}
       <div className={styles.stickyStudentBar} aria-label="学生关键信息常驻摘要">
         <div className={styles.stickyBarPrimary}>
           <div className={styles.stickyStudentIdentity}>
@@ -1414,115 +1556,131 @@ export default function GeneratePlanPage() {
 
       {planId ? (
         <>
-        <div className={styles.summaryStrip}>
-          <div className={styles.summaryCard}><div className={styles.label}>候选总量</div><div className={styles.value}>{candidateGroups?.total ?? 0}</div><div className={styles.hint}>专业组候选</div></div>
-          <div className={styles.summaryCard}><div className={styles.label}>排序位次</div><div className={styles.value}>{formatRankValue(studentRankForDecision)}</div><div className={styles.hint}>{isUsingScoreBasedRank ? '一分一段估算' : '档案位次'}</div></div>
-          <div className={styles.summaryCard}><div className={styles.label}>方案年份</div><div className={styles.value}>{candidateGroups?.planYear ?? '-'}</div><div className={styles.hint}>招生计划口径</div></div>
-          <div className={styles.summaryCard}><div className={styles.label}>当前方案</div><div className={styles.value}>{planItems.length}</div><div className={styles.hint}>已加入志愿项</div></div>
-        </div>
+          {/* —— 4 指标 strip —— */}
+          <div className="pgv2-metric-strip fade-up">
+            <div className="pgv2-metric">
+              <span className="k">候选总量</span>
+              <span className="v">{candidateGroups?.total ?? 0}</span>
+              <span className="sub">专业组候选 · 已隐藏 {hiddenGroupKeys.size}</span>
+            </div>
+            <div className="pgv2-metric">
+              <span className="k">排序位次</span>
+              <span className="v">{formatRankValue(studentRankForDecision)}</span>
+              <span className="sub">{isUsingScoreBasedRank ? '一分一段估算' : '档案位次'}</span>
+            </div>
+            <div className="pgv2-metric">
+              <span className="k">方案年份</span>
+              <span className="v">{candidateGroups?.planYear ?? '-'}</span>
+              <span className="sub">招生计划口径</span>
+            </div>
+            <div className="pgv2-metric tone-accent">
+              <span className="k">当前方案</span>
+              <span className="v">{planItems.length}</span>
+              <span className="sub">已加入志愿项</span>
+            </div>
+          </div>
 
-        <div className={styles.workbench}>
-          <section className={styles.panel}>
-            <div className={styles.panelHead}>
-              <div className={styles.panelTitle}>
-                <h2>院校专业组候选池</h2>
-                <p>按后端候选结果展示专业组，排序参考位次、专业匹配、计划变化、竞争池、选科池和征集口径。</p>
-              </div>
-            </div>
-            <div className={styles.toolbar}>
-              <Input.Search
-                placeholder="院校/专业/专业组"
-                allowClear
-                value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
-                onSearch={setKeyword}
-              />
-              <div className={styles.filterRow}>
-                <Select
-                  value={candidateSort}
-                  onChange={(value: CandidateGroupSort) => setCandidateSort(value)}
-                  options={CANDIDATE_SORT_OPTIONS}
-                  className="w-[170px]"
-                />
-                <Select
-                  value={includeSoftFails ? 'all' : 'pass'}
-                  onChange={(value) => setIncludeSoftFails(value === 'all')}
-                  options={[
-                    { label: '显示风险项', value: 'all' },
-                    { label: '仅可选项', value: 'pass' },
-                  ]}
-                  className="w-[130px]"
-                />
-              </div>
-            </div>
-            <div className={styles.candidateView}>
-              <FilterBar
-                filters={poolFilters}
-                setFilters={setPoolFilters}
-                filteredCount={visibleGroups.length}
-                totalCount={groups.length}
-              />
-              <div className={styles.densityNote}>
+          {/* —— 主区: 候选池 + 当前方案 —— */}
+          <div className="pgv2-workbench">
+            {/* —— Region 3: pgv2-pool 候选池 —— */}
+            <section className="pgv2-pool">
+              <div className="pgv2-pool-head">
                 <div>
-                  当前展示 <strong>{visibleGroups.length}</strong> 个候选，按 <strong>{CANDIDATE_SORT_OPTIONS.find((item) => item.value === candidateSort)?.label}</strong> 排序
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ display: 'inline-flex', gap: 2, padding: 2, borderRadius: 6, background: 'var(--surface-dim, #f0eee6)' }}>
-                    <button
-                      type="button"
-                      onClick={() => setTrendType('filing')}
-                      style={{
-                        height: 22, padding: '0 10px', borderRadius: 4, border: 0, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                        background: trendType === 'filing' ? '#fff' : 'transparent',
-                        color: trendType === 'filing' ? '#1e3a5f' : '#6b6962',
-                        boxShadow: trendType === 'filing' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                      }}
-                    >
-                      投档线趋势
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTrendType('min')}
-                      style={{
-                        height: 22, padding: '0 10px', borderRadius: 4, border: 0, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                        background: trendType === 'min' ? '#fff' : 'transparent',
-                        color: trendType === 'min' ? '#1e3a5f' : '#6b6962',
-                        boxShadow: trendType === 'min' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                      }}
-                    >
-                      组最低趋势
-                    </button>
-                  </div>
-                  <span>{includeSoftFails ? '包含风险项' : '仅显示可选项'}</span>
+                  <h2>院校专业组候选池</h2>
+                  <p>按后端候选结果展示专业组,排序参考位次、专业匹配、计划变化、竞争池、选科池和征集口径</p>
                 </div>
               </div>
+
+              {/* —— Region 4: pgv2-toolbar 搜索 + 排序 + 显示已隐藏 —— */}
+              <div className="pgv2-toolbar">
+                <span className="pgv2-search">
+                  <SearchOutlined />
+                  <input
+                    placeholder="搜索院校 / 专业组 / 专业"
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') setKeyword(searchText);
+                    }}
+                  />
+                </span>
+                <select
+                  className="pgv2-sort"
+                  value={candidateSort}
+                  onChange={(event) => setCandidateSort(event.target.value as CandidateGroupSort)}
+                >
+                  {CANDIDATE_SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>排序:{o.label}</option>
+                  ))}
+                </select>
+                <label className="pgv2-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showHidden}
+                    onChange={(event) => setShowHidden(event.target.checked)}
+                  />
+                  显示已隐藏 ({hiddenGroupKeys.size})
+                </label>
+                <label className="pgv2-toggle">
+                  <input
+                    type="checkbox"
+                    checked={includeSoftFails}
+                    onChange={(event) => setIncludeSoftFails(event.target.checked)}
+                  />
+                  显示风险项
+                </label>
+              </div>
+
+              {/* —— Region 5: pgv2-tier-bar 8 段梯度过滤 chip —— */}
+              <div className="pgv2-tier-bar">
+                {GRADIENT_FILTER_OPTIONS.map((o) => {
+                  const baseGroups = groups.filter((g) => showHidden || !hiddenGroupKeys.has(g.groupKey));
+                  const n = o.tones
+                    ? baseGroups.filter((g) => o.tones!.includes(gradientTier(g))).length
+                    : baseGroups.length;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      className={`pgv2-tier-chip ${gradientFilter === o.value ? 'is-active' : ''}`}
+                      onClick={() => setGradientFilter(o.value)}
+                    >
+                      {o.label} <span className="n">{n}</span>
+                    </button>
+                  );
+                })}
+                <span className="pgv2-tier-sep" aria-hidden="true" />
+                <span className="pgv2-density-note">
+                  当前展示 <strong>{visibleGroups.length}</strong> 个候选, 按
+                  <strong> {currentSortLabel}</strong> 排序
+                </span>
+              </div>
+
+              {/* —— Region 6: pgv2-source-note 计划口径回退提示 —— */}
               {isUsingFallbackYear ? (
-                <Alert
-                  type="info"
-                  showIcon
-                  message={`当前候选池参考 ${candidateGroups.sourceYear} 年招生计划，方案年份仍为 ${candidateGroups.planYear}。人数变化按 ${candidateGroups.previousYear ?? (candidateGroups.sourceYear! - 1)} 年对比。`}
-                />
+                <div className="pgv2-source-note">
+                  <InfoCircleOutlined />
+                  当前候选池参考 <strong>{candidateGroups!.sourceYear}</strong> 年招生计划,
+                  方案年份为 <strong>{candidateGroups!.planYear}</strong>。人数变化按
+                  <strong> {candidateGroups!.previousYear ?? (candidateGroups!.sourceYear! - 1)}</strong> 年对比。
+                </div>
               ) : null}
 
-              {isUsingScoreBasedRank ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message={`档案位次 ${candidateGroups?.storedRank?.toLocaleString()} 与 ${student?.totalScore ?? '-'} 分明显不匹配，候选排序已按 ${candidateGroups?.sourceYear ?? '当前'} 年一分一段估算位次 ${candidateGroups?.scoreBasedRank?.toLocaleString()} 计算。`}
-                />
-              ) : null}
-
+              {/* —— 候选卡片列表 —— */}
               {groupLoading ? (
                 <div className="py-16 text-center">
                   <Spin size="large" />
                   <div className="mt-4 text-sm font-medium text-text">正在计算候选专业组</div>
                   <div className="mt-1 text-xs text-text-tertiary">系统正在综合位次、计划变化、竞争人数、选科池和征集数据</div>
                 </div>
-              ) : visibleGroups.length ? (
+              ) : visibleGroups.length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                  没有符合条件的候选 · 试试切换梯度或清空关键词
+                </div>
+              ) : (
                 <>
-                  <div className={styles.cardList}>
+                  <div className="pgv2-cards">
                     {visibleGroups.map((group) => {
-                      // 隐藏的卡：渲染塌缩 HiddenCard
                       if (hiddenGroupKeys.has(group.groupKey)) {
                         return (
                           <HiddenCard
@@ -1534,298 +1692,59 @@ export default function GeneratePlanPage() {
                         );
                       }
                       const expanded = expandedGroupKeys.includes(group.groupKey);
-                      const planChange = formatGroupPlanChange(group);
                       const added = isCandidateGroupAlreadyAdded(group, planItems);
                       const anchor = getAnchorMajor(group);
                       const adjustedRank = getAdjustedRank(group, anchor);
-                      const rankGap = formatRankGap(studentRankForDecision, adjustedRank);
                       const majorSections = getMajorSections(group);
-                      const previewMajors = (majorSections.recommended.length ? majorSections.recommended : group.majors)
-                        .slice(0, expanded ? Math.min(majorSections.recommended.length || group.majors.length, 6) : 3);
-                      const evidence = [
-                        ...(group.matchReasons ?? []),
-                        ...(anchor?.matchReasons ?? []),
-                      ].filter(Boolean);
-                      const trendPoints = (trendType === 'filing' ? group.historyFiling3y : group.history3y) ?? [];
-                      const ms = group.matchScore ?? 0;
-                      const weightClass =
-                        ms >= 85 ? compareStyles.cardPrimary :
-                        ms > 0 && ms < 70 ? compareStyles.cardSecondary :
-                        '';
-                      const comparedClass = compareSet.has(group.groupKey) ? compareStyles.cardCompared : '';
-                      const trendDelta = trendPoints.length >= 2
-                        ? trendPoints[trendPoints.length - 1].score - trendPoints[0].score
-                        : null;
                       return (
-                        <article key={group.groupKey} className={`${styles.candidateCard} ${weightClass} ${comparedClass}`}>
-                          <MatchHeader
-                            matchScore={group.matchScore ?? 0}
-                            matchReason={group.matchReason}
-                            prefMatch={group.prefMatch}
-                            compared={compareSet.has(group.groupKey)}
-                            onCompareToggle={() => toggleCompare(group.groupKey)}
-                          />
-                          {trendPoints.length > 0 ? (
-                            <div style={{ padding: '8px 16px', borderTop: '1px solid #f0eee6', borderBottom: '1px solid #f0eee6', background: '#faf9f5', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 11, color: '#6b6962', fontWeight: 600, letterSpacing: 0.4, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                {trendType === 'filing' ? '近 3 年投档线' : '近 3 年组最低分'}
-                              </span>
-                              <div style={{ width: 280, flexShrink: 0 }}>
-                                <TrendChart points={trendPoints} />
-                              </div>
-                              <div style={{ fontSize: 12, color: '#6b6962', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', flexWrap: 'wrap' }}>
-                                {trendDelta != null ? (
-                                  <>
-                                    <span style={{ fontFamily: 'Georgia, "Noto Serif SC", SimSun, serif', fontWeight: 600, color: '#1a1a19' }}>
-                                      {trendPoints[0].score} → {trendPoints[trendPoints.length - 1].score}
-                                    </span>
-                                    <span style={{
-                                      fontSize: 11, fontWeight: 700,
-                                      padding: '2px 6px', borderRadius: 4,
-                                      background: trendDelta > 0 ? '#fef2f2' : trendDelta < 0 ? '#f0fff4' : '#f0eee6',
-                                      color: trendDelta > 0 ? '#c53030' : trendDelta < 0 ? '#276749' : '#6b6962',
-                                    }}>
-                                      {trendDelta > 0 ? '+' : ''}{trendDelta}
-                                    </span>
-                                    <span style={{ fontSize: 10, color: '#87867f' }}>{trendPoints.length} 年</span>
-                                  </>
-                                ) : null}
-                                {group.predictedMinRank?.point != null ? (
-                                  <span
-                                    title={`基于 ${group.predictedMinRank.targetYear ?? '2026'} 年预测 · 信心 ${group.predictedMinRank.confidence ?? '—'}`}
-                                    style={{
-                                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                                      padding: '3px 8px', borderRadius: 5,
-                                      background: '#fdf8ec', border: '1px solid #f0dfad',
-                                      color: '#8a6510', fontSize: 11, fontWeight: 600,
-                                      cursor: 'help',
-                                    }}
-                                  >
-                                    ◇ {group.predictedMinRank.targetYear ?? 2026} 预测 ~{group.predictedMinRank.point.toLocaleString()} 位
-                                    {group.predictedMinRank.confidence ? (
-                                      <span style={{
-                                        marginLeft: 2,
-                                        padding: '0 4px',
-                                        borderRadius: 3,
-                                        fontSize: 9,
-                                        background: group.predictedMinRank.confidence === 'high' ? '#e8f5ec'
-                                          : group.predictedMinRank.confidence === 'medium' ? '#ebf4ff'
-                                          : '#f0eee6',
-                                        color: group.predictedMinRank.confidence === 'high' ? '#276749'
-                                          : group.predictedMinRank.confidence === 'medium' ? '#2c5282'
-                                          : '#87867f',
-                                      }}>
-                                        {group.predictedMinRank.confidence === 'high' ? '高'
-                                          : group.predictedMinRank.confidence === 'medium' ? '中'
-                                          : '低'}
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
-                          ) : null}
-                          <div className={styles.candidateTop}>
-                            <UniversityLogo name={group.universityName || '学校'} logoUrl={group.university?.logoUrl} size={40} />
-                            <button type="button" className="min-w-0 border-0 bg-transparent p-0 text-left" onClick={() => toggleGroup(group.groupKey)}>
-                              <div className={styles.nameLine}>
-                                <h3>{group.universityName}</h3>
-                                <span className={tagClass(gradientTone(gradientTier(group)))}>{GRADIENT_LABEL[gradientTier(group)]}</span>
-                                {added ? <span className={tagClass('muted')}>已加入</span> : null}
-                                {group.softFailCount > 0 ? <span className={tagClass('warn')}>{group.softFailCount} 个风险专业</span> : null}
-                                <UniversityBadges group={group} />
-                              </div>
-                              <div className={styles.subLine}>
-                                {group.university?.province || group.university?.city ? <span>{group.university?.province}{group.university?.city ? ` · ${group.university.city}` : ''}</span> : null}
-                                <span className={styles.dot}>·</span>
-                                <span>{formatCandidateGroup(group)}</span>
-                              </div>
-                            </button>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                              <div className={`${compareStyles.gradeBadge} ${
-                                gradientTone(gradientTier(group)) === 'rush' ? compareStyles.gradeBadgeRush :
-                                gradientTone(gradientTier(group)) === 'safe' ? compareStyles.gradeBadgeSafe :
-                                compareStyles.gradeBadgeStable
-                              }`}>
-                                <span className={compareStyles.gradeLabel}>梯度</span>
-                                <span className={compareStyles.gradeValue}>{GRADIENT_LABEL[gradientTier(group)]}</span>
-                                <span className={compareStyles.gradeNote}>{rankGap.text}</span>
-                              </div>
-                              <div className={styles.cardActions}>
-                              <button type="button" className={cx(styles.btn, styles.btnSmall)} onClick={() => anchor && setActiveDetail({ group, major: anchor })}>详情</button>
-                              <button
-                                type="button"
-                                className={cx(styles.btn, styles.btnSmall)}
-                                onClick={() => toggleGroup(group.groupKey)}
-                              >
-                                专业 <DownOutlined rotate={expanded ? 180 : 0} />
-                              </button>
-                              {anchor ? (
-                                <button
-                                  type="button"
-                                  className={cx(styles.btn, styles.btnSmall, !added && styles.btnPrimary)}
-                                  disabled={added}
-                                  onClick={() => addCandidateGroup(group, anchor)}
-                                >
-                                  <PlusOutlined />
-                                  {getAddActionLabel(group, anchor, added)}
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                className={cx(styles.btn, styles.btnSmall)}
-                                onClick={() => hideGroup(group.groupKey)}
-                                title="不考虑此校（可恢复）"
-                                style={{ color: '#87867f' }}
-                              >
-                                ✕ 不考虑
-                              </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          <MetricStrip
-                            planCount={group.currentPlanCount}
-                            planDelta={group.planCountChange}
-                            postgradRate={group.university?.postgradRate}
-                            furtherStudyRate={group.university?.furtherStudyRate}
-                            employmentRate={group.university?.employmentRate}
-                            avgSalary={group.university?.avgSalary}
-                            satisfaction={group.university?.satisfactionOverall}
-                            satisfactionSample={group.university?.satisfactionCount}
-                            tuition={anchor?.tuition ?? null}
-                            duration={anchor?.duration ?? anchor?.standardDuration ?? null}
-                          />
-
-                          <div className={styles.majorList}>
-                            <CandidateMajorSection
-                              title={MAJOR_SECTION_LABEL.RECOMMENDED}
-                              section="RECOMMENDED"
-                              majors={previewMajors}
-                              group={group}
-                              onAdd={addCandidateGroup}
-                              addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
-                            />
-                          </div>
-
-                          {expanded ? (() => {
-                            const currentTab = groupExpandTabs[group.groupKey] ?? 'majors';
-                            return (
-                              <>
-                                <div className={compareStyles.expandedTabs}>
-                                  <button
-                                    type="button"
-                                    className={`${compareStyles.expandedTab} ${currentTab === 'majors' ? compareStyles.active : ''}`}
-                                    onClick={() => setGroupExpandTab(group.groupKey, 'majors')}
-                                  >
-                                    完整专业（{group.majorCount}）
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={`${compareStyles.expandedTab} ${currentTab === 'evidence' ? compareStyles.active : ''}`}
-                                    onClick={() => setGroupExpandTab(group.groupKey, 'evidence')}
-                                  >
-                                    数据依据 / 模型校验
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={`${compareStyles.expandedTab} ${currentTab === 'school' ? compareStyles.active : ''}`}
-                                    onClick={() => setGroupExpandTab(group.groupKey, 'school')}
-                                  >
-                                    院校详情
-                                  </button>
+                        <CandidateCardV3
+                          key={group.groupKey}
+                          group={group}
+                          isExpanded={expanded}
+                          isHidden={false}
+                          isCompare={compareSet.has(group.groupKey)}
+                          isAdded={added}
+                          studentRankForDecision={studentRankForDecision}
+                          adjustedRank={adjustedRank}
+                          expandedTab={(groupExpandTabs[group.groupKey] ?? 'majors') as 'majors' | 'evidence' | 'school'}
+                          onToggleExpand={() => toggleGroup(group.groupKey)}
+                          onToggleCompare={() => toggleCompare(group.groupKey)}
+                          onHide={() => hideGroup(group.groupKey)}
+                          onRestore={() => restoreGroup(group.groupKey)}
+                          onAdd={() => anchor && addCandidateGroup(group, anchor)}
+                          onTabChange={(tab) => setGroupExpandTab(group.groupKey, tab)}
+                          renderExpandedContent={(tab) => {
+                            if (tab === 'majors') {
+                              return (
+                                <>
+                                  <CandidateMajorSection title="推荐填写" section="RECOMMENDED" majors={majorSections.recommended} group={group} onAdd={addCandidateGroup} />
+                                  <CandidateMajorSection title="可备选" section="BACKUP" majors={majorSections.backup} group={group} onAdd={addCandidateGroup} />
+                                  <CandidateMajorSection title="风险/不建议" section="RISK" majors={majorSections.risk} group={group} onAdd={addCandidateGroup} />
+                                </>
+                              );
+                            }
+                            if (tab === 'evidence') {
+                              return (
+                                <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                  {riskReviewItems(group, anchor, studentRankForDecision).map((it: any, i: number) => (
+                                    <EvidenceItem key={i} label={it.title}>{it.content}</EvidenceItem>
+                                  ))}
                                 </div>
-                                <div className={compareStyles.expandedPanel}>
-                                  {currentTab === 'majors' ? (
-                                    <>
-                                      <CandidateMajorSection
-                                        title={MAJOR_SECTION_LABEL.BACKUP}
-                                        section="BACKUP"
-                                        majors={majorSections.backup}
-                                        group={group}
-                                        onAdd={addCandidateGroup}
-                                        addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
-                                      />
-                                      <CandidateMajorSection
-                                        title={MAJOR_SECTION_LABEL.RISK}
-                                        section="RISK"
-                                        majors={majorSections.risk}
-                                        group={group}
-                                        onAdd={addCandidateGroup}
-                                        addingMajorKey={added ? group.recommendedAnchorEnrollmentPlanId : null}
-                                      />
-                                      <div className="mt-4">
-                                        <Table
-                                          rowKey="enrollmentPlanId"
-                                          size="small"
-                                          columns={majorColumns(group)}
-                                          dataSource={group.majors}
-                                          pagination={false}
-                                          scroll={{ x: 900 }}
-                                        />
-                                      </div>
-                                    </>
-                                  ) : currentTab === 'evidence' ? (
-                                    <div className={styles.dataEvidence}>
-                                      <div className={styles.evidenceTitle}>数据依据</div>
-                                      <div className={styles.evidenceGrid}>
-                                        <EvidenceItem label="位次依据">
-                                          排序位次 {formatRankValue(studentRankForDecision)}，修正位次 {formatRankValue(adjustedRank)}，{rankGap.text}。
-                                        </EvidenceItem>
-                                        <EvidenceItem label="计划变化">{planChange.text}</EvidenceItem>
-                                        <EvidenceItem label="竞争变化">{formatCompetition(group)}；{formatSelectionCompetition(group)}</EvidenceItem>
-                                        <EvidenceItem label="风险提示">
-                                          {group.dynamicGradient?.reasons?.length
-                                            ? group.dynamicGradient.reasons.slice(0, 2).join('；')
-                                            : evidence.length ? evidence.slice(0, 2).join('；') : '按专业匹配排序'}
-                                        </EvidenceItem>
-                                      </div>
-                                      {group.supplementary?.scope === 'UNIVERSITY_BATCH' ? (
-                                        <div className={styles.noteRow}>
-                                          <span className={styles.compareNote}>院校批次征集仅参考，不直接降低专业组风险</span>
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  ) : (
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
-                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>办学层次</div>
-                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
-                                          {group.university?.is985 ? '985 工程 · ' : ''}
-                                          {group.university?.is211 ? '211 工程 · ' : ''}
-                                          {group.university?.isDoubleFirstClass ? '双一流建设高校 · ' : ''}
-                                          {group.university?.runningNature ?? '—'}
-                                        </div>
-                                      </div>
-                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
-                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>排名参考</div>
-                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
-                                          软科 #{group.university?.softRanking ?? '—'}
-                                        </div>
-                                      </div>
-                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
-                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>地理位置</div>
-                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
-                                          {group.university?.province ?? '—'}{group.university?.city ? ' · ' + group.university.city : ''}
-                                        </div>
-                                      </div>
-                                      <div style={{ padding: 12, background: '#fff', border: '1px solid #f0eee6', borderRadius: 8 }}>
-                                        <div style={{ fontSize: 11, color: '#87867f', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>升学就业</div>
-                                        <div style={{ fontSize: 13, color: '#1a1a19', lineHeight: 1.6 }}>
-                                          {group.university?.postgradRate ? `保研 ${group.university.postgradRate}` : ''}
-                                          {group.university?.furtherStudyRate ? ` · 升学 ${group.university.furtherStudyRate}` : ''}
-                                          {group.university?.employmentRate ? ` · 就业 ${group.university.employmentRate}` : ''}
-                                          {group.university?.avgSalary ? ` · 月薪 ${group.university.avgSalary}` : ''}
-                                          {!group.university?.postgradRate && !group.university?.employmentRate ? '—' : ''}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
+                              );
+                            }
+                            if (tab === 'school') {
+                              return (
+                                <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><UniversityBadges group={group} /></div>
+                                  <div>软科排名: {group.university?.softRanking ?? '—'}</div>
+                                  <div>办学性质: {group.university?.runningNature ?? '—'}</div>
+                                  <div>院校所在地: {group.university?.province ?? '—'} {group.university?.city ?? ''}</div>
                                 </div>
-                              </>
-                            );
-                          })() : null}
-                        </article>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
                       );
                     })}
                   </div>
@@ -1843,103 +1762,157 @@ export default function GeneratePlanPage() {
                     </div>
                   ) : null}
                 </>
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合条件的专业组" />
               )}
-            </div>
-          </section>
+            </section>
 
-          <aside className={styles.rail}>
-            <div className={styles.railCard}>
-              <h3>当前方案健康度</h3>
-              {planFetching ? <Spin size="small" /> : null}
-              <div className={styles.healthGrid}>
-                <div className={styles.healthStat}><span>已选</span><strong>{planItems.length}</strong></div>
-                <div className={styles.healthStat}><span>风险</span><strong>{planItems.filter((item: any) => item.overrideSoftFail).length}</strong></div>
-                <div className={styles.healthStat}><span>状态</span><strong>{plan?.status ?? '-'}</strong></div>
-              </div>
-              <div className={styles.dist}><span /><span /><span /></div>
-              <div className={styles.distLabels}><span>冲类</span><span>稳类</span><span>保类</span></div>
-              <div className={styles.gapList}>
-                <div><span>候选池</span><b>{candidateGroups?.total ?? 0} 个专业组</b></div>
-                <div><span>排序位次</span><b>{formatRankValue(studentRankForDecision)}</b></div>
-                <div><span>资料状态</span><b>{student?.intakeStatus || 'DRAFT'}</b></div>
-              </div>
-            </div>
+            {/* —— Region 7: pgv2-rail 右侧 sticky 当前方案 (最大重写) —— */}
+            <aside className="pgv2-rail">
+              <div className="pgv2-rail-card">
+                <h3>
+                  <span className="ic"><FileTextOutlined /></span>
+                  当前方案
+                  {selectedBatchPlan ? (
+                    <span className="pgv2-tag tone-accent">V{selectedBatchPlan.versionNo ?? 1}</span>
+                  ) : null}
+                  {planFetching ? <Spin size="small" style={{ marginLeft: 'auto' }} /> : null}
+                </h3>
 
-            <div className={styles.railCard}>
-              <h3>已选专业组</h3>
-            {planItems.length ? (
-              <div className={styles.selectedList}>
-                {planItems.map((item: any) => (
-                  <div key={item.id} className={styles.selectedItem}>
-                    <div className={styles.selectedTop}>
-                      <div>
-                        <div className={styles.selectedName}>{item.order ?? item.sequence}. {item.universityName}</div>
-                        <div className={styles.selectedMeta}>
-                          {item.groupCode ? `专业组 ${item.groupCode} · ` : ''}{item.recommendedOrder ?? item.majorName}
-                          {' · '}
-                          {item.rank25Group ?? item.rank25Major ? `${(item.rank25Group ?? item.rank25Major).toLocaleString()} 位` : '位次 -'}
-                        </div>
-                      </div>
-                      {plan?.status === 'DRAFT' ? (
-                        <button
-                          type="button"
-                          className={cx(styles.btn, styles.btnSmall)}
-                          disabled={removeMutation.isPending}
-                          onClick={() => removeMutation.mutate(item.id)}
-                          aria-label="移除"
-                        >
-                          <DeleteOutlined />
-                        </button>
-                      ) : null}
-                    </div>
-                    <details className={styles.selectedMajorsPanel}>
-                      <summary>展开组内专业</summary>
-                      <PlanMajorSelectionEditor
-                        item={item}
-                        status={plan?.status}
-                        editable={plan?.status === 'DRAFT' || plan?.status === 'PENDING_REVIEW'}
-                        saving={updateMajorSelectionMutation.isPending}
-                        onSave={(payload) => updateMajorSelectionMutation.mutate({
-                          itemId: item.id,
-                          ...payload,
-                        })}
-                      />
-                    </details>
+                {/* 三梯度 + 总数 统计 */}
+                <div className="pgv2-rail-stats">
+                  <div className="rs">
+                    <span className="lbl">冲档</span>
+                    <span className="num rush">{tierStats.rush}</span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="从左侧专业组加入志愿项" />
-            )}
-            </div>
+                  <div className="rs">
+                    <span className="lbl">稳档</span>
+                    <span className="num accent">{tierStats.stable}</span>
+                  </div>
+                  <div className="rs">
+                    <span className="lbl">保底</span>
+                    <span className={`num ${tierStats.safe < 4 ? 'rush' : 'safe'}`}>{tierStats.safe}</span>
+                  </div>
+                  <div className="rs total">
+                    <span className="lbl">总数</span>
+                    <span className="num">{planItems.length} / 45</span>
+                  </div>
+                </div>
 
-            <div className={styles.railCard}>
-              <h3>下一步建议</h3>
-              <div className={styles.suggestion}>
-                <span className={styles.suggestionMark}>i</span>
-                <ol className={styles.nextSteps}>
-                  <li>优先补足稳 / 稳保，要求学生位次覆盖修正位次。</li>
-                  <li>极冲只做备选，不占正式推荐名额。</li>
-                  <li>软性风险专业先复核限制，再加入方案。</li>
-                </ol>
+                {/* 已选志愿列表 (HTML5 drag-and-drop 排序, onDragEnd 调 reorderItems 持久化) */}
+                <div className="pgv2-rail-list">
+                  {localPlanItems.length === 0 ? (
+                    <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+                      从左侧专业组加入志愿项
+                    </div>
+                  ) : (
+                    localPlanItems.map((item: any, pi: number) => {
+                      const g = item.gradient ?? item.suggestedGradient ?? 'WEN';
+                      const tone = g === 'CHONG' ? 'rush' : g === 'WEN' ? 'stable' : 'safe';
+                      const tierLabel = g === 'CHONG' ? '冲' : g === 'WEN' ? '稳' : '保';
+                      const idx = pi + 1;
+                      const isOpen = expandedRailItemId === item.id;
+                      const isDragging = dragIdx === pi;
+                      const isOver = dragOverIdx === pi && dragIdx !== pi;
+                      const canDrag = plan?.status === 'DRAFT' && !reorderMutation.isPending;
+                      return (
+                        <div
+                          className={`pgv2-rail-item-wrap ${isOpen ? 'is-open' : ''} ${isDragging ? 'dragging' : ''} ${isOver ? 'drag-over' : ''}`}
+                          key={item.id ?? pi}
+                          draggable={canDrag}
+                          onDragStart={(e) => {
+                            if (!canDrag) return;
+                            setDragIdx(pi);
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragOver={(e) => {
+                            if (!canDrag) return;
+                            e.preventDefault();
+                            setDragOverIdx(pi);
+                          }}
+                          onDragEnd={handleRailDragEnd}
+                        >
+                          <div
+                            className="pgv2-rail-item"
+                            onClick={() => setExpandedRailItemId(isOpen ? null : item.id)}
+                          >
+                            <span className="rail-grip" title={canDrag ? '拖动调整顺位' : '草稿状态下可拖动'}>⋮⋮</span>
+                            <span className="idx">{String(idx).padStart(2, '0')}</span>
+                            <span className={`pgv2-tier-tag tone-${tone}`}>{tierLabel}</span>
+                            <span className="meta">
+                              <span className="uni">{item.universityName}</span>
+                              <span className="grp">
+                                {item.groupCode ? `[${item.groupCode}] ` : ''}
+                                {item.recommendedOrder ?? item.majorName ?? ''}
+                              </span>
+                            </span>
+                            {plan?.status === 'DRAFT' ? (
+                              <button
+                                type="button"
+                                className="pgv2-rail-del"
+                                disabled={removeMutation.isPending}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeMutation.mutate(item.id); }}
+                                aria-label="移除"
+                              >
+                                <DeleteOutlined />
+                              </button>
+                            ) : null}
+                          </div>
+                          {isOpen ? (
+                          <div style={{ padding: '8px 12px 12px' }}>
+                            <PlanMajorSelectionEditor
+                              item={item}
+                              status={plan?.status}
+                              editable={plan?.status === 'DRAFT' || plan?.status === 'PENDING_REVIEW'}
+                              saving={updateMajorSelectionMutation.isPending}
+                              onSave={(payload) => updateMajorSelectionMutation.mutate({
+                                itemId: item.id,
+                                ...payload,
+                              })}
+                            />
+                          </div>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="pgv2-rail-tip">
+                  <strong>服从调剂规则:</strong>
+                  少于等于 6 个专业时全部带入,超过 6 个时优先学生意向专业
+                </div>
+
+                <div className="pgv2-hints">
+                  <h4>下一步建议</h4>
+                  <div className="pgv2-hint tone-accent">
+                    <span className="ic"><InfoCircleOutlined /></span>
+                    <span>优先补足稳 / 稳保,要求学生位次覆盖修正位次。</span>
+                  </div>
+                  <div className="pgv2-hint tone-rush">
+                    <span className="ic"><WarningOutlined /></span>
+                    <span>极冲只做备选,不占正式推荐名额。</span>
+                  </div>
+                  <div className="pgv2-hint tone-safe">
+                    <span className="ic"><CheckOutlined /></span>
+                    <span>软性风险专业先复核限制,再加入方案。</span>
+                  </div>
+                  <Button
+                    type="primary"
+                    block
+                    style={{ marginTop: 12 }}
+                    disabled={plan?.status !== 'DRAFT' || !planItems.length || submitMutation.isPending}
+                    onClick={() => submitMutation.mutate()}
+                    icon={<CheckOutlined />}
+                  >
+                    提交主管审核
+                  </Button>
+                </div>
               </div>
-              <button
-                type="button"
-                className={cx(styles.btn, styles.btnPrimary)}
-                disabled={plan?.status !== 'DRAFT' || !planItems.length || submitMutation.isPending}
-                onClick={() => submitMutation.mutate()}
-              >
-                <CheckOutlined />
-                提交主管审核
-              </button>
-            </div>
-          </aside>
-        </div>
+            </aside>
+          </div>
         </>
       ) : null}
 
+      {/* —— 专业组复核 Drawer (保留现有 antd Drawer 实现) —— */}
       <Drawer
         width={880}
         rootClassName={styles.drawerRoot}
@@ -2088,7 +2061,7 @@ export default function GeneratePlanPage() {
                 <Descriptions.Item label="平均薪资">{formatValue(activeDetail.major.avgSalary, '元')}</Descriptions.Item>
               </Descriptions>
               <p className="mt-3 text-sm leading-relaxed text-text-tertiary">
-                {activeDetail.major.description || '该专业暂无长文本介绍，当前优先展示已接入的招生计划、录取和就业升学数据。'}
+                {activeDetail.major.description || '该专业暂无长文本介绍,当前优先展示已接入的招生计划、录取和就业升学数据。'}
               </p>
               <div className="mt-3 space-y-3">
                 <div>
@@ -2109,34 +2082,34 @@ export default function GeneratePlanPage() {
         ) : null}
       </Drawer>
 
-      {/* 浮动对比 bar */}
+      {/* —— Region 8: pgv2-compare-bar 底部对比浮条 —— */}
       {compareSet.size > 0 ? (
-        <div className={compareStyles.compareBar}>
-          <span className={compareStyles.compareBarIcon}>⚖</span>
-          <div className={compareStyles.compareBarText}>
-            已选 <b>{compareSet.size}</b> / 4 项参与对比
-            <div className={compareStyles.compareBarNames}>
-              {Array.from(compareSet).map((key) => visibleGroups.find((g) => g.groupKey === key)?.universityName ?? '').filter(Boolean).join(' · ')}
-            </div>
-          </div>
-          <button className={compareStyles.compareBarBtnGhost} onClick={() => setCompareSet(new Set())}>
-            清空
-          </button>
+        <div className="pgv2-compare-bar">
+          <span className="ic">⚖</span>
+          <span className="cnt">已选 <strong>{compareSet.size}</strong> / 4 个对比</span>
+          <span className="names">
+            {Array.from(compareSet)
+              .map((key) => visibleGroups.find((g) => g.groupKey === key)?.universityName ?? '')
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+          <button type="button" className="ghost" onClick={() => setCompareSet(new Set())}>清除</button>
           <button
-            className={compareStyles.compareBarBtnPrimary}
+            type="button"
+            className="primary"
             disabled={compareSet.size < 2}
             onClick={() => setCompareDrawerOpen(true)}
           >
-            打开对比 →
+            进入对比 →
           </button>
         </div>
       ) : null}
 
-      {/* 对比 Drawer */}
+      {/* —— 对比 Drawer (保留 antd) —— */}
       <Drawer
         open={compareDrawerOpen}
         onClose={() => setCompareDrawerOpen(false)}
-        title={<span>⚖ 候选对比（{compareSet.size} 项）</span>}
+        title={<span>⚖ 候选对比({compareSet.size} 项)</span>}
         width={typeof window !== 'undefined' ? Math.min(1180, window.innerWidth * 0.92) : 1100}
         placement="right"
       >
@@ -2147,103 +2120,82 @@ export default function GeneratePlanPage() {
         />
       </Drawer>
 
-      <AlgorithmPathDrawer
-        open={algoDrawerOpen}
-        onClose={() => setAlgoDrawerOpen(false)}
-        student={student}
-        batchName={selectedBatchName}
-        candidateCount={candidateGroups?.total ?? 0}
-        softFailedCount={groups.filter((g) => g.softFailCount > 0).length}
-        selectedCount={planItems.length}
-      />
+      {/* —— Region 9: pgv2-drawer 算法路径 (复刻设计稿自定义 drawer) —— */}
+      {algoDrawerOpen ? (
+        <>
+          <div className="pgv2-drawer-mask" onClick={() => setAlgoDrawerOpen(false)} />
+          <div className="pgv2-drawer" role="dialog" aria-label="算法路径">
+            <div className="pgv2-drawer-head">
+              <div>
+                <div className="pgv2-eyebrow">ALGORITHM PATH</div>
+                <h2>候选池生成路径</h2>
+                <div className="pgv2-sub">实时计算 · 透明可审计</div>
+              </div>
+              <button type="button" className="pgv2-drawer-close" onClick={() => setAlgoDrawerOpen(false)}>
+                <CloseOutlined />
+              </button>
+            </div>
+
+            <div className="pgv2-drawer-body">
+              <div className="pgv2-drawer-sect">
+                <h4>位次源</h4>
+                <div className="pgv2-rank-source">
+                  <div className={`rs-row ${!isUsingScoreBasedRank ? 'is-active' : ''}`}>
+                    <span>档案位次</span>
+                    <strong>{candidateGroups?.storedRank?.toLocaleString() ?? student?.provincialRank?.toLocaleString() ?? '—'}</strong>
+                    <em>学生档案录入</em>
+                  </div>
+                  <div className={`rs-row ${isUsingScoreBasedRank ? 'is-active' : ''}`}>
+                    <span>一分一段估算</span>
+                    <strong>{candidateGroups?.scoreBasedRank?.toLocaleString() ?? '—'}</strong>
+                    <em>{student?.totalScore ?? '—'} 分 · {candidateGroups?.sourceYear ?? '当前'} 年</em>
+                  </div>
+                </div>
+                {isUsingScoreBasedRank ? (
+                  <div className="pgv2-drawer-tip">
+                    档案位次与分数明显不匹配,系统默认按 <strong>一分一段估算位次</strong> 计算候选池
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="pgv2-drawer-sect">
+                <h4>本次候选池生成步骤</h4>
+                <ol className="pgv2-steps">
+                  {[
+                    `学生输入: 选科 ${subjectCombination} · 总分 ${student?.totalScore ?? '—'} · 位次 ${candidateGroups?.studentRankUsed?.toLocaleString() ?? '—'}`,
+                    `批次设定: ${selectedBatchName ?? '未选批次'}`,
+                    '硬过滤(选科+体检+生源地): 由后端硬过滤剔除不符合硬条件的院校组',
+                    `软规则过滤(意向+加分等): 意向城市 ${preferredLocationSummary} · 意向专业 ${preferredMajorSummary}`,
+                    `候选池规模: 共 ${candidateGroups?.total ?? 0} 个院校专业组(其中 ${groups.filter((g) => g.softFailCount > 0).length} 个软命中风险)`,
+                    `当前已选: ${planItems.length} 个志愿项,${planItems.length > 0 ? '可继续添加 / 调整' : '尚未添加'}`,
+                  ].map((s, i) => (
+                    <li key={i}>
+                      <span className="no">{String(i + 1).padStart(2, '0')}</span>
+                      <span className="txt">{s}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              <div className="pgv2-drawer-sect">
+                <h4>8 段动态梯度说明</h4>
+                <div className="pgv2-grad-legend">
+                  {(Object.keys(GRADIENT_LABEL) as DynamicGradientTier[]).map((k) => (
+                    <div className="gl" key={k}>
+                      <span className={`pgv2-tier-tag tone-${gradientTone(k)}`}>{GRADIENT_LABEL[k]}</span>
+                      <span className="desc">{GRAD_DESC[k]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pgv2-drawer-tip">
+                <strong>免责提示:</strong> 算法基于历史录取数据 + 当年招生计划计算,实际录取可能受当年志愿填报情况影响。
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
     </div>
-  );
-}
-
-function AlgorithmPathDrawer({
-  open,
-  onClose,
-  student,
-  batchName,
-  candidateCount,
-  softFailedCount,
-  selectedCount,
-}: {
-  open: boolean;
-  onClose: () => void;
-  student: any;
-  batchName: string | undefined;
-  candidateCount: number;
-  softFailedCount: number;
-  selectedCount: number;
-}) {
-  const examType = student?.examType ?? '--';
-  const totalScore = student?.totalScore ?? null;
-  const provincialRank = student?.provincialRank ?? null;
-  const firstChoice = student?.firstChoice ?? '--';
-  const reChoices = Array.isArray(student?.reChoices) ? student.reChoices.join('/') : '--';
-  const subjectCombo = `${examType}·${firstChoice}·${reChoices}`;
-  const cityPrefs = Array.isArray(student?.preferredCities)
-    ? student.preferredCities.slice(0, 5).join('/')
-    : '--';
-  const majorPrefs = Array.isArray(student?.preferredMajors)
-    ? student.preferredMajors.slice(0, 5).join('/')
-    : '--';
-
-  const passedCount = Math.max(0, candidateCount - softFailedCount);
-
-  const steps = [
-    {
-      title: '① 学生输入',
-      detail: `选科 ${subjectCombo} · 总分 ${totalScore ?? '--'} · 位次 ${
-        provincialRank?.toLocaleString('zh-CN') ?? '--'
-      }`,
-    },
-    {
-      title: '② 批次设定',
-      detail: batchName ?? '未选批次',
-    },
-    {
-      title: '③ 硬过滤(选科+体检+生源地)',
-      detail: '由后端硬过滤剔除不符合硬条件的院校组',
-    },
-    {
-      title: '④ 软规则过滤(意向+加分等)',
-      detail: `意向城市 ${cityPrefs} · 意向专业 ${majorPrefs};软规则命中 ${softFailedCount} 个院校组(降权显示)`,
-    },
-    {
-      title: '⑤ 候选池规模',
-      detail: `共 ${candidateCount} 个院校专业组(${passedCount} 完全匹配 + ${softFailedCount} 软命中)`,
-    },
-    {
-      title: '⑥ 当前已选',
-      detail: `老师已选 ${selectedCount} 个志愿,${selectedCount > 0 ? '可继续添加 / 调整' : '尚未添加'}`,
-    },
-  ];
-
-  return (
-    <Drawer
-      title="算法路径解释"
-      open={open}
-      onClose={onClose}
-      width={420}
-      placement="right"
-    >
-      <p className="mb-4 text-sm text-text-muted">
-        此页推荐结果基于以下决策路径生成。可作为给家长解释方案逻辑的参考。
-      </p>
-      <ol className="m-0 list-none space-y-3 p-0">
-        {steps.map((step, i) => (
-          <li key={i} className="border-l-2 border-l-primary bg-bg/30 p-3">
-            <p className="m-0 text-sm font-medium text-text">{step.title}</p>
-            <p className="m-0 mt-1 text-xs text-text-muted">{step.detail}</p>
-          </li>
-        ))}
-      </ol>
-      <div className="mt-6 rounded-md border border-dashed border-border bg-bg/30 p-3 text-xs text-text-muted">
-        <strong>免责提示:</strong>{' '}
-        算法基于历史录取数据 + 当年招生计划计算,实际录取可能受当年志愿填报情况影响。
-      </div>
-    </Drawer>
   );
 }

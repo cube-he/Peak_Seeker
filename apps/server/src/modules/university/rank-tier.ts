@@ -5,7 +5,7 @@
  */
 
 export type Tier = '985' | '211' | '普通本科' | '专科';
-export type RankTier = 'rush' | 'stable' | 'safe' | 'elite' | 'unknown';
+export type RankTier = 'unreachable' | 'rush' | 'stable' | 'safe' | 'elite' | 'unknown';
 
 interface TierThresholds {
   stable: number;
@@ -25,7 +25,10 @@ const HISTORY_SCIENCE_MULTIPLIER = 1.5;
 
 const RATIO_THRESHOLDS = { rushMax: -0.10, stableMax: 0.15, safeMax: 0.50 };
 
-const RISK_ORDER: RankTier[] = ['rush', 'stable', 'safe', 'elite'];
+/** ratio < UNREACHABLE_RATIO → 院校位次远高于学生 50%+，列出来只会误导。 */
+const UNREACHABLE_RATIO = -0.5;
+
+const RISK_ORDER: RankTier[] = ['unreachable', 'rush', 'stable', 'safe', 'elite'];
 
 export function getTier(input: {
   is985: boolean;
@@ -57,15 +60,18 @@ export function classifyRank(
   const m = historical ? HISTORY_SCIENCE_MULTIPLIER : 1;
   const absStable = t.stable * m;
   const absSafe = t.safe * m;
+  const absElite = t.elite * m;
 
   let absTier: RankTier;
-  if (diff < -absStable) absTier = 'rush';
+  if (diff < -absElite) absTier = 'unreachable';
+  else if (diff < -absStable) absTier = 'rush';
   else if (diff < absStable) absTier = 'stable';
   else if (diff < absSafe) absTier = 'safe';
   else absTier = 'elite';
 
   let ratioTier: RankTier;
-  if (ratio < RATIO_THRESHOLDS.rushMax) ratioTier = 'rush';
+  if (ratio < UNREACHABLE_RATIO) ratioTier = 'unreachable';
+  else if (ratio < RATIO_THRESHOLDS.rushMax) ratioTier = 'rush';
   else if (ratio < RATIO_THRESHOLDS.stableMax) ratioTier = 'stable';
   else if (ratio < RATIO_THRESHOLDS.safeMax) ratioTier = 'safe';
   else ratioTier = 'elite';

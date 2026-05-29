@@ -2,6 +2,7 @@ import type { UniversityRankBannerProps } from './types';
 import type { RankTier } from '@/utils/classify-rank';
 
 const TIER_STYLE: Record<RankTier, { border: string; bg: string; chip: string; label: string }> = {
+  unreachable: { border: 'border-gray-300 border-l-gray-500', bg: 'bg-gradient-to-br from-gray-100 to-white', chip: 'bg-gray-500', label: '难达' },
   rush:    { border: 'border-red-200 border-l-red-500',    bg: 'bg-gradient-to-br from-red-50 to-white',    chip: 'bg-red-500',    label: '冲' },
   stable:  { border: 'border-blue-200 border-l-blue-500',  bg: 'bg-gradient-to-br from-blue-50 to-white',   chip: 'bg-blue-500',   label: '稳' },
   safe:    { border: 'border-green-200 border-l-green-500',bg: 'bg-gradient-to-br from-green-50 to-white',  chip: 'bg-green-500',  label: '保' },

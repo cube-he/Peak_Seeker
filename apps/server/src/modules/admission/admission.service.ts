@@ -265,17 +265,24 @@ export class AdmissionService {
       });
     }
 
-    // 按"最近年份最佳可用分数/位次"排序（取消分页，整段返回）
+    // 按"距学生分数/位次距离升序"排序，保证 take 500 时冲/稳/保都能覆盖。
+    // 旧逻辑按位次升序 → 全是 985 名校排前 → 学生分数低时全部判"冲"。
     const allGroups = Array.from(groups.values());
     allGroups.sort((a, b) => {
       if (score != null) {
         const aScore = this.getBestScore(a.yearlyData);
         const bScore = this.getBestScore(b.yearlyData);
-        return (bScore ?? 0) - (aScore ?? 0); // 按分数降序
+        if (aScore == null && bScore == null) return 0;
+        if (aScore == null) return 1;
+        if (bScore == null) return -1;
+        return Math.abs(aScore - score) - Math.abs(bScore - score);
       }
       const aRank = this.getBestRank(a.yearlyData);
       const bRank = this.getBestRank(b.yearlyData);
-      return (aRank ?? Infinity) - (bRank ?? Infinity); // 按位次升序
+      if (aRank == null && bRank == null) return 0;
+      if (aRank == null) return 1;
+      if (bRank == null) return -1;
+      return Math.abs(aRank - rank!) - Math.abs(bRank - rank!);
     });
 
     const limited = allGroups.slice(0, 500);

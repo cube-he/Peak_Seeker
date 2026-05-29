@@ -256,11 +256,18 @@ export class PlanItemService {
       where: { planId, id: { in: itemIds } },
     });
     if (count !== itemIds.length) throw new NotFoundException('志愿项不存在');
-    await this.prisma.$transaction(
-      itemIds.map((id, idx) =>
+    // 注意: PlanItem 有 @@unique([planId, sequence]) 复合唯一约束。
+    // 直接逐条 update 到目标 sequence 会触发中间状态冲突 (例如把第 1 位换到第 2 位时,
+    // 第一次 update 让两条记录同时拥有 sequence=2 ↘ unique violation)。
+    // 两阶段提交: phase1 全部置为负数避让, phase2 再写入目标 sequence。
+    await this.prisma.$transaction([
+      ...itemIds.map((id, idx) =>
+        this.prisma.planItem.update({ where: { id }, data: { sequence: -(idx + 1) } }),
+      ),
+      ...itemIds.map((id, idx) =>
         this.prisma.planItem.update({ where: { id }, data: { sequence: idx + 1 } }),
       ),
-    );
+    ]);
     // 触发风险重算(非阻塞)
     this.riskEngine.recomputeForPlan(planId).catch(() => {});
     return { ok: true, count: itemIds.length };

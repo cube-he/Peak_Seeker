@@ -7,9 +7,13 @@ import {
   type Tier,
 } from './admission-thresholds';
 
-export type RankTier = 'rush' | 'stable' | 'safe' | 'elite' | 'unknown';
+export type RankTier = 'unreachable' | 'rush' | 'stable' | 'safe' | 'elite' | 'unknown';
 
-const RISK_ORDER: RankTier[] = ['rush', 'stable', 'safe', 'elite'];
+// unreachable 排在 rush 前: Math.min 取小 idx → 任一标准判"够不到"就过滤掉。
+const RISK_ORDER: RankTier[] = ['unreachable', 'rush', 'stable', 'safe', 'elite'];
+
+/** ratio < UNREACHABLE_RATIO → 院校位次远高于学生 (学生差距 >50%)，列出来只会误导。 */
+const UNREACHABLE_RATIO = -0.5;
 
 /**
  * Derive university tier for a given (university flags, batch) row.
@@ -54,15 +58,18 @@ export function classifyRank(
   const m = historical ? HISTORY_SCIENCE_MULTIPLIER : 1;
   const absStable = t.stable * m;
   const absSafe = t.safe * m;
+  const absElite = t.elite * m;
 
   let absTier: RankTier;
-  if (diff < -absStable) absTier = 'rush';
+  if (diff < -absElite) absTier = 'unreachable';
+  else if (diff < -absStable) absTier = 'rush';
   else if (diff < absStable) absTier = 'stable';
   else if (diff < absSafe) absTier = 'safe';
   else absTier = 'elite';
 
   let ratioTier: RankTier;
-  if (ratio < RATIO_THRESHOLDS.rushMax) ratioTier = 'rush';
+  if (ratio < UNREACHABLE_RATIO) ratioTier = 'unreachable';
+  else if (ratio < RATIO_THRESHOLDS.rushMax) ratioTier = 'rush';
   else if (ratio < RATIO_THRESHOLDS.stableMax) ratioTier = 'stable';
   else if (ratio < RATIO_THRESHOLDS.safeMax) ratioTier = 'safe';
   else ratioTier = 'elite';

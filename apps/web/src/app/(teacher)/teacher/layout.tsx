@@ -1,5 +1,12 @@
 'use client';
 
+/* 教师工作台设计稿样式 (willnest-teacher.css, 6969 行).
+   在这里 import 而不是 globals.css —— 它含大量 element-level reset 和通用
+   className, 全局 import 会污染登录页 / 学生侧 (实测登录卡片被吃掉).
+   Next.js app router 会把 CSS 切到 /teacher/* 路由的 chunk, 离开教师路由
+   切回时 CSS 不会"卸载", 但用户从登录页开始访问时这堆样式不会加载. */
+import '@/styles/willnest-teacher.css';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -248,8 +255,10 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="p-4 sm:p-6 lg:p-8 bg-bg min-h-[calc(100vh-56px)]">
+        {/* Page Content — wn-teacher-scope: willnest-teacher.css 所有规则已被
+            scope 脚本加上 `.wn-teacher-scope` 前缀, 只在此 wrapper 内生效, 防止
+            client navigation 后残留的 CSS 污染 /universities 等非教师页面 */}
+        <main className="wn-teacher-scope p-4 sm:p-6 lg:p-8 bg-bg min-h-[calc(100vh-56px)]">
           {children}
         </main>
       </div>

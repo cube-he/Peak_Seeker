@@ -1,110 +1,242 @@
 'use client';
 
+/**
+ * 教师工作台 · 新建学生
+ * 复刻自 `WillNest Design System/teacher/views/student-create.jsx`.
+ * 仍用 studentApi.create + react-query mutation, antd message 提示.
+ * 设计稿 className: sc-hero / sc-card / sc-grid / sc-field / sc-label /
+ *                   sc-input / sc-hint / sc-radio / sc-footer / qa primary.
+ */
+
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Button, Card, Form, Input, message, Radio } from 'antd';
-import { ArrowLeftOutlined, UserAddOutlined } from '@ant-design/icons';
 import { useMutation } from '@tanstack/react-query';
+import { message } from 'antd';
 import { studentApi } from '@/services/student-api';
+import { PageHeader, TIcon } from '@/components/willnest';
 
-interface CreateStudentForm {
+interface CreateForm {
   username: string;
   password: string;
   realName: string;
-  phone?: string;
-  gender?: 'MALE' | 'FEMALE';
+  phone: string;
+  gender: 'MALE' | 'FEMALE';
 }
 
 export default function CreateStudentPage() {
   const router = useRouter();
-  const [form] = Form.useForm<CreateStudentForm>();
+  const [form, setForm] = useState<CreateForm>({
+    username: '',
+    password: '',
+    realName: '',
+    phone: '',
+    gender: 'MALE',
+  });
 
   const createMutation = useMutation({
-    mutationFn: (values: CreateStudentForm) => studentApi.create(values),
+    mutationFn: (values: CreateForm) =>
+      studentApi.create({
+        username: values.username,
+        password: values.password,
+        realName: values.realName,
+        phone: values.phone || undefined,
+        gender: values.gender,
+      }),
     onSuccess: (data) => {
       message.success('学生创建成功');
       router.push(`/teacher/students/${data?.data?.id || ''}`);
     },
     onError: () => {
-      message.error('创建失败，请重试');
+      message.error('创建失败,请重试');
     },
   });
 
-  return (
-    <div className="mx-auto max-w-[720px] space-y-5">
-      <Link
-        href="/teacher/students"
-        className="inline-flex items-center gap-2 text-sm text-text-tertiary no-underline transition-colors hover:text-primary"
-      >
-        <ArrowLeftOutlined /> 返回学生列表
-      </Link>
+  // 字段校验 (设计稿原版逻辑保留)
+  const errors: Partial<Record<keyof CreateForm, string>> = {};
+  if (form.username && form.username.length < 3) errors.username = '至少 3 个字符';
+  if (form.password && form.password.length < 6) errors.password = '至少 6 位';
+  const canSubmit =
+    form.username.length >= 3 &&
+    form.password.length >= 6 &&
+    form.realName.trim().length > 0 &&
+    !createMutation.isPending;
 
-      <section className="rounded-2xl bg-[#1e3a5f] px-6 py-6 text-white shadow-card">
-        <p className="text-[11px] uppercase tracking-[2px] text-accent-light">Create Student</p>
-        <h1 className="mt-2 font-serif text-3xl font-semibold">创建学生</h1>
-        <p className="mt-2 text-sm leading-6 text-white/70">
-          先创建登录账号，后续可在学生详情中补全成绩、户籍、偏好和健康信息。
+  const update = <K extends keyof CreateForm>(k: K, v: CreateForm[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = () => {
+    if (!canSubmit) return;
+    createMutation.mutate(form);
+  };
+
+  return (
+    <div className="view-transition">
+      {/* —— 返回 —— */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 13,
+          color: 'var(--text-tertiary)',
+          marginBottom: 20,
+        }}
+      >
+        <Link
+          href="/teacher/students"
+          style={{
+            background: 'transparent',
+            border: 0,
+            padding: '4px 8px',
+            borderRadius: 6,
+            color: 'var(--text-tertiary)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            whiteSpace: 'nowrap',
+            textDecoration: 'none',
+          }}
+        >
+          <span style={{ width: 12, height: 12, display: 'inline-flex' }}>
+            <TIcon.chevLeft />
+          </span>{' '}
+          返回学生列表
+        </Link>
+      </div>
+
+      <PageHeader
+        eyebrow="ONBOARD STUDENT"
+        title="创建学生"
+        meta={
+          <span>
+            登录账号 + 基本身份 · 后续可在学生详情补全成绩、户籍、偏好和健康信息
+          </span>
+        }
+        fresh=""
+      />
+
+      {/* —— Navy hero banner —— */}
+      <section className="sc-hero fade-up d1">
+        <div className="eyebrow">CREATE STUDENT</div>
+        <h2>先创建登录账号</h2>
+        <p>
+          学生即可用账号登录小程序,自助填报成绩 / 户籍 / 选科 / 偏好。
+          也可以后续再补,不影响你出方案。
         </p>
       </section>
 
-      <Card className="rounded-2xl shadow-card">
-        <Form form={form} layout="vertical" onFinish={(values) => createMutation.mutate(values)} requiredMark="optional">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Form.Item
-              name="username"
-              label="登录用户名"
-              rules={[
-                { required: true, message: '请输入用户名' },
-                { min: 3, message: '用户名至少 3 个字符' },
-              ]}
-            >
-              <Input placeholder="学生登录时使用" />
-            </Form.Item>
-
-            <Form.Item
-              name="password"
-              label="初始密码"
-              rules={[
-                { required: true, message: '请设置初始密码' },
-                { min: 6, message: '密码至少 6 个字符' },
-              ]}
-            >
-              <Input.Password placeholder="学生可后续修改" />
-            </Form.Item>
-
-            <Form.Item name="realName" label="真实姓名" rules={[{ required: true, message: '请输入学生真实姓名' }]}>
-              <Input placeholder="学生真实姓名" />
-            </Form.Item>
-
-            <Form.Item name="phone" label="手机号">
-              <Input placeholder="学生或家长手机号（选填）" />
-            </Form.Item>
+      {/* —— 表单卡片 —— */}
+      <div className="sc-card fade-up d2">
+        <div className="sc-grid">
+          <div className="sc-field">
+            <label className="sc-label">
+              登录用户名 <span className="req">必填</span>
+            </label>
+            <input
+              className={`sc-input ${errors.username ? 'is-err' : ''}`}
+              placeholder="如 zhangsan2025"
+              value={form.username}
+              onChange={(e) => update('username', e.target.value)}
+            />
+            {errors.username ? (
+              <div className="sc-hint err">{errors.username}</div>
+            ) : (
+              <div className="sc-hint">至少 3 字符,推荐"姓名拼音+年份"</div>
+            )}
           </div>
 
-          <Form.Item name="gender" label="性别">
-            <Radio.Group>
-              <Radio value="MALE">男</Radio>
-              <Radio value="FEMALE">女</Radio>
-            </Radio.Group>
-          </Form.Item>
-
-          <div className="flex gap-3 border-t border-border-subtle pt-4">
-            <Button
-              type="primary"
-              htmlType="submit"
-              icon={<UserAddOutlined />}
-              loading={createMutation.isPending}
-              size="large"
-              className="border-0"
-            >
-              创建学生
-            </Button>
-            <Link href="/teacher/students">
-              <Button size="large">取消</Button>
-            </Link>
+          <div className="sc-field">
+            <label className="sc-label">
+              初始密码 <span className="req">必填</span>
+            </label>
+            <input
+              type="password"
+              className={`sc-input ${errors.password ? 'is-err' : ''}`}
+              placeholder="至少 6 位"
+              value={form.password}
+              onChange={(e) => update('password', e.target.value)}
+            />
+            {errors.password ? (
+              <div className="sc-hint err">{errors.password}</div>
+            ) : (
+              <div className="sc-hint">首次登录会要求学生修改</div>
+            )}
           </div>
-        </Form>
-      </Card>
+
+          <div className="sc-field">
+            <label className="sc-label">
+              真实姓名 <span className="req">必填</span>
+            </label>
+            <input
+              className="sc-input"
+              placeholder="如 张三"
+              value={form.realName}
+              onChange={(e) => update('realName', e.target.value)}
+            />
+            <div className="sc-hint">与身份证一致,用于报名信息核对</div>
+          </div>
+
+          <div className="sc-field">
+            <label className="sc-label">
+              手机号 <span className="opt">选填</span>
+            </label>
+            <input
+              className="sc-input"
+              placeholder="如 138 0000 0000"
+              value={form.phone}
+              onChange={(e) => update('phone', e.target.value)}
+            />
+            <div className="sc-hint">学生或家长手机号,沟通用</div>
+          </div>
+
+          <div className="sc-field sc-field-full">
+            <label className="sc-label">性别</label>
+            <div className="sc-radio-group">
+              {(
+                [
+                  { v: 'MALE', t: '男' },
+                  { v: 'FEMALE', t: '女' },
+                ] as const
+              ).map((o) => (
+                <button
+                  key={o.v}
+                  type="button"
+                  className={`sc-radio ${form.gender === o.v ? 'is-active' : ''}`}
+                  onClick={() => update('gender', o.v)}
+                >
+                  <span className="sc-radio-dot" />
+                  {o.t}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="sc-footer">
+          <Link
+            href="/teacher/students"
+            className="qa"
+            style={{ textDecoration: 'none' }}
+          >
+            取消
+          </Link>
+          <button
+            type="button"
+            className={`qa primary ${!canSubmit ? 'is-disabled' : ''}`}
+            onClick={submit}
+            disabled={!canSubmit}
+          >
+            {createMutation.isPending ? (
+              '正在创建...'
+            ) : (
+              <>
+                <TIcon.plus /> 创建学生
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

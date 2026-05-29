@@ -741,7 +741,8 @@ export default function PlanDetailPage() {
 
   return (
     <div className="space-y-5">
-      {/* A · sticky 顶部栏 */}
+      {/* A · sticky 顶部栏 (设计稿 ph 风格 eyebrow + serif 标题; 视觉对齐设计稿,
+          但保留 sticky + 对比版本 + 动作按钮区原有业务逻辑) */}
       <div className="sticky top-14 z-20 -mx-4 border-b border-border bg-bg/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <Link
           href="/teacher/plans"
@@ -749,9 +750,18 @@ export default function PlanDetailPage() {
         >
           <ArrowLeftOutlined /> 返回方案列表
         </Link>
+        <span
+          className="eyebrow"
+          style={{ display: 'block', marginTop: 6, color: 'var(--accent)' }}
+        >
+          PLAN · 方案详情
+        </span>
         <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <h1 className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-base">
+            <h1
+              className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xl"
+              style={{ fontFamily: 'var(--font-heading)', fontWeight: 600 }}
+            >
               <Link
                 href={`/teacher/students/${plan.studentId}`}
                 className="font-semibold text-text no-underline hover:text-primary"
@@ -818,58 +828,61 @@ export default function PlanDetailPage() {
         </div>
       </div>
 
-      {/* B · 上下文摘要卡 */}
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <SummaryCell
-          label="学生"
-          value={summary.studentScore != null ? `${summary.studentScore} 分` : '--'}
-          sub={summary.studentRank != null ? `${formatNumber(summary.studentRank)} 位` : ''}
-        />
-        <SummaryCell
-          label="冲 / 稳 / 保"
-          value={
-            <span>
-              <span className="text-rush">{summary.gradientCounts.chong}</span>
-              <span className="mx-1 text-text-faint">/</span>
-              <span className="text-accent">{summary.gradientCounts.wen}</span>
-              <span className="mx-1 text-text-faint">/</span>
-              <span className="text-safe">{summary.gradientCounts.bao}</span>
-            </span>
-          }
-          sub={items.length ? `共 ${items.length} 个志愿` : ''}
-        />
-        <SummaryCell
-          label="平均分差"
-          value={
-            summary.avgMargin !== null ? (
+      {/* B · 上下文摘要卡 — 设计稿 .stat-cluster + .scell 4 列 */}
+      <div className="stat-cluster fade-up d2" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="scell t-primary">
+          <div className="k">学生</div>
+          <div className="v">
+            {summary.studentScore != null ? summary.studentScore : '--'}
+            {summary.studentScore != null ? <span className="small">分</span> : null}
+          </div>
+          <div className="sub">
+            {summary.studentRank != null ? `${formatNumber(summary.studentRank)} 位` : '—'}
+          </div>
+        </div>
+        <div className="scell t-accent">
+          <div className="k">冲 / 稳 / 保</div>
+          <div className="v" style={{ fontSize: 28 }}>
+            <span style={{ color: 'var(--rush)' }}>{summary.gradientCounts.chong}</span>
+            <span style={{ color: 'var(--text-faint)', margin: '0 6px' }}>/</span>
+            <span style={{ color: 'var(--accent)' }}>{summary.gradientCounts.wen}</span>
+            <span style={{ color: 'var(--text-faint)', margin: '0 6px' }}>/</span>
+            <span style={{ color: 'var(--safe)' }}>{summary.gradientCounts.bao}</span>
+          </div>
+          <div className="sub">{items.length ? `共 ${items.length} 个志愿` : '—'}</div>
+        </div>
+        <div className="scell t-safe">
+          <div className="k">平均分差</div>
+          <div className="v">
+            {summary.avgMargin !== null ? (
               <span
-                className={
-                  summary.avgMargin < 0
-                    ? 'text-rush'
-                    : summary.avgMargin >= 20
-                    ? 'text-safe'
-                    : 'text-accent'
-                }
+                style={{
+                  color:
+                    summary.avgMargin < 0
+                      ? 'var(--rush)'
+                      : summary.avgMargin >= 20
+                      ? 'var(--safe)'
+                      : 'var(--accent)',
+                }}
               >
                 {summary.avgMargin > 0 ? '+' : ''}
                 {summary.avgMargin}
               </span>
             ) : (
               '--'
-            )
-          }
-          sub="学生分 - 历史最低分"
-        />
-        <SummaryCell
-          label="风险志愿"
-          value={
-            <span className={summary.riskCount > 0 ? 'text-rush' : 'text-safe'}>
-              {summary.riskCount}
-            </span>
-          }
-          sub={summary.riskCount > 0 ? '见表格风险列' : '无风险标记'}
-        />
-      </section>
+            )}
+            <span className="small">分</span>
+          </div>
+          <div className="sub">学生分 - 历史最低分</div>
+        </div>
+        <div className="scell t-primary">
+          <div className="k">风险志愿</div>
+          <div className="v" style={{ color: summary.riskCount > 0 ? 'var(--rush)' : 'var(--safe)' }}>
+            {summary.riskCount}
+          </div>
+          <div className="sub">{summary.riskCount > 0 ? '见表格风险列' : '无风险标记'}</div>
+        </div>
+      </div>
 
       {/* 家长退回意见或定稿提示 */}
       {plan.parentChangeRequest ? (
@@ -1063,23 +1076,7 @@ export default function PlanDetailPage() {
 }
 
 // ── 摘要单元格 ──
-function SummaryCell({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: React.ReactNode;
-  sub?: string;
-}) {
-  return (
-    <div className="rounded-2xl bg-surface px-4 py-3 shadow-card">
-      <p className="m-0 text-[11px] font-medium uppercase tracking-wider text-text-muted">{label}</p>
-      <p className="m-0 mt-1 text-xl font-semibold text-text">{value}</p>
-      {sub ? <p className="m-0 mt-0.5 text-xs text-text-muted">{sub}</p> : null}
-    </div>
-  );
-}
+/* SummaryCell 已被设计稿 .stat-cluster + .scell 替换, 函数定义删除避免 unused. */
 
 // ── 展开行：推荐理由 + 风险 + 调剂建议 + 专业选择编辑器 + 教师批注 ──
 function ItemExpansion({

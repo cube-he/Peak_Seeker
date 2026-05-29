@@ -2,6 +2,7 @@ import RankTierBadge from './RankTierBadge';
 import { classifyRank, getTier, isHistorical, type RankTier } from '@/utils/classify-rank';
 
 const BG_COLOR_BY_TIER: Record<RankTier, string> = {
+  unreachable: '#f3f4f6',
   rush:    '#fef0ee',
   stable:  '#ebf2f8',
   safe:    '#e8f1ec',

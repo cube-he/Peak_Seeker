@@ -1,42 +1,34 @@
 'use client';
 
+/**
+ * 教师工作台 · 学生管理 (列表)
+ * 复刻自 `WillNest Design System/teacher/views/students.jsx`.
+ * 业务逻辑保留: keyword debounce → backend, 二级过滤前端做, useSearchParams
+ * + Suspense 框架, CSV 导出.
+ * className 用设计稿 stu-grid / stu-tbl / stu-card / fc / chip-bar /
+ *           search-wrap / stu-select / stu-view-toggle.
+ */
+
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Avatar, Button, Empty, Input, Segmented, Select, Space, Spin, Table, Tag, Tooltip } from 'antd';
-import {
-  FileTextOutlined,
-  PlusOutlined,
-  SearchOutlined,
-  UploadOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
+import { Spin, message } from 'antd';
 import { useQuery } from '@tanstack/react-query';
-import type { ColumnsType } from 'antd/es/table';
 import { studentApi, type ProfileProgress } from '@/services/student-api';
-import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
+import {
+  Avatar,
+  Empty,
+  PageHeader,
+  SubjectChip,
+  TIcon,
+  fmtAgo,
+  type WnStudent,
+} from '@/components/willnest';
 
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  COLLECTING: { label: '待采集', color: 'default' },
-  GENERATING: { label: '待生成', color: 'cyan' },
-  REVIEWING: { label: '待审核', color: 'gold' },
-  FINALIZED: { label: '已定稿', color: 'green' },
-  SUBMITTED: { label: '已填报', color: 'success' },
-};
-
-const PLAN_STATUS_LABEL: Record<string, string> = {
-  DRAFT: '草稿',
-  PENDING_REVIEW: '待审',
-  REVIEWING: '审中',
-  APPROVED: '已通过',
-  PARENT_CONFIRMED: '家长确认',
-  REJECTED: '已退回',
-  FINALIZED: '已定稿',
-  PUBLISHED: '已发布',
-  OUTDATED: '已过期',
-};
-
-interface Student {
+// ============================================================
+//   Types & mappings
+// ============================================================
+interface BackendStudent {
   id: number;
   username: string;
   realName?: string;
@@ -53,134 +45,147 @@ interface Student {
   latestPlanVersionNo?: number | null;
   updatedAt?: string;
   createdAt: string;
+  examType?: 'PHYSICS' | 'HISTORY' | null;
 }
 
-type ProgressFilter = 'all' | 'self_low' | 'self_mid' | 'teacher_pending' | 'recommendable';
+type DesignTrack = 'me' | 'parent' | 'supervisor' | 'done' | 'idle';
 
-function getWorkflowStatus(student: Student): string {
-  return student.workflowStatus ?? 'COLLECTING';
+const PLAN_STATUS_LABEL: Record<string, string> = {
+  DRAFT: '草稿',
+  PENDING_REVIEW: '待审',
+  REVIEWING: '审中',
+  APPROVED: '已通过',
+  PARENT_CONFIRMED: '家长确认',
+  REJECTED: '已退回',
+  FINALIZED: '已定稿',
+  PUBLISHED: '已发布',
+  OUTDATED: '已过期',
+};
+
+const TRACK_TONE: Record<DesignTrack, { txt: string; tone: string; cls: string }> = {
+  me: { txt: '等我动手', tone: 'rush', cls: 'me' },
+  parent: { txt: '等学生家长', tone: 'accent', cls: 'parent' },
+  supervisor: { txt: '待主管', tone: 'primary', cls: 'sup' },
+  done: { txt: '已交付', tone: '', cls: 'done' },
+  idle: { txt: '进行中', tone: '', cls: 'none' },
+};
+
+// Avatar tone — id 稳定 hash 防抖
+const TONES = ['t-blue', 't-amber', 't-violet', 't-rose', 't-green'];
+function pickTone(id: number): string {
+  return TONES[Math.abs(id) % TONES.length];
 }
 
-function getDisplayName(student: Student): string {
-  return student.user?.realName || student.realName || student.username;
+function getName(s: BackendStudent): string {
+  return s.user?.realName ?? s.realName ?? s.username;
+}
+function getPhone(s: BackendStudent): string {
+  return s.user?.phone ?? s.phone ?? '';
+}
+function getCompleteness(s: BackendStudent): number {
+  return s.progress?.overallCompleteness ?? 0;
+}
+function getStudentCompleteness(s: BackendStudent): number {
+  return s.progress?.studentSelfCompleteness ?? 0;
+}
+function getTeacherCompleteness(s: BackendStudent): number {
+  // teacher 完整度 = overall - student (近似)
+  return Math.max(0, getCompleteness(s) - getStudentCompleteness(s));
 }
 
-function formatNumber(value?: number | null) {
-  if (value === null || value === undefined) return '--';
-  return value.toLocaleString('zh-CN');
+function daysSince(date: string | undefined, now: number): number {
+  if (!date) return 0;
+  const t = new Date(date).getTime();
+  if (Number.isNaN(t)) return 0;
+  return Math.max(0, Math.floor((now - t) / 86_400_000));
 }
 
-function daysSince(date: string | undefined, now: Date) {
-  if (!date) return null;
-  const past = new Date(date);
-  if (Number.isNaN(past.getTime())) return null;
-  return Math.floor((now.getTime() - past.getTime()) / 86_400_000);
-}
-
-function formatRelativeTime(date: Date, now: Date) {
-  const seconds = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
-  if (seconds < 60) return '刚刚';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
-  if (seconds < 86_400) return `${Math.floor(seconds / 3600)} 小时前`;
-  return `${Math.floor(seconds / 86_400)} 天前`;
-}
-
-// 学生当前所属的"任务轨"——与 Dashboard 三轨对齐
-type StudentTodoTrack =
-  | 'wait-me'
-  | 'wait-student-parent'
-  | 'wait-supervisor'
-  | 'sleeping'
-  | 'delivered'
-  | 'idle';
-
-function getStudentTodoTrack(student: Student, now: Date): StudentTodoTrack {
-  const status = getWorkflowStatus(student);
-  const noActionDays = daysSince(student.updatedAt, now);
-  const completeness = student.progress?.overallCompleteness ?? 0;
-
-  if (status === 'SUBMITTED') return 'delivered';
-  if (noActionDays !== null && noActionDays >= 7 && status !== 'FINALIZED') return 'sleeping';
-
-  if (
-    student.latestPlanStatus === 'PENDING_REVIEW' ||
-    student.latestPlanStatus === 'REVIEWING'
-  ) {
-    return 'wait-supervisor';
+// backend workflow 状态 → 设计稿 track
+function getTrack(s: BackendStudent): DesignTrack {
+  const status = s.workflowStatus ?? 'COLLECTING';
+  if (status === 'SUBMITTED') return 'done';
+  if (s.latestPlanStatus === 'PENDING_REVIEW' || s.latestPlanStatus === 'REVIEWING') {
+    return 'supervisor';
   }
-
-  if (status === 'COLLECTING' && completeness < 60) return 'wait-me';
-  if (status === 'GENERATING') return 'wait-me';
-  if (status === 'COLLECTING' && completeness >= 60) return 'wait-student-parent';
-  if (status === 'FINALIZED') return 'wait-student-parent';
-
+  const completeness = getCompleteness(s);
+  if (status === 'COLLECTING' && completeness < 60) return 'me';
+  if (status === 'GENERATING') return 'me';
+  if (status === 'COLLECTING') return 'parent';
+  if (status === 'FINALIZED') return 'parent';
   return 'idle';
 }
 
-const TRACK_LABEL: Record<StudentTodoTrack, string> = {
-  'wait-me': '等我动手',
-  'wait-student-parent': '等学生家长',
-  'wait-supervisor': '等主管审核',
-  'sleeping': '沉默',
-  'delivered': '已交付',
-  'idle': '进行中',
-};
-
-const TRACK_TONE: Record<StudentTodoTrack, string> = {
-  'wait-me': 'bg-rush text-white',
-  'wait-student-parent': 'bg-primary text-white',
-  'wait-supervisor': 'bg-accent text-white',
-  'sleeping': 'bg-rush text-white',
-  'delivered': 'bg-safe text-white',
-  'idle': 'bg-text-muted text-white',
-};
-
-function SopMiniBar({ student }: { student: Student }) {
-  const status = getWorkflowStatus(student);
-  const stages: { key: string; done: boolean; active: boolean }[] = [
-    { key: '签', done: !!student.createdAt, active: false },
-    { key: '采', done: status !== 'COLLECTING', active: status === 'COLLECTING' },
-    {
-      key: '案',
-      done: ['REVIEWING', 'FINALIZED', 'SUBMITTED'].includes(status),
-      active: status === 'GENERATING',
-    },
-    {
-      key: '审',
-      done: ['FINALIZED', 'SUBMITTED'].includes(status),
-      active: status === 'REVIEWING',
-    },
-    {
-      key: '稿',
-      done: status === 'SUBMITTED',
-      active: status === 'FINALIZED',
-    },
-    { key: '交', done: status === 'SUBMITTED', active: false },
-  ];
-
-  return (
-    <div className="flex items-center gap-1">
-      {stages.map((s, i) => (
-        <span key={s.key} className="flex items-center gap-1">
-          <span
-            aria-label={s.key}
-            className={`inline-block h-2 w-2 rounded-full ${
-              s.done
-                ? 'bg-safe'
-                : s.active
-                  ? 'bg-accent'
-                  : 'border border-text-muted bg-surface'
-            }`}
-          />
-          {i < stages.length - 1 ? (
-            <span aria-hidden className="h-px w-2 bg-border-subtle" />
-          ) : null}
-        </span>
-      ))}
-    </div>
-  );
+// backend workflow → 设计稿 intakeStatus (用于"资料状态"过滤)
+function getIntakeStatus(s: BackendStudent): 'VERIFIED' | 'SUBMITTED' | 'NEEDS_CHANGES' | 'DRAFT' {
+  const w = s.workflowStatus ?? 'COLLECTING';
+  if (w === 'FINALIZED' || w === 'SUBMITTED') return 'VERIFIED';
+  if (w === 'REVIEWING') return 'SUBMITTED';
+  if (s.latestPlanStatus === 'REJECTED') return 'NEEDS_CHANGES';
+  return 'DRAFT';
 }
 
+interface DesignStudent extends WnStudent {
+  /** 转成 string 方便设计稿原版 .toLowerCase() 调用 */
+  idStr: string;
+  /** backend id (用于 router push) */
+  rawId: number;
+  score: number;
+  rank: number;
+  plansCount: number;
+  latestPlan: string | null;
+  lastActHours: number;
+  silentDays: number;
+  needsAttention: boolean;
+  intakeStatus: 'VERIFIED' | 'SUBMITTED' | 'NEEDS_CHANGES' | 'DRAFT';
+  completion: { total: number; student: number; teacher: number };
+  exam: 'PHYSICS' | 'HISTORY' | null;
+  contact: { school: string; clazz: string; phone: string };
+  track: DesignTrack;
+}
+
+function toDesign(s: BackendStudent, now: number): DesignStudent {
+  const name = getName(s);
+  const silentDays = daysSince(s.updatedAt, now);
+  const track = getTrack(s);
+  const completeness = getCompleteness(s);
+  const latestPlan = s.latestPlanStatus
+    ? `${s.latestPlanVersionNo ? `v${s.latestPlanVersionNo} ` : ''}${
+        PLAN_STATUS_LABEL[s.latestPlanStatus] ?? s.latestPlanStatus
+      }`
+    : null;
+  return {
+    id: s.id,
+    rawId: s.id,
+    idStr: String(s.id),
+    name,
+    initials: name.charAt(0),
+    tone: pickTone(s.id),
+    score: s.totalScore ?? 0,
+    rank: s.provincialRank ?? 0,
+    plansCount: s.planCount ?? 0,
+    latestPlan,
+    lastActHours: silentDays * 24,
+    silentDays,
+    needsAttention: silentDays >= 4 || (track === 'me' && completeness < 30),
+    intakeStatus: getIntakeStatus(s),
+    completion: {
+      total: completeness,
+      student: getStudentCompleteness(s),
+      teacher: getTeacherCompleteness(s),
+    },
+    exam: s.examType ?? null,
+    contact: {
+      school: '', // backend 暂未提供, 占位
+      clazz: '',
+      phone: getPhone(s),
+    },
+    track,
+  };
+}
+
+// ============================================================
+//   Hooks
+// ============================================================
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -190,653 +195,396 @@ function useDebouncedValue<T>(value: T, delay: number) {
   return debounced;
 }
 
-// 导出为带 UTF-8 BOM 的 CSV，Excel 直接打开不乱码
-function exportStudentsCSV(students: Student[], filename: string) {
-  const headers = ['姓名', '手机', '状态', '总分', '位次', '完整度%', '方案数', '最新方案', '最近更新'];
-  const rows = students.map((s) => [
-    getDisplayName(s),
-    s.user?.phone || s.phone || '',
-    STATUS_MAP[getWorkflowStatus(s)]?.label || '',
-    s.totalScore ?? '',
-    s.provincialRank ?? '',
-    s.progress?.overallCompleteness ?? '',
-    s.planCount ?? 0,
-    s.latestPlanStatus
-      ? `${s.latestPlanVersionNo ? `v${s.latestPlanVersionNo} ` : ''}${PLAN_STATUS_LABEL[s.latestPlanStatus] ?? s.latestPlanStatus}`
-      : '',
-    s.updatedAt ? new Date(s.updatedAt).toLocaleString('zh-CN') : '',
-  ]);
-  const csv = [headers, ...rows]
-    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\r\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
+// ============================================================
+//   Page wrapper (Suspense for useSearchParams)
+// ============================================================
 export default function TeacherStudentsPage() {
   return (
     <Suspense
       fallback={
-        <div className="rounded-2xl bg-surface py-20 text-center shadow-card">
+        <div className="view-transition" style={{ padding: 80, textAlign: 'center' }}>
           <Spin size="large" />
         </div>
       }
     >
-      <TeacherStudentsPageInner />
+      <Inner />
     </Suspense>
   );
 }
 
-function StudentCardGrid({ students, now }: { students: Student[]; now: Date }) {
-  if (students.length === 0) {
-    return (
-      <div className="rounded-2xl bg-surface py-20 text-center shadow-card">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有学生符合筛选条件" />
-      </div>
-    );
-  }
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {students.map((s) => (
-        <StudentCard key={s.id} student={s} now={now} />
-      ))}
-    </div>
-  );
-}
-
-function TaskChip({
-  label,
-  count,
-  active,
-  onClick,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-xs transition ${
-        active
-          ? 'border-primary bg-primary text-white'
-          : 'border-border-subtle bg-surface text-text hover:border-primary'
-      }`}
-    >
-      {label} <span className="ml-1 opacity-80">{count}</span>
-    </button>
-  );
-}
-
-function StudentCard({ student, now }: { student: Student; now: Date }) {
-  const track = getStudentTodoTrack(student, now);
-  const name = getDisplayName(student);
-  const completeness = student.progress?.overallCompleteness ?? 0;
-  const lastUpdated = student.updatedAt ? new Date(student.updatedAt) : null;
-  const lastActionStr = lastUpdated ? formatRelativeTime(lastUpdated, now) : '--';
-  const totalScore = student.totalScore ?? null;
-  const provincialRank = student.provincialRank ?? null;
-  const planCount = student.planCount ?? 0;
-  const latestPlanLabel = student.latestPlanStatus
-    ? `v${student.latestPlanVersionNo ?? '?'} ${PLAN_STATUS_LABEL[student.latestPlanStatus] ?? student.latestPlanStatus}`
-    : '无方案';
-
-  // 沉默或已交付的卡片降低视觉权重，减少干扰
-  const dimClass = track === 'sleeping' || track === 'delivered' ? 'opacity-70' : '';
-
-  return (
-    <Link
-      href={`/teacher/students/${student.id}`}
-      className={`block rounded-lg border border-border-subtle bg-surface p-4 no-underline shadow-card transition hover:border-primary hover:shadow-md ${dimClass}`}
-    >
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="m-0 truncate font-medium text-text">{name}</p>
-          <p className="m-0 text-xs text-text-muted">
-            {totalScore != null ? `${totalScore} 分` : '--'} ·{' '}
-            位次 {provincialRank != null ? provincialRank.toLocaleString('zh-CN') : '--'}
-          </p>
-        </div>
-        <span
-          className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${TRACK_TONE[track]}`}
-        >
-          {TRACK_LABEL[track]}
-        </span>
-      </div>
-
-      <div className="mb-2">
-        <SopMiniBar student={student} />
-      </div>
-
-      <div className="space-y-0.5 text-xs text-text-muted">
-        <p className="m-0">
-          资料 {completeness}% · 方案 {planCount} 份 · 最新 {latestPlanLabel}
-        </p>
-        <p className="m-0">上次动作 {lastActionStr}</p>
-      </div>
-    </Link>
-  );
-}
-
-function TeacherStudentsPageInner() {
+function Inner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // 状态
   const [searchInput, setSearchInput] = useState(() => searchParams.get('keyword') ?? '');
   const search = useDebouncedValue(searchInput, 300);
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(
-    () => searchParams.get('workflowStatus') ?? searchParams.get('status') ?? undefined,
-  );
-  const [progressFilter, setProgressFilter] = useState<ProgressFilter>('all');
-  // 顶部快捷 chip 引入的两个独立 flag（其他 chip 复用 statusFilter / progressFilter）
-  const [noPlanOnly, setNoPlanOnly] = useState(false);
-  const [highScoreOnly, setHighScoreOnly] = useState(false);
-  const [trackFilter, setTrackFilter] = useState<StudentTodoTrack | 'all'>('all');
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  // 客户端启动后再产生 now / updatedAt，避免 SSR 时间不一致 hydration 警告
-  const [clock, setClock] = useState<{ now: Date; updatedAt: Date } | null>(null);
-  const [generateForStudent, setGenerateForStudent] = useState<Student | null>(null);
+  const [filter, setFilter] = useState<string>(() => searchParams.get('filter') ?? 'all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [progressFilter, setProgressFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
 
-  // 视图切换:卡片 / 表格。默认卡片,localStorage 记忆上次选择
-  const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
-    if (typeof window === 'undefined') return 'card';
-    const saved = window.localStorage.getItem('teacher-students-view') as 'card' | 'table' | null;
-    return saved ?? 'card';
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('teacher-students-view', viewMode);
-    }
-  }, [viewMode]);
-
+  // 数据
   const { data, isLoading } = useQuery({
     queryKey: ['teacher-students', search],
-    queryFn: () => studentApi.getList({ search, pageSize: 200 }),
+    queryFn: () => studentApi.getList({ pageSize: 200, search: search || undefined }),
   });
+  const raw: BackendStudent[] = (data as any)?.data?.data ?? (data as any)?.data ?? [];
 
-  useEffect(() => {
-    if (data) {
-      const stamp = new Date();
-      setClock({ now: stamp, updatedAt: stamp });
-    }
-  }, [data]);
+  const [now] = useState(() => Date.now());
+  const students = useMemo(() => raw.map((s) => toDesign(s, now)), [raw, now]);
 
-  const allStudents: Student[] = data?.data?.data ?? data?.data ?? [];
-
-  const students = useMemo(() => {
-    let list = allStudents;
-    const now = clock?.now;
-    if (trackFilter !== 'all' && now) {
-      list = list.filter((s) => getStudentTodoTrack(s, now) === trackFilter);
-    }
-    if (statusFilter) {
-      list = list.filter((s) => getWorkflowStatus(s) === statusFilter);
-    }
-    if (progressFilter !== 'all') {
-      list = list.filter((student) => {
-        const progress = student.progress;
-        if (!progress) return progressFilter === 'self_low';
-        switch (progressFilter) {
-          case 'self_low':
-            return progress.studentSelfCompleteness < 50;
-          case 'self_mid':
-            return progress.studentSelfCompleteness >= 50 && progress.studentSelfCompleteness < 80;
-          case 'teacher_pending':
-            return progress.teacherDataCompleteness < 100;
-          case 'recommendable':
-            return progress.isRecommendable;
-          default:
-            return true;
-        }
-      });
-    }
-    if (noPlanOnly) list = list.filter((s) => !s.planCount);
-    if (highScoreOnly) list = list.filter((s) => (s.totalScore ?? 0) >= 640);
-    return list;
-  }, [allStudents, statusFilter, progressFilter, noPlanOnly, highScoreOnly, trackFilter, clock?.now]);
-
+  // 分桶计数
   const counts = useMemo(
     () => ({
-      all: allStudents.length,
-      attention: allStudents.filter((s) => (s.progress?.studentSelfCompleteness ?? 0) < 50).length,
-      noPlan: allStudents.filter((s) => !s.planCount).length,
-      reviewing: allStudents.filter((s) => getWorkflowStatus(s) === 'REVIEWING').length,
-      highScore: allStudents.filter((s) => (s.totalScore ?? 0) >= 640).length,
+      me: students.filter((s) => s.track === 'me').length,
+      parent: students.filter((s) => s.track === 'parent').length,
+      sup: students.filter((s) => s.track === 'supervisor').length,
+      silent: students.filter((s) => s.silentDays >= 4).length,
+      done: students.filter((s) => s.track === 'done').length,
+      attn: students.filter((s) => s.needsAttention).length,
+      noPlan: students.filter((s) => s.plansCount === 0).length,
+      pending: students.filter((s) => s.track === 'supervisor').length,
+      high: students.filter((s) => s.score >= 640).length,
+      all: students.length,
     }),
-    [allStudents],
+    [students],
   );
 
-  const trackCounts = useMemo(() => {
-    const now = clock?.now;
-    if (!now) {
-      return { 'wait-me': 0, 'wait-student-parent': 0, 'wait-supervisor': 0, sleeping: 0, delivered: 0, idle: 0 };
+  // 应用过滤器
+  const filtered = useMemo(() => {
+    let xs = students;
+    switch (filter) {
+      case 'me':
+        xs = xs.filter((s) => s.track === 'me');
+        break;
+      case 'parent':
+        xs = xs.filter((s) => s.track === 'parent');
+        break;
+      case 'sup':
+        xs = xs.filter((s) => s.track === 'supervisor');
+        break;
+      case 'silent':
+        xs = xs.filter((s) => s.silentDays >= 4);
+        break;
+      case 'done':
+        xs = xs.filter((s) => s.track === 'done');
+        break;
+      case 'attn':
+        xs = xs.filter((s) => s.needsAttention);
+        break;
+      case 'noPlan':
+        xs = xs.filter((s) => s.plansCount === 0);
+        break;
+      case 'pending':
+        xs = xs.filter((s) => s.track === 'supervisor');
+        break;
+      case 'high':
+        xs = xs.filter((s) => s.score >= 640);
+        break;
+      default:
+        break;
     }
-    const c: Record<StudentTodoTrack, number> = {
-      'wait-me': 0,
-      'wait-student-parent': 0,
-      'wait-supervisor': 0,
-      sleeping: 0,
-      delivered: 0,
-      idle: 0,
-    };
-    allStudents.forEach((s) => {
-      const t = getStudentTodoTrack(s, now);
-      c[t] += 1;
-    });
-    return c;
-  }, [allStudents, clock?.now]);
+    if (statusFilter === 'verified') xs = xs.filter((s) => s.intakeStatus === 'VERIFIED');
+    else if (statusFilter === 'submitted') xs = xs.filter((s) => s.intakeStatus === 'SUBMITTED');
+    else if (statusFilter === 'changes') xs = xs.filter((s) => s.intakeStatus === 'NEEDS_CHANGES');
+    else if (statusFilter === 'draft') xs = xs.filter((s) => s.intakeStatus === 'DRAFT');
 
-  const noActiveFilter =
-    !statusFilter && progressFilter === 'all' && !noPlanOnly && !highScoreOnly;
+    if (progressFilter === 'self_low') xs = xs.filter((s) => s.completion.student < 50);
+    else if (progressFilter === 'self_mid')
+      xs = xs.filter((s) => s.completion.student >= 50 && s.completion.student < 100);
+    else if (progressFilter === 'teacher_low') xs = xs.filter((s) => s.completion.teacher < 80);
+    else if (progressFilter === 'recommendable') xs = xs.filter((s) => s.completion.total >= 80);
+    return xs;
+  }, [students, filter, statusFilter, progressFilter]);
 
-  const chipActive = {
-    all: noActiveFilter,
-    attention: progressFilter === 'self_low',
-    noPlan: noPlanOnly,
-    reviewing: statusFilter === 'REVIEWING',
-    highScore: highScoreOnly,
-  };
+  const openStudent = (id: number) => router.push(`/teacher/students/${id}`);
 
-  function clearAllFilters() {
-    setStatusFilter(undefined);
-    setProgressFilter('all');
-    setNoPlanOnly(false);
-    setHighScoreOnly(false);
-    setTrackFilter('all');
-  }
-
-  function clickChip(chip: keyof typeof chipActive) {
-    if (chip === 'all') {
-      clearAllFilters();
-      return;
-    }
-    if (chip === 'attention') {
-      setProgressFilter(chipActive.attention ? 'all' : 'self_low');
-    } else if (chip === 'noPlan') {
-      setNoPlanOnly(!noPlanOnly);
-    } else if (chip === 'reviewing') {
-      setStatusFilter(chipActive.reviewing ? undefined : 'REVIEWING');
-    } else if (chip === 'highScore') {
-      setHighScoreOnly(!highScoreOnly);
-    }
-  }
-
-  const now = clock?.now ?? new Date();
-
-  const columns: ColumnsType<Student> = [
-    {
-      title: '学生',
-      key: 'name',
-      render: (_, record) => {
-        const name = getDisplayName(record);
-        const phone = record.user?.phone || record.phone;
-        return (
-          <div className="flex items-center gap-3">
-            <Avatar size="small" icon={<UserOutlined />} className="flex-shrink-0 bg-primary">
-              {name?.charAt(0)}
-            </Avatar>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-text">{name}</div>
-              {phone ? <div className="text-xs text-text-muted">{phone}</div> : null}
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      title: '状态',
-      key: 'status',
-      width: 90,
-      render: (_, record) => {
-        const ws = getWorkflowStatus(record);
-        const state = STATUS_MAP[ws] || { label: ws, color: 'default' };
-        return <Tag color={state.color}>{state.label}</Tag>;
-      },
-    },
-    {
-      title: '分数/位次',
-      key: 'scoreRank',
-      width: 130,
-      sorter: (a, b) => (a.totalScore ?? 0) - (b.totalScore ?? 0),
-      render: (_, record) => (
-        <div className="text-sm">
-          {record.totalScore ? (
-            <span className="font-medium text-text">{record.totalScore}</span>
-          ) : (
-            <span className="text-text-faint">未填写</span>
-          )}
-          {record.provincialRank ? (
-            <div className="text-xs text-text-muted">{formatNumber(record.provincialRank)} 位</div>
-          ) : null}
-        </div>
-      ),
-    },
-    {
-      title: '完整度',
-      key: 'completeness',
-      width: 140,
-      sorter: (a, b) => (a.progress?.overallCompleteness ?? 0) - (b.progress?.overallCompleteness ?? 0),
-      render: (_, record) => {
-        const self = record.progress?.studentSelfCompleteness ?? 0;
-        const teacher = record.progress?.teacherDataCompleteness ?? 0;
-        const overall = record.progress?.overallCompleteness ?? 0;
-        const isRecommendable = record.progress?.isRecommendable;
-        return (
-          <Tooltip
-            title={
-              <div className="text-xs">
-                <div>综合：{overall}%</div>
-                <div>学生自填：{self}%</div>
-                <div>教师录入：{teacher}%</div>
-                {isRecommendable ? <div className="mt-1 text-[#52c41a]">✓ 可推荐</div> : null}
-              </div>
-            }
-          >
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-1.5">
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-bg">
-                  <div className="h-full bg-primary" style={{ width: `${self}%` }} />
-                </div>
-                <span className="w-7 text-right text-[10px] text-text-muted">{self}%</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-bg">
-                  <div className="h-full bg-accent" style={{ width: `${teacher}%` }} />
-                </div>
-                <span className="w-7 text-right text-[10px] text-text-muted">{teacher}%</span>
-              </div>
-            </div>
-          </Tooltip>
-        );
-      },
-    },
-    {
-      title: '方案',
-      key: 'plan',
-      width: 110,
-      render: (_, record) => {
-        const count = record.planCount ?? 0;
-        if (count === 0) return <span className="text-xs text-text-faint">未生成</span>;
-        const label = record.latestPlanStatus
-          ? PLAN_STATUS_LABEL[record.latestPlanStatus] ?? record.latestPlanStatus
-          : '';
-        const version = record.latestPlanVersionNo ? `v${record.latestPlanVersionNo}` : '';
-        const content = (
-          <span className="text-sm">
-            <strong className="text-text">{version}</strong>
-            {version && label ? <span className="text-text-muted"> · {label}</span> : null}
-            {count > 1 ? <span className="ml-1 text-[10px] text-text-faint">({count} 份)</span> : null}
-          </span>
-        );
-        if (record.latestPlanId) {
-          return (
-            <Link
-              href={`/teacher/plans/${record.latestPlanId}`}
-              onClick={(e) => e.stopPropagation()}
-              className="no-underline hover:underline"
-            >
-              {content}
-            </Link>
-          );
-        }
-        return content;
-      },
-    },
-    {
-      title: '最近更新',
-      key: 'updatedAt',
-      width: 100,
-      sorter: (a, b) => {
-        const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        return aTime - bTime;
-      },
-      defaultSortOrder: 'descend',
-      render: (_, record) => {
-        if (!record.updatedAt) return <span className="text-xs text-text-faint">--</span>;
-        const days = daysSince(record.updatedAt, now);
-        const text = formatRelativeTime(new Date(record.updatedAt), now);
-        const isStale = days !== null && days > 7;
-        return <span className={`text-xs ${isStale ? 'font-medium text-rush' : 'text-text-muted'}`}>{text}</span>;
-      },
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 110,
-      render: (_, record) => (
-        <Space size="small" onClick={(event) => event.stopPropagation()}>
-          <Button
-            type="text"
-            size="small"
-            icon={<FileTextOutlined />}
-            onClick={() => setGenerateForStudent(record)}
-          >
-            生成方案
-          </Button>
-        </Space>
-      ),
-    },
+  // 两组 chips (作业流 + 属性筛选)
+  const trackChips = [
+    { k: 'all', label: '全部' },
+    { k: 'me', label: '等我动手' },
+    { k: 'parent', label: '等学生家长' },
+    { k: 'sup', label: '等主管' },
+    { k: 'done', label: '已交付' },
+  ];
+  const attrChips: { k: string; label: string; tone?: string }[] = [
+    { k: 'attn', label: '需关注', tone: 'rush' },
+    { k: 'silent', label: '沉默 ≥4 天', tone: 'rush' },
+    { k: 'noPlan', label: '未建方案' },
+    { k: 'pending', label: '待审核' },
+    { k: 'high', label: '≥640 分', tone: 'safe' },
   ];
 
-  const selectedStudents = students.filter((s) => selectedRowKeys.includes(s.id));
-
-  function handleExportSelected() {
-    if (!selectedStudents.length) return;
-    const stamp = new Date().toISOString().slice(0, 10);
-    exportStudentsCSV(selectedStudents, `学生清单-${stamp}.csv`);
+  if (isLoading) {
+    return (
+      <div className="view-transition" style={{ padding: 80, textAlign: 'center' }}>
+        <Spin size="large" />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-5">
-      {/* 顶部 header — 精简后 */}
-      <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-text">学生管理</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-text-muted">
-            <span>{allStudents.length} 名学生</span>
-            <span aria-hidden>·</span>
-            <span>{counts.attention} 名需要关注</span>
-            <span aria-hidden>·</span>
-            <span>{counts.reviewing} 份待审核</span>
-            <span aria-hidden>·</span>
-            <span>数据更新于 {clock ? formatRelativeTime(clock.updatedAt, clock.now) : '--'}</span>
-          </p>
-        </div>
-        <Space wrap>
-          <Tooltip title="批量导入功能待接入">
-            <Button icon={<UploadOutlined />} disabled>
-              批量导入
-            </Button>
-          </Tooltip>
-          <Link href="/teacher/students/create">
-            <Button type="primary" icon={<PlusOutlined />} className="border-0">
-              创建学生
-            </Button>
-          </Link>
-        </Space>
-      </header>
+    <div className="view-transition">
+      <PageHeader
+        eyebrow="ROSTER"
+        title="学生管理"
+        meta={
+          <>
+            <span>
+              <span className="em">{students.length}</span> 名签约学生
+            </span>
+            <span className="dot" />
+            <span>
+              <span className="em">{counts.attn}</span> 需关注
+            </span>
+            <span className="dot" />
+            <span>
+              <span className="em">{counts.done}</span> 已交付
+            </span>
+          </>
+        }
+        fresh="刚刚"
+        actions={
+          <>
+            <button
+              type="button"
+              className="qa"
+              disabled
+              title="批量导入待接入"
+              onClick={() => message.info('批量导入功能待接入')}
+            >
+              <TIcon.upload /> 批量导入
+            </button>
+            <Link href="/teacher/students/create" className="qa primary" style={{ textDecoration: 'none' }}>
+              <TIcon.plus /> 新建学生
+            </Link>
+          </>
+        }
+      />
 
-      {/* 筛选条 */}
-      <section className="rounded-2xl bg-surface px-4 py-4 shadow-card">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <Input
-            placeholder="按姓名、学号或手机号搜索"
-            prefix={<SearchOutlined className="text-text-muted" />}
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            className="xl:w-[300px]"
-            allowClear
-          />
-          <Select
-            placeholder="筛选状态"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            allowClear
-            className="xl:w-[160px]"
-            options={Object.entries(STATUS_MAP).map(([value, state]) => ({ value, label: state.label }))}
-          />
-          <Select<ProgressFilter>
-            value={progressFilter}
-            onChange={setProgressFilter}
-            className="xl:w-[200px]"
-            options={[
-              { value: 'all', label: '全部完整度' },
-              { value: 'self_low', label: '自填 < 50%' },
-              { value: 'self_mid', label: '自填 50%~80%' },
-              { value: 'teacher_pending', label: '老师录入未完成' },
-              { value: 'recommendable', label: '可推荐' },
-            ]}
-          />
-          <Segmented
-            value={viewMode}
-            onChange={(val) => setViewMode(val as 'card' | 'table')}
-            options={[
-              { label: '卡片', value: 'card' },
-              { label: '表格', value: 'table' },
-            ]}
-          />
-          <div className="text-sm text-text-muted xl:ml-auto">
-            当前显示 <strong className="text-text">{students.length}</strong> 名
-          </div>
-        </div>
-      </section>
-
-      {/* 任务维度 chip — 与 Dashboard 三轨对齐 */}
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-text-muted">按任务:</span>
-        <TaskChip
-          label="全部"
-          count={allStudents.length}
-          active={trackFilter === 'all'}
-          onClick={() => setTrackFilter('all')}
-        />
-        <TaskChip
-          label="🔴 等我"
-          count={trackCounts['wait-me']}
-          active={trackFilter === 'wait-me'}
-          onClick={() => setTrackFilter('wait-me')}
-        />
-        <TaskChip
-          label="📤 等学生家长"
-          count={trackCounts['wait-student-parent']}
-          active={trackFilter === 'wait-student-parent'}
-          onClick={() => setTrackFilter('wait-student-parent')}
-        />
-        <TaskChip
-          label="⏳ 等主管"
-          count={trackCounts['wait-supervisor']}
-          active={trackFilter === 'wait-supervisor'}
-          onClick={() => setTrackFilter('wait-supervisor')}
-        />
-        <TaskChip
-          label="⚠️ 沉默"
-          count={trackCounts['sleeping']}
-          active={trackFilter === 'sleeping'}
-          onClick={() => setTrackFilter('sleeping')}
-        />
-        <TaskChip
-          label="✓ 已交付"
-          count={trackCounts['delivered']}
-          active={trackFilter === 'delivered'}
-          onClick={() => setTrackFilter('delivered')}
-        />
-      </div>
-
-      {/* 快捷筛选 chip — 可点 */}
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ['all', '全部', counts.all],
-            ['attention', '需关注', counts.attention],
-            ['noPlan', '未建方案', counts.noPlan],
-            ['reviewing', '待审核', counts.reviewing],
-            ['highScore', '≥640 分', counts.highScore],
-          ] as const
-        ).map(([key, label, count]) => (
+      <div className="chip-bar fade-up d1">
+        <span className="chip-label">作业流</span>
+        {trackChips.map((c) => (
           <button
-            key={key}
+            key={c.k}
             type="button"
-            onClick={() => clickChip(key)}
-            className={`cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-              chipActive[key]
-                ? 'border-primary bg-primary text-white'
-                : 'border-border bg-surface text-text-secondary hover:border-primary hover:text-primary'
-            }`}
+            className={`fc ${filter === c.k ? 'is-active' : ''}`}
+            onClick={() => setFilter(c.k)}
           >
-            {label} <span className="ml-1 opacity-70">{count}</span>
+            {c.label}
+            <span className="n">{counts[c.k as keyof typeof counts]}</span>
+          </button>
+        ))}
+        <span className="chip-sep" aria-hidden="true" />
+        <span className="chip-label">筛选</span>
+        {attrChips.map((c) => (
+          <button
+            key={c.k}
+            type="button"
+            className={`fc ${filter === c.k ? `is-active t-${c.tone || ''}` : ''}`}
+            onClick={() => setFilter(c.k)}
+          >
+            {c.label}
+            <span className="n">{counts[c.k as keyof typeof counts]}</span>
           </button>
         ))}
       </div>
 
-      {/* 批量操作栏 — 选中后浮现 */}
-      {selectedRowKeys.length > 0 ? (
-        <div className="sticky top-14 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-primary bg-primary-fixed px-4 py-3 shadow-card">
-          <span className="text-sm font-medium text-primary">
-            已选 {selectedRowKeys.length} 名学生
-          </span>
-          <Button size="small" type="primary" onClick={handleExportSelected}>
-            导出 CSV
-          </Button>
-          <Tooltip title="批量催更功能待接入">
-            <Button size="small" disabled>
-              批量催更
-            </Button>
-          </Tooltip>
-          <Button
-            size="small"
-            type="text"
-            className="ml-auto"
-            onClick={() => setSelectedRowKeys([])}
+      <div className="search-wrap fade-up d2">
+        <TIcon.search />
+        <input
+          placeholder="姓名 / 学号 / 学校"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+        />
+        <span className="stu-toolbar-sep" />
+        <select
+          className="stu-select"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="all">资料状态:全部</option>
+          <option value="verified">已确认</option>
+          <option value="submitted">待确认</option>
+          <option value="changes">已退回</option>
+          <option value="draft">草稿</option>
+        </select>
+        <select
+          className="stu-select"
+          value={progressFilter}
+          onChange={(e) => setProgressFilter(e.target.value)}
+        >
+          <option value="all">进度:全部</option>
+          <option value="self_low">学生自填 &lt; 50%</option>
+          <option value="self_mid">学生自填 50-99%</option>
+          <option value="teacher_low">老师录入 &lt; 80%</option>
+          <option value="recommendable">可推荐 (≥80%)</option>
+        </select>
+        <div className="stu-view-toggle">
+          <button
+            type="button"
+            className={viewMode === 'card' ? 'is-active' : ''}
+            onClick={() => setViewMode('card')}
+            title="卡片视图"
           >
-            取消选择
-          </Button>
+            <TIcon.dashboard />
+          </button>
+          <button
+            type="button"
+            className={viewMode === 'table' ? 'is-active' : ''}
+            onClick={() => setViewMode('table')}
+            title="表格视图"
+          >
+            <TIcon.filter />
+          </button>
         </div>
-      ) : null}
+      </div>
 
-      {viewMode === 'table' ? (
-        <Table
-          columns={columns}
-          dataSource={students}
-          loading={isLoading}
-          rowKey="id"
-          rowSelection={{
-            selectedRowKeys,
-            onChange: (keys) => setSelectedRowKeys(keys),
-          }}
-          pagination={{
-            pageSize: 20,
-            showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 名学生`,
-          }}
-          scroll={{ x: 980 }}
-          className="rounded-2xl bg-surface shadow-card"
-          onRow={(record) => ({
-            className: 'cursor-pointer',
-            onClick: () => router.push(`/teacher/students/${record.id}`),
-          })}
-        />
+      {filtered.length === 0 ? (
+        <Empty title="没有匹配的学生" sub="试试更换过滤条件或调整搜索关键词" />
+      ) : viewMode === 'card' ? (
+        <div className="stu-grid fade-up d3">
+          {filtered.map((s) => (
+            <StudentCard key={s.id} student={s} onOpen={() => openStudent(s.rawId)} />
+          ))}
+        </div>
       ) : (
-        <StudentCardGrid students={students} now={clock?.now ?? new Date()} />
+        <StudentTable students={filtered} onOpen={openStudent} />
       )}
+    </div>
+  );
+}
 
-      {generateForStudent ? (
-        <PrerequisiteCheckModal
-          open={!!generateForStudent}
-          student={generateForStudent}
-          onCancel={() => setGenerateForStudent(null)}
-        />
-      ) : null}
+// ============================================================
+//   StudentCard (卡片视图)
+// ============================================================
+function StudentCard({ student: s, onOpen }: { student: DesignStudent; onOpen: () => void }) {
+  const tl = TRACK_TONE[s.track];
+  return (
+    <article className={`stu-card track-${tl.cls}`} onClick={onOpen}>
+      <div className="row1">
+        <Avatar student={s} size={44} />
+        <div className="who">
+          <div className="name">
+            {s.name}
+            {tl.txt ? <span className={`label ${tl.tone}`}>{tl.txt}</span> : null}
+          </div>
+          {(s.contact.school || s.contact.clazz) && (
+            <div className="school">
+              {s.contact.school}
+              {s.contact.clazz ? ` · ${s.contact.clazz}` : ''}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="score-line">
+        <span className="score">{s.score || '--'}</span>
+        <span className="rank">
+          位次 <span className="em">{s.rank ? s.rank.toLocaleString() : '--'}</span>
+        </span>
+        <SubjectChip exam={s.exam} />
+      </div>
+
+      <div className="stu-card-prog">
+        <div className="stu-card-prog-row">
+          <span className="lbl">资料完整度</span>
+          <span className="val">{s.completion.total}%</span>
+        </div>
+        <div
+          className={`stu-card-prog-bar ${
+            s.completion.total >= 90 ? 'full' : s.completion.total < 60 ? 'low' : ''
+          }`}
+        >
+          <span className="fill" style={{ width: `${s.completion.total}%` }} />
+        </div>
+      </div>
+
+      <div className="meta">
+        方案 <span className="em">{s.plansCount}</span> 份
+        {s.latestPlan ? (
+          <>
+            {' '}
+            · 最新 <span className="em">{s.latestPlan}</span>
+          </>
+        ) : null}
+        <br />
+        <span className="last">
+          <TIcon.clock /> 上次动作 {fmtAgo(s.lastActHours)}
+          {s.silentDays >= 4 ? (
+            <span style={{ color: 'var(--rush)', marginLeft: 8 }}>· 沉默 {s.silentDays} 天</span>
+          ) : null}
+        </span>
+      </div>
+    </article>
+  );
+}
+
+// ============================================================
+//   StudentTable (表格视图, 9 列)
+// ============================================================
+function StudentTable({
+  students,
+  onOpen,
+}: {
+  students: DesignStudent[];
+  onOpen: (id: number) => void;
+}) {
+  return (
+    <div className="stu-tbl fade-up d3">
+      <div className="stu-tbl-head">
+        <span>姓名</span>
+        <span>手机</span>
+        <span>状态</span>
+        <span style={{ textAlign: 'right' }}>总分</span>
+        <span style={{ textAlign: 'right' }}>位次</span>
+        <span style={{ textAlign: 'right' }}>完整度</span>
+        <span style={{ textAlign: 'right' }}>方案</span>
+        <span>最新方案</span>
+        <span style={{ textAlign: 'right' }}>最近更新</span>
+      </div>
+      {students.map((s) => {
+        const tl = TRACK_TONE[s.track];
+        return (
+          <div className="stu-tbl-row" key={s.id} onClick={() => onOpen(s.rawId)}>
+            <span className="nm">
+              <Avatar student={s} size={28} />
+              <span>
+                <strong>{s.name}</strong>
+                {s.contact.school ? <em>{s.contact.school}</em> : null}
+              </span>
+            </span>
+            <span className="phone">{s.contact.phone || '—'}</span>
+            <span>
+              <span className={`stu-tbl-status tone-${tl.tone || 'muted'}`}>{tl.txt}</span>
+            </span>
+            <span className="num score">{s.score || '--'}</span>
+            <span className="num rank">{s.rank ? s.rank.toLocaleString() : '--'}</span>
+            <span className="num pct">
+              <span
+                className={`stu-tbl-pct ${
+                  s.completion.total >= 90 ? 'full' : s.completion.total < 60 ? 'low' : ''
+                }`}
+              >
+                {s.completion.total}%
+              </span>
+            </span>
+            <span className="num pl">{s.plansCount}</span>
+            <span className="latest">
+              {s.latestPlan ?? <em style={{ color: 'var(--text-faint)' }}>—</em>}
+            </span>
+            <span className="when">
+              {fmtAgo(s.lastActHours)}
+              {s.silentDays >= 4 ? (
+                <span style={{ display: 'block', color: 'var(--rush)', fontSize: 10.5 }}>
+                  沉默 {s.silentDays} 天
+                </span>
+              ) : null}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

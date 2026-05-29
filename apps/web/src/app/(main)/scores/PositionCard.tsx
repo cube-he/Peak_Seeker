@@ -11,6 +11,7 @@ interface PositionCardProps {
   stableCount: number;
   safeCount: number;
   unknownCount: number;
+  year: number;
 }
 
 export function PositionCard({
@@ -20,6 +21,7 @@ export function PositionCard({
   stableCount,
   safeCount,
   unknownCount,
+  year,
 }: PositionCardProps) {
   return (
     <Card title="你的定位">
@@ -28,7 +30,7 @@ export function PositionCard({
           <Statistic title="换算位次" value={rank} groupSeparator="" />
         </Col>
         <Col span={8}>
-          <Statistic title="省排名" value={`前 ${percentile}%`} />
+          <Statistic title="百分位" value={`前 ${(percentile * 100).toFixed(2)}%`} />
         </Col>
         <Col span={8}>
           <Statistic title="可冲" value={rushCount} />
@@ -43,8 +45,8 @@ export function PositionCard({
         </Col>
       </Row>
       <Text type="secondary" style={{ display: 'block', marginTop: 16 }}>
-        基于 2025 一分一段表换算
-        {unknownCount > 0 ? `，另有 ${unknownCount} 所数据不足` : ''}
+        基于 {year} 一分一段表换算
+        {unknownCount > 0 ? `，另有 ${unknownCount} 所院校暂无预测位次数据` : ''}
       </Text>
     </Card>
   );

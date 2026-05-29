@@ -13,50 +13,53 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 describe('PositionCard', () => {
-  it('shows the converted rank, percentile and tier counts', () => {
+  it('shows the converted rank, percentile (×100, 2 decimals) and tier counts', () => {
     render(
       <PositionCard
         rank={12000}
-        percentile={3.5}
+        percentile={0.035}
         rushCount={4}
         stableCount={9}
         safeCount={6}
         unknownCount={0}
+        year={2025}
       />,
     );
     expect(screen.getByText('12000')).toBeInTheDocument();
-    expect(screen.getByText(/前 3.5%/)).toBeInTheDocument();
+    expect(screen.getByText(/前 3\.50%/)).toBeInTheDocument();
     expect(screen.getByText(/2025/)).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('9')).toBeInTheDocument();
     expect(screen.getByText('6')).toBeInTheDocument();
   });
 
-  it('appends a data-insufficient note when unknownCount > 0', () => {
+  it('appends a 预测位次 note when unknownCount > 0', () => {
     render(
       <PositionCard
         rank={12000}
-        percentile={3.5}
+        percentile={0.035}
         rushCount={4}
         stableCount={9}
         safeCount={6}
         unknownCount={7}
+        year={2025}
       />,
     );
-    expect(screen.getByText(/另有 7 所数据不足/)).toBeInTheDocument();
+    expect(screen.getByText(/另有 7 所院校暂无预测位次数据/)).toBeInTheDocument();
   });
 
   it('omits the note when unknownCount is 0', () => {
     render(
       <PositionCard
         rank={12000}
-        percentile={3.5}
+        percentile={0.035}
         rushCount={4}
         stableCount={9}
         safeCount={6}
         unknownCount={0}
+        year={2025}
       />,
     );
-    expect(screen.queryByText(/数据不足/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/数据不足|暂无预测位次/)).not.toBeInTheDocument();
   });
 });

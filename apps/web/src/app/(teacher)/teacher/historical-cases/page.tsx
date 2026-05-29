@@ -1,316 +1,309 @@
 'use client';
 
-import { useState } from 'react';
+/**
+ * 教师工作台 · 历史案例 (列表)
+ * 复刻自 `WillNest Design System/teacher/views/history.jsx` 的 ViewHistory.
+ * className: stat-cluster / hf-bar / h-tbl.
+ * 详情页 [id]/page.tsx 暂保留现有 antd 版本 (工作量大且功能完整).
+ */
+
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { Spin } from 'antd';
 import {
-  Card,
-  Input,
-  Select,
-  InputNumber,
-  Table,
-  Tag,
-  Spin,
-  Empty,
-  Statistic,
-  Row,
-  Col,
-} from 'antd';
-import { historicalCasesApi, type HistoricalCaseListItem } from '@/services/historical-cases-api';
+  historicalCasesApi,
+  type HistoricalCaseListItem,
+} from '@/services/historical-cases-api';
+import { PageHeader, TIcon } from '@/components/willnest';
 
-const EXAM_TYPE_LABEL: Record<string, string> = {
+const EXAM_TXT: Record<string, string> = {
   PHYSICS: '物理类',
   HISTORY: '历史类',
 };
 
 export default function HistoricalCasesPage() {
-  const [examYear, setExamYear] = useState<number | undefined>(2025);
-  const [examType, setExamType] = useState<'PHYSICS' | 'HISTORY' | undefined>(undefined);
-  const [scoreFrom, setScoreFrom] = useState<number | undefined>(undefined);
-  const [scoreTo, setScoreTo] = useState<number | undefined>(undefined);
-  const [keyword, setKeyword] = useState<string>('');
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [year, setYear] = useState<string>('all');
+  const [exam, setExam] = useState<'all' | 'PHYSICS' | 'HISTORY'>('all');
+  const [scoreMin, setScoreMin] = useState<string>('');
+  const [scoreMax, setScoreMax] = useState<string>('');
+  const [kw, setKw] = useState<string>('');
+  const page = 1;
+  const pageSize = 200;
 
+  // stats 不带年份过滤拿一次, 供 stat-cluster 顶部展示
   const { data: stats } = useQuery({
-    queryKey: ['historical-stats', examYear],
-    queryFn: () => historicalCasesApi.stats(examYear),
+    queryKey: ['historical-stats'],
+    queryFn: () => historicalCasesApi.stats(undefined),
   });
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['historical-list', examYear, examType, scoreFrom, scoreTo, keyword, page],
+  const { data: listData, isLoading } = useQuery({
+    queryKey: ['historical-list', year, exam, scoreMin, scoreMax, kw, page],
     queryFn: () =>
       historicalCasesApi.list({
-        examYear,
-        examType,
-        scoreFrom,
-        scoreTo,
-        keyword: keyword.trim() || undefined,
+        examYear: year === 'all' ? undefined : Number(year),
+        examType: exam === 'all' ? undefined : exam,
+        scoreFrom: scoreMin ? Number(scoreMin) : undefined,
+        scoreTo: scoreMax ? Number(scoreMax) : undefined,
+        keyword: kw.trim() || undefined,
         page,
         pageSize,
       }),
   });
 
-  const columns = [
-    {
-      title: '学生',
-      dataIndex: ['user', 'realName'],
-      render: (_: any, row: HistoricalCaseListItem) => (
-        <Link href={`/teacher/historical-cases/${row.id}`} className="text-primary">
-          {row.user.realName ?? row.user.username}
-        </Link>
-      ),
-      width: 100,
-    },
-    {
-      title: '选科',
-      render: (_: any, row: HistoricalCaseListItem) => {
-        const type = row.examType ? EXAM_TYPE_LABEL[row.examType] : '--';
-        const re = Array.isArray(row.reChoices) ? row.reChoices.join('/') : '--';
-        return (
-          <span className="text-sm">
-            {type} · {row.firstChoice ?? '--'}/{re}
-          </span>
-        );
-      },
-      width: 180,
-    },
-    {
-      title: '总分',
-      dataIndex: 'totalScore',
-      width: 70,
-      sorter: (a: HistoricalCaseListItem, b: HistoricalCaseListItem) =>
-        (a.totalScore ?? 0) - (b.totalScore ?? 0),
-    },
-    { title: '位次', dataIndex: 'provincialRank', width: 90 },
-    {
-      title: '录取大学',
-      render: (_: any, row: HistoricalCaseListItem) => {
-        const ar = row.admissionResult;
-        if (!ar) return <span className="text-text-muted">未录取</span>;
-        if (ar.admittedUniId) {
-          return (
-            <Link href={`/universities/${ar.admittedUniId}`} className="text-primary">
-              {ar.admittedUniName}
-            </Link>
-          );
-        }
-        return <span>{ar.admittedUniName}</span>;
-      },
-      width: 180,
-    },
-    {
-      title: '专业组',
-      render: (_: any, row: HistoricalCaseListItem) => {
-        const code = row.admissionResult?.admittedMajorGroupCode;
-        return code ? <Tag color="cyan">{code}</Tag> : <span className="text-text-muted">--</span>;
-      },
-      width: 80,
-    },
-    {
-      title: '录取专业',
-      render: (_: any, row: HistoricalCaseListItem) => {
-        const ar = row.admissionResult;
-        const name = ar?.admittedMajorName;
-        const code = ar?.admittedMajorCode;
-        if (!name) return <span className="text-text-muted">--</span>;
-        const inner = (
-          <>
-            {code ? <span className="text-text-muted">[{code}] </span> : null}
-            {name}
-          </>
-        );
-        if (ar?.admittedMajorId) {
-          return (
-            <Link href={`/majors/${ar.admittedMajorId}`} className="text-sm text-primary">
-              {inner}
-            </Link>
-          );
-        }
-        return <span className="text-sm">{inner}</span>;
-      },
-      width: 200,
-    },
-    {
-      title: '批次',
-      render: (_: any, row: HistoricalCaseListItem) => (
-        <Tag>{row.admissionResult?.batchName ?? '--'}</Tag>
-      ),
-      width: 110,
-    },
-    {
-      title: '分差',
-      render: (_: any, row: HistoricalCaseListItem) => {
-        const d = row.admissionResult?.scoreDiff;
-        if (d == null) return '--';
-        return <span className={d >= 0 ? 'text-safe' : 'text-rush'}>{d > 0 ? `+${d}` : d}</span>;
-      },
-      width: 70,
-    },
-    {
-      title: '第几志愿',
-      render: (_: any, row: HistoricalCaseListItem) => row.admissionResult?.sequenceNo ?? '--',
-      width: 80,
-    },
-    {
-      title: '负责老师',
-      render: (_: any, row: HistoricalCaseListItem) =>
-        row.teacher?.user.realName ?? row.teacher?.user.username ?? '--',
-      width: 100,
-    },
-  ];
+  const filtered: HistoricalCaseListItem[] = (listData as any)?.data ?? [];
+
+  // 年份过滤桶: backend stats 里有 byExamYear 字段可用, 没有则 fallback 静态
+  const yearCounts = useMemo<Record<string, number>>(() => {
+    const m: Record<string, number> = { all: stats?.total ?? 0 };
+    const byYear = (stats as any)?.byExamYear ?? {};
+    Object.entries(byYear).forEach(([y, c]) => {
+      m[String(y)] = Number(c);
+    });
+    return m;
+  }, [stats]);
+
+  const years: (string | number)[] = useMemo(() => {
+    const byYear = (stats as any)?.byExamYear ?? {};
+    const ys = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+    return ['all', ...(ys.length ? ys : [2025, 2024, 2023, 2022])];
+  }, [stats]);
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-baseline justify-between">
-        <h1 className="m-0 font-serif text-xl font-semibold">历史案例</h1>
-        <span className="text-xs text-text-muted">
-          往届学生的志愿填报 + 录取结果归档. 用于参考相似分数学生填了哪、录取在哪.
-        </span>
-      </div>
+    <div className="view-transition">
+      <PageHeader
+        eyebrow="ARCHIVE"
+        title="历史案例"
+        meta={
+          <>
+            <span>往届学生的志愿填报 + 录取结果归档</span>
+            <span className="dot" />
+            <span>用于参考相似分数学生填了哪、录取在哪</span>
+          </>
+        }
+        fresh=""
+      />
 
-      {/* 统计概览 */}
-      {stats ? (
-        <Row gutter={16}>
-          <Col xs={12} md={6}>
-            <Card>
-              <Statistic title="案例总数" value={stats.total} />
-            </Card>
-          </Col>
-          <Col xs={12} md={6}>
-            <Card>
-              <Statistic
-                title="物理类 / 历史类"
-                value={`${stats.byExamType.PHYSICS ?? 0} / ${stats.byExamType.HISTORY ?? 0}`}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} md={6}>
-            <Card>
-              <Statistic
-                title="平均分差"
-                value={stats.avgScoreDiff ?? '--'}
-                suffix={stats.avgScoreDiff !== null ? '分' : ''}
-              />
-              <p className="m-0 text-[11px] text-text-muted">
-                有效样本 {stats.sampleSize} 条
-              </p>
-            </Card>
-          </Col>
-          <Col xs={12} md={6}>
-            <Card>
-              <p className="m-0 text-xs text-text-muted">高频录取院校</p>
-              <ul className="m-0 mt-1 list-none p-0 text-sm">
-                {stats.topUniversities.slice(0, 3).map((u) => (
-                  <li key={u.name} className="truncate">
-                    {u.name} × {u.count}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          </Col>
-        </Row>
-      ) : null}
-
-      {/* 过滤栏 */}
-      <Card size="small">
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <p className="m-0 mb-1 text-xs text-text-muted">高考年份</p>
-            <Select
-              value={examYear}
-              onChange={(v) => {
-                setExamYear(v);
-                setPage(1);
-              }}
-              style={{ width: 120 }}
-              options={[
-                { label: '2025', value: 2025 },
-                { label: '2024', value: 2024 },
-                { label: '全部', value: undefined },
-              ]}
-            />
+      {/* —— 统计概览 4 chip —— */}
+      <div className="stat-cluster fade-up d1">
+        <div className="scell t-primary">
+          <div className="k">案例总数</div>
+          <div className="v">
+            {stats?.total ?? '--'}
+            <span className="small">条</span>
           </div>
-          <div>
-            <p className="m-0 mb-1 text-xs text-text-muted">科类</p>
-            <Select
-              value={examType}
-              onChange={(v) => {
-                setExamType(v);
-                setPage(1);
-              }}
-              allowClear
-              style={{ width: 120 }}
-              placeholder="不限"
-              options={[
-                { label: '物理类', value: 'PHYSICS' },
-                { label: '历史类', value: 'HISTORY' },
-              ]}
-            />
-          </div>
-          <div>
-            <p className="m-0 mb-1 text-xs text-text-muted">分数下限</p>
-            <InputNumber
-              value={scoreFrom}
-              onChange={(v) => {
-                setScoreFrom(v ?? undefined);
-                setPage(1);
-              }}
-              min={0}
-              max={750}
-              style={{ width: 100 }}
-            />
-          </div>
-          <div>
-            <p className="m-0 mb-1 text-xs text-text-muted">分数上限</p>
-            <InputNumber
-              value={scoreTo}
-              onChange={(v) => {
-                setScoreTo(v ?? undefined);
-                setPage(1);
-              }}
-              min={0}
-              max={750}
-              style={{ width: 100 }}
-            />
-          </div>
-          <div className="flex-1 min-w-[200px]">
-            <p className="m-0 mb-1 text-xs text-text-muted">姓名 / 录取大学</p>
-            <Input.Search
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onSearch={() => setPage(1)}
-              allowClear
-              placeholder="搜学生姓名或大学名"
-            />
+          <div className="sub">
+            {year === 'all' ? '全部年份归档' : `${year} 届 · ${yearCounts[year] ?? 0} 条`}
           </div>
         </div>
-      </Card>
-
-      {/* 列表 */}
-      <Card>
-        {isLoading ? (
-          <div className="py-12 text-center">
-            <Spin />
+        <div className="scell t-safe">
+          <div className="k">物理类 / 历史类</div>
+          <div className="v">
+            {stats?.byExamType.PHYSICS ?? 0}
+            <span className="small">/ {stats?.byExamType.HISTORY ?? 0}</span>
           </div>
-        ) : !data || data.data.length === 0 ? (
-          <Empty description="暂无符合条件的历史案例" />
-        ) : (
-          <Table<HistoricalCaseListItem>
-            rowKey="id"
-            dataSource={data.data}
-            columns={columns as any}
-            size="small"
-            pagination={{
-              current: page,
-              pageSize,
-              total: data.total,
-              onChange: setPage,
-              showSizeChanger: false,
-            }}
+          <div className="sub">按 2024 选考改革后科类</div>
+        </div>
+        <div className="scell t-accent">
+          <div className="k">平均分差</div>
+          <div className="v">
+            {stats?.avgScoreDiff != null && stats.avgScoreDiff >= 0 ? '+' : ''}
+            {stats?.avgScoreDiff ?? '--'}
+            <span className="small">分</span>
+          </div>
+          <div className="sub">
+            有效样本 {stats?.sampleSize ?? 0} 条 · 录取分 vs 学生分
+          </div>
+        </div>
+        <div className="scell t-primary">
+          <div className="k">高频录取院校 Top 3</div>
+          <ul>
+            {(stats?.topUniversities ?? []).slice(0, 3).map((u) => (
+              <li key={u.name}>
+                <span className="uniName">{u.name}</span>
+                <span className="cnt">{u.count} 条</span>
+              </li>
+            ))}
+            {(!stats || stats.topUniversities.length === 0) && (
+              <li>
+                <span className="uniName">暂无</span>
+              </li>
+            )}
+          </ul>
+        </div>
+      </div>
+
+      {/* —— 过滤栏 —— */}
+      <div className="hf-bar fade-up d2">
+        <div className="group">
+          <span className="group-label">年份</span>
+          {years.map((y) => (
+            <button
+              key={y}
+              type="button"
+              className={`yr-chip ${String(year) === String(y) ? 'is-active' : ''}`}
+              onClick={() => setYear(String(y))}
+            >
+              {y === 'all' ? '全部' : `${y} 届`}
+              <span className="n">{yearCounts[String(y)] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+        <div className="group">
+          <span className="group-label">科类</span>
+          <select value={exam} onChange={(e) => setExam(e.target.value as any)}>
+            <option value="all">不限</option>
+            <option value="PHYSICS">物理类</option>
+            <option value="HISTORY">历史类</option>
+          </select>
+        </div>
+        <div className="group">
+          <span className="group-label">分数</span>
+          <input
+            placeholder="下限"
+            value={scoreMin}
+            onChange={(e) => setScoreMin(e.target.value)}
           />
-        )}
-      </Card>
+          <span style={{ color: 'var(--text-muted)' }}>—</span>
+          <input
+            placeholder="上限"
+            value={scoreMax}
+            onChange={(e) => setScoreMax(e.target.value)}
+          />
+        </div>
+        <div className="group" style={{ marginLeft: 'auto' }}>
+          <span className="group-label">关键词</span>
+          <span className="input-wrap">
+            <TIcon.search />
+            <input
+              className="kw"
+              placeholder="姓名 / 大学 / 专业"
+              value={kw}
+              onChange={(e) => setKw(e.target.value)}
+            />
+          </span>
+        </div>
+      </div>
+
+      {/* —— 数据表 —— */}
+      {isLoading ? (
+        <div className="view-transition" style={{ padding: 80, textAlign: 'center' }}>
+          <Spin size="large" />
+        </div>
+      ) : (
+        <>
+          <div className="h-tbl fade-up d3">
+            <div className="h-tbl-head">
+              <span>学生</span>
+              <span>选科</span>
+              <span>总分</span>
+              <span>位次</span>
+              <span>录取大学</span>
+              <span>专业组</span>
+              <span>录取专业</span>
+              <span>批次</span>
+              <span>分差</span>
+              <span>顺位</span>
+              <span>老师</span>
+            </div>
+            {filtered.length === 0 ? (
+              <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
+                没有符合条件的案例 · 试试调整年份或分数范围
+              </div>
+            ) : (
+              filtered.map((c) => {
+                const ar = c.admissionResult;
+                const name = c.user?.realName ?? c.user?.username ?? '学生';
+                const teacherName =
+                  c.teacher?.user?.realName ?? c.teacher?.user?.username ?? '—';
+                const subjects = `${c.firstChoice ?? '--'}/${
+                  Array.isArray(c.reChoices) ? c.reChoices.join('') : '--'
+                }`;
+                const isEarly = ar?.batchName?.includes('提前') ?? false;
+                const diff = ar?.scoreDiff;
+                return (
+                  <Link
+                    href={`/teacher/historical-cases/${c.id}`}
+                    className="h-tbl-row"
+                    key={c.id}
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    <span className="name">
+                      {name}
+                      {c.examYear ? (
+                        <span
+                          style={{
+                            color: 'var(--text-muted)',
+                            fontSize: 10.5,
+                            marginLeft: 4,
+                            fontFamily: 'var(--font-body)',
+                            fontWeight: 400,
+                          }}
+                        >
+                          {c.examYear}
+                        </span>
+                      ) : null}
+                    </span>
+                    <div className="subj">
+                      <div>
+                        <span className="em">
+                          {c.examType ? EXAM_TXT[c.examType] : '—'}
+                        </span>
+                      </div>
+                      <div>{subjects}</div>
+                    </div>
+                    <span className="score">{c.totalScore ?? '--'}</span>
+                    <span className="rank">
+                      {c.provincialRank != null
+                        ? c.provincialRank.toLocaleString()
+                        : '--'}
+                    </span>
+                    <span className="uname">{ar?.admittedUniName ?? '未录取'}</span>
+                    <span>
+                      {ar?.admittedMajorGroupCode ? (
+                        <span className="grp">{ar.admittedMajorGroupCode}</span>
+                      ) : (
+                        '—'
+                      )}
+                    </span>
+                    <span className="major">{ar?.admittedMajorName ?? '—'}</span>
+                    <span>
+                      {ar?.batchName ? (
+                        <span className={`batch ${isEarly ? 'early' : ''}`}>
+                          {ar.batchName}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </span>
+                    <span className={`diff ${(diff ?? 0) >= 0 ? 'up' : 'down'}`}>
+                      {diff == null ? '—' : (diff >= 0 ? '+' : '') + diff}
+                    </span>
+                    <span className="order">{ar?.sequenceNo ?? '—'}</span>
+                    <span className="teacher">
+                      <span className="av">{teacherName.charAt(0)}</span>
+                      {teacherName}
+                    </span>
+                  </Link>
+                );
+              })
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 20,
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 4,
+              fontSize: 12.5,
+              color: 'var(--text-tertiary)',
+            }}
+          >
+            <span>共 {filtered.length} 条</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

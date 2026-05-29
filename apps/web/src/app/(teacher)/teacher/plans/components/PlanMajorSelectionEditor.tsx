@@ -52,6 +52,25 @@ export default function PlanMajorSelectionEditor({
     setSelectedMajors(selection.selectedMajors);
   }, [selection.selectedMajors]);
 
+  // HTML5 drag-and-drop 排序 (只在 selected 块内移动, source/target 都必须是 selected)
+  const [dragMajorIdx, setDragMajorIdx] = useState<number | null>(null);
+  const [dragOverMajorIdx, setDragOverMajorIdx] = useState<number | null>(null);
+  const handleMajorDragEnd = () => {
+    if (dragMajorIdx == null || dragOverMajorIdx == null || dragMajorIdx === dragOverMajorIdx) {
+      setDragMajorIdx(null);
+      setDragOverMajorIdx(null);
+      return;
+    }
+    setSelectedMajors((current) => {
+      const next = [...current];
+      const [moved] = next.splice(dragMajorIdx, 1);
+      next.splice(dragOverMajorIdx, 0, moved);
+      return next;
+    });
+    setDragMajorIdx(null);
+    setDragOverMajorIdx(null);
+  };
+
   const selectedIds = new Set(selectedMajors.map((major) => major.enrollmentPlanId));
   const rows = [
     ...selectedMajors.map((major) => ({ ...major, isSelected: true })),
@@ -94,15 +113,46 @@ export default function PlanMajorSelectionEditor({
           const selected = selectedIds.has(major.enrollmentPlanId);
           const selectedIndex = selectedMajors.findIndex((item) => item.enrollmentPlanId === major.enrollmentPlanId);
           const disableCheckbox = !canEdit || saving || (!selected && selectedMajors.length >= 6) || (selected && selectedMajors.length <= 1);
+          // 仅 selected 行可拖动 (未选行不允许参与排序)
+          const canDrag = selected && canEdit && !saving;
+          const isDragging = canDrag && dragMajorIdx === selectedIndex;
+          const isDragOver = canDrag && dragOverMajorIdx === selectedIndex && dragMajorIdx !== selectedIndex;
 
           return (
             <div
               key={major.enrollmentPlanId}
+              draggable={canDrag}
+              onDragStart={(e) => {
+                if (!canDrag) return;
+                setDragMajorIdx(selectedIndex);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(e) => {
+                if (!canDrag) return;
+                e.preventDefault();
+                setDragOverMajorIdx(selectedIndex);
+              }}
+              onDragEnd={handleMajorDragEnd}
               className={[
-                'grid gap-3 rounded-md border px-3 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center',
+                'grid gap-3 rounded-md border px-3 py-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center',
                 selected ? 'border-border bg-white text-text' : 'border-border-subtle bg-gray-50 text-gray-400',
-              ].join(' ')}
+                canDrag ? 'cursor-move' : '',
+                isDragging ? 'opacity-50' : '',
+                isDragOver ? 'border-primary ring-2 ring-primary/30' : '',
+              ].filter(Boolean).join(' ')}
             >
+              {/* 拖拽 grip handle (仅 selected 显示, 视觉提示) */}
+              {selected ? (
+                <span
+                  className={canDrag ? 'select-none text-text-tertiary text-base leading-none' : 'select-none text-text-faint text-base leading-none'}
+                  title={canDrag ? '拖动调整顺序' : '当前状态不可拖动'}
+                  aria-hidden="true"
+                >
+                  ⋮⋮
+                </span>
+              ) : (
+                <span aria-hidden="true" />
+              )}
               <label className="flex min-w-0 items-start gap-2">
                 <Checkbox
                   checked={selected}

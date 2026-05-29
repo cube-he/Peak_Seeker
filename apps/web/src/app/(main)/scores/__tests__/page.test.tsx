@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import ScoresPage from '../page';
 import { scoreSegmentApi } from '@/services/score-segment';
 import { admissionService } from '@/services/admission';
@@ -12,6 +12,12 @@ Object.defineProperty(window, 'matchMedia', {
     addEventListener: jest.fn(), removeEventListener: jest.fn(), dispatchEvent: jest.fn(),
   })),
 });
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+  usePathname: () => '/scores',
+  useSearchParams: () => ({ get: () => null }),
+}));
 
 jest.mock('@/services/score-segment', () => ({
   scoreSegmentApi: { lookup: jest.fn(), equivalent: jest.fn() },
@@ -39,38 +45,23 @@ describe('ScoresPage', () => {
     (scoreSegmentApi.equivalent as jest.Mock).mockReset();
     (admissionService.getAggregated as jest.Mock).mockReset();
     (scoreSegmentApi.equivalent as jest.Mock).mockResolvedValue({
-      base: { year: 2025, examType: '物理', score: 600, rank: 12000, percentile: 3.5 },
+      base: { year: 2025, examType: '物理', score: 600, rank: 12000, percentile: 0.035 },
       equivalents: [],
     });
-  });
-
-  it('does not render the legacy mode cards, range input or statistic cards', () => {
-    render(<ScoresPage />);
-    expect(screen.queryByText('按位次查')).not.toBeInTheDocument();
-    expect(screen.queryByText('浮动范围')).not.toBeInTheDocument();
-    expect(screen.queryByText('同位次跨年对比')).not.toBeInTheDocument();
-  });
-
-  it('converts score to rank then loads and buckets admissions on query', async () => {
-    (scoreSegmentApi.lookup as jest.Mock).mockResolvedValue({
-      year: 2025,
-      examType: '物理',
-      score: 600,
-      rank: 12000,
-      percentile: 3.5,
-    });
     (admissionService.getAggregated as jest.Mock).mockResolvedValue({ data: [], total: 0 });
+  });
+
+  it('auto-queries from examInfo on mount', async () => {
+    (scoreSegmentApi.lookup as jest.Mock).mockResolvedValue({
+      year: 2025, examType: '物理', score: 600, rank: 12000, percentile: 0.035,
+    });
 
     render(<ScoresPage />);
-
-    fireEvent.click(screen.getByRole('button', { name: /查.?询/ }));
 
     await waitFor(() => {
-      expect(scoreSegmentApi.lookup).toHaveBeenCalledWith({
-        year: 2025,
-        examType: '物理',
-        score: 600,
-      });
+      expect(scoreSegmentApi.lookup).toHaveBeenCalledWith(
+        expect.objectContaining({ year: 2025, examType: '物理', score: 600 }),
+      );
     });
     await waitFor(() => {
       expect(admissionService.getAggregated).toHaveBeenCalledWith({
@@ -84,15 +75,15 @@ describe('ScoresPage', () => {
     });
   });
 
-  it('shows a conversion-failed message when lookup rejects', async () => {
-    (scoreSegmentApi.lookup as jest.Mock).mockRejectedValue(new Error('out of range'));
+  it('renders a refined error message when lookup rejects', async () => {
+    (scoreSegmentApi.lookup as jest.Mock).mockRejectedValue({
+      response: { status: 404, data: { message: 'not found' } },
+    });
 
     render(<ScoresPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: /查.?询/ }));
-
     await waitFor(() => {
-      expect(screen.getByText(/换算失败/)).toBeInTheDocument();
+      expect(screen.getByText(/未找到对应数据/)).toBeInTheDocument();
     });
   });
 });

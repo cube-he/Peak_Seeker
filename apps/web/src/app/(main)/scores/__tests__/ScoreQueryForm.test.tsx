@@ -17,7 +17,7 @@ describe('ScoreQueryForm', () => {
     expect(screen.getByText('四川')).toBeInTheDocument();
   });
 
-  it('submits subjects and score when the query button is clicked', () => {
+  it('submits with mode/year/subjects/score when query button is clicked', () => {
     const onSubmit = jest.fn();
     render(
       <ScoreQueryForm
@@ -30,12 +30,18 @@ describe('ScoreQueryForm', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /查.?询/ }));
 
-    expect(onSubmit).toHaveBeenCalledWith({ subjects: '物理', score: 600 });
+    expect(onSubmit).toHaveBeenCalledWith({
+      mode: 'score',
+      year: 2025,
+      subjects: '物理',
+      score: 600,
+      rank: undefined,
+    });
   });
 
-  it('does not render a range input or mode cards', () => {
+  it('exposes both 按分数 and 按位次 query modes', () => {
     render(<ScoreQueryForm onSubmit={jest.fn()} loading={false} />);
-    expect(screen.queryByText('浮动范围')).not.toBeInTheDocument();
-    expect(screen.queryByText('按位次查')).not.toBeInTheDocument();
+    expect(screen.getByText('按分数')).toBeInTheDocument();
+    expect(screen.getByText('按位次')).toBeInTheDocument();
   });
 });

@@ -128,6 +128,14 @@ export const planApi = {
     return api.delete(`/plans/${planId}/items/${itemId}`) as any;
   },
 
+  /**
+   * 重排志愿顺序 (POST /plans/:planId/items/reorder)
+   * itemIds: 按目标新顺序排好的 item.id 数组, 后端把 sequence 重写为索引+1
+   */
+  reorderItems(planId: string | number, itemIds: number[]): Promise<any> {
+    return api.post(`/plans/${planId}/items/reorder`, { itemIds }) as any;
+  },
+
   submitForReview(id: string): Promise<any> {
     return api.post(`/plans/${id}/submit-review`) as any;
   },

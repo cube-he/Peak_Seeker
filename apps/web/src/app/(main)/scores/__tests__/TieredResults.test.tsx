@@ -55,7 +55,7 @@ function makeItem(id: number): AggregatedAdmissionListItem {
 }
 
 describe('TieredResults', () => {
-  it('defaults to the stable tab', () => {
+  it('defaults to the stable tab when stable has items', () => {
     render(
       <TieredResults
         userRank={12000}
@@ -89,5 +89,17 @@ describe('TieredResults', () => {
       />,
     );
     expect(screen.getByRole('button', { name: '加载更多' })).toBeInTheDocument();
+  });
+
+  it('renders the filter bar with search and tag chips', () => {
+    render(
+      <TieredResults
+        userRank={12000}
+        buckets={{ rush: [], stable: [makeItem(2)], safe: [] }}
+      />,
+    );
+    expect(screen.getByPlaceholderText('搜索院校名')).toBeInTheDocument();
+    expect(screen.getByText('985')).toBeInTheDocument();
+    expect(screen.getByText('211')).toBeInTheDocument();
   });
 });

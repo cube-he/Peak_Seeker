@@ -1,6 +1,7 @@
 import type { RankTier } from '@/utils/classify-rank';
 
 const STYLES: Record<RankTier, { bg: string; fg: string; label: string }> = {
+  unreachable: { bg: '#f3f4f6', fg: '#6b7280', label: '难达' },
   rush:    { bg: '#fef0ee', fg: '#c53030', label: '冲' },
   stable:  { bg: '#ebf2f8', fg: '#2c5282', label: '稳' },
   safe:    { bg: '#e8f1ec', fg: '#276749', label: '保' },
