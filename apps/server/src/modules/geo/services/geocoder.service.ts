@@ -41,11 +41,24 @@ export class GeocoderService {
     return raw ? this.fromGeocode(address, raw) : null;
   }
 
+  /**
+   * 查"分校区"坐标。
+   * 返回 null 仅表示"高德没找到 / 坐标无效 / mainCoords 损坏"。
+   *
+   * isMainAlias 字段含义(2026-06-01 fix):
+   *   true  → 高德返回的坐标距 main < 300m,说明这个 candidate 其实就是主校区。
+   *           调用方应跳过该候选,而不是把它写成 invalid 副校区。
+   *   false → 真分校区,坐标可信。
+   *
+   * 历史:之前的版本在 < 300m 时直接返回 null。但 backfill 把 null 当成"采集失败"
+   * 然后标 invalid + 清坐标。对西南交大这种"本部=犀浦校区"的学校是误伤——主校区
+   * 数据反而被脏化。改成显式返回 isMainAlias 让上层据此决定行为。
+   */
   async geocodeCampus(
     universityName: string,
     campusName: string,
     mainCoords: { latitude: number; longitude: number },
-  ): Promise<GeoResult | null> {
+  ): Promise<{ result: GeoResult; isMainAlias: boolean } | null> {
     if (!Number.isFinite(mainCoords.latitude) || !Number.isFinite(mainCoords.longitude)) {
       return null;
     }
@@ -58,8 +71,7 @@ export class GeocoderService {
       mainCoords.latitude, mainCoords.longitude,
       result.latitude, result.longitude,
     );
-    if (distMeters < CAMPUS_POLLUTION_THRESHOLD_METERS) return null;
-    return result;
+    return { result, isMainAlias: distMeters < CAMPUS_POLLUTION_THRESHOLD_METERS };
   }
 
   async geocodeUniversity(

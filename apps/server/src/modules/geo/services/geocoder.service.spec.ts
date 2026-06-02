@@ -46,7 +46,7 @@ describe('GeocoderService.geocode', () => {
 describe('GeocoderService.geocodeCampus', () => {
   const mainCoords = { latitude: 30.819352, longitude: 104.182965 };
 
-  it('returns POI result when campus is far from main', async () => {
+  it('returns { result, isMainAlias: false } when campus is far from main', async () => {
     const searchPlaceText = jest.fn().mockResolvedValue([{
       id: 'X', name: '西南石油大学南充校区',
       type: '科教文化服务;学校;高等院校', typecode: '141201',
@@ -57,18 +57,21 @@ describe('GeocoderService.geocodeCampus', () => {
     const amap = fakeAmap({ searchPlaceText });
     const svc = new GeocoderService(amap);
 
-    const result = await svc.geocodeCampus('西南石油大学', '南充', mainCoords);
+    const out = await svc.geocodeCampus('西南石油大学', '南充', mainCoords);
 
     expect(searchPlaceText).toHaveBeenCalledWith(
       '西南石油大学南充',
       { types: '141201' },
     );
-    expect(result?.source).toBe('amap_poi');
-    expect(result?.city).toBe('南充市');
-    expect(result?.latitude).toBeCloseTo(31.75, 2);
+    expect(out).not.toBeNull();
+    expect(out!.isMainAlias).toBe(false);
+    expect(out!.result.source).toBe('amap_poi');
+    expect(out!.result.city).toBe('南充市');
+    expect(out!.result.latitude).toBeCloseTo(31.75, 2);
   });
 
-  it('returns null when result coords coincide with main coords (pollution)', async () => {
+  it('returns { result, isMainAlias: true } when result coords coincide with main coords', async () => {
+    // 西南交大场景:本部就在犀浦,扒到的 candidate 也是犀浦 → 高德返回的就是 main 坐标
     const searchPlaceText = jest.fn().mockResolvedValue([{
       id: 'X', name: '西南石油大学',
       type: '科教文化服务;学校;高等院校', typecode: '141201',
@@ -78,12 +81,15 @@ describe('GeocoderService.geocodeCampus', () => {
     const amap = fakeAmap({ searchPlaceText });
     const svc = new GeocoderService(amap);
 
-    const result = await svc.geocodeCampus('西南石油大学', '南充', mainCoords);
+    const out = await svc.geocodeCampus('西南石油大学', '南充', mainCoords);
 
-    expect(result).toBeNull();
+    expect(out).not.toBeNull();
+    expect(out!.isMainAlias).toBe(true);
+    // 坐标和 source 仍照实带回(给 backfill 看,但 backfill 会跳过这个候选)
+    expect(out!.result.latitude).toBeCloseTo(30.819, 3);
   });
 
-  it('returns null when result is within 300m of main (just inside threshold)', async () => {
+  it('marks isMainAlias=true when result is within 300m of main (just inside threshold)', async () => {
     const searchPlaceText = jest.fn().mockResolvedValue([{
       id: 'X', name: '某分校',
       type: '科教文化服务;学校;高等院校', typecode: '141201',
@@ -93,12 +99,13 @@ describe('GeocoderService.geocodeCampus', () => {
     const amap = fakeAmap({ searchPlaceText });
     const svc = new GeocoderService(amap);
 
-    const result = await svc.geocodeCampus('西南石油大学', '某', mainCoords);
+    const out = await svc.geocodeCampus('西南石油大学', '某', mainCoords);
 
-    expect(result).toBeNull();
+    expect(out).not.toBeNull();
+    expect(out!.isMainAlias).toBe(true);
   });
 
-  it('returns POI result when result is just outside 300m threshold', async () => {
+  it('marks isMainAlias=false when result is just outside 300m threshold', async () => {
     const searchPlaceText = jest.fn().mockResolvedValue([{
       id: 'X', name: '某分校',
       type: '科教文化服务;学校;高等院校', typecode: '141201',
@@ -108,10 +115,11 @@ describe('GeocoderService.geocodeCampus', () => {
     const amap = fakeAmap({ searchPlaceText });
     const svc = new GeocoderService(amap);
 
-    const result = await svc.geocodeCampus('西南石油大学', '某', mainCoords);
+    const out = await svc.geocodeCampus('西南石油大学', '某', mainCoords);
 
-    expect(result).not.toBeNull();
-    expect(result?.source).toBe('amap_poi');
+    expect(out).not.toBeNull();
+    expect(out!.isMainAlias).toBe(false);
+    expect(out!.result.source).toBe('amap_poi');
   });
 
   it('returns null when searchPlaceText returns empty array', async () => {

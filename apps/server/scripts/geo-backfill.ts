@@ -17,6 +17,10 @@ import { GeoValidator } from '../src/modules/geo/services/validator.service';
 import { RetryChain } from '../src/modules/geo/services/retry-chain.service';
 import { AmapClient } from '../src/modules/geo/amap/amap.client';
 import { GEO_CONFIG } from '../src/modules/geo/geo.config';
+import {
+  buildCampusRows,
+  CandidateGeoResult,
+} from '../src/modules/geo/utils/build-campus-rows';
 import { makeBar, writeJsonReport, parseArgs } from './lib/cli-utils';
 
 interface RunOptions {
@@ -130,45 +134,27 @@ async function processOne(
 
   const candidates = await deps.extractor.extract(id);
 
-  type CampusRow = {
-    name: string; isMain: boolean;
-    province?: string; city?: string; district?: string | null;
-    address?: string; latitude?: number; longitude?: number;
-    geoStatus: 'verified' | 'invalid' | 'pending';
-    geoSource?: string;
-    discoveredFrom: string;
-  };
-  const campuses: CampusRow[] = [];
+  // 逐个 candidate 调高德地理编码(只在 main 成功且坐标有效时调用)。
+  // 拿到所有结果后,用 buildCampusRows 这个纯函数把"main + candidate 结果"组装成
+  // 最终要写库的 campus 行集合。新组装规则:
+  //   - main 成功 → 始终先有一条 isMain=true 主校区('本部')。
+  //   - candidate 距 main < 300m(isMainAlias=true)→ 跳过候选,不再误标 invalid。
+  //   - candidate 远离 main → verified 副校区。
+  //   - candidate 查不到 → invalid 副校区(保留候选名作线索)。
+  // 详见 src/modules/geo/utils/build-campus-rows.ts 的文档注释。
+  const candidateResults = new Map<string, CandidateGeoResult | null>();
+  if (main && main.latitude != null && main.longitude != null) {
+    for (const c of candidates) {
+      const r = await deps.geocoder.geocodeCampus(uni.name, c.name, {
+        latitude: main.latitude, longitude: main.longitude,
+      });
+      candidateResults.set(c.name, r);
+    }
+  } else {
+    for (const c of candidates) candidateResults.set(c.name, null);
+  }
 
-  if (candidates.length === 0 && main) {
-    campuses.push({
-      name: '本部', isMain: true,
-      province: main.province, city: main.city, district: main.district,
-      address: main.address, latitude: main.latitude, longitude: main.longitude,
-      geoStatus: 'verified', geoSource: main.source,
-      discoveredFrom: 'amap_search',
-    });
-  }
-  for (const c of candidates) {
-    const r =
-      main && main.latitude != null && main.longitude != null
-        ? await deps.geocoder.geocodeCampus(uni.name, c.name, {
-            latitude: main.latitude,
-            longitude: main.longitude,
-          })
-        : null;
-    campuses.push({
-      name: c.name, isMain: c.name === '本部' || c.name === '主校区',
-      province: r?.province, city: r?.city, district: r?.district,
-      address: r?.address, latitude: r?.latitude, longitude: r?.longitude,
-      geoStatus: r ? 'verified' : 'invalid', geoSource: r?.source,
-      discoveredFrom: c.source,
-    });
-  }
-  if (!campuses.some((c) => c.isMain)) {
-    const first = campuses.find((c) => c.geoStatus === 'verified');
-    if (first) first.isMain = true;
-  }
+  const campuses = buildCampusRows({ main, candidates, candidateResults });
 
   type PoiRow = {
     campusName: string; amapId: string; name: string;
