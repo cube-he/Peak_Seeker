@@ -7,13 +7,20 @@ import { MapQueryDto } from './dto/map-query.dto';
 import { AdmissionService } from '../admission/admission.service';
 import { getTier, classifyRank } from './rank-tier';
 
-/** 地图视图返回的院校最小载荷:仅 marker + 筛选所需的字段,2226 所一次性拉 */
+/**
+ * 地图视图返回的"校区"载荷 — 一个 verified 校区一行,2026-06-02 改造前是
+ * 一所学校一行(只取主校区)。改造原因:用户期望全国大地图按真实校区位置
+ * 分开展示(北航 = 3 个 dot 而非 1 个)。
+ *
+ * id 仍是 university.id(便于点 dot 跳详情页);新增 campusId/campusName/isMain
+ * 携带校区维度信息。district 改取自 campus(分校在不同区/县时归属正确)。
+ */
 export interface MapUniversity {
-  id: number;
-  name: string;
+  id: number;          // 学校 id(跳详情页用)
+  name: string;        // 学校名
   province: string | null;
   city: string | null;
-  district: string | null;
+  district: string | null;   // 校区所在区/县(来自 university_campuses.district)
   level: string | null;
   type: string | null;
   // 办学性质:公办 / 民办 / 中外合作办学 等。DB 字段叫 runningNature,
@@ -24,6 +31,10 @@ export interface MapUniversity {
   isDoubleFirstClass: boolean;
   lat: number;
   lng: number;
+  // 校区维度字段
+  campusId: number;
+  campusName: string;
+  isMain: boolean;
 }
 
 /**
@@ -205,46 +216,49 @@ export class UniversityService {
   }
 
   async findAllForMap(query: MapQueryDto): Promise<MapUniversity[]> {
-    // 缓存 key 含完整 query,filter 变化触发新查询;1h TTL 跟其他读接口一致
-    const cacheKey = `university:map:${JSON.stringify(query)}`;
+    // 2026-06-02 改造:从 universityCampus 查每个 verified 校区,而不是从
+    // university 表查"是否存在主校区"。结果是扁平的"一校区一行"。
+    // cache key 加 :v2 跟旧版本区分,避免老缓存污染新返回(部署后旧 v1 cache 失效)。
+    const cacheKey = `university:map:v2:${JSON.stringify(query)}`;
     const cached = await this.redis.getCache<MapUniversity[]>(cacheKey);
     if (cached) return cached;
 
-    const where: any = {};
+    // 学校层面的 filter(走 universityCampus → university 嵌套关系)
+    const universityWhere: any = {};
     if (query.keyword) {
-      where.OR = [
+      universityWhere.OR = [
         { name: { contains: query.keyword } },
         { code: { contains: query.keyword } },
       ];
     }
-    if (query.province) where.province = query.province;
-    if (query.city) where.city = query.city;
-    if (query.type) where.type = query.type;
-    if (query.level) where.level = query.level;
-    if (query.nature) where.runningNature = query.nature;
-    if (query.grade) where.grade = query.grade;
-    if (query.isDoubleFirstClass !== undefined) where.isDoubleFirstClass = query.isDoubleFirstClass;
-    if (query.is985 !== undefined) where.is985 = query.is985;
-    if (query.is211 !== undefined) where.is211 = query.is211;
+    if (query.province) universityWhere.province = query.province;
+    if (query.city) universityWhere.city = query.city;
+    if (query.type) universityWhere.type = query.type;
+    if (query.level) universityWhere.level = query.level;
+    if (query.nature) universityWhere.runningNature = query.nature;
+    if (query.grade) universityWhere.grade = query.grade;
+    if (query.isDoubleFirstClass !== undefined) universityWhere.isDoubleFirstClass = query.isDoubleFirstClass;
+    if (query.is985 !== undefined) universityWhere.is985 = query.is985;
+    if (query.is211 !== undefined) universityWhere.is211 = query.is211;
 
-    // 必须有 verified 主校区且有坐标——没坐标的院校(11/2237)不进地图
-    where.campuses = {
-      some: { geoStatus: 'verified', isMain: true, latitude: { not: null } },
-    };
-
-    const rows = await this.prisma.university.findMany({
-      where,
+    const rows = await this.prisma.universityCampus.findMany({
+      where: {
+        geoStatus: 'verified',
+        latitude: { not: null },
+        university: universityWhere,
+      },
       select: {
-        id: true, name: true, province: true, city: true,
-        level: true, type: true, runningNature: true,
-        is985: true, is211: true, isDoubleFirstClass: true,
-        campuses: {
-          where: { geoStatus: 'verified', isMain: true, latitude: { not: null } },
-          select: { latitude: true, longitude: true, district: true },
-          take: 1,
-          orderBy: { id: 'asc' },
+        id: true, name: true, isMain: true,
+        latitude: true, longitude: true, district: true,
+        university: {
+          select: {
+            id: true, name: true, province: true, city: true,
+            level: true, type: true, runningNature: true,
+            is985: true, is211: true, isDoubleFirstClass: true,
+          },
         },
       },
+      orderBy: [{ universityId: 'asc' }, { isMain: 'desc' }, { id: 'asc' }],
     });
 
     // Prisma Decimal -> number(同 findById 的处理逻辑)
@@ -256,26 +270,24 @@ export class UniversityService {
       return Number(v);
     };
 
-    const items: MapUniversity[] = rows
-      .filter((u: any) => u.campuses.length > 0)
-      .map((u: any) => {
-        const c = u.campuses[0];
-        return {
-          id: u.id,
-          name: u.name,
-          province: u.province,
-          city: u.city,
-          district: c.district,
-          level: u.level,
-          type: u.type,
-          nature: u.runningNature,
-          is985: u.is985,
-          is211: u.is211,
-          isDoubleFirstClass: u.isDoubleFirstClass,
-          lat: toNum(c.latitude),
-          lng: toNum(c.longitude),
-        };
-      });
+    const items: MapUniversity[] = rows.map((r: any) => ({
+      id: r.university.id,
+      name: r.university.name,
+      province: r.university.province,
+      city: r.university.city,
+      district: r.district,
+      level: r.university.level,
+      type: r.university.type,
+      nature: r.university.runningNature,
+      is985: r.university.is985,
+      is211: r.university.is211,
+      isDoubleFirstClass: r.university.isDoubleFirstClass,
+      lat: toNum(r.latitude),
+      lng: toNum(r.longitude),
+      campusId: r.id,
+      campusName: r.name,
+      isMain: r.isMain,
+    }));
 
     await this.redis.setCache(cacheKey, items, 3600);
     return items;

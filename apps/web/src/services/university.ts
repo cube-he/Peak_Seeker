@@ -118,13 +118,17 @@ export interface MapQueryParams {
   isDoubleFirstClass?: boolean;
 }
 
-/** 地图视图的院校点 */
+/**
+ * 地图视图的"校区"点 — 2026-06-02 改造后,一个 verified 校区一条记录。
+ * id 仍是 university.id(点 dot 跳详情页用)。campusId/campusName/isMain
+ * 是新增的校区维度字段。同一所学校的多个校区:id/name 相同,campusId 不同。
+ */
 export interface MapUniversity {
-  id: number;
+  id: number;          // university id(跳详情页用)
   name: string;
   province: string | null;
   city: string | null;
-  district: string | null;
+  district: string | null;   // 校区所在区/县
   level: string | null;
   type: string | null;
   // 办学性质:公办 / 民办 / 中外合作办学 等(对应 DB runningNature)。
@@ -135,6 +139,10 @@ export interface MapUniversity {
   isDoubleFirstClass: boolean;
   lat: number;
   lng: number;
+  // 校区维度
+  campusId: number;
+  campusName: string;
+  isMain: boolean;
 }
 
 export const universityService = {

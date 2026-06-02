@@ -102,7 +102,10 @@ function aggregateForSubLevel(
   parent: PathNode,
   subLevel: 'province' | 'city' | 'district',
 ): Map<string, number> {
-  const m = new Map<string, number>();
+  // 2026-06-02 改造:unis 现在是"校区"扁平数组(同校多校区多行),
+  // 但用户期望的"X 省 N 所院校"是按学校去重数。所以 Map<area, Set<universityId>>,
+  // 转回 Map<area, count> 时取 set.size。
+  const setMap = new Map<string, Set<number>>();
   for (const u of unis) {
     let key: string | null = null;
     if (parent.level === 'country') {
@@ -114,8 +117,13 @@ function aggregateForSubLevel(
       if (u.city !== parent.name) continue;
       key = u.district;
     }
-    if (key) m.set(key, (m.get(key) ?? 0) + 1);
+    if (key) {
+      if (!setMap.has(key)) setMap.set(key, new Set());
+      setMap.get(key)!.add(u.id);
+    }
   }
+  const m = new Map<string, number>();
+  setMap.forEach((set, k) => m.set(k, set.size));
   return m;
 }
 
@@ -223,9 +231,18 @@ function buildInfoHtml(uni: MapUniversity): string {
     )
     .join('');
 
+  // 2026-06-02 改造:title 加校区名 + 主/副 badge。校区名 = '本部' 时显示「主校区」,
+  // 否则显示「X 校区(主/副)」让用户一眼区分点的是哪个校区。
+  const campusName = uni.campusName ?? '本部';
+  const campusLabel = campusName === '本部' ? '主校区' : `${campusName}校区`;
+  const mainBadge = uni.isMain
+    ? `<span style="display:inline-block;margin-left:6px;padding:1px 5px;font-size:10px;color:#2563eb;background:rgba(37,99,235,0.12);border-radius:3px">主</span>`
+    : `<span style="display:inline-block;margin-left:6px;padding:1px 5px;font-size:10px;color:#16a34a;background:rgba(22,163,74,0.12);border-radius:3px">副</span>`;
+
   return `
     <div style="min-width:200px;padding:4px 2px;font-family:inherit">
-      <div style="font-weight:600;font-size:14px;color:#0f172a;margin-bottom:4px">${escapeHtml(uni.name)}</div>
+      <div style="font-weight:600;font-size:14px;color:#0f172a;margin-bottom:2px">${escapeHtml(uni.name)}</div>
+      <div style="font-size:12px;color:#334155;margin-bottom:4px">${escapeHtml(campusLabel)}${mainBadge}</div>
       <div style="font-size:11px;color:#64748b;margin-bottom:6px">${escapeHtml(location)}</div>
       <div style="margin-bottom:8px">${tagHtml}</div>
       <a href="/universities/${uni.id}"
@@ -572,7 +589,12 @@ export function MapTab() {
             'pointer-events: auto',
             'box-shadow: 0 1px 2px rgba(0,0,0,0.05)',
           ].join(';');
-          nameDiv.textContent = u.name;
+          // 2026-06-02 改造:校名 label 显示 "学校名 + 校区名"(校区名=本部时省略)。
+          // 同 district 同校多 campus 时(如北航 学院路+主校都在海淀),分开标识。
+          const campusSuffix = u.campusName && u.campusName !== '本部'
+            ? `(${u.campusName}校区)`
+            : '';
+          nameDiv.textContent = u.name + campusSuffix;
           nameDiv.addEventListener('click', (ev) => {
             ev.stopPropagation();
             if (!infoWindowRef.current) return;

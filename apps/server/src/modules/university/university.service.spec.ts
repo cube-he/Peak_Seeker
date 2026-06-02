@@ -397,22 +397,25 @@ describe('UniversityService.getFilters', () => {
 });
 
 describe('UniversityService.findAllForMap', () => {
-  // Prisma Decimal mock: an object with toNumber() — same shape as findById coercion
+  // 2026-06-02 改造:从 "一所学校一行 + 主校区坐标" 改成 "一个 verified 校区一行"。
+  // 用户期望:全国地图上分校区按各自真实位置分开显示(北航 = 3 个 dot 而非 1 个)。
+  // Prisma 数据形态也跟着变 — 查 universityCampus 表 + join university。
   const decimal = (n: number) => ({ toNumber: () => n });
 
-  const mapUni = (over: any = {}) => ({
-    id: 1, name: '四川大学', province: '四川', city: '成都',
-    level: '本科', type: '综合',
-    is985: true, is211: true, isDoubleFirstClass: true,
-    campuses: [
-      { latitude: decimal(30.6303), longitude: decimal(104.0834), district: '武侯区' },
-    ],
+  const mapCampus = (over: any = {}) => ({
+    id: 100, name: '本部', isMain: true,
+    latitude: decimal(30.6303), longitude: decimal(104.0834), district: '武侯区',
+    university: {
+      id: 1, name: '四川大学', province: '四川', city: '成都',
+      level: '本科', type: '综合', runningNature: '公办',
+      is985: true, is211: true, isDoubleFirstClass: true,
+    },
     ...over,
   });
 
-  const setup = (universities: any[]) => {
+  const setup = (campuses: any[]) => {
     const prisma = {
-      university: { findMany: jest.fn().mockResolvedValue(universities) },
+      universityCampus: { findMany: jest.fn().mockResolvedValue(campuses) },
     };
     const redis = {
       getCache: jest.fn().mockResolvedValue(null),
@@ -423,49 +426,87 @@ describe('UniversityService.findAllForMap', () => {
     return { svc, prisma, redis };
   };
 
-  it('returns id/name/lat/lng/district plus filter-relevant fields', async () => {
-    const { svc } = setup([mapUni()]);
+  it('一校区一行:输出含 campusId/campusName/isMain + 学校属性', async () => {
+    const { svc } = setup([mapCampus()]);
     const result: any[] = await (svc as any).findAllForMap({});
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({
       id: 1, name: '四川大学', province: '四川', city: '成都', district: '武侯区',
-      level: '本科', type: '综合',
+      level: '本科', type: '综合', nature: '公办',
       is985: true, is211: true, isDoubleFirstClass: true,
       lat: 30.6303, lng: 104.0834,
+      campusId: 100, campusName: '本部', isMain: true,
     });
   });
 
-  it('coerces Prisma Decimal latitude/longitude to plain number', async () => {
-    const { svc } = setup([mapUni()]);
+  it('Prisma Decimal lat/lng 转 number', async () => {
+    const { svc } = setup([mapCampus()]);
     const result: any[] = await (svc as any).findAllForMap({});
     expect(typeof result[0].lat).toBe('number');
     expect(typeof result[0].lng).toBe('number');
   });
 
-  it('excludes universities that have no verified main campus with coords', async () => {
+  it('多校区同校 → 输出多行(每个 verified 校区一行)', async () => {
+    // 北航场景:学院路(主)+ 沙河(副)
     const { svc } = setup([
-      mapUni({ id: 1, campuses: [{ latitude: decimal(30), longitude: decimal(104), district: null }] }),
-      mapUni({ id: 2, campuses: [] }), // 没有 verified main campus
+      mapCampus({
+        id: 200, name: '学院路', isMain: true,
+        latitude: decimal(39.98), longitude: decimal(116.34), district: '海淀区',
+        university: { id: 2, name: '北京航空航天大学', province: '北京', city: '北京',
+          level: '本科', type: '理工', runningNature: '公办',
+          is985: true, is211: true, isDoubleFirstClass: true },
+      }),
+      mapCampus({
+        id: 201, name: '沙河', isMain: false,
+        latitude: decimal(40.15), longitude: decimal(116.28), district: '昌平区',
+        university: { id: 2, name: '北京航空航天大学', province: '北京', city: '北京',
+          level: '本科', type: '理工', runningNature: '公办',
+          is985: true, is211: true, isDoubleFirstClass: true },
+      }),
     ]);
     const result: any[] = await (svc as any).findAllForMap({});
-    expect(result.map((r) => r.id)).toEqual([1]);
+    expect(result).toHaveLength(2);
+    expect(result[0].campusName).toBe('学院路');
+    expect(result[0].isMain).toBe(true);
+    expect(result[0].district).toBe('海淀区');
+    expect(result[1].campusName).toBe('沙河');
+    expect(result[1].isMain).toBe(false);
+    expect(result[1].district).toBe('昌平区');
+    // 学校 id 相同(同一所学校)
+    expect(result[0].id).toBe(2);
+    expect(result[1].id).toBe(2);
   });
 
-  it('translates filter params into prisma where clause (province + level + is985)', async () => {
-    const { svc, prisma } = setup([mapUni()]);
+  it('district 字段取自 campus 而非主表(分校在不同区/县时正确归属)', async () => {
+    // 哈工大威海应该归"威海/环翠区"而非主校区的"哈尔滨/南岗区"
+    const { svc } = setup([
+      mapCampus({
+        id: 300, name: '威海', isMain: false,
+        latitude: decimal(37.51), longitude: decimal(122.06), district: '环翠区',
+        university: { id: 3, name: '哈尔滨工业大学', province: '黑龙江', city: '哈尔滨',
+          level: '本科', type: '理工', runningNature: '公办',
+          is985: true, is211: true, isDoubleFirstClass: true },
+      }),
+    ]);
+    const result: any[] = await (svc as any).findAllForMap({});
+    expect(result[0].district).toBe('环翠区');
+  });
+
+  it('filter 参数翻译成 where + 通过 university 关系过滤', async () => {
+    const { svc, prisma } = setup([mapCampus()]);
     await (svc as any).findAllForMap({ province: '四川', level: '本科', is985: true });
-    const call = prisma.university.findMany.mock.calls[0][0];
-    expect(call.where.province).toBe('四川');
-    expect(call.where.level).toBe('本科');
-    expect(call.where.is985).toBe(true);
-    // 必须有 verified main campus
-    expect(call.where.campuses).toEqual({
-      some: { geoStatus: 'verified', isMain: true, latitude: { not: null } },
-    });
+    const call = prisma.universityCampus.findMany.mock.calls[0][0];
+    // verified + 有坐标
+    expect(call.where.geoStatus).toBe('verified');
+    expect(call.where.latitude).toEqual({ not: null });
+    // 学校筛选通过 university 嵌套关系
+    expect(call.where.university.province).toBe('四川');
+    expect(call.where.university.level).toBe('本科');
+    expect(call.where.university.is985).toBe(true);
   });
 
-  it('caches results keyed by query parameters', async () => {
-    const { svc, redis } = setup([mapUni()]);
+  it('缓存:key 含 query 参数', async () => {
+    const { svc, redis } = setup([mapCampus()]);
     await (svc as any).findAllForMap({ province: '四川' });
     expect(redis.setCache).toHaveBeenCalled();
     const cacheKey = (redis.setCache as jest.Mock).mock.calls[0][0];
