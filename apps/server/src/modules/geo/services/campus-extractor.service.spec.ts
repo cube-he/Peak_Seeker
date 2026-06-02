@@ -118,6 +118,35 @@ describe('CampusExtractor.extractFromCharterText', () => {
   });
 });
 
+describe('CampusExtractor.extractFromManualList', () => {
+  // 2026-06-02:手工映射表,补招生数据完全没线索的真分校(川大华西、哈工大威海/深圳、
+  // 山大威海/青岛 等)。来源 = 'manual',优先级最高。
+
+  it('未知 universityId → 空数组', () => {
+    const ex = new CampusExtractor(fakePrisma([]) as any, fakeAmap() as any);
+    expect(ex.extractFromManualList(999999)).toEqual([]);
+  });
+
+  it('已知 universityId → 返回该校所有 manual candidates,source=manual', () => {
+    const ex = new CampusExtractor(fakePrisma([]) as any, fakeAmap() as any);
+    // 9002 川大:望江(主) + 江安 + 华西(华西是数据源完全没线索的,manual 补)
+    const result = ex.extractFromManualList(9002);
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.map((c) => c.name)).toContain('华西');
+    for (const c of result) {
+      expect(c.source).toBe('manual');
+    }
+  });
+
+  it('哈工大威海/深圳通过 manual 补', () => {
+    const ex = new CampusExtractor(fakePrisma([]) as any, fakeAmap() as any);
+    const result = ex.extractFromManualList(9055);
+    const names = result.map((c) => c.name);
+    expect(names).toContain('威海');
+    expect(names).toContain('深圳');
+  });
+});
+
 describe('CampusExtractor.extract (combined)', () => {
   it('combines and dedups across sources, preserving best source ordering', async () => {
     const prisma = {

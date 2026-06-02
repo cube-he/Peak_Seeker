@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
 import { AmapClient } from '../amap/amap.client';
 import { CampusCandidate } from '../dto/campus-candidate.dto';
+import { lookupKnownCampuses } from './known-campuses';
 
 // Captures patterns like:
 //   [威海]      （深圳）      (深圳)        沙河校区
@@ -130,16 +131,27 @@ export class CampusExtractor {
     return Array.from(out).map((name) => ({ name, source: 'charter_extract' }));
   }
 
+  /**
+   * 手工映射表("已知校区")— 补招生数据完全没线索的真分校。
+   * 2026-06-02 加入,优先级最高(用户审定过,比自动扒的可信)。
+   */
+  extractFromManualList(universityId: number): CampusCandidate[] {
+    return lookupKnownCampuses(universityId).map((name) => ({ name, source: 'manual' }));
+  }
+
   async extract(universityId: number): Promise<CampusCandidate[]> {
     const fromTags = await this.extractFromEnrollmentPlanTags(universityId);
     const uni = await this.prisma.university.findUnique({ where: { id: universityId } });
     const charterText = (uni?.charterInfo as { fullText?: string } | null)?.fullText ?? '';
     const fromCharter = this.extractFromCharterText(charterText);
+    const fromManual = this.extractFromManualList(universityId);
 
-    // Merge with priority: enrollment_plan_tag > charter_extract.
+    // Merge with priority: manual > enrollment_plan_tag > charter_extract.
+    // 'manual' 是最权威的(用户维护过),同名时覆盖自动来源。
     const merged = new Map<string, CampusCandidate>();
     for (const c of fromCharter) merged.set(c.name, c);
-    for (const c of fromTags) merged.set(c.name, c);   // overwrites charter for same name
+    for (const c of fromTags) merged.set(c.name, c);
+    for (const c of fromManual) merged.set(c.name, c);
     return Array.from(merged.values());
   }
 }
