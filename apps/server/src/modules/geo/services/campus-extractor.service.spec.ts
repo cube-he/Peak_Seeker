@@ -38,6 +38,66 @@ describe('CampusExtractor.extractFromEnrollmentPlanTags', () => {
   });
 });
 
+describe('CampusExtractor — strips leading modifiers from "X 学年/年级在 Y 校区"', () => {
+  // 2026-06-02 真实脏数据回归:招生备注里"第一学年在江阴校区"这种句式,
+  // 旧版 SUFFIX_RE 贪婪抓 "第一学年在江阴" 整串当校区名。修复:剥离前置
+  // "X 学年/年级 起/在/开始" 修饰词,只取真校区名。
+
+  it.each([
+    ['第一学年在江阴校区就读', '江阴'],
+    ['第二、三、四学年在南京校区就读', '南京'],
+    ['一、二年级白马校区', '白马'],
+    ['三年级起新庄校区', '新庄'],
+    ['一年级在启东校区就读', '启东'],
+    ['二年级开始在啬园校区就读', '啬园'],
+    ['第一学年在朝晖校区就读', '朝晖'],
+    ['第二学年起在莫干山校区就读', '莫干山'],
+    ['第一学年在下沙校区', '下沙'],
+    ['新生第一年在奉贤校区', '奉贤'],
+    ['低年级在涿州校区', '涿州'],
+    ['一至三年级在沙河校区', '沙河'],
+    ['四学年在南京校区', '南京'],
+  ])('「%s」→「%s」', async (notes, expected) => {
+    const prisma = fakePrisma([{ majorName: '某专业', planNotes: notes }]);
+    const ex = new CampusExtractor(prisma as any, fakeAmap() as any);
+    const result = await ex.extractFromEnrollmentPlanTags(1);
+    const names = result.map((c) => c.name);
+    expect(names).toContain(expected);
+    // 不应再有任何含「年/学/级/起/在」字样的脏校区名
+    for (const n of names) {
+      expect(n).not.toMatch(/[年学级起在开始至]/);
+    }
+  });
+
+  it('剥离学校名自身前缀:"中国药科大学江宁" → "江宁"', async () => {
+    const prisma = fakePrisma([{ majorName: '某专业', planNotes: '在中国药科大学江宁校区就读' }]);
+    const ex = new CampusExtractor(prisma as any, fakeAmap() as any);
+    const result = await ex.extractFromEnrollmentPlanTags(1);
+    expect(result.map((c) => c.name)).toContain('江宁');
+  });
+
+  it('剥离学校名自身前缀:"山东大学威海" → "威海"', async () => {
+    const prisma = fakePrisma([{ majorName: '某专业', planNotes: '在山东大学威海校区上课' }]);
+    const ex = new CampusExtractor(prisma as any, fakeAmap() as any);
+    const result = await ex.extractFromEnrollmentPlanTags(1);
+    expect(result.map((c) => c.name)).toContain('威海');
+  });
+
+  it('已正常的校区名不受影响:"江安校区就读" → "江安"', async () => {
+    const prisma = fakePrisma([{ majorName: '某专业', planNotes: '江安校区就读' }]);
+    const ex = new CampusExtractor(prisma as any, fakeAmap() as any);
+    const result = await ex.extractFromEnrollmentPlanTags(1);
+    expect(result.map((c) => c.name)).toEqual(['江安']);
+  });
+
+  it('括号格式仍然工作:"[威海]" → "威海"(没有副作用)', async () => {
+    const prisma = fakePrisma([{ majorName: '[威海]计算机' }]);
+    const ex = new CampusExtractor(prisma as any, fakeAmap() as any);
+    const result = await ex.extractFromEnrollmentPlanTags(1);
+    expect(result.map((c) => c.name)).toEqual(['威海']);
+  });
+});
+
 describe('CampusExtractor.extractFromCharterText', () => {
   it('extracts campus names from "我校现有 X 个校区,分别位于…"', () => {
     const ex = new CampusExtractor(fakePrisma([]) as any, fakeAmap() as any);

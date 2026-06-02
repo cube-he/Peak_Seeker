@@ -6,11 +6,39 @@ import { CampusCandidate } from '../dto/campus-candidate.dto';
 // Captures patterns like:
 //   [威海]      （深圳）      (深圳)        沙河校区
 //   威海校区    深圳分校      Tianjin 校区(rare)
-const BRACKET_RE = /[\[【（(]\s*([\u4e00-\u9fa5A-Za-z]{1,8}?)\s*[\]】）)]/g;
-const SUFFIX_RE = /([\u4e00-\u9fa5A-Za-z]{1,8}?)(?:校区|分校)/g;
+const BRACKET_RE = /[\[【（(]\s*([一-龥A-Za-z]{1,8}?)\s*[\]】）)]/g;
+const SUFFIX_RE = /([一-龥A-Za-z]{1,8}?)(?:校区|分校)/g;
+
+// 2026-06-02 fix:招生备注里"第一学年在江安校区"这种句式,SUFFIX_RE 贪婪抓
+// "第一学年在江安" 整串当校区名。下面的 cleanCampusName 剥离两类前缀:
+//   1) "X学年/年级 起/在/开始" 修饰词("第一学年在"、"二年级开始在"、"新生第一年在"等)
+//   2) 学校名自身("中国药科大学江宁" 抓到完整学校名+地名,要剥成"江宁")
+// "学年/年级/年" 必须出现(否则整个修饰词就不算修饰词);数字部分可选(应付"低年级在"这种)。
+const LEADING_MODIFIER_RE =
+  /^(?:新生|低|高)?(?:第?[一二三四五六七八九十0-9]+[、,，至到]?)*(?:学年|年级|年)(?:起|开始|在)?/;
+const LONE_PREP_RE = /^(?:在|起|开始)/;
+
+function cleanCampusName(raw: string): string {
+  let s = raw;
+  // 1) 剥学校自身名:"中国药科大学江宁" → "江宁";"山东大学威海" → "威海"
+  const lastSchool = Math.max(
+    s.lastIndexOf('大学'),
+    s.lastIndexOf('学院'),
+    s.lastIndexOf('学校'),
+  );
+  if (lastSchool >= 0) s = s.slice(lastSchool + 2);
+  // 2) 反复剥前置修饰词(应付"一、二年级在"这种多段)
+  let prev = '';
+  while (s !== prev) {
+    prev = s;
+    s = s.replace(LEADING_MODIFIER_RE, '');
+  }
+  s = s.replace(LONE_PREP_RE, '');
+  return s;
+}
 
 // patterns matching "位于X、Y和Z" / "分布在X、Y" within a phrase
-const LOCATIONS_RE = /(?:位于|分布在)[\s\S]{0,40}?([\u4e00-\u9fa5、\s和与及]{2,40})/g;
+const LOCATIONS_RE = /(?:位于|分布在)[\s\S]{0,40}?([一-龥、\s和与及]{2,40})/g;
 const SPLIT_RE = /[、和与及，,]/;
 const CITY_NAMES = new Set<string>([
   // a tiny dictionary of well-known prefecture-level cities used as campus markers.
@@ -53,8 +81,9 @@ export class CampusExtractor {
     }
     SUFFIX_RE.lastIndex = 0;
     while ((m = SUFFIX_RE.exec(text)) !== null) {
-      const v = m[1].trim();
-      if (this.looksLikeCampusName(v)) out.add(v);
+      // 2026-06-02 fix:经 cleanCampusName 剥离修饰词/学校名前缀后再判定
+      const cleaned = cleanCampusName(m[1].trim());
+      if (this.looksLikeCampusName(cleaned)) out.add(cleaned);
     }
   }
 
@@ -67,7 +96,9 @@ export class CampusExtractor {
     ]);
     if (blacklist.has(v)) return false;
     // require at least one CJK char
-    if (!/[\u4e00-\u9fa5]/.test(v)) return false;
+    if (!/[一-龥]/.test(v)) return false;
+    // 2026-06-02 fix:含修饰词字眼 → 仍是脏的(防止 clean 漏剥的边角)
+    if (/[年学级起开始至]/.test(v)) return false;
     return true;
   }
 
