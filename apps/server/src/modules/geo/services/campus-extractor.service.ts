@@ -107,7 +107,7 @@ export class CampusExtractor {
     if (/[年学级起开始至]/.test(v)) return false;
     // 2026-06-02 task 5:含"或"(选项分隔)/ 含特定非地名词组 → 拒
     if (/[或]/.test(v)) return false;
-    if (/(?:修读|学籍|含政策|占地|办法|要求|管理)/.test(v)) return false;
+    if (/(?:修读|学籍|含政策|占地|办法|要求|管理|就读)/.test(v)) return false;
     return true;
   }
 
