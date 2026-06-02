@@ -17,6 +17,8 @@ const SUFFIX_RE = /([一-龥A-Za-z]{1,8}?)(?:校区|分校)/g;
 // "学年/年级/年" 必须出现(否则整个修饰词就不算修饰词);数字部分可选(应付"低年级在"这种)。
 const LEADING_MODIFIER_RE =
   /^(?:新生|低|高)?(?:第?[一二三四五六七八九十0-9]+[、,，至到]?)*(?:学年|年级|年)(?:起|开始|在)?/;
+// 2026-06-02 task 5:"大三在/大四在/大一大二在" 这类前缀。"大X"可重复。
+const DA_GRADE_RE = /^(?:大[一二三四五六七八九十0-9])+(?:起|开始|在)?/;
 const LONE_PREP_RE = /^(?:在|起|开始)/;
 
 function cleanCampusName(raw: string): string {
@@ -28,11 +30,12 @@ function cleanCampusName(raw: string): string {
     s.lastIndexOf('学校'),
   );
   if (lastSchool >= 0) s = s.slice(lastSchool + 2);
-  // 2) 反复剥前置修饰词(应付"一、二年级在"这种多段)
+  // 2) 反复剥前置修饰词(应付"一、二年级在"和"大一大二在"这两类多段格式)
   let prev = '';
   while (s !== prev) {
     prev = s;
     s = s.replace(LEADING_MODIFIER_RE, '');
+    s = s.replace(DA_GRADE_RE, '');
   }
   s = s.replace(LONE_PREP_RE, '');
   return s;
@@ -94,12 +97,17 @@ export class CampusExtractor {
     const blacklist = new Set([
       '本科', '专科', '中外合作', '艺术', '体育', '少民', '提前批',
       '单列', '高收费', '春季', '免费师范', '国家专项', '地方专项',
+      // 2026-06-02 task 5:招生备注里偶尔被误抓的非校区短语
+      '主校区', '含政策性加分', '修读', '学籍', '占地', '办学',
     ]);
     if (blacklist.has(v)) return false;
     // require at least one CJK char
     if (!/[一-龥]/.test(v)) return false;
     // 2026-06-02 fix:含修饰词字眼 → 仍是脏的(防止 clean 漏剥的边角)
     if (/[年学级起开始至]/.test(v)) return false;
+    // 2026-06-02 task 5:含"或"(选项分隔)/ 含特定非地名词组 → 拒
+    if (/[或]/.test(v)) return false;
+    if (/(?:修读|学籍|含政策|占地|办法|要求|管理)/.test(v)) return false;
     return true;
   }
 

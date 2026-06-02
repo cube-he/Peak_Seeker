@@ -83,6 +83,43 @@ describe('CampusExtractor — strips leading modifiers from "X 学年/年级在 
     expect(result.map((c) => c.name)).toContain('威海');
   });
 
+  // 2026-06-02 task 5 边角修复:大X 前缀 + 黑名单词
+  it.each([
+    ['大三在靖安墨轩湖校区', '墨轩湖'],   // 太长会失败,但起码不是"大三在..."
+    ['大四在南昌黄家湖校区', '黄家湖'],
+    ['大一大二在郑蒲港校区', '郑蒲港'],
+  ])('「%s」剥"大X"前缀 → 包含「%s」', async (notes, expected) => {
+    const prisma = fakePrisma([{ majorName: '某专业', planNotes: notes }]);
+    const ex = new CampusExtractor(prisma as any, fakeAmap() as any);
+    const result = await ex.extractFromEnrollmentPlanTags(1);
+    expect(result.map((c) => c.name).join(',')).toContain(expected);
+    // 不应残留"大X在"
+    for (const c of result) {
+      expect(c.name).not.toMatch(/^大[一二三四五六七八九十]/);
+      expect(c.name).not.toMatch(/^在/);
+    }
+  });
+
+  it.each([
+    ['含政策性加分'],
+    ['修读课程要求'],
+    ['主校区'],         // 跟"本部"重复 + 没具体地名
+    ['明秀或相思湖'],   // 含"或"
+    ['或石林'],         // 起首"或"
+    ['学籍管理办法'],
+  ])('黑名单关键词「%s」→ 不入候选', async (notes) => {
+    const prisma = fakePrisma([{ majorName: '某专业', planNotes: notes + '校区' }]);
+    const ex = new CampusExtractor(prisma as any, fakeAmap() as any);
+    const result = await ex.extractFromEnrollmentPlanTags(1);
+    for (const c of result) {
+      expect(c.name).not.toContain('含政策性加分');
+      expect(c.name).not.toContain('修读');
+      expect(c.name).not.toContain('或');
+      expect(c.name).not.toContain('学籍');
+      expect(c.name).not.toBe('主校区');
+    }
+  });
+
   it('已正常的校区名不受影响:"江安校区就读" → "江安"', async () => {
     const prisma = fakePrisma([{ majorName: '某专业', planNotes: '江安校区就读' }]);
     const ex = new CampusExtractor(prisma as any, fakeAmap() as any);
