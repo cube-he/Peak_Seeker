@@ -423,24 +423,21 @@ const RULES: Record<string, any> = {
 };
 
 // DB 中实际存在的细分批次名 → 共享哪个顶层规则
-// 解决 Plan A Task 12 后遗留问题: DB 有"本科批A段（国家专项）"等细分行而无纯"本科批A段"
-const BATCH_ALIASES: Record<string, string[]> = {
-  本科批A段: [
-    '本科批A段（国家专项）',
-    '本科批A段（地方专项）',
-    '本科批高校专项',
-    '本科批高水平运动队',
-  ],
-  本科提前批B段: [
-    '本科提前批国家专项',
-    '本科提前批高校专项',
-  ],
-};
+// 但每个细分批次卡片只展示自己专属的 subset, 避免 4 张本科批 A 卡片重复显示
+// 解决 Plan A Task 12 遗留: DB 有"本科批A段（国家专项）"等细分行而无纯"本科批A段"
+const BATCH_ALIASES: Array<{ alias: string; parent: string; onlySubsets: string[] }> = [
+  { alias: '本科批A段（国家专项）', parent: '本科批A段', onlySubsets: ['guojia_zhuanxiang'] },
+  { alias: '本科批A段（地方专项）', parent: '本科批A段', onlySubsets: ['difang_zhuanxiang'] },
+  { alias: '本科批高校专项', parent: '本科批B段', onlySubsets: ['gaoxiao_zhuanxiang'] },
+  { alias: '本科批高水平运动队', parent: '本科批A段', onlySubsets: ['gaoshui_yundong'] },
+  { alias: '本科提前批国家专项', parent: '本科批A段', onlySubsets: ['guojia_zhuanxiang'] },
+  { alias: '本科提前批高校专项', parent: '本科批B段', onlySubsets: ['gaoxiao_zhuanxiang'] },
+];
 
 // 完全独立的占位批次 (只填 dataPending placeholder)
 const PLACEHOLDER_BATCHES: Record<string, any> = {
   强基计划: {
-    scoreFloor: { type: 'BATCH_LINE' },
+    scoreFloor: { type: 'SPECIAL_LINE' },  // 强基用特殊类型线 518, 不是本科线
     examTypes: ['物理', '历史'],
     volunteerMode: 'SEQUENTIAL',
     hardEligibility: [],
@@ -472,12 +469,26 @@ async function main() {
   console.log(`Regions: 119/${REGION_119.length} 143/${REGION_143.length} 88/${REGION_88.length}`);
   let updated = 0;
   // 合并 RULES + PLACEHOLDER_BATCHES + aliases 后, 一次循环 update
+  // alias 批次只展示自己的 subset (避免老师看 4 张本科批 A 重复卡片)
   const allTargets: Array<{ batch: string; rules: any }> = [];
   for (const [batch, rules] of Object.entries(RULES)) {
     allTargets.push({ batch, rules });
-    for (const alias of BATCH_ALIASES[batch] ?? []) {
-      allTargets.push({ batch: alias, rules });
+  }
+  for (const { alias, parent, onlySubsets } of BATCH_ALIASES) {
+    const parentRules = RULES[parent];
+    if (!parentRules) {
+      console.warn(`⚠ alias "${alias}" 找不到 parent "${parent}"`);
+      continue;
     }
+    const filteredSubsets = parentRules.subsets.filter((s: any) => onlySubsets.includes(s.code));
+    if (filteredSubsets.length === 0) {
+      console.warn(`⚠ alias "${alias}" 在 parent "${parent}" 下找不到任意 onlySubsets=${onlySubsets.join(',')}`);
+      continue;
+    }
+    allTargets.push({
+      batch: alias,
+      rules: { ...parentRules, subsets: filteredSubsets },
+    });
   }
   for (const [batch, rules] of Object.entries(PLACEHOLDER_BATCHES)) {
     allTargets.push({ batch, rules });

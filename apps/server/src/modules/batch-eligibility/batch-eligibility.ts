@@ -185,6 +185,19 @@ export function judgeBatchEligibility(
   return result;
 }
 
+// 规则码 → 中文需求描述 (UI 卡片摘要展示)
+const REQUIREMENT_LABEL: Record<string, string> = {
+  RURAL_HOUSEHOLD_IN_REGION: '农村户籍 + 户籍县 ∈ 119 县',
+  HOUSEHOLD_IN_REGION: '户籍县 ∈ 指定区域',
+  AGE_RANGE: '年龄要求',
+  POLITICAL_REVIEW_REQUIRED: '需通过政治考核',
+  PHYSICAL_EXAM_REQUIRED: '需通过体检',
+  VISION_STANDARD: '视力 / 色觉标准',
+  SCHOOL_RECOMMENDATION: '需中学校长推荐',
+  SERVICE_COMMITMENT: '需签 6 年服务承诺',
+  GENDER: '性别限制',
+};
+
 function evalSubset(student: StudentForEligibility, subset: SubsetRule): SubsetResult {
   if (subset.dataPending) {
     return {
@@ -207,7 +220,7 @@ function evalSubset(student: StudentForEligibility, subset: SubsetRule): SubsetR
         : 'FAIL';
     rulesEval.push({
       ruleCode: rule.rule,
-      requirement: rule.rule,  // 后续 Task 4 seed 可传入更精确文案
+      requirement: REQUIREMENT_LABEL[rule.rule] ?? rule.rule,
       actual: hint,
       pass: status,
     });

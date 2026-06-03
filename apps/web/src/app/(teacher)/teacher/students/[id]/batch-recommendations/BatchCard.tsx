@@ -9,6 +9,12 @@ const VERDICT_TEXT: Record<string, { label: string; color: string }> = {
   DATA_PENDING: { label: '详情待补充', color: 'bg-gray-100 text-gray-700' },
 };
 
+const VOLUNTEER_MODE_LABEL: Record<string, string> = {
+  parallel: '平行志愿',
+  sequential: '顺序志愿',
+  mixed: '混合志愿',
+};
+
 export function BatchCard({
   batch,
   selected,
@@ -21,7 +27,7 @@ export function BatchCard({
   disabled: boolean;
 }) {
   const v = VERDICT_TEXT[batch.verdict] ?? VERDICT_TEXT.DATA_PENDING;
-  const topReason = batch.reasons?.[0]?.message ?? '—';
+  const modeLabel = VOLUNTEER_MODE_LABEL[batch.volunteerMode] ?? batch.volunteerMode;
   return (
     <div className="border rounded p-4">
       <div className="flex items-start justify-between gap-2">
@@ -35,8 +41,7 @@ export function BatchCard({
           />
           <div>
             <div className="font-semibold">{batch.batchName}</div>
-            <div className="text-xs text-gray-500">志愿模式: {batch.volunteerMode}</div>
-            <div className="text-sm mt-1">{topReason}</div>
+            <div className="text-xs text-gray-500">志愿模式: {modeLabel}</div>
           </div>
         </label>
         <span className={`text-xs px-2 py-1 rounded ${v.color}`}>{v.label}</span>
