@@ -152,3 +152,120 @@ describe('judgeBatchEligibility', () => {
     expect(r.verdict).toBe('ELIGIBLE');
   });
 });
+
+describe('judgeBatchEligibility V2 (subsets 数组)', () => {
+  const baseStudent = {
+    examType: 'PHYSICS' as const,
+    totalScore: 480,
+    isRural: true,
+    county: '叙永县',
+    politicalStatus: null,
+    birthDate: new Date('2008-01-01'),
+  };
+  const baseBatchConfig = (rules: any) => ({
+    id: 1,
+    batch: '本科批A段',
+    examType: '物理',
+    eligibilityRules: rules,
+  });
+
+  it('subsets 中至少一个 ELIGIBLE → 批次 verdict=ELIGIBLE', () => {
+    const rules = {
+      scoreFloor: { type: 'BATCH_LINE' },
+      examTypes: ['物理'],
+      volunteerMode: 'PARALLEL',
+      hardEligibility: [],
+      subsets: [
+        {
+          code: 'puton',
+          name: '普通类',
+          description: '一般本科',
+          hardRules: [],
+          references: [],
+        },
+        {
+          code: 'guojia_zhuanxiang',
+          name: '国家专项',
+          description: '面向贫困县',
+          hardRules: [{
+            scope: 'SUBSET', subset: '国家专项',
+            rule: 'HOUSEHOLD_IN_REGION',
+            params: { regions: ['其他县'] },
+          }],
+          references: [],
+        },
+      ],
+    };
+    const r = judgeBatchEligibility(baseStudent, baseBatchConfig(rules), { score: 438 });
+    expect(r.verdict).toBe('ELIGIBLE');
+  });
+
+  it('subsets 全部 INELIGIBLE → 批次 verdict=INELIGIBLE', () => {
+    const rules = {
+      scoreFloor: { type: 'BATCH_LINE' },
+      examTypes: ['物理'],
+      volunteerMode: 'PARALLEL',
+      hardEligibility: [],
+      subsets: [
+        {
+          code: 'guojia',
+          name: '国家专项',
+          description: '',
+          hardRules: [{
+            scope: 'SUBSET', subset: '国家专项',
+            rule: 'HOUSEHOLD_IN_REGION',
+            params: { regions: ['其他县'] },
+          }],
+          references: [],
+        },
+      ],
+    };
+    const r = judgeBatchEligibility(baseStudent, baseBatchConfig(rules), { score: 438 });
+    expect(r.verdict).toBe('INELIGIBLE');
+  });
+
+  it('subsets dataPending → 该 subset 不参与聚合, 整批仍 ELIGIBLE', () => {
+    const rules = {
+      scoreFloor: { type: 'BATCH_LINE' },
+      examTypes: ['物理'],
+      volunteerMode: 'PARALLEL',
+      hardEligibility: [],
+      subsets: [
+        { code: 'puton', name: '普通类', description: '', hardRules: [], references: [] },
+        { code: 'qiangji', name: '强基计划', description: '', dataPending: true, references: [] },
+      ],
+    };
+    const r = judgeBatchEligibility(baseStudent, baseBatchConfig(rules), { score: 438 });
+    expect(r.verdict).toBe('ELIGIBLE');
+    expect((r as any).subsetResults).toBeDefined();
+    expect((r as any).subsetResults).toHaveLength(2);
+    expect((r as any).subsetResults.find((s: any) => s.code === 'qiangji').verdict).toBe('DATA_PENDING');
+  });
+
+  it('SCORE_FAIL 时 subsets 不需要判定, 直接 INELIGIBLE', () => {
+    const rules = {
+      scoreFloor: { type: 'BATCH_LINE' },
+      examTypes: ['物理'],
+      volunteerMode: 'PARALLEL',
+      hardEligibility: [],
+      subsets: [{ code: 'puton', name: '普通类', description: '', hardRules: [], references: [] }],
+    };
+    const r = judgeBatchEligibility(
+      { ...baseStudent, totalScore: 400 },
+      baseBatchConfig(rules),
+      { score: 438 },
+    );
+    expect(r.verdict).toBe('INELIGIBLE');
+  });
+
+  it('subsets 缺失 → 退化到老逻辑 (向后兼容)', () => {
+    const rules = {
+      scoreFloor: { type: 'BATCH_LINE' },
+      examTypes: ['物理'],
+      volunteerMode: 'PARALLEL',
+      hardEligibility: [],
+    };
+    const r = judgeBatchEligibility(baseStudent, baseBatchConfig(rules), { score: 438 });
+    expect(r.verdict).toBe('ELIGIBLE');
+  });
+});

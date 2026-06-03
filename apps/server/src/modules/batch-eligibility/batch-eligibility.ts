@@ -7,6 +7,11 @@ import type {
   EligibilityReason,
   EligibilityRulesJson,
   HardEligibilityRule,
+  SubsetRule,
+  SubsetResult,
+  SubsetVerdict,
+  RuleEvalResult,
+  RuleEvalStatus,
 } from './types';
 
 export interface StudentForEligibility {
@@ -135,7 +140,88 @@ export function judgeBatchEligibility(
     reasons.push({ type: 'SOFT_HINT', message: sr.message });
   }
 
+  // === V2: subsets 数组评估 ===
+  // 见 docs/superpowers/specs/2026-06-03-batch-recommendation-page-design.md § 四
+  const subsets = (rules as any).subsets as SubsetRule[] | undefined;
+  if (subsets && Array.isArray(subsets) && subsets.length > 0) {
+    if (result.verdict === 'INELIGIBLE') {
+      // SCORE_FAIL / EXAM_TYPE_MISMATCH 已经直接 return, 这里走不到
+      // 防御性: 全部标记 INELIGIBLE 跟着批次走
+      result.subsetResults = subsets.map((s) => ({
+        code: s.code,
+        name: s.name,
+        description: s.description,
+        verdict: 'INELIGIBLE',
+        rulesEval: [],
+        references: (s.references ?? []).map(refToItem),
+      }));
+    } else {
+      result.subsetResults = subsets.map((s) => evalSubset(student, s));
+      // 聚合 batch verdict
+      const activeVerdicts = result.subsetResults.filter((s) => s.verdict !== 'DATA_PENDING');
+      if (activeVerdicts.length === 0) {
+        // 全 dataPending, 保持原 verdict 不动
+      } else if (activeVerdicts.some((s) => s.verdict === 'ELIGIBLE')) {
+        result.verdict = 'ELIGIBLE';
+      } else if (activeVerdicts.every((s) => s.verdict === 'INELIGIBLE')) {
+        result.verdict = 'INELIGIBLE';
+      } else {
+        result.verdict = 'CONDITIONAL';
+      }
+    }
+  }
+
   return result;
+}
+
+function evalSubset(student: StudentForEligibility, subset: SubsetRule): SubsetResult {
+  if (subset.dataPending) {
+    return {
+      code: subset.code,
+      name: subset.name,
+      description: subset.description,
+      verdict: 'DATA_PENDING',
+      rulesEval: [],
+      references: (subset.references ?? []).map(refToItem),
+    };
+  }
+  const rulesEval: RuleEvalResult[] = [];
+  let verdict: SubsetVerdict = 'ELIGIBLE';
+  for (const rule of subset.hardRules ?? []) {
+    const { satisfied, hint, soft } = evalHardRule(student, rule);
+    const status: RuleEvalStatus = soft
+      ? 'SOFT_HINT'
+      : satisfied
+        ? 'PASS'
+        : 'FAIL';
+    rulesEval.push({
+      ruleCode: rule.rule,
+      requirement: rule.rule,  // 后续 Task 4 seed 可传入更精确文案
+      actual: hint,
+      pass: status,
+    });
+    if (!satisfied && !soft) verdict = 'INELIGIBLE';
+    else if (soft && verdict === 'ELIGIBLE') verdict = 'CONDITIONAL';
+  }
+  return {
+    code: subset.code,
+    name: subset.name,
+    description: subset.description,
+    verdict,
+    rulesEval,
+    references: (subset.references ?? []).map(refToItem),
+  };
+}
+
+function refToItem(ref: { title: string; filename: string | null; type: string; sourceNote?: string }): SubsetResult['references'][number] {
+  return {
+    title: ref.title,
+    filename: ref.filename,
+    type: ref.type as 'pdf' | 'xlsx' | 'announcement',
+    downloadUrl: ref.filename ? `/attachments/policy/${ref.filename}` : null,
+    available: !!ref.filename,
+    sourceNote: ref.sourceNote,
+  };
 }
 
 function evalHardRule(

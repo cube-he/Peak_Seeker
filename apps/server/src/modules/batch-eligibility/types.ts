@@ -24,6 +24,7 @@ export interface BatchEligibilityResult {
   examType: string;       // 如 "物理"
   verdict: BatchEligibilityVerdict;
   reasons: EligibilityReason[];
+  subsetResults?: SubsetResult[];  // V2 subsets 判定
 }
 
 // eligibilityRules JSON 内部结构 (存入 batch_configs.eligibility_rules)
