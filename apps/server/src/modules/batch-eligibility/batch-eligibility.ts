@@ -256,14 +256,16 @@ function evalHardRule(
   switch (rule.rule) {
     case 'RURAL_HOUSEHOLD_IN_REGION': {
       const regions = (rule.params?.regions as string[]) ?? [];
+      // 先看确定信息: 学生明确填了城镇户籍 → 直接不符
+      // (Bug 修复: 之前 county 缺失走 SOFT_HINT 绕过了 isRural 判断, 城镇生显示"条件通过")
+      if (!student.isRural) {
+        return { satisfied: false, hint: `${subsetLabel}要求农村户籍, 学生为城镇户籍` };
+      }
       if (!student.county) {
-        return { satisfied: false, soft: true, hint: `${subsetLabel}需农村户籍 + 户籍县在实施区域内, 学生未填户籍县, 请老师面谈核实` };
+        return { satisfied: false, soft: true, hint: `${subsetLabel}需户籍县在 ${regions.length} 县实施区域内, 学生未填户籍县, 请老师面谈核实` };
       }
       if (!regions.includes(student.county)) {
         return { satisfied: false, hint: `${subsetLabel}要求户籍县在实施区域内 (${regions.length} 县名单), 学生户籍县「${student.county}」不在` };
-      }
-      if (!student.isRural) {
-        return { satisfied: false, hint: `${subsetLabel}要求农村户籍, 学生为城镇户籍` };
       }
       return { satisfied: true, hint: 'PASS' };
     }
