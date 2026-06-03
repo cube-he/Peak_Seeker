@@ -803,6 +803,59 @@ export class StudentService {
     return { unlocked: true };
   }
 
+  /**
+   * 老师在批次推荐页确认最终批次, 同时把 intakeStatus 切到 VERIFIED。
+   * 见 docs/superpowers/specs/2026-06-03-batch-recommendation-page-design.md § 六.2
+   */
+  async confirmBatches(
+    studentId: number,
+    opts: {
+      teacherProfileId?: number;
+      reviewerUserId: number;
+      preferredBatches: string[];
+      reviewComment?: string;
+    },
+  ) {
+    const KNOWN_BATCHES = new Set([
+      '本科批A段',
+      '本科批B段',
+      '本科提前批A段',
+      '本科提前批B段',
+      '高职提前批',
+      '高职批',
+    ]);
+    if (!Array.isArray(opts.preferredBatches) || opts.preferredBatches.length === 0) {
+      throw new BadRequestException('至少选定 1 个批次');
+    }
+    for (const b of opts.preferredBatches) {
+      if (!KNOWN_BATCHES.has(b)) {
+        throw new BadRequestException(`未知批次: ${b}`);
+      }
+    }
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      select: { id: true, teacherId: true, intakeStatus: true },
+    });
+    if (!student) throw new NotFoundException('学生不存在');
+    if (opts.teacherProfileId !== undefined && student.teacherId !== opts.teacherProfileId) {
+      throw new ForbiddenException('无权确认不属于自己的学生的批次');
+    }
+    if (student.intakeStatus !== 'SUBMITTED' && student.intakeStatus !== 'NEEDS_CHANGES') {
+      throw new ConflictException('学生尚未提交资料或已确认');
+    }
+    return this.prisma.studentProfile.update({
+      where: { id: studentId },
+      data: {
+        preferredBatches: opts.preferredBatches as any,
+        batchesConfirmedAt: new Date(),
+        intakeStatus: 'VERIFIED',
+        intakeReviewedBy: opts.reviewerUserId,
+        intakeReviewedAt: new Date(),
+        intakeReviewComment: opts.reviewComment ?? null,
+      },
+    });
+  }
+
   async reviewIntake(
     studentId: number,
     opts: {

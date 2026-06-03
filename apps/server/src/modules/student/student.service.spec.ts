@@ -680,6 +680,85 @@ describe('StudentService', () => {
       expect(updateCall.data.batchesConfirmedAt).toBeUndefined();
     });
 
+    describe('confirmBatches', () => {
+      const KNOWN_BATCHES = ['本科批A段', '本科批B段', '本科提前批A段', '本科提前批B段', '高职提前批', '高职批'];
+
+      it('成功: 写入 preferredBatches + batchesConfirmedAt + intakeStatus=VERIFIED', async () => {
+        prisma.studentProfile.findUnique.mockResolvedValue({
+          id: 1,
+          teacherId: 5,
+          intakeStatus: 'SUBMITTED',
+        });
+        prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'VERIFIED' });
+
+        const result = await (service as any).confirmBatches(1, {
+          teacherProfileId: 5,
+          reviewerUserId: 20,
+          preferredBatches: ['本科批A段', '本科批B段'],
+          reviewComment: '面谈后确认',
+        });
+
+        expect(result).toHaveProperty('intakeStatus', 'VERIFIED');
+        expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 1 },
+            data: expect.objectContaining({
+              preferredBatches: ['本科批A段', '本科批B段'],
+              batchesConfirmedAt: expect.any(Date),
+              intakeStatus: 'VERIFIED',
+              intakeReviewedBy: 20,
+              intakeReviewedAt: expect.any(Date),
+              intakeReviewComment: '面谈后确认',
+            }),
+          }),
+        );
+      });
+
+      it('校验失败: preferredBatches 为空数组 → BadRequest', async () => {
+        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED' });
+        await expect(
+          (service as any).confirmBatches(1, {
+            teacherProfileId: 5,
+            reviewerUserId: 20,
+            preferredBatches: [],
+          }),
+        ).rejects.toThrow(/至少选定/);
+      });
+
+      it('校验失败: preferredBatches 包含未知批次 → BadRequest', async () => {
+        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED' });
+        await expect(
+          (service as any).confirmBatches(1, {
+            teacherProfileId: 5,
+            reviewerUserId: 20,
+            preferredBatches: ['强基计划'],
+          }),
+        ).rejects.toThrow(/未知批次/);
+      });
+
+      it('校验失败: 学生 intakeStatus = DRAFT → Conflict', async () => {
+        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'DRAFT' });
+        await expect(
+          (service as any).confirmBatches(1, {
+            teacherProfileId: 5,
+            reviewerUserId: 20,
+            preferredBatches: ['本科批A段'],
+          }),
+        ).rejects.toThrow(/学生尚未提交资料/);
+      });
+
+      it('权限: 非所属老师 → Forbidden', async () => {
+        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED' });
+        await expect(
+          (service as any).confirmBatches(1, {
+            teacherProfileId: 99,
+            reviewerUserId: 20,
+            preferredBatches: ['本科批A段'],
+          }),
+        ).rejects.toThrow(/无权/);
+      });
+    });
+
     it('unlockBatches 解锁锁定的批次, 写入 unlockBy + intakeStatus NEEDS_CHANGES', async () => {
       prisma.studentProfile.findUnique.mockResolvedValue({
         id: 1,
