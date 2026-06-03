@@ -422,11 +422,67 @@ const RULES: Record<string, any> = {
   },
 };
 
+// DB 中实际存在的细分批次名 → 共享哪个顶层规则
+// 解决 Plan A Task 12 后遗留问题: DB 有"本科批A段（国家专项）"等细分行而无纯"本科批A段"
+const BATCH_ALIASES: Record<string, string[]> = {
+  本科批A段: [
+    '本科批A段（国家专项）',
+    '本科批A段（地方专项）',
+    '本科批高校专项',
+    '本科批高水平运动队',
+  ],
+  本科提前批B段: [
+    '本科提前批国家专项',
+    '本科提前批高校专项',
+  ],
+};
+
+// 完全独立的占位批次 (只填 dataPending placeholder)
+const PLACEHOLDER_BATCHES: Record<string, any> = {
+  强基计划: {
+    scoreFloor: { type: 'BATCH_LINE' },
+    examTypes: ['物理', '历史'],
+    volunteerMode: 'SEQUENTIAL',
+    hardEligibility: [],
+    subsets: [{
+      code: 'qiangji',
+      name: '强基计划',
+      description: '基础学科拔尖人才, 5+3 校测综合评价, 单独申报',
+      dataPending: true,
+      references: [],
+    }],
+  },
+  省属高校少民预科: {
+    scoreFloor: { type: 'BATCH_LINE', leniency: 80 },
+    examTypes: ['物理', '历史'],
+    volunteerMode: 'PARALLEL',
+    hardEligibility: [],
+    subsets: [{
+      code: 'shaomin_yuke',
+      name: '省属高校少数民族预科',
+      description: '少数民族考生 + 户籍县在特定区域, 预科 1 年 + 本科',
+      dataPending: true,
+      references: [],
+    }],
+  },
+};
+
 async function main() {
   console.log('Seeding batch recommendation rules (V2 subsets) for 四川 year=2026...');
   console.log(`Regions: 119/${REGION_119.length} 143/${REGION_143.length} 88/${REGION_88.length}`);
   let updated = 0;
+  // 合并 RULES + PLACEHOLDER_BATCHES + aliases 后, 一次循环 update
+  const allTargets: Array<{ batch: string; rules: any }> = [];
   for (const [batch, rules] of Object.entries(RULES)) {
+    allTargets.push({ batch, rules });
+    for (const alias of BATCH_ALIASES[batch] ?? []) {
+      allTargets.push({ batch: alias, rules });
+    }
+  }
+  for (const [batch, rules] of Object.entries(PLACEHOLDER_BATCHES)) {
+    allTargets.push({ batch, rules });
+  }
+  for (const { batch, rules } of allTargets) {
     const configs = await prisma.batchConfig.findMany({
       where: { batch, province: '四川', year: 2026 },
     });

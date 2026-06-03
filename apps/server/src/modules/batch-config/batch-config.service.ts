@@ -88,10 +88,19 @@ export class BatchConfigService {
     });
 
     // 拉所有该省该年分数线 (本届实际线 = examYear, 而非 planYear)
+    // 2026 年分数线 6 月底才出, 先尝试 examYear, 找不到回退到 examYear-1 (2025 线作预估)
     const examYear = student.examYear ?? planYear;
-    const allLines = await this.prisma.batchLine.findMany({
+    let allLines = await this.prisma.batchLine.findMany({
       where: { year: examYear, province },
     });
+    let lineYearUsed = examYear;
+    if (allLines.length === 0) {
+      const fallbackYear = examYear - 1;
+      allLines = await this.prisma.batchLine.findMany({
+        where: { year: fallbackYear, province },
+      });
+      lineYearUsed = fallbackYear;
+    }
     // 选科别名: 数据源中可能是 "物理" 或 "物理类"
     const examTypeAliases = examTypeLabel === '物理' ? ['物理', '物理类'] : ['历史', '历史类'];
     const lineFor = (type: 'BATCH_LINE' | 'SPECIAL_LINE' | 'ZHUANKE_LINE') => {
@@ -131,6 +140,10 @@ export class BatchConfigService {
         },
         line,
       );
+      // 若用了 fallback 年的分数线, scoreInfo 加标记让前端提示
+      if (verdict.scoreInfo && line && lineYearUsed !== examYear) {
+        verdict.scoreInfo = { ...verdict.scoreInfo, lineYearUsed } as any;
+      }
       return {
         ...verdict,
         batchName: b.batch,
