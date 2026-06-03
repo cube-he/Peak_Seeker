@@ -1172,9 +1172,12 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
       <div className="field full">
         <label>必填三科<span className="sc-hint"> 语文 / 数学 / 英语</span></label>
         <div className="sc-9subjects-grid">
-          <TeacherScoreInput name="scoreChinese" label="语文" max={150} required />
-          <TeacherScoreInput name="scoreMath" label="数学" max={150} required />
-          <TeacherScoreInput name="scoreEnglish" label="英语" max={150} required />
+          {/* 不加 required: 老师建档支持渐进式录入 (先填一部分先保存, 后续补).
+              学生端 stage 表单是"提交意向"语义所以 required; 老师端是"档案管理"
+              语义, 任何时候保存都该允许. 完整度 / missing-card 仍标缺失项. */}
+          <TeacherScoreInput name="scoreChinese" label="语文" max={150} />
+          <TeacherScoreInput name="scoreMath" label="数学" max={150} />
+          <TeacherScoreInput name="scoreEnglish" label="英语" max={150} />
         </div>
       </div>
 
