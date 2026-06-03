@@ -146,6 +146,20 @@ export class StudentController {
     });
   }
 
+  @Post(':id/unlock-batches')
+  @ApiOperation({ summary: '老师解锁学生已锁定的批次选择' })
+  @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
+  async unlockBatches(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.studentService.unlockBatches(
+      id,
+      user.id,
+      user.role === 'ADMIN' ? undefined : user.teacherProfileId ?? undefined,
+    );
+  }
+
   @Put(':id')
   @ApiOperation({ summary: 'Update student profile through legacy route' })
   @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))

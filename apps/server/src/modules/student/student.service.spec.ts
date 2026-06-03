@@ -711,6 +711,51 @@ describe('StudentService', () => {
       expect(prisma.studentProfile.update).not.toHaveBeenCalled();
     });
 
+    it('unlockBatches 解锁锁定的批次, 写入 unlockBy + intakeStatus NEEDS_CHANGES', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1,
+        teacherId: 5,
+        batchesConfirmedAt: new Date('2026-06-01'),
+      });
+      prisma.studentProfile.update.mockResolvedValue({ id: 1 });
+
+      const result = await (service as any).unlockBatches(1, 20, 5);
+
+      expect(result).toEqual({ unlocked: true });
+      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({
+            batchesConfirmedAt: null,
+            batchesUnlockedBy: 20,
+            batchesUnlockedAt: expect.any(Date),
+            intakeStatus: 'NEEDS_CHANGES',
+          }),
+        }),
+      );
+    });
+
+    it('unlockBatches 未锁定时返回 unlocked=false 不写库', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1,
+        teacherId: 5,
+        batchesConfirmedAt: null,
+      });
+      const result = await (service as any).unlockBatches(1, 20, 5);
+      expect(result.unlocked).toBe(false);
+      expect(prisma.studentProfile.update).not.toHaveBeenCalled();
+    });
+
+    it('unlockBatches 非所属老师 → ForbiddenException', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1,
+        teacherId: 5,
+        batchesConfirmedAt: new Date('2026-06-01'),
+      });
+      await expect((service as any).unlockBatches(1, 30, 99)).rejects.toThrow(/无权/);
+      expect(prisma.studentProfile.update).not.toHaveBeenCalled();
+    });
+
     it('reviewIntake verifies an assigned student for plan creation', async () => {
       prisma.studentProfile.findUnique.mockResolvedValue({
         id: 1,

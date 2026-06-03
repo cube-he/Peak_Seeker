@@ -779,6 +779,39 @@ export class StudentService {
     });
   }
 
+  /**
+   * 老师解锁学生已锁定的批次选择。
+   * 商业化流程: 学生提交资料 → 锁定批次 → 如需调整批次必须老师解锁
+   * 见 docs/superpowers/specs/2026-06-02-batch-selection-at-intake-design.md § 三
+   */
+  async unlockBatches(
+    studentId: number,
+    teacherUserId: number,
+    teacherProfileId?: number,
+  ): Promise<{ unlocked: boolean; reason?: string }> {
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      select: { id: true, teacherId: true, batchesConfirmedAt: true },
+    });
+    if (!student) throw new NotFoundException('学生不存在');
+    if (teacherProfileId !== undefined && student.teacherId !== teacherProfileId) {
+      throw new ForbiddenException('无权解锁该学生的批次');
+    }
+    if (!student.batchesConfirmedAt) {
+      return { unlocked: false, reason: '批次未锁定, 无需解锁' };
+    }
+    await this.prisma.studentProfile.update({
+      where: { id: studentId },
+      data: {
+        batchesConfirmedAt: null,
+        batchesUnlockedBy: teacherUserId,
+        batchesUnlockedAt: new Date(),
+        intakeStatus: 'NEEDS_CHANGES',
+      },
+    });
+    return { unlocked: true };
+  }
+
   async reviewIntake(
     studentId: number,
     opts: {
