@@ -29,7 +29,6 @@ import {
   STAGE_LABELS,
 } from '@/components/student/stage-fields';
 import HealthCheckboxGroup from '@/components/student/HealthCheckboxGroup';
-import { ScoreInput as SharedScoreInput } from '@/components/student/ScoreInput';
 import {
   type Subject9Form,
   sum9Subjects,
@@ -505,8 +504,52 @@ function FieldGrid({
   return <div className={`grid grid-cols-1 gap-x-4 ${columns}`}>{children}</div>;
 }
 
-// 学生端 ScoreInput 直接复用共享版 (老师端用同一个组件保证录入体验一致)
-const ScoreInput = SharedScoreInput;
+function ScoreInput({
+  name,
+  label,
+  max,
+  required,
+  disabled,
+  placeholder,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  max: number;
+  required?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
+  onChange?: (value: number | null) => void;
+}) {
+  return (
+    <div
+      className={`rounded-xl border px-3 py-3 transition-colors ${
+        disabled
+          ? 'border-border-subtle bg-surface-dim/60 opacity-70'
+          : 'border-border-subtle bg-surface hover:border-primary/25'
+      }`}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="font-medium text-text">{label}</span>
+        <span className="text-[11px] text-text-muted">满分 {max}</span>
+      </div>
+      <Form.Item
+        name={name}
+        rules={required ? [{ required: true, message: '必填' }] : undefined}
+        className="mb-0"
+      >
+        <InputNumber
+          min={0}
+          max={max}
+          className="w-full"
+          disabled={disabled}
+          placeholder={placeholder}
+          onChange={onChange}
+        />
+      </Form.Item>
+    </div>
+  );
+}
 
 function Stage1Fields() {
   const form = Form.useFormInstance();

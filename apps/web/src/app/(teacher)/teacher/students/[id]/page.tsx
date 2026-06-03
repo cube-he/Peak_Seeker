@@ -10,7 +10,6 @@ import {
   sum9Subjects,
   type Subject9Form,
 } from '@/components/student/stage1-score-mapping';
-import { ScoreInput } from '@/components/student/ScoreInput';
 import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Spin, message } from 'antd';
 import {
   LockOutlined,
@@ -1137,32 +1136,25 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
         </Form.Item>
       </div>
 
-      {/* 必填三科: 语 / 数 / 英 */}
+      {/* 必填三科 */}
       <div className="field sd-field-full">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>必填三科</span>
-          <span style={{ fontSize: 11, color: '#999' }}>语文 / 数学 / 英语</span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-          <ScoreInput name="scoreChinese" label="语文" max={150} required />
-          <ScoreInput name="scoreMath" label="数学" max={150} required />
-          <ScoreInput name="scoreEnglish" label="英语" max={150} required />
+        <label>必填三科 (语 / 数 / 英)</label>
+        <div className="sd-form-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          <Form.Item name="scoreChinese" noStyle>
+            <InputNumber min={0} max={150} style={{ width: '100%' }} placeholder="语文 (满分 150)" />
+          </Form.Item>
+          <Form.Item name="scoreMath" noStyle>
+            <InputNumber min={0} max={150} style={{ width: '100%' }} placeholder="数学 (满分 150)" />
+          </Form.Item>
+          <Form.Item name="scoreEnglish" noStyle>
+            <InputNumber min={0} max={150} style={{ width: '100%' }} placeholder="英语 (满分 150)" />
+          </Form.Item>
         </div>
       </div>
 
       {/* 首选科目: 物理 / 历史 二选一 */}
       <div className="field sd-field-full">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>首选科目</span>
-          <span style={{
-            fontSize: 11,
-            background: '#fffaf0',
-            color: '#d97706',
-            padding: '2px 8px',
-            borderRadius: 9999,
-            fontWeight: 500,
-          }}>物理 / 历史二选一</span>
-        </div>
+        <label>首选科目 (物理 / 历史 二选一, 满分 100)</label>
         <Form.Item
           noStyle
           shouldUpdate={(p, c) => p.scorePhysics !== c.scorePhysics || p.scoreHistory !== c.scoreHistory}
@@ -1171,46 +1163,40 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
             const hasPhysics = getFieldValue('scorePhysics') != null;
             const hasHistory = getFieldValue('scoreHistory') != null;
             return (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                <ScoreInput
-                  name="scorePhysics"
-                  label="物理"
-                  max={100}
-                  disabled={hasHistory}
-                  placeholder={hasHistory ? '已选历史' : undefined}
-                  onChange={(v) => {
-                    if (v != null) setFieldsValue({ scoreHistory: null });
-                  }}
-                />
-                <ScoreInput
-                  name="scoreHistory"
-                  label="历史"
-                  max={100}
-                  disabled={hasPhysics}
-                  placeholder={hasPhysics ? '已选物理' : undefined}
-                  onChange={(v) => {
-                    if (v != null) setFieldsValue({ scorePhysics: null });
-                  }}
-                />
+              <div className="sd-form-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                <Form.Item name="scorePhysics" noStyle>
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    style={{ width: '100%' }}
+                    placeholder={hasHistory ? '已选历史' : '物理'}
+                    disabled={hasHistory}
+                    onChange={(v) => {
+                      if (v != null) setFieldsValue({ scoreHistory: null });
+                    }}
+                  />
+                </Form.Item>
+                <Form.Item name="scoreHistory" noStyle>
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    style={{ width: '100%' }}
+                    placeholder={hasPhysics ? '已选物理' : '历史'}
+                    disabled={hasPhysics}
+                    onChange={(v) => {
+                      if (v != null) setFieldsValue({ scorePhysics: null });
+                    }}
+                  />
+                </Form.Item>
               </div>
             );
           }}
         </Form.Item>
       </div>
 
-      {/* 再选科目: 化生政地 选 2 */}
+      {/* 再选两科: 化生政地 选 2 */}
       <div className="field sd-field-full">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>再选科目</span>
-          <span style={{
-            fontSize: 11,
-            background: '#fffaf0',
-            color: '#d97706',
-            padding: '2px 8px',
-            borderRadius: 9999,
-            fontWeight: 500,
-          }}>化 / 生 / 政 / 地选四选二</span>
-        </div>
+        <label>再选科目 (化 / 生 / 政 / 地 选 2, 满分 100)</label>
         <Form.Item
           noStyle
           shouldUpdate={(p, c) =>
@@ -1232,15 +1218,17 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
               { name: 'scoreGeography', label: '地理' },
             ];
             return (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              <div className="sd-form-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                 {subs.map((s) => (
-                  <ScoreInput
-                    key={s.name}
-                    name={s.name}
-                    label={s.label}
-                    max={100}
-                    disabled={lock && !isFilled(s.name)}
-                  />
+                  <Form.Item key={s.name} name={s.name} noStyle>
+                    <InputNumber
+                      min={0}
+                      max={100}
+                      style={{ width: '100%' }}
+                      placeholder={s.label}
+                      disabled={lock && !isFilled(s.name)}
+                    />
+                  </Form.Item>
                 ))}
               </div>
             );
