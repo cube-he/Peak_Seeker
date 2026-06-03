@@ -18,7 +18,14 @@ import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const adapter = new PrismaMariaDb(process.env.DATABASE_URL!);
+// adapter-mariadb 7.x 期望:
+//   1. 第一个参数是字符串 (config), 第二个是 options;
+//   2. URL scheme 必须 'mariadb://' 而非 'mysql://' (rewriteConnectionString
+//      会 reject "mysql://" 抛 "error parsing connection string").
+// .env 里通常配的 mysql://, 这里 swap 成 mariadb:// 给 adapter.
+const rawUrl = process.env.DATABASE_URL!;
+const adapterUrl = rawUrl.startsWith('mysql://') ? 'mariadb://' + rawUrl.slice(8) : rawUrl;
+const adapter = new PrismaMariaDb(adapterUrl);
 const prisma = new PrismaClient({ adapter } as any);
 
 const COUNTIES_JSON_PATH = join(__dirname, '../../../data/seed/batch-region-counties.json');
