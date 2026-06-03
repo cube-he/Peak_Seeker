@@ -22,6 +22,40 @@ export interface EligibleBatchForStudent extends BatchEligibilityResult {
   admissionOrder: number;
 }
 
+/**
+ * 批次推荐 / 方案制作必填的关键资料字段
+ * 缺一不可 - 不全则: ① 老师不能 confirmBatches; ② 不能进做方案阶段
+ * 业务原因: 这些字段是算法准确判定硬资格的前提
+ */
+export interface IntakeDataGap {
+  ok: boolean;
+  missing: Array<{ field: string; label: string }>;
+}
+
+const BATCH_RECOMMENDATION_REQUIRED: Array<{ key: string; label: string; from: 'student' | 'user' }> = [
+  { key: 'examType',  label: '选科',        from: 'student' },
+  { key: 'county',    label: '户籍县',      from: 'student' },
+  { key: 'isRural',   label: '城/乡户籍',   from: 'student' },
+  { key: 'birthDate', label: '出生日期',    from: 'user' },
+  { key: 'ethnicity', label: '民族',        from: 'user' },
+  { key: 'gender',    label: '性别',        from: 'user' },
+];
+
+export function validateIntakeForBatchSelection(
+  student: any & { user?: any },
+): IntakeDataGap {
+  const missing: Array<{ field: string; label: string }> = [];
+  for (const f of BATCH_RECOMMENDATION_REQUIRED) {
+    const value =
+      f.from === 'student' ? (student as any)[f.key] : (student.user ?? {})[f.key];
+    // isRural 是 boolean, 视为 null/undefined 才算未填
+    if (value === null || value === undefined || value === '') {
+      missing.push({ field: f.key, label: f.label });
+    }
+  }
+  return { ok: missing.length === 0, missing };
+}
+
 @Injectable()
 export class BatchConfigService {
   constructor(private prisma: PrismaService) {}
@@ -53,7 +87,7 @@ export class BatchConfigService {
       teacherProfileId?: number | null;
       isSupervisor?: boolean;
     },
-  ): Promise<EligibleBatchForStudent[]> {
+  ): Promise<{ batches: EligibleBatchForStudent[]; intakeGap: IntakeDataGap }> {
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
       include: { user: { select: { birthDate: true, ethnicity: true, gender: true } } },
@@ -120,7 +154,8 @@ export class BatchConfigService {
       return row ? { score: row.score } : null;
     };
 
-    return list.map((b) => {
+    const intakeGap = validateIntakeForBatchSelection(student);
+    const batches = list.map((b) => {
       const rules = b.eligibilityRules as EligibilityRulesJson | null;
       const line = rules?.scoreFloor ? lineFor(rules.scoreFloor.type) : null;
       const verdict = judgeBatchEligibility(
@@ -155,5 +190,6 @@ export class BatchConfigService {
         admissionOrder: b.admissionOrder,
       };
     });
+    return { batches, intakeGap };
   }
 }

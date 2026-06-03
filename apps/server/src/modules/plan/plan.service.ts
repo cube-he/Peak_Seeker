@@ -13,6 +13,7 @@ import { ReviewPlanDto } from './dto/review-plan.dto';
 import { PlanStateMachineService, PlanAction } from './plan-state-machine.service';
 import { RiskEngineService } from './risk-engine/risk-engine.service';
 import { FEATURE_FLAGS } from '../../config/feature-flags';
+import { validateIntakeForBatchSelection } from '../batch-config/batch-config.service';
 
 @Injectable()
 export class PlanService {
@@ -342,6 +343,13 @@ export class PlanService {
     }
     if (student.intakeStatus !== 'VERIFIED') {
       throw new ConflictException('学生资料需先由老师确认为 VERIFIED 后才能创建方案');
+    }
+    // 双保险: 即使 intakeStatus=VERIFIED, 也再校验一次关键资料 (防绕过)
+    const intakeGap = validateIntakeForBatchSelection(student);
+    if (!intakeGap.ok) {
+      throw new BadRequestException(
+        `学生关键资料未完成, 无法做方案: ${intakeGap.missing.map(m => m.label).join(', ')}`,
+      );
     }
 
     const batchConfig = await this.prisma.batchConfig.findUnique({

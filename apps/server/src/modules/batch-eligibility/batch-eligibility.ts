@@ -258,15 +258,18 @@ function evalHardRule(
 ): { satisfied: boolean; hint: string; soft?: boolean } {
   const subsetLabel = rule.subset ? `「${rule.subset}」` : '';
   switch (rule.rule) {
+    // 设计原则:
+    //   - 学生明确填了 + 不符 → satisfied=false, soft=false → 资格不符 (INELIGIBLE)
+    //   - 学生客观字段未填 (本人该填的: 户籍县/出生日期/民族/性别) → satisfied=false, soft=false → 资格不符 (INELIGIBLE)
+    //     hint 明示"未填"让老师催学生补, 不是误判 "条件通过"
+    //   - 老师面谈才能确定的 (政考/体检/视力/服务承诺/校长推荐) → satisfied=false, soft=true → 条件通过 (CONDITIONAL)
     case 'RURAL_HOUSEHOLD_IN_REGION': {
       const regions = (rule.params?.regions as string[]) ?? [];
-      // 先看确定信息: 学生明确填了城镇户籍 → 直接不符
-      // (Bug 修复: 之前 county 缺失走 SOFT_HINT 绕过了 isRural 判断, 城镇生显示"条件通过")
       if (!student.isRural) {
         return { satisfied: false, hint: `${subsetLabel}要求农村户籍, 学生为城镇户籍` };
       }
       if (!student.county) {
-        return { satisfied: false, soft: true, hint: `${subsetLabel}需户籍县在 ${regions.length} 县实施区域内, 学生未填户籍县, 请老师面谈核实` };
+        return { satisfied: false, hint: `${subsetLabel}需户籍县在 ${regions.length} 县实施区域内, 学生未填户籍县 → 请先催学生补完资料` };
       }
       if (!regions.includes(student.county)) {
         return { satisfied: false, hint: `${subsetLabel}要求户籍县在实施区域内 (${regions.length} 县名单), 学生户籍县「${student.county}」不在` };
@@ -276,17 +279,17 @@ function evalHardRule(
     case 'HOUSEHOLD_IN_REGION': {
       const regions = (rule.params?.regions as string[]) ?? [];
       if (!student.county) {
-        return { satisfied: false, soft: true, hint: `${subsetLabel}需户籍县在实施区域, 学生未填户籍县, 请老师面谈核实` };
+        return { satisfied: false, hint: `${subsetLabel}需户籍县在 ${regions.length} 县实施区域, 学生未填户籍县 → 请先催学生补完资料` };
       }
       if (!regions.includes(student.county)) {
-        return { satisfied: false, hint: `${subsetLabel}户籍县不在 ${regions.length} 县实施区域内` };
+        return { satisfied: false, hint: `${subsetLabel}户籍县「${student.county}」不在 ${regions.length} 县实施区域内` };
       }
       return { satisfied: true, hint: 'PASS' };
     }
     case 'AGE_RANGE': {
       const { min, max, asOf } = (rule.params ?? {}) as { min: number; max: number; asOf: string };
       if (!student.birthDate) {
-        return { satisfied: false, soft: true, hint: `${subsetLabel}需 ${min}-${max} 周岁 (截至 ${asOf}), 学生未填出生日期, 请老师面谈核实` };
+        return { satisfied: false, hint: `${subsetLabel}需 ${min}-${max} 周岁 (截至 ${asOf}), 学生未填出生日期 → 请先催学生补完资料` };
       }
       const asOfDate = new Date(asOf);
       const age = Math.floor((asOfDate.getTime() - student.birthDate.getTime()) / (365.25 * 86400 * 1000));

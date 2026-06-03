@@ -1,0 +1,316 @@
+/* ==========================================================================
+   智愿家 (WillNest) — Colors & Type Tokens
+   --------------------------------------------------------------------------
+   Editorial, warm-cream, deep-blue + gold. Serif display + sans body.
+   Sourced from VolunteerHelper/apps/web/tailwind.config.js + globals.css.
+   ========================================================================== */
+
+/* ---- Web fonts ---------------------------------------------------------- */
+@font-face {
+  font-family: 'Crimson Pro';
+  src: url('/fonts/crimson-pro-400.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Crimson Pro';
+  src: url('/fonts/crimson-pro-500.woff2') format('woff2');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Crimson Pro';
+  src: url('/fonts/crimson-pro-600.woff2') format('woff2');
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Crimson Pro';
+  src: url('/fonts/crimson-pro-700.woff2') format('woff2');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-400.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-500.woff2') format('woff2');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-600.woff2') format('woff2');
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-700.woff2') format('woff2');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+:root {
+  /* ---- Brand: Primary (deep navy ink) ---- */
+  --primary:        #1e3a5f;
+  --primary-light:  #2c5282;
+  --primary-fixed:  #ebf4ff;
+
+  /* ---- Brand: Accent (warm gold / amber) ---- */
+  --accent:         #b8860b;
+  --accent-light:   #d4a843;
+  --accent-fixed:   #fdf8ec;
+
+  /* ---- Surface (warm cream paper) ---- */
+  --bg:             #f5f4ed;  /* page background */
+  --surface:        #faf9f5;  /* cards */
+  --surface-dim:    #f0eee6;  /* inputs, table headers */
+  --surface-high:   #ffffff;  /* modals, popovers */
+
+  /* ---- Text (warm near-black, dropping in lightness) ---- */
+  --text:           #1a1a19;
+  --text-secondary: #4d4c48;
+  --text-tertiary:  #6b6962;
+  --text-muted:     #87867f;
+  --text-faint:     #b0aea5;
+
+  /* ---- Borders & rings ---- */
+  --border:         #e8e6dc;
+  --border-subtle:  #f0eee6;
+  --ring:           #d1cfc5;
+
+  /* ---- Semantic / Plan-status colors ----
+     Used as the 冲 / 稳 / 保 (rush / stable / safe) lexicon for AI plans. */
+  --rush:           #c53030;  /* 冲 — reach */
+  --rush-fixed:     #fef2f2;
+  --stable:         #2c5282;  /* 保 — match */
+  --stable-fixed:   #ebf4ff;
+  --safe:           #276749;  /* 稳 — safe */
+  --safe-fixed:     #f0fff4;
+  --elite:          #b8860b;  /* gold for 985 / Double-First-Class */
+  --elite-fixed:    #fdf8ec;
+
+  /* ---- Type families ---- */
+  --font-heading:   'Crimson Pro', Georgia, 'Noto Serif SC', 'Songti SC', SimSun, serif;
+  --font-body:      'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+
+  /* ---- Type scale (px) ---- */
+  --fs-display:     44px;  /* hero h1 desktop */
+  --fs-h1:          36px;
+  --fs-h2:          30px;
+  --fs-h3:          22px;
+  --fs-h4:          19px;
+  --fs-body:        15px;
+  --fs-small:       13px;
+  --fs-caption:     11px;
+  --fs-eyebrow:     11px;  /* uppercase, letter-spacing 2px */
+
+  /* ---- Line heights ---- */
+  --lh-display:     1.12;
+  --lh-tight:       1.25;
+  --lh-body:        1.65;
+  --lh-relaxed:     1.7;
+
+  /* ---- Spacing (used as 4px increments throughout) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* ---- Radius ---- */
+  --radius-sm:   6px;
+  --radius:      8px;   /* default — buttons, inputs */
+  --radius-lg:   10px;  /* cards */
+  --radius-xl:   12px;  /* modals, dropdowns */
+  --radius-full: 999px;
+
+  /* ---- Shadows (warm + double-layer; visible on cream background) ---- */
+  --shadow-card:        0 1px 2px rgba(26, 26, 25, 0.05), 0 4px 16px rgba(107, 69, 32, 0.06);
+  --shadow-card-hover:  0 2px 4px rgba(26, 26, 25, 0.06), 0 18px 36px rgba(107, 69, 32, 0.12);
+  --shadow-glow-primary:    0 8px 24px rgba(30, 58, 95, 0.18);
+  --shadow-glow-primary-lg: 0 12px 32px rgba(30, 58, 95, 0.25);
+  --shadow-glow-accent:     0 8px 24px rgba(184, 134, 11, 0.20);
+  --shadow-modal:           0 20px 60px rgba(26, 26, 25, 0.15);
+  --shadow-nav:             0 1px 0  #e8e6dc;
+  --shadow-ring:            0 0 0 1px #e8e6dc;
+
+  /* ---- Motion ---- */
+  --ease:        cubic-bezier(0.4, 0, 0.2, 1);  /* default ease-out */
+  --dur-fast:    150ms;
+  --dur:         200ms;
+  --dur-slow:    300ms;
+}
+
+/* ==========================================================================
+   Semantic type styles. Apply these classes (or copy the rules) — they
+   capture how the product *actually* sets type, not just sizes.
+   ========================================================================== */
+
+html, body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: var(--lh-body);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.h-display {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(28px, 5vw, var(--fs-display));
+  line-height: var(--lh-display);
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.h1 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: clamp(24px, 3.5vw, var(--fs-h1));
+  line-height: var(--lh-tight);
+  color: var(--text);
+}
+.h2 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--fs-h2);
+  line-height: var(--lh-tight);
+  color: var(--text);
+}
+.h3 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--fs-h3);
+  line-height: 1.3;
+  color: var(--text);
+}
+.h4 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--fs-h4);
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.p, p {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-relaxed);
+  color: var(--text-tertiary);
+}
+
+.lead {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
+
+.small  { font-size: var(--fs-small); line-height: 1.55; color: var(--text-tertiary); }
+.caption{ font-size: var(--fs-caption); color: var(--text-muted); }
+
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--fs-eyebrow);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+
+.mono, code, kbd, samp {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+/* Numerals — used widely on stat cards & data tables. */
+.num, .tabular { font-variant-numeric: tabular-nums; }
+
+.serif-num {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   Common utility patterns (mirroring globals.css)
+   ========================================================================== */
+
+.glass-panel {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: rgba(250, 249, 245, 0.92);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: #fff;
+  font-weight: 600;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 12px 24px;
+  box-shadow: var(--shadow-glow-primary);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  cursor: pointer;
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: var(--shadow-glow-primary-lg); }
+.btn-primary:active { transform: translateY(0); }
+
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 12px 24px;
+  box-shadow: var(--shadow-glow-accent);
+  transition: transform var(--dur) var(--ease), background var(--dur) var(--ease);
+  cursor: pointer;
+}
+.btn-accent:hover { background: var(--accent-light); transform: translateY(-1px); }
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--dur-slow) var(--ease), transform var(--dur-slow) var(--ease);
+}
+.card.hoverable:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
+}
+
+.input {
+  background: var(--surface-dim);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text);
+  transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.input:focus {
+  outline: none;
+  background: #fff;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.1);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-full);
+  padding: 2px 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.tag-rush   { background: var(--rush-fixed);   color: var(--rush); }
+.tag-stable { background: var(--stable-fixed); color: var(--stable); }
+.tag-safe   { background: var(--safe-fixed);   color: var(--safe); }
+.tag-elite  { background: var(--elite-fixed);  color: var(--elite); }

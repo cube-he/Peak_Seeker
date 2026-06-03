@@ -114,14 +114,14 @@ describe('BatchConfigService', () => {
       ]);
 
       const result = await service.listEligibleForStudent(10, teacherUser);
-      expect(result).toHaveLength(1);
-      expect(result[0].verdict).toBe('ELIGIBLE');
-      expect(result[0].reasons.find((r: any) => r.type === 'SCORE_PASS')).toBeDefined();
-      expect(result[0].batchConfigId).toBe(1);
-      expect(result[0].batchName).toBe('本科批A段');
-      expect(result[0].maxGroupCount).toBe(45);
-      expect(result[0].volunteerMode).toBe('parallel');
-      expect(result[0].admissionOrder).toBe(5);
+      expect(result.batches).toHaveLength(1);
+      expect(result.batches[0].verdict).toBe('ELIGIBLE');
+      expect(result.batches[0].reasons.find((r: any) => r.type === 'SCORE_PASS')).toBeDefined();
+      expect(result.batches[0].batchConfigId).toBe(1);
+      expect(result.batches[0].batchName).toBe('本科批A段');
+      expect(result.batches[0].maxGroupCount).toBe(45);
+      expect(result.batches[0].volunteerMode).toBe('parallel');
+      expect(result.batches[0].admissionOrder).toBe(5);
     });
 
     it('SUBSET 硬资格不满足时 verdict=CONDITIONAL + HARD_SUBSET_FAIL', async () => {
@@ -159,9 +159,9 @@ describe('BatchConfigService', () => {
       ]);
 
       const result = await service.listEligibleForStudent(10, teacherUser);
-      expect(result[0].verdict).toBe('CONDITIONAL');
+      expect(result.batches[0].verdict).toBe('CONDITIONAL');
       expect(
-        result[0].reasons.find((r: any) => r.type === 'HARD_SUBSET_FAIL' && r.subset === '国家专项'),
+        result.batches[0].reasons.find((r: any) => r.type === 'HARD_SUBSET_FAIL' && r.subset === '国家专项'),
       ).toBeDefined();
     });
 
@@ -192,9 +192,9 @@ describe('BatchConfigService', () => {
       ]);
 
       const result = await service.listEligibleForStudent(10, teacherUser);
-      expect(result[0].verdict).toBe('ELIGIBLE');  // 不再 INELIGIBLE
-      expect(result[0].reasons.find((r: any) => r.type === 'SCORE_FAIL')).toBeDefined();
-      expect(result[0].scoreInfo?.gap).toBe(-38);
+      expect(result.batches[0].verdict).toBe('ELIGIBLE');  // 不再 INELIGIBLE
+      expect(result.batches[0].reasons.find((r: any) => r.type === 'SCORE_FAIL')).toBeDefined();
+      expect(result.batches[0].scoreInfo?.gap).toBe(-38);
     });
 
     it('Prisma 查询传 orderBy: admissionOrder asc, 排序交给 DB', async () => {
@@ -224,8 +224,8 @@ describe('BatchConfigService', () => {
       prismaMock.batchLine.findMany.mockResolvedValue([]);
 
       const result = await service.listEligibleForStudent(10, teacherUser);
-      expect(result[0].verdict).toBe('ELIGIBLE');
-      expect(result[0].reasons).toEqual([]);
+      expect(result.batches[0].verdict).toBe('ELIGIBLE');
+      expect(result.batches[0].reasons).toEqual([]);
     });
   });
 
@@ -298,11 +298,11 @@ describe('BatchConfigService', () => {
       ]);
 
       const result = await service.listEligibleForStudent(10, teacherUser);
-      expect(result[0].verdict).toBe('ELIGIBLE');
-      expect(result[0].subsetResults).toHaveLength(2);
-      expect(result[0].subsetResults?.[0].code).toBe('puton');
-      expect(result[0].subsetResults?.[1].code).toBe('guojia');
-      expect(result[0].subsetResults?.[1].references[0].downloadUrl).toBe(
+      expect(result.batches[0].verdict).toBe('ELIGIBLE');
+      expect(result.batches[0].subsetResults).toHaveLength(2);
+      expect(result.batches[0].subsetResults?.[0].code).toBe('puton');
+      expect(result.batches[0].subsetResults?.[1].code).toBe('guojia');
+      expect(result.batches[0].subsetResults?.[1].references[0].downloadUrl).toBe(
         '/attachments/policy/p119.xlsx',
       );
     });

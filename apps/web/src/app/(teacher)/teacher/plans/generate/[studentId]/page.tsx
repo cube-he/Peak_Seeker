@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { pickerApi } from '@/services/picker';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   Alert,
+  AutoComplete,
   Button,
   Descriptions,
   Drawer,
@@ -176,6 +178,12 @@ interface CandidateMajor {
   displayReason?: string | null;
   rankStrategy?: RankStrategyDetail | null;
   isRecommendedAnchor?: boolean;
+  // 临时搜索高亮: true 表示该专业的 majorName / category 命中了当前搜索关键词。
+  // 仅用于 UI 排序(分区内排前)+ 加"搜索匹配"chip, 不影响 anchor / 加入方案的第 1 志愿。
+  matchesKeyword?: boolean;
+  // 意向梯队命中: true 表示该专业属于当前选中的意向梯队 (后端返回)。
+  // 用于分区内排前 + 加绿色"🎯 梯队意向"chip。
+  matchesPreferredTier?: boolean;
 }
 
 interface CandidateMajorSections {
@@ -252,6 +260,9 @@ interface CandidateGroup {
   recommendedAnchorEnrollmentPlanId?: number | null;
   majors: CandidateMajor[];
   majorSections?: CandidateMajorSections | null;
+  // 后端标记: tier 模式下命中梯队但全 RISK (位次差距过大 / 软规则全失败)
+  // 前端据此显示位次差预警, 并禁用 / 警告"加入"按钮
+  allRisk?: boolean;
 }
 
 interface CandidateGroupListResult {
@@ -572,6 +583,15 @@ function CandidateMajorSection({
   addingMajorKey?: number | null;
 }) {
   if (!majors.length) return null;
+  // 视觉排序优先级 (不改 anchor 持久语义):
+  //   1. matchesPreferredTier (意向梯队命中) 排最前
+  //   2. matchesKeyword (搜索命中) 次之
+  const sortedMajors = [...majors].sort((a, b) => {
+    const ap = a.matchesPreferredTier ? 1 : 0;
+    const bp = b.matchesPreferredTier ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return (b.matchesKeyword ? 1 : 0) - (a.matchesKeyword ? 1 : 0);
+  });
   return (
     <div className={styles.majorSection}>
       <div className={styles.majorSectionHead}>
@@ -579,7 +599,7 @@ function CandidateMajorSection({
         <em>{majors.length}</em>
       </div>
       <div className={styles.majorSectionRows}>
-        {majors.map((major) => {
+        {sortedMajors.map((major) => {
           const starClass =
             section === 'RECOMMENDED' ? compareStyles.majorStarRec :
             section === 'RISK' ? compareStyles.majorStarRisk :
@@ -646,6 +666,40 @@ function CandidateMajorSection({
                 })()}
                 {major.isNationalFeature ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagNational}`}>国家特色</span> : null}
                 {major.isSinoForeign ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagSino}`}>中外</span> : null}
+                {major.matchesKeyword ? (
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      padding: '1px 6px',
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: '#fffbe6',
+                      color: '#d48806',
+                      border: '1px solid #ffe58f',
+                    }}
+                    title="临时高亮:命中当前搜索关键词。不影响该专业组的锚定专业(以学生意向为准)。"
+                  >
+                    🔍 搜索匹配
+                  </span>
+                ) : null}
+                {major.matchesPreferredTier ? (
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      padding: '1px 6px',
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: '#f6ffed',
+                      color: '#389e0d',
+                      border: '1px solid #b7eb8f',
+                    }}
+                    title="该专业属于当前选中的意向梯队。"
+                  >
+                    🎯 梯队意向
+                  </span>
+                ) : null}
                 {major.planNotes ? <NotesChip notes={major.planNotes} /> : null}
               </div>
 
@@ -789,6 +843,98 @@ function UniversityBadges({ group }: { group: CandidateGroup }) {
   );
 }
 
+// 院校搜索 AutoComplete: 输入时联想院校名 + 旧名 (renameHistory).
+// 老师输入"川"看到"四川大学"; 输入"北方交通大学"看到"北京交通大学 (原 北方交通大学)"
+function UniversitySearchAutoComplete({
+  value, onChange, onCommit,
+}: { value: string; onChange: (v: string) => void; onCommit: (v: string) => void }) {
+  const { data } = useQuery({
+    queryKey: ['picker-options', 'universities'],
+    queryFn: () => pickerApi.universities(),
+    staleTime: Infinity,
+  });
+  const universities = data ?? [];
+  const options = useMemo(() => {
+    const q = value.trim();
+    if (!q) return [];
+    const lower = q.toLowerCase();
+    // 名称命中优先, renameHistory 命中其次
+    const nameHits: any[] = [];
+    const renameHits: any[] = [];
+    for (const u of universities) {
+      if (u.name.toLowerCase().includes(lower)) {
+        nameHits.push({ value: u.name, label: u.name });
+      } else if (u.renameHistory && u.renameHistory.includes(q)) {
+        renameHits.push({
+          value: u.name,
+          label: `${u.name}  (含旧名: ${u.renameHistory.slice(0, 30)}${u.renameHistory.length > 30 ? '…' : ''})`,
+        });
+      }
+      if (nameHits.length + renameHits.length >= 20) break;
+    }
+    return [...nameHits.slice(0, 12), ...renameHits.slice(0, 8)];
+  }, [value, universities]);
+  return (
+    <span className="pgv2-search" title="按院校名搜索, 输入旧名 (如「北方交通大学」) 也能匹配到改名后的院校">
+      <SearchOutlined />
+      <AutoComplete
+        value={value}
+        options={options}
+        onChange={onChange}
+        onSelect={(v: string) => { onChange(v); onCommit(v); }}
+        onBlur={() => onCommit(value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') onCommit(value); }}
+        placeholder="搜索院校"
+        style={{ width: 220 }}
+        allowClear
+        notFoundContent={null}
+      />
+    </span>
+  );
+}
+
+// 专业搜索 AutoComplete: 输入时联想专业名
+function MajorSearchAutoComplete({
+  value, onChange, onCommit,
+}: { value: string; onChange: (v: string) => void; onCommit: (v: string) => void }) {
+  const { data } = useQuery({
+    queryKey: ['picker-options', 'majors'],
+    queryFn: () => pickerApi.majors(),
+    staleTime: Infinity,
+  });
+  const majors = data ?? [];
+  const options = useMemo(() => {
+    const q = value.trim();
+    if (!q) return [];
+    const lower = q.toLowerCase();
+    const hits: any[] = [];
+    for (const m of majors) {
+      if (m.name.toLowerCase().includes(lower)) {
+        hits.push({ value: m.name, label: m.name });
+        if (hits.length >= 20) break;
+      }
+    }
+    return hits;
+  }, [value, majors]);
+  return (
+    <span className="pgv2-search" title="按专业名搜索, 同时填院校则 AND 组合">
+      <SearchOutlined />
+      <AutoComplete
+        value={value}
+        options={options}
+        onChange={onChange}
+        onSelect={(v: string) => { onChange(v); onCommit(v); }}
+        onBlur={() => onCommit(value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') onCommit(value); }}
+        placeholder="搜索专业"
+        style={{ width: 220 }}
+        allowClear
+        notFoundContent={null}
+      />
+    </span>
+  );
+}
+
 export default function GeneratePlanPage() {
   const params = useParams<{ studentId: string }>();
   const router = useRouter();
@@ -800,10 +946,23 @@ export default function GeneratePlanPage() {
     const existingPlanId = Number(searchParams.get('planId'));
     return Number.isFinite(existingPlanId) && existingPlanId > 0 ? existingPlanId : undefined;
   });
-  const [keyword, setKeyword] = useState('');
-  const [searchText, setSearchText] = useState('');
+  // 院校 / 专业各自独立输入, 同时填则后端 AND 组合
+  const keyword = ''; // 旧参数兼容: UI 不再用单一 keyword, 此变量保留为空避免改动 API/cache key 结构
+  const [keywordUniversity, setKeywordUniversity] = useState('');
+  const [keywordMajor, setKeywordMajor] = useState('');
+  const [searchTextUniversity, setSearchTextUniversity] = useState('');
+  const [searchTextMajor, setSearchTextMajor] = useState('');
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
+  // 意向梯队过滤 (0 = 全部, 1+ = 该梯队). 默认 1 (学生没填意向时自动落到 0)
+  const [appliedTier, setAppliedTier] = useState<number>(() => {
+    const t = Number(searchParams.get('tier'));
+    return Number.isFinite(t) && t >= 0 ? t : 1;
+  });
+  // 是否隐藏已加入当前 plan 的院校组 (默认 true)
+  const [excludeAdded, setExcludeAdded] = useState<boolean>(
+    searchParams.get('excludeAdded') !== 'false',
+  );
   // FilterBar / 趋势 toggle 已下线: pgv2 设计稿用 4 chip 梯度 + showHidden 替代
   // 不持久化的"不考虑"集合（per-session）
   const [hiddenGroupKeys, setHiddenGroupKeys] = useState<Set<string>>(new Set());
@@ -882,13 +1041,17 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, keyword, includeSoftFails, candidateSort, candidatePage],
+    queryKey: ['plan-candidate-groups', planId, keyword, keywordUniversity, keywordMajor, includeSoftFails, candidateSort, candidatePage, appliedTier, excludeAdded],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: candidatePageSize,
       keyword,
+      keywordUniversity,
+      keywordMajor,
       includeSoftFails,
       sort: candidateSort,
+      tier: appliedTier,
+      excludeAdded,
     }),
     enabled: !!planId,
   });
@@ -989,7 +1152,23 @@ export default function GeneratePlanPage() {
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
-  }, [planId, keyword, includeSoftFails, candidateSort]);
+  }, [planId, keyword, keywordUniversity, keywordMajor, includeSoftFails, candidateSort, appliedTier, excludeAdded]);
+
+  // URL 同步: appliedTier / excludeAdded 写回 ?tier=N&excludeAdded=false
+  // (沿用 P1-11 模式: 前进后退 + 分享链接保留状态)
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (appliedTier > 0) params.set('tier', String(appliedTier));
+    else params.delete('tier');
+    if (!excludeAdded) params.set('excludeAdded', 'false');
+    else params.delete('excludeAdded');
+    const next = params.toString();
+    const current = searchParams.toString();
+    if (next !== current) {
+      router.replace(`?${next}`, { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedTier, excludeAdded]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1593,17 +1772,16 @@ export default function GeneratePlanPage() {
 
               {/* —— Region 4: pgv2-toolbar 搜索 + 排序 + 显示已隐藏 —— */}
               <div className="pgv2-toolbar">
-                <span className="pgv2-search">
-                  <SearchOutlined />
-                  <input
-                    placeholder="搜索院校 / 专业组 / 专业"
-                    value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') setKeyword(searchText);
-                    }}
-                  />
-                </span>
+                <UniversitySearchAutoComplete
+                  value={searchTextUniversity}
+                  onChange={setSearchTextUniversity}
+                  onCommit={setKeywordUniversity}
+                />
+                <MajorSearchAutoComplete
+                  value={searchTextMajor}
+                  onChange={setSearchTextMajor}
+                  onCommit={setKeywordMajor}
+                />
                 <select
                   className="pgv2-sort"
                   value={candidateSort}
@@ -1621,15 +1799,57 @@ export default function GeneratePlanPage() {
                   />
                   显示已隐藏 ({hiddenGroupKeys.size})
                 </label>
-                <label className="pgv2-toggle">
+                <label
+                  className="pgv2-toggle"
+                  title="勾选: 显示学费超预算 / 民办性质不符等可权衡的专业 (进风险区);不勾: 这些专业直接从候选隐藏。学生性别/健康/户籍/民族不符的专业总是被剔除(不进候选)"
+                >
                   <input
                     type="checkbox"
                     checked={includeSoftFails}
                     onChange={(event) => setIncludeSoftFails(event.target.checked)}
                   />
-                  显示风险项
+                  显示学费/办学性质不符
+                </label>
+                <label className="pgv2-toggle">
+                  <input
+                    type="checkbox"
+                    checked={!excludeAdded}
+                    onChange={(event) => setExcludeAdded(!event.target.checked)}
+                  />
+                  显示已填报院校专业组
                 </label>
               </div>
+
+              {/* —— 意向梯队过滤 chip (每个 chip 带粗略命中数) —— */}
+              {((candidateGroups as any)?.availableTiers ?? []).length > 0 ? (
+                <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
+                  <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>意向梯队</span>
+                  <button
+                    type="button"
+                    className={`pgv2-tier-chip ${appliedTier === 0 ? 'is-active' : ''}`}
+                    onClick={() => setAppliedTier(0)}
+                  >
+                    全部
+                  </button>
+                  {((candidateGroups as any).availableTiers as Array<{tier: number; majors: string[]; groupCount: number}>).map((t) => {
+                    const head = t.majors[0] ?? '(空)';
+                    const more = t.majors.length > 1 ? ` +${t.majors.length - 1}` : '';
+                    const empty = t.groupCount === 0;
+                    return (
+                      <button
+                        key={t.tier}
+                        type="button"
+                        className={`pgv2-tier-chip ${appliedTier === t.tier ? 'is-active' : ''}`}
+                        onClick={() => setAppliedTier(t.tier)}
+                        title={`${t.majors.join('、')} — 本批次候选 ${t.groupCount} 组`}
+                        style={empty ? { opacity: 0.55 } : undefined}
+                      >
+                        梯队{t.tier}: {head}{more} <span style={{ color: empty ? '#bfbfbf' : '#666', fontWeight: 400 }}>({t.groupCount})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
 
               {/* —— Region 5: pgv2-tier-bar 8 段梯度过滤 chip —— */}
               <div className="pgv2-tier-bar">
@@ -1675,7 +1895,58 @@ export default function GeneratePlanPage() {
                 </div>
               ) : visibleGroups.length === 0 ? (
                 <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                  没有符合条件的候选 · 试试切换梯度或清空关键词
+                  {(() => {
+                    // 优先告诉老师"当前梯队没候选, 别的梯队有"
+                    const tiers = ((candidateGroups as any)?.availableTiers ?? []) as Array<{tier: number; majors: string[]; groupCount: number}>;
+                    const current = tiers.find((t) => t.tier === appliedTier);
+                    const hasOther = tiers.some((t) => t.tier !== appliedTier && t.groupCount > 0);
+                    if (appliedTier > 0 && current && current.groupCount === 0) {
+                      return (
+                        <>
+                          <div>梯队{appliedTier}「{current.majors.join('、')}」在<strong>{plan?.batchName ?? '本批次'}</strong>{candidateGroups?.sourceYear ? `（${candidateGroups.sourceYear}年）` : ''}没有招生院校</div>
+                          <div style={{ marginTop: 8, fontSize: 12 }}>
+                            {hasOther
+                              ? '上方 chip 旁的数字是各梯队的候选数。点 [全部] 或有数字的梯队查看候选'
+                              : '所有梯队在本批次都无候选。可考虑切换批次或调整意向'}
+                          </div>
+                        </>
+                      );
+                    }
+                    if (keyword || keywordUniversity || keywordMajor) {
+                      const parts: string[] = [];
+                      if (keywordUniversity) parts.push(`院校「${keywordUniversity}」`);
+                      if (keywordMajor) parts.push(`专业「${keywordMajor}」`);
+                      if (!parts.length && keyword) parts.push(`「${keyword}」`);
+                      // 当前选了具体梯队时, 搜索可能被 tier 排除 — 提示切到「全部」
+                      const hint = appliedTier > 0
+                        ? '试试点上方 [全部] 梯队 chip,该院校 / 专业可能不在当前梯队的招生计划里'
+                        : '可能该院校 / 专业不在本批次 (' + (plan?.batchName ?? '当前批次') + ') + 选科范围内,或换个词试试';
+                      return (
+                        <>
+                          {parts.join(' + ')} 没匹到候选
+                          <div style={{ marginTop: 8, fontSize: 12 }}>{hint}</div>
+                        </>
+                      );
+                    }
+                    // tier > 0 + groupCount > 0 + visible = 0: 说明被前端 8 段梯度 chip 或已隐藏过滤掉了
+                    if (appliedTier > 0 && current && current.groupCount > 0) {
+                      return (
+                        <>
+                          梯队{appliedTier} 有 {current.groupCount} 个候选,但被当前梯度筛选 / 已隐藏过滤掉
+                          <div style={{ marginTop: 8, fontSize: 12 }}>试试点上方[全部]梯度 chip 或勾「显示已隐藏」</div>
+                        </>
+                      );
+                    }
+                    if (excludeAdded) {
+                      return (
+                        <>
+                          剩余候选都已加入方案
+                          <div style={{ marginTop: 8, fontSize: 12 }}>勾选「显示已填报院校专业组」可查看已加入的</div>
+                        </>
+                      );
+                    }
+                    return <>没有符合条件的候选 · 试试切换梯度或清空关键词</>;
+                  })()}
                 </div>
               ) : (
                 <>
@@ -1715,8 +1986,45 @@ export default function GeneratePlanPage() {
                           onTabChange={(tab) => setGroupExpandTab(group.groupKey, tab)}
                           renderExpandedContent={(tab) => {
                             if (tab === 'majors') {
+                              // 全 RISK 组的位次差预警: 让老师一眼看到学生位次 vs 历史最低位次的差距
+                              const allRiskBanner = group.allRisk ? (() => {
+                                const stu = studentRankForDecision;
+                                const tierHit = group.majors.find((m: any) => m.matchesPreferredTier) ?? group.majors[0];
+                                const histRank = tierHit?.majorMinRank;
+                                const histScore = tierHit?.majorMinScore;
+                                const ratio = stu && histRank ? Math.round((stu / histRank) * 10) / 10 : null;
+                                return (
+                                  <div style={{
+                                    margin: '8px 0',
+                                    padding: '10px 12px',
+                                    background: '#fff1f0',
+                                    border: '1px solid #ffa39e',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    lineHeight: 1.6,
+                                  }}>
+                                    <div style={{ fontWeight: 600, color: '#cf1322', marginBottom: 4 }}>
+                                      ⚠ 位次差距过大,该梯队意向专业本批次无可推荐候选
+                                    </div>
+                                    <div style={{ color: '#595959' }}>
+                                      学生位次 <strong>{stu?.toLocaleString() ?? '—'}</strong>
+                                      {tierHit ? (
+                                        <>
+                                          {' '}vs {tierHit.majorName} 历史最低{' '}
+                                          <strong>{histScore ?? '—'}分 / 位次 {histRank?.toLocaleString() ?? '—'}</strong>
+                                          {ratio ? <span style={{ marginLeft: 6, color: '#cf1322' }}>(学生位次约为 {ratio} 倍)</span> : null}
+                                        </>
+                                      ) : null}
+                                    </div>
+                                    <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 4 }}>
+                                      下方为该专业组详细录取数据,可参考。如需加入请先与学生沟通调整意向。
+                                    </div>
+                                  </div>
+                                );
+                              })() : null;
                               return (
                                 <>
+                                  {allRiskBanner}
                                   <CandidateMajorSection title="推荐填写" section="RECOMMENDED" majors={majorSections.recommended} group={group} onAdd={addCandidateGroup} />
                                   <CandidateMajorSection title="可备选" section="BACKUP" majors={majorSections.backup} group={group} onAdd={addCandidateGroup} />
                                   <CandidateMajorSection title="风险/不建议" section="RISK" majors={majorSections.risk} group={group} onAdd={addCandidateGroup} />

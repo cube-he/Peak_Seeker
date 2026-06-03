@@ -242,7 +242,7 @@ describe('PlanCandidateService', () => {
     expect(prisma.enrollmentPlan.findMany.mock.calls[0][0].take).toBe(300);
   });
 
-  it('PASS 排在 SOFT_FAIL 前', async () => {
+  it('PASS 排在 SOFT_FAIL 前 (用学费超预算演示 SOFT_FAIL)', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: '本科批A段', batchConfigId: 5,
       year: 2026,
@@ -250,15 +250,16 @@ describe('PlanCandidateService', () => {
     prisma.studentProfile.findUnique.mockResolvedValue({
       id: 10, province: '四川', examType: 'PHYSICS', provincialRank: 30000,
       colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
-      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      // tuitionBudget LOW (< 6000) → 5000 OK, 30000 超预算 → SOFT_FAIL
+      isRural: false, tuitionBudget: 'LOW', acceptSinoForeign: true,
       acceptPrivate: 'RELAXED', user: { gender: '男', ethnicity: '汉族' },
     });
     prisma.enrollmentPlan.findMany.mockResolvedValue([
       { id: 100, universityId: 1, majorId: 1, university: { name: 'A' }, major: { name: 'M1', code: '0805', notes: '' },
         recruitType: '普通类', isSinoForeign: false, planNotes: '', tuition: 5000,
         majorCode: '0805', subjects: '物理', batch: '本科批A段', groupCode: 'G1', majorName: 'M1' },
-      { id: 101, universityId: 2, majorId: 2, university: { name: 'B' }, major: { name: 'M2', code: '1001', notes: '本专业仅限女生报考' },
-        recruitType: '普通类', isSinoForeign: false, planNotes: '', tuition: 5000,
+      { id: 101, universityId: 2, majorId: 2, university: { name: 'B' }, major: { name: 'M2', code: '1001', notes: '' },
+        recruitType: '普通类', isSinoForeign: false, planNotes: '', tuition: 30000,
         majorCode: '1001', subjects: '物理', batch: '本科批A段', groupCode: 'G2', majorName: 'M2' },
     ]);
     prisma.admissionRecord.findMany.mockResolvedValue([]);
@@ -433,6 +434,250 @@ describe('PlanCandidateService', () => {
 
     expect(result.groups).toHaveLength(0);
     expect(result.total).toBe(0);
+  });
+
+  // 回归: keyword 命中专业时, 同一专业组里其余专业也要展示, 不能只回命中行
+  // (旧实现把 keyword OR 加到 EnrollmentPlan 行级 where, 导致同组非命中专业被丢)
+  it('keyword 命中专业时, 同一专业组里的其余专业一同返回', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: [], preferredMajorCategories: [], excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 2 } }]);
+    prisma.enrollmentPlan.findMany
+      // 1) keyword 预查询: 找到命中行所属的 group key 集合 (distinct)
+      .mockResolvedValueOnce([
+        { universityId: 1, groupCode: 'G1', batch: 'Batch A', recruitType: 'General', subjects: 'Physics' },
+      ])
+      // 2) 主查询: 按 group key OR 拉回该 group 的全部专业行 (包含未命中 keyword 的 CS)
+      .mockResolvedValueOnce([
+        {
+          id: 100, universityId: 1, majorId: 11, university: { id: 1, name: 'Alpha University', code: 'A01' },
+          major: { id: 11, name: 'Computer Science', code: '080901', category: 'Engineering' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '080901', majorName: 'Computer Science', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: 'Physics group', groupPlanCount: 30,
+          planCount: 10,
+        },
+        {
+          id: 101, universityId: 1, majorId: 12, university: { id: 1, name: 'Alpha University', code: 'A01' },
+          major: { id: 12, name: 'Automation', code: '080801', category: 'Engineering' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5200,
+          majorCode: '080801', majorName: 'Automation', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: 'Physics group', groupPlanCount: 30,
+          planCount: 20,
+        },
+      ])
+      // 3) previous plans 查询
+      .mockResolvedValueOnce([]);
+    // 给两个专业各加一条 admission record, 让 splitMajorSections 至少出 recommended/backup,
+    // 否则 group 会被 "majorSections.recommended.length === 0 && backup.length === 0 → return null" 丢弃
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      {
+        universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G1', majorCode: '080901', majorName: 'Computer Science', year: 2025,
+        groupMinRank: 10000, groupMinScore: 610, groupAdmissionCount: 28,
+        majorMinRank: 9500, majorMinScore: 615, majorAdmissionCount: 9,
+      },
+      {
+        universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G1', majorCode: '080801', majorName: 'Automation', year: 2025,
+        groupMinRank: 10000, groupMinScore: 610, groupAdmissionCount: 28,
+        majorMinRank: 9800, majorMinScore: 605, majorAdmissionCount: 18,
+      },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH', keyword: 'Automation',
+    });
+
+    // 验证: 预查询用 OR 含 university/major/majorName/renameHistory (老师不搜 groupName), distinct 5 字段
+    // 老 keyword 兼容路径 OR 合并匹配 (新接口走 AND, 见专门测试)
+    const distinctCall = prisma.enrollmentPlan.findMany.mock.calls[0][0];
+    expect(distinctCall.where.OR).toEqual([
+      { university: { name: { contains: 'Automation' } } },
+      { university: { renameHistory: { contains: 'Automation' } } },
+      { major: { name: { contains: 'Automation' } } },
+      { majorName: { contains: 'Automation' } },
+    ]);
+    expect(distinctCall.distinct).toEqual(['universityId', 'groupCode', 'batch', 'recruitType', 'subjects']);
+
+    // 验证: 主查询用 group key OR (无 keyword OR), 限制只拉命中 group 的行
+    const mainCall = prisma.enrollmentPlan.findMany.mock.calls[1][0];
+    expect(mainCall.where.OR).toEqual([
+      { universityId: 1, groupCode: 'G1', batch: 'Batch A', recruitType: 'General', subjects: 'Physics' },
+    ]);
+
+    // 最终结果: 专业组里同时有 Automation (命中) 和 Computer Science (未命中但同组)
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].majorCount).toBe(2);
+    expect(result.groups[0].majors.map((m: any) => m.majorName).sort()).toEqual(['Automation', 'Computer Science']);
+
+    // 搜索是临时的: 不改变 displaySection / anchor 持久语义, 只给命中行加 matchesKeyword=true
+    // 学生没填意向, 两个专业都进 RECOMMENDED (PASS + 位次可参考)
+    const automationMajor = result.groups[0].majors.find((m: any) => m.majorName === 'Automation');
+    const csMajor = result.groups[0].majors.find((m: any) => m.majorName === 'Computer Science');
+    expect(automationMajor.matchesKeyword).toBe(true);
+    expect(csMajor.matchesKeyword).toBe(false);
+    // displayReason 仍按原意向逻辑, 不被 keyword 篡改
+    expect(automationMajor.displayReason).not.toContain('搜索');
+    expect(automationMajor.displayReason).not.toContain('Automation');
+  });
+
+  it('keyword 命中 0 个专业组时, 短路返回空, 不做主查询', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: [], preferredMajorCategories: [], excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 0 } }]);
+    // 预查询命中 0 个 group
+    prisma.enrollmentPlan.findMany.mockResolvedValueOnce([]);
+
+    const result: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH', keyword: '不存在的关键词',
+    });
+
+    expect(result.groups).toHaveLength(0);
+    expect(result.total).toBe(0);
+    // 只调用了一次 (预查询), 没有进主查询 / previous / admissionRecord
+    expect(prisma.enrollmentPlan.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.admissionRecord.findMany).not.toHaveBeenCalled();
+  });
+
+  // T5 spec: tier 过滤 — 整个 group 至少含该梯队任一专业, 否则隐藏整组;
+  // 组内梯队专业进 RECOMMENDED + matchesPreferredTier=true, 非梯队专业进 BACKUP
+  it('tier=1 时, 只返回含梯队 1 任一专业的院校组', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+      planItems: [],
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: [
+        { tier: 1, majors: ['Automation'] },
+        { tier: 2, majors: ['Computer Science'] },
+      ],
+      preferredMajorCategories: [], excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 3 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        // G1 (Alpha): 含 Automation (梯队1) + Math (非梯队)
+        { id: 100, universityId: 1, majorId: 11, university: { id: 1, name: 'Alpha' },
+          major: { id: 11, name: 'Automation', code: '080801', category: 'Engineering' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '080801', majorName: 'Automation', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: 'G1', groupPlanCount: 20, planCount: 10 },
+        { id: 101, universityId: 1, majorId: 12, university: { id: 1, name: 'Alpha' },
+          major: { id: 12, name: 'Math', code: '0701', category: 'Science' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '0701', majorName: 'Math', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: 'G1', groupPlanCount: 20, planCount: 10 },
+        // G2 (Beta): 只含 Computer Science (梯队2), 应被 tier=1 过滤掉
+        { id: 200, universityId: 2, majorId: 21, university: { id: 2, name: 'Beta' },
+          major: { id: 21, name: 'Computer Science', code: '0809', category: 'Engineering' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '0809', majorName: 'Computer Science', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G2', groupName: 'G2', groupPlanCount: 10, planCount: 10 },
+      ])
+      .mockResolvedValueOnce([]);
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      { universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G1', majorCode: '080801', majorName: 'Automation', year: 2025,
+        groupMinRank: 10000, groupMinScore: 610, majorMinRank: 9800, majorMinScore: 605, majorAdmissionCount: 10 },
+      { universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G1', majorCode: '0701', majorName: 'Math', year: 2025,
+        groupMinRank: 10000, groupMinScore: 610, majorMinRank: 9900, majorMinScore: 608, majorAdmissionCount: 10 },
+      { universityId: 2, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G2', majorCode: '0809', majorName: 'Computer Science', year: 2025,
+        groupMinRank: 10000, groupMinScore: 610, majorMinRank: 9700, majorMinScore: 615, majorAdmissionCount: 10 },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH', tier: 1,
+    });
+
+    // G2 被过滤 (只含 Computer Science, 不在梯队1)
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].universityName).toBe('Alpha');
+    // G1: Automation (梯队1) 进 RECOMMENDED, Math 进 BACKUP
+    expect(result.groups[0].majorSections.recommended.map((m: any) => m.majorName)).toEqual(['Automation']);
+    expect(result.groups[0].majorSections.backup.map((m: any) => m.majorName)).toEqual(['Math']);
+    expect(result.groups[0].recommendedAnchorEnrollmentPlanId).toBe(100);
+    // matchesPreferredTier 标记
+    const auto = result.groups[0].majors.find((m: any) => m.majorName === 'Automation');
+    const math = result.groups[0].majors.find((m: any) => m.majorName === 'Math');
+    expect(auto.matchesPreferredTier).toBe(true);
+    expect(math.matchesPreferredTier).toBe(false);
+    // 返回 availableTiers 给前端 chip 渲染, 每个 tier 带 groupCount (粗略命中数)
+    // G1 含 Automation (tier 1), G2 含 Computer Science (tier 2)
+    expect(result.availableTiers).toEqual([
+      { tier: 1, majors: ['Automation'], groupCount: 1 },
+      { tier: 2, majors: ['Computer Science'], groupCount: 1 },
+    ]);
+    expect(result.appliedTier).toBe(1);
+  });
+
+  // T6 spec: excludeAdded — 已加入当前 plan 的院校组隐藏
+  it('excludeAdded=true (默认) 时, 过滤掉已加入 plan 的院校组', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+      planItems: [{ universityId: 1, groupCode: 'G1' }], // G1 已加入
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: [], preferredMajorCategories: [], excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 2 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        // G1: 已加入, 应被过滤
+        { id: 100, universityId: 1, majorId: 11, university: { id: 1, name: 'Alpha' },
+          major: { id: 11, name: 'A', code: '01', category: 'X' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '01', majorName: 'A', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: 'G1', groupPlanCount: 10, planCount: 10 },
+        // G2: 未加入, 保留
+        { id: 200, universityId: 2, majorId: 21, university: { id: 2, name: 'Beta' },
+          major: { id: 21, name: 'B', code: '02', category: 'Y' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '02', majorName: 'B', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G2', groupName: 'G2', groupPlanCount: 10, planCount: 10 },
+      ])
+      .mockResolvedValueOnce([]);
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      { universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G1', majorCode: '01', majorName: 'A', year: 2025,
+        groupMinRank: 10000, groupMinScore: 600, majorMinRank: 9800, majorMinScore: 600, majorAdmissionCount: 10 },
+      { universityId: 2, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G2', majorCode: '02', majorName: 'B', year: 2025,
+        groupMinRank: 10000, groupMinScore: 600, majorMinRank: 9800, majorMinScore: 600, majorAdmissionCount: 10 },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH', excludeAdded: true,
+    });
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].universityName).toBe('Beta');
   });
 
   it('uses score-segment rank for fallback-year candidate groups when stored rank is impossible', async () => {

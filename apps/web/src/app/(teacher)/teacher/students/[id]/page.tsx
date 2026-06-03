@@ -19,6 +19,7 @@ import { useProvinceOptions } from '@/components/student/picker/options/useProvi
 import { useCityOptions } from '@/components/student/picker/options/useCityOptions';
 import { useUniversityOptions } from '@/components/student/picker/options/useUniversityOptions';
 import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
+import PreferredMajorTierFormItem from '@/components/student/preferred-majors/PreferredMajorTierFormItem';
 import { getRegionCascaderOptions, type CascaderOption } from '@/data/student-options';
 import { fieldLabel } from '@/components/student/stage-fields';
 
@@ -1248,10 +1249,10 @@ function PreferenceFields() {
           <Select {...pickerSelectProps(cityOptions)} placeholder="选择城市" />
         </Form.Item>
       </div>
-      <div className="field">
-        <label>意向专业</label>
+      <div className="field sd-field-full">
+        <label>意向专业 (梯队)</label>
         <Form.Item name="preferredMajors" noStyle>
-          <Select {...pickerSelectProps(majorOptions)} loading={isMajorLoading} placeholder="搜索专业" />
+          <PreferredMajorTierFormItem options={majorOptions ?? []} isLoading={isMajorLoading} />
         </Form.Item>
       </div>
       <div className="field">

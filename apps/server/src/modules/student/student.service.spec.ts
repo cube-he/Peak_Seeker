@@ -688,6 +688,10 @@ describe('StudentService', () => {
           id: 1,
           teacherId: 5,
           intakeStatus: 'SUBMITTED',
+          examType: 'PHYSICS',
+          county: '叙永县',
+          isRural: true,
+          user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' },
         });
         prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'VERIFIED' });
 
@@ -715,7 +719,7 @@ describe('StudentService', () => {
       });
 
       it('校验失败: preferredBatches 为空数组 → BadRequest', async () => {
-        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED' });
+        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED', examType: 'PHYSICS', county: '叙永县', isRural: true, user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' } });
         await expect(
           (service as any).confirmBatches(1, {
             teacherProfileId: 5,
@@ -726,7 +730,7 @@ describe('StudentService', () => {
       });
 
       it('校验失败: preferredBatches 包含未知批次 → BadRequest', async () => {
-        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED' });
+        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED', examType: 'PHYSICS', county: '叙永县', isRural: true, user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' } });
         await expect(
           (service as any).confirmBatches(1, {
             teacherProfileId: 5,
@@ -737,7 +741,7 @@ describe('StudentService', () => {
       });
 
       it('校验失败: 学生 intakeStatus = DRAFT → Conflict', async () => {
-        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'DRAFT' });
+        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'DRAFT', examType: 'PHYSICS', county: '叙永县', isRural: true, user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' } });
         await expect(
           (service as any).confirmBatches(1, {
             teacherProfileId: 5,
@@ -748,7 +752,7 @@ describe('StudentService', () => {
       });
 
       it('权限: 非所属老师 → Forbidden', async () => {
-        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED' });
+        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED', examType: 'PHYSICS', county: '叙永县', isRural: true, user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' } });
         await expect(
           (service as any).confirmBatches(1, {
             teacherProfileId: 99,

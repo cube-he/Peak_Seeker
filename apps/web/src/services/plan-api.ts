@@ -17,7 +17,9 @@ export interface CreatePlanForStudentParams {
 export interface CandidateListParams {
   page?: number;
   pageSize?: number;
-  keyword?: string;
+  keyword?: string; // 旧接口兼容: 院校/专业合并搜索
+  keywordUniversity?: string; // 院校名搜索 (新拆分)
+  keywordMajor?: string; // 专业名搜索 (新拆分); 同时填则 AND 组合
   includeSoftFails?: boolean;
 }
 
@@ -33,6 +35,10 @@ export type CandidateGroupSort =
 
 export interface CandidateGroupListParams extends CandidateListParams {
   sort?: CandidateGroupSort;
+  // 意向梯队过滤 (0 / undefined = 不过滤, 1+ = 该梯队号)
+  tier?: number;
+  // 是否隐藏已加入当前 plan 的院校组 (默认 true)
+  excludeAdded?: boolean;
 }
 
 export interface TeacherPlanListParams {
@@ -98,8 +104,12 @@ export const planApi = {
         page: params?.page ?? 1,
         pageSize: params?.pageSize ?? 20,
         keyword: params?.keyword?.trim() || undefined,
+        keywordUniversity: params?.keywordUniversity?.trim() || undefined,
+        keywordMajor: params?.keywordMajor?.trim() || undefined,
         includeSoftFails: params?.includeSoftFails,
         sort: params?.sort ?? 'MAJOR_MATCH',
+        tier: params?.tier,
+        excludeAdded: params?.excludeAdded,
       },
     }) as any;
   },

@@ -1,6 +1,6 @@
 import api from './api';
 
-export interface UniversityPickerOption { id: number; code: string | null; name: string; }
+export interface UniversityPickerOption { id: number; code: string | null; name: string; renameHistory?: string | null; }
 export interface MajorPickerOption { id: number; code: string | null; name: string; }
 export interface BatchPickerOption { code: string; name: string; order: number; }
 

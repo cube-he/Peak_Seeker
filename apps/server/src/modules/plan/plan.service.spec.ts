@@ -79,7 +79,10 @@ describe('PlanService workflow gates', () => {
       id: 10,
       teacherId: 5,
       intakeStatus: 'VERIFIED',
-      user: { realName: '小王', username: 'student' },
+      examType: 'PHYSICS',
+      county: '叙永县',
+      isRural: true,
+      user: { realName: '小王', username: 'student', birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' },
     });
     prisma.batchConfig.findUnique.mockResolvedValue({
       id: 22,
@@ -240,7 +243,10 @@ describe('PlanService workflow gates', () => {
         teacherId: 5,
         intakeStatus: 'VERIFIED',
         preferredBatches,
-        user: { realName: '小王', username: 'student' },
+        examType: 'PHYSICS',
+        county: '叙永县',
+        isRural: true,
+        user: { realName: '小王', username: 'student', birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' },
       });
       prisma.batchConfig.findUnique.mockResolvedValue({
         id: 22,

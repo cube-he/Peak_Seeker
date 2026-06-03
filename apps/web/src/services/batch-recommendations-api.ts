@@ -47,9 +47,15 @@ export interface BatchRecommendation {
   scoreInfo?: ScoreInfo;
 }
 
+export interface IntakeDataGap {
+  ok: boolean;
+  missing: Array<{ field: string; label: string }>;
+}
+
 export interface BatchRecommendationsResponse {
   batches: BatchRecommendation[];
   batchesConfirmedAt: string | null;
+  intakeGap: IntakeDataGap;
 }
 
 // axios 响应拦截器 (services/api.ts) 已 unwrap 成 response.data,
@@ -57,15 +63,16 @@ export interface BatchRecommendationsResponse {
 // AxiosResponse<T>, 所以保持 `as any` 与现有 service 一致.
 export const batchRecommendationsApi = {
   async fetch(studentId: number): Promise<BatchRecommendationsResponse> {
-    // 复用现有 eligible-batches 端点 + 学生 lock 状态
-    const batches = (await api.get<BatchRecommendation[]>(
+    // 服务端 eligible-batches 现在返回 { batches, intakeGap }
+    const eb = (await api.get<{ batches: BatchRecommendation[]; intakeGap: IntakeDataGap }>(
       `/students/${studentId}/eligible-batches`,
-    )) as unknown as BatchRecommendation[];
+    )) as unknown as { batches: BatchRecommendation[]; intakeGap: IntakeDataGap };
     const student = (await api.get<{ batchesConfirmedAt: string | null }>(
       `/students/${studentId}`,
     )) as unknown as { batchesConfirmedAt: string | null };
     return {
-      batches,
+      batches: eb.batches,
+      intakeGap: eb.intakeGap,
       batchesConfirmedAt: student.batchesConfirmedAt,
     };
   },

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { Col, Divider, Form, Row } from 'antd';
 import AutoSaveSelect from '../auto-save/AutoSaveSelect';
 import AutoSaveRadio from '../auto-save/AutoSaveRadio';
@@ -10,6 +11,12 @@ import { useMajorCategoryOptions } from '../picker/options/useMajorCategoryOptio
 import { useUniversityOptions } from '../picker/options/useUniversityOptions';
 import { useMajorOptions } from '../picker/options/useMajorOptions';
 import { useBatchOptions } from '../picker/options/useBatchOptions';
+import PreferredMajorTierEditor, {
+  normalize as normalizeTiers,
+  coerceTierShape,
+} from '../preferred-majors/PreferredMajorTierEditor';
+import type { PreferredMajorTier } from '../preferred-majors/types';
+import { useAutoSave } from '../auto-save/useAutoSave';
 
 interface Props {
   profile: Record<string, any>;
@@ -22,6 +29,37 @@ const PRIORITY_MODE = [
   { label: '均衡', value: 'BALANCED' },
 ];
 
+// 意向专业梯队编辑 wrapper:
+//   - 兼容旧 shape (string[]) → 自动按数组顺序拆梯队 (1 个一梯队)
+//   - 接 auto-save: onChange 后 normalize 再 commit (debounced 1.5s)
+function PreferredMajorTiersField({ defaultValue }: { defaultValue: unknown }) {
+  const { commit } = useAutoSave('preferredMajors');
+  const { data: options, isLoading } = useMajorOptions();
+
+  // value 兼容: 旧 shape (string[]) 自动按数组顺序拆梯队 — 共用 coerceTierShape helper
+  const initial: PreferredMajorTier[] = useMemo(
+    () => coerceTierShape(defaultValue),
+    [JSON.stringify(defaultValue)],
+  );
+
+  const [tiers, setTiers] = useState<PreferredMajorTier[]>(initial);
+  useEffect(() => { setTiers(initial); }, [initial]);
+
+  const handleChange = (next: PreferredMajorTier[]) => {
+    setTiers(next);
+    commit(normalizeTiers(next));
+  };
+
+  return (
+    <PreferredMajorTierEditor
+      value={tiers}
+      options={options ?? []}
+      onChange={handleChange}
+      isLoading={isLoading}
+    />
+  );
+}
+
 export default function PreferenceSection({ profile }: Props) {
   return (
     <Form layout="horizontal" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }} size="small">
@@ -29,7 +67,7 @@ export default function PreferenceSection({ profile }: Props) {
         <Col xs={24} md={12}><Form.Item label="意向省份"><AutoSavePicker fieldKey="preferredProvinces" defaultValue={profile.preferredProvinces ?? []} optionsHook={useProvinceOptions} placeholder="搜索省份" /></Form.Item></Col>
         <Col xs={24} md={12}><Form.Item label="意向城市"><AutoSavePicker fieldKey="preferredCities" defaultValue={profile.preferredCities ?? []} optionsHook={useCityOptions} placeholder="搜索城市" /></Form.Item></Col>
         <Col xs={24} md={12}><Form.Item label="意向院校"><AutoSavePicker fieldKey="preferredUniversities" defaultValue={profile.preferredUniversities ?? []} optionsHook={useUniversityOptions} placeholder="搜索院校" /></Form.Item></Col>
-        <Col xs={24} md={12}><Form.Item label="意向专业"><AutoSavePicker fieldKey="preferredMajors" defaultValue={profile.preferredMajors ?? []} optionsHook={useMajorOptions} placeholder="搜索专业" /></Form.Item></Col>
+        <Col xs={24}><Form.Item label="意向专业" labelCol={{ span: 3 }} wrapperCol={{ span: 21 }}><PreferredMajorTiersField defaultValue={profile.preferredMajors} /></Form.Item></Col>
         <Col xs={24} md={12}><Form.Item label="专业类别"><AutoSavePicker fieldKey="preferredMajorCategories" defaultValue={profile.preferredMajorCategories ?? []} optionsHook={useMajorCategoryOptions} placeholder="搜索专业类别" /></Form.Item></Col>
         <Col xs={24} md={12}><Form.Item label="意向批次"><AutoSavePicker fieldKey="preferredBatches" defaultValue={profile.preferredBatches ?? []} optionsHook={useBatchOptions} placeholder="搜索批次" /></Form.Item></Col>
         <Col xs={24}><Form.Item label="优先模式" labelCol={{ span: 3 }} wrapperCol={{ span: 21 }}><AutoSaveRadio fieldKey="priorityMode" options={PRIORITY_MODE} defaultValue={profile.priorityMode ?? null} /></Form.Item></Col>

@@ -12,6 +12,7 @@ import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
 import { Role, StudentStatus, Prisma } from '@prisma/client';
 import { ProgressService } from './progress.service';
+import { validateIntakeForBatchSelection } from '../batch-config/batch-config.service';
 import {
   TEACHER_ONLY_FIELDS,
   FIELD_TO_PROVENANCE_GROUP,
@@ -834,7 +835,7 @@ export class StudentService {
     }
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
-      select: { id: true, teacherId: true, intakeStatus: true },
+      include: { user: { select: { birthDate: true, ethnicity: true, gender: true } } },
     });
     if (!student) throw new NotFoundException('学生不存在');
     if (opts.teacherProfileId !== undefined && student.teacherId !== opts.teacherProfileId) {
@@ -842,6 +843,13 @@ export class StudentService {
     }
     if (student.intakeStatus !== 'SUBMITTED' && student.intakeStatus !== 'NEEDS_CHANGES') {
       throw new ConflictException('学生尚未提交资料或已确认');
+    }
+    // 关键资料缺失则禁止确认 (推荐 + 方案制作的前提)
+    const intakeGap = validateIntakeForBatchSelection(student);
+    if (!intakeGap.ok) {
+      throw new BadRequestException(
+        `学生关键资料未完成, 请催学生补完后再确认批次: ${intakeGap.missing.map(m => m.label).join(', ')}`,
+      );
     }
     return this.prisma.studentProfile.update({
       where: { id: studentId },
