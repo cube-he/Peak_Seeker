@@ -396,10 +396,23 @@ export default function StudentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['student-detail', studentId] });
     },
     onError: (error: any) => {
-      if (error?.response?.status === 409) {
+      // 把后端真实回错原样打到 console, 便于排查 (老师 F12 截图给我).
+      // NestJS ValidationPipe 报错 message 是数组, 需要展平成可读字符串.
+      const data = error?.response?.data;
+      const status = error?.response?.status;
+      console.error('[saveMutation] PUT 失败', { status, data, error });
+      const rawMsg = data?.message;
+      const friendlyMsg = Array.isArray(rawMsg)
+        ? rawMsg.slice(0, 3).join('; ')
+        : (typeof rawMsg === 'string' ? rawMsg : '');
+      if (status === 409) {
         message.error('数据已被其他人修改，请刷新后重试');
+      } else if (status === 400 && friendlyMsg) {
+        message.error(`保存失败: ${friendlyMsg}`);
+      } else if (friendlyMsg) {
+        message.error(friendlyMsg);
       } else {
-        message.error(error?.response?.data?.message ?? '保存失败');
+        message.error(`保存失败 (${status ?? 'network'})`);
       }
     },
   });
