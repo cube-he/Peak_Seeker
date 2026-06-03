@@ -165,7 +165,7 @@ describe('BatchConfigService', () => {
       ).toBeDefined();
     });
 
-    it('SCORE_FAIL 时 verdict=INELIGIBLE', async () => {
+    it('SCORE_FAIL 时 verdict 不再 INELIGIBLE (新方案: 分数仅作展示)', async () => {
       prismaMock.studentProfile.findUnique.mockResolvedValue({
         ...baseStudent,
         totalScore: 400,
@@ -192,8 +192,9 @@ describe('BatchConfigService', () => {
       ]);
 
       const result = await service.listEligibleForStudent(10, teacherUser);
-      expect(result[0].verdict).toBe('INELIGIBLE');
+      expect(result[0].verdict).toBe('ELIGIBLE');  // 不再 INELIGIBLE
       expect(result[0].reasons.find((r: any) => r.type === 'SCORE_FAIL')).toBeDefined();
+      expect(result[0].scoreInfo?.gap).toBe(-38);
     });
 
     it('Prisma 查询传 orderBy: admissionOrder asc, 排序交给 DB', async () => {

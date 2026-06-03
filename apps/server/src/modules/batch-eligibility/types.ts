@@ -25,6 +25,18 @@ export interface BatchEligibilityResult {
   verdict: BatchEligibilityVerdict;
   reasons: EligibilityReason[];
   subsetResults?: SubsetResult[];  // V2 subsets 判定
+  scoreInfo?: ScoreInfo;  // 分数信息(仅展示, 不影响 verdict, 分数推荐由 plan-candidate 候选池接手)
+}
+
+export interface ScoreInfo {
+  studentScore: number | null;       // 学生总分
+  lineScore: number | null;          // 批次/特殊/专科线
+  lineType: 'BATCH_LINE' | 'SPECIAL_LINE' | 'ZHUANKE_LINE';
+  lineMissing: boolean;              // 当年分数线数据是否缺失
+  gap: number | null;                // studentScore - lineScore, null 时数据缺失或分数缺
+  passesLine: boolean | null;        // true=过线, false=不过, null=数据缺失
+  leniency?: number;                 // 容错(本科提前批B 段 20)
+  withinLeniency: boolean | null;    // 在容错内 (不过线但差不超 leniency)
 }
 
 // eligibilityRules JSON 内部结构 (存入 batch_configs.eligibility_rules)

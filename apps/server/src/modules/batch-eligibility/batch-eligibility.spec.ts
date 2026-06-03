@@ -32,24 +32,28 @@ describe('judgeBatchEligibility', () => {
     expect(r.reasons.find(x => x.type === 'SCORE_PASS')).toBeDefined();
   });
 
-  it('总分 < 本科线 + 无容错 → INELIGIBLE + SCORE_FAIL', () => {
+  it('总分 < 本科线 + 无容错 → SCORE_FAIL 但 verdict 不变 (只标 scoreInfo)', () => {
     const rules: EligibilityRulesJson = {
       scoreFloor: { type: 'BATCH_LINE' },
       examTypes: ['物理'], volunteerMode: 'PARALLEL', hardEligibility: [],
     };
     const r = judgeBatchEligibility({ ...baseStudent, totalScore: 400 }, baseBatchConfig({ eligibilityRules: rules }), line(438));
-    expect(r.verdict).toBe('INELIGIBLE');
+    expect(r.verdict).toBe('ELIGIBLE'); // 不再 INELIGIBLE
     expect(r.reasons.find(x => x.type === 'SCORE_FAIL')).toBeDefined();
+    expect(r.scoreInfo?.passesLine).toBe(false);
+    expect(r.scoreInfo?.gap).toBe(-38);
   });
 
-  it('总分 < 本科线 但在容错内 → CONDITIONAL + SCORE_DOWN_TOLERANCE', () => {
+  it('总分 < 本科线 但在容错内 → SCORE_DOWN_TOLERANCE (verdict 不变)', () => {
     const rules: EligibilityRulesJson = {
       scoreFloor: { type: 'BATCH_LINE', leniency: 20 },
       examTypes: ['物理'], volunteerMode: 'PARALLEL', hardEligibility: [],
     };
     const r = judgeBatchEligibility({ ...baseStudent, totalScore: 425 }, baseBatchConfig({ eligibilityRules: rules }), line(438));
-    expect(r.verdict).toBe('CONDITIONAL');
+    expect(r.verdict).toBe('ELIGIBLE');  // 不再 CONDITIONAL
     expect(r.reasons.find(x => x.type === 'SCORE_DOWN_TOLERANCE')).toBeDefined();
+    expect(r.scoreInfo?.withinLeniency).toBe(true);
+    expect(r.scoreInfo?.passesLine).toBe(false);
   });
 
   it('选科不匹配 → INELIGIBLE + EXAM_TYPE_MISMATCH', () => {
@@ -127,29 +131,49 @@ describe('judgeBatchEligibility', () => {
     expect(r.reasons.find(x => x.type === 'SOFT_HINT')).toBeDefined();
   });
 
-  it('SCORE_FAIL 即使有 HARD_SUBSET 也直接 INELIGIBLE', () => {
+  it('总分 < 本科线 即使有 HARD_SUBSET 也不再 INELIGIBLE (verdict 不受分数影响)', () => {
     const rules: EligibilityRulesJson = {
       scoreFloor: { type: 'BATCH_LINE' },
       examTypes: ['物理'], volunteerMode: 'PARALLEL',
       hardEligibility: [{ scope: 'SUBSET', subset: '地方专项', rule: 'RURAL_HOUSEHOLD_IN_REGION', params: { regions: ['叙永县'] } }],
     };
     const r = judgeBatchEligibility({ ...baseStudent, totalScore: 400 }, baseBatchConfig({ eligibilityRules: rules }), line(438));
-    expect(r.verdict).toBe('INELIGIBLE');
+    expect(r.verdict).not.toBe('INELIGIBLE');  // 分数低不再直接 INELIGIBLE
+    expect(r.reasons.find(x => x.type === 'SCORE_FAIL')).toBeDefined();
   });
 
-  it('batchLine 为 null → CONDITIONAL + SOFT_HINT 提示数据缺失', () => {
+  it('batchLine 为 null → SOFT_HINT 提示数据缺失 (verdict 不再 CONDITIONAL)', () => {
     const rules: EligibilityRulesJson = {
       scoreFloor: { type: 'BATCH_LINE' },
       examTypes: ['物理'], volunteerMode: 'PARALLEL', hardEligibility: [],
     };
     const r = judgeBatchEligibility(baseStudent, baseBatchConfig({ eligibilityRules: rules }), null);
-    expect(r.verdict).toBe('CONDITIONAL');
+    expect(r.verdict).toBe('ELIGIBLE');  // 不再 CONDITIONAL
     expect(r.reasons.find(x => x.type === 'SOFT_HINT' && x.message.includes('分数线'))).toBeDefined();
+    expect(r.scoreInfo?.lineMissing).toBe(true);
   });
 
   it('eligibilityRules null → ELIGIBLE (老数据兼容)', () => {
     const r = judgeBatchEligibility(baseStudent, baseBatchConfig({ eligibilityRules: null }), line(438));
     expect(r.verdict).toBe('ELIGIBLE');
+  });
+
+  it('scoreInfo 携带分数对比信息', () => {
+    const rules: EligibilityRulesJson = {
+      scoreFloor: { type: 'BATCH_LINE', leniency: 20 },
+      examTypes: ['物理'], volunteerMode: 'PARALLEL', hardEligibility: [],
+    };
+    const r = judgeBatchEligibility(baseStudent, baseBatchConfig({ eligibilityRules: rules }), line(438));
+    expect(r.scoreInfo).toEqual({
+      studentScore: 480,
+      lineScore: 438,
+      lineType: 'BATCH_LINE',
+      lineMissing: false,
+      gap: 42,
+      passesLine: true,
+      leniency: 20,
+      withinLeniency: false,
+    });
   });
 });
 
@@ -242,7 +266,7 @@ describe('judgeBatchEligibility V2 (subsets 数组)', () => {
     expect((r as any).subsetResults.find((s: any) => s.code === 'qiangji').verdict).toBe('DATA_PENDING');
   });
 
-  it('SCORE_FAIL 时 subsets 不需要判定, 直接 INELIGIBLE', () => {
+  it('SCORE_FAIL 时 subsets 仍正常聚合 (分数不再影响 verdict)', () => {
     const rules = {
       scoreFloor: { type: 'BATCH_LINE' },
       examTypes: ['物理'],
@@ -255,7 +279,9 @@ describe('judgeBatchEligibility V2 (subsets 数组)', () => {
       baseBatchConfig(rules),
       { score: 438 },
     );
-    expect(r.verdict).toBe('INELIGIBLE');
+    expect(r.verdict).toBe('ELIGIBLE');  // 普通类硬规则空,subset ELIGIBLE,聚合 ELIGIBLE
+    expect(r.reasons.find(x => x.type === 'SCORE_FAIL')).toBeDefined();
+    expect(r.scoreInfo?.passesLine).toBe(false);
   });
 
   it('subsets 缺失 → 退化到老逻辑 (向后兼容)', () => {

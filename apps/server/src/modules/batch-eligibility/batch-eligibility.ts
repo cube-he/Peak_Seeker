@@ -12,6 +12,7 @@ import type {
   SubsetVerdict,
   RuleEvalResult,
   RuleEvalStatus,
+  ScoreInfo,
 } from './types';
 
 export interface StudentForEligibility {
@@ -69,42 +70,51 @@ export function judgeBatchEligibility(
     return result;
   }
 
-  // 2. 分数门槛
-  if (!batchLine) {
+  // 2. 分数信息 (仅展示, 不影响 verdict, 分数推荐由 plan-candidate 候选池接手)
+  const scoreInfo: ScoreInfo = {
+    studentScore: student.totalScore,
+    lineScore: batchLine?.score ?? null,
+    lineType: rules.scoreFloor.type,
+    lineMissing: !batchLine,
+    gap: (batchLine && student.totalScore != null) ? student.totalScore - batchLine.score : null,
+    passesLine: (batchLine && student.totalScore != null) ? student.totalScore >= batchLine.score : null,
+    leniency: rules.scoreFloor.leniency,
+    withinLeniency: null,
+  };
+  if (batchLine && student.totalScore != null) {
+    const leniency = rules.scoreFloor.leniency ?? 0;
+    if (student.totalScore >= batchLine.score) {
+      reasons.push({
+        type: 'SCORE_PASS',
+        message: `总分 ${student.totalScore} ≥ 该批次最低线 ${batchLine.score}`,
+      });
+      scoreInfo.withinLeniency = false;
+    } else if (student.totalScore >= batchLine.score - leniency) {
+      reasons.push({
+        type: 'SCORE_DOWN_TOLERANCE',
+        message: `总分 ${student.totalScore} 在线下 ${batchLine.score - student.totalScore} 分, 部分项目可降分录取`,
+      });
+      scoreInfo.withinLeniency = true;
+    } else {
+      // 注意: 不再 INELIGIBLE 早 return, 只 push reason 让 UI 展示
+      reasons.push({
+        type: 'SCORE_FAIL',
+        message: `总分 ${student.totalScore} < 该批次最低线 ${batchLine.score}${leniency ? ` (含 ${leniency} 分容错)` : ''}`,
+      });
+      scoreInfo.withinLeniency = false;
+    }
+  } else if (!batchLine) {
     reasons.push({
       type: 'SOFT_HINT',
       message: '当年批次分数线数据缺失, 无法精确判定, 请老师核实',
     });
-    result.verdict = 'CONDITIONAL';
   } else if (student.totalScore == null) {
     reasons.push({
       type: 'SOFT_HINT',
       message: '学生总分未填, 无法判定分数门槛',
     });
-    result.verdict = 'CONDITIONAL';
-  } else {
-    const leniency = rules.scoreFloor.leniency ?? 0;
-    const lineScore = batchLine.score;
-    if (student.totalScore >= lineScore) {
-      reasons.push({
-        type: 'SCORE_PASS',
-        message: `总分 ${student.totalScore} ≥ 该批次最低线 ${lineScore}`,
-      });
-    } else if (student.totalScore >= lineScore - leniency) {
-      reasons.push({
-        type: 'SCORE_DOWN_TOLERANCE',
-        message: `总分 ${student.totalScore} 在线下 ${lineScore - student.totalScore} 分, 部分项目可降分录取`,
-      });
-      result.verdict = 'CONDITIONAL';
-    } else {
-      reasons.push({
-        type: 'SCORE_FAIL',
-        message: `总分 ${student.totalScore} < 该批次最低线 ${lineScore}${leniency ? ` (含 ${leniency} 分容错)` : ''}`,
-      });
-      result.verdict = 'INELIGIBLE';
-      return result;
-    }
   }
+  result.scoreInfo = scoreInfo;
 
   // 3. 硬资格 (ALL scope) — 全批硬卡
   for (const rule of rules.hardEligibility) {
@@ -145,7 +155,8 @@ export function judgeBatchEligibility(
   const subsets = (rules as any).subsets as SubsetRule[] | undefined;
   if (subsets && Array.isArray(subsets) && subsets.length > 0) {
     if (result.verdict === 'INELIGIBLE') {
-      // SCORE_FAIL / EXAM_TYPE_MISMATCH 已经直接 return, 这里走不到
+      // EXAM_TYPE_MISMATCH / HARD_FAIL 已经直接 return, 这里走不到
+      // (SCORE_FAIL 不再影响 verdict, 已改为 scoreInfo 展示)
       // 防御性: 全部标记 INELIGIBLE 跟着批次走
       result.subsetResults = subsets.map((s) => ({
         code: s.code,
