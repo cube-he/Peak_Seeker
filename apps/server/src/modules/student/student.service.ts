@@ -757,14 +757,6 @@ export class StudentService {
     if (!progress.stageProgress.stage1.completed) {
       throw new ConflictException('核心资料未填写完整，暂不能提交给老师确认');
     }
-    // 商业化流程: 提交资料必须先选定填报批次, 提交后锁定供老师按批次出方案
-    // 见 docs/superpowers/specs/2026-06-02-batch-selection-at-intake-design.md § 三
-    const preferredBatches = Array.isArray(profile.preferredBatches)
-      ? (profile.preferredBatches as unknown[]).filter((x) => typeof x === 'string')
-      : [];
-    if (preferredBatches.length === 0) {
-      throw new BadRequestException('请至少选定 1 个填报批次才能提交资料');
-    }
 
     return this.prisma.studentProfile.update({
       where: { id: profile.id },
@@ -774,7 +766,6 @@ export class StudentService {
         intakeReviewedAt: null,
         intakeReviewedBy: null,
         intakeReviewComment: null,
-        batchesConfirmedAt: new Date(),
       },
     });
   }

@@ -648,45 +648,7 @@ describe('StudentService', () => {
   // ── updateMyProfile (2026-05-06 redesign) ───────────────
 
   describe('intake workflow', () => {
-    it('submitMyIntake marks a complete student intake as SUBMITTED', async () => {
-      (service as any).progressService.compute.mockReturnValue({
-        studentSelfCompleteness: 100,
-        teacherDataCompleteness: 0,
-        stageProgress: {
-          stage1: { filled: 16, total: 16, completed: true },
-          stage2: { filled: 0, total: 15, completed: false },
-          stage3: { filled: 0, total: 26, completed: false },
-        },
-        overallCompleteness: 60,
-        isRecommendable: false,
-        missingFieldsForRecommend: [],
-      });
-      prisma.studentProfile.findUnique.mockResolvedValue({
-        id: 1,
-        userId: 100,
-        intakeStatus: 'DRAFT',
-        preferredBatches: ['本科批A段'],
-        user: { id: 100, realName: '小王', phone: '13800000000', gender: 'MALE' },
-      });
-      prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'SUBMITTED' });
-
-      const result = await (service as any).submitMyIntake(100);
-
-      expect(result).toHaveProperty('intakeStatus', 'SUBMITTED');
-      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 1 },
-          data: expect.objectContaining({
-            intakeStatus: 'SUBMITTED',
-            intakeSubmittedAt: expect.any(Date),
-            intakeReviewComment: null,
-            batchesConfirmedAt: expect.any(Date),
-          }),
-        }),
-      );
-    });
-
-    it('submitMyIntake 在 preferredBatches 为空时拒绝', async () => {
+    it('submitMyIntake marks a complete student intake as SUBMITTED (不再写 batchesConfirmedAt)', async () => {
       (service as any).progressService.compute.mockReturnValue({
         studentSelfCompleteness: 100,
         teacherDataCompleteness: 0,
@@ -706,9 +668,16 @@ describe('StudentService', () => {
         preferredBatches: [],
         user: { id: 100, realName: '小王', phone: '13800000000', gender: 'MALE' },
       });
+      prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'SUBMITTED' });
 
-      await expect((service as any).submitMyIntake(100)).rejects.toThrow(/批次/);
-      expect(prisma.studentProfile.update).not.toHaveBeenCalled();
+      const result = await (service as any).submitMyIntake(100);
+
+      expect(result).toHaveProperty('intakeStatus', 'SUBMITTED');
+      const updateCall = prisma.studentProfile.update.mock.calls[0][0];
+      expect(updateCall.data.intakeStatus).toBe('SUBMITTED');
+      expect(updateCall.data.intakeSubmittedAt).toEqual(expect.any(Date));
+      // 关键: 不再写 batchesConfirmedAt
+      expect(updateCall.data.batchesConfirmedAt).toBeUndefined();
     });
 
     it('unlockBatches 解锁锁定的批次, 写入 unlockBy + intakeStatus NEEDS_CHANGES', async () => {
