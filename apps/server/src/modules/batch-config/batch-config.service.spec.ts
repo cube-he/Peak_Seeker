@@ -227,4 +227,83 @@ describe('BatchConfigService', () => {
       expect(result[0].reasons).toEqual([]);
     });
   });
+
+  describe('listEligibleForStudent V2 (含 subsetResults)', () => {
+    const baseStudent = {
+      id: 10,
+      teacherId: 99,
+      examType: 'PHYSICS',
+      examYear: 2026,
+      totalScore: 480,
+      province: '四川',
+      county: '叙永县',
+      isRural: true,
+      politicalStatus: null,
+      user: { birthDate: new Date('2008-01-01') },
+    };
+    const teacherUser = {
+      role: 'TEACHER',
+      teacherProfileId: 99,
+      studentProfileId: null,
+      isSupervisor: false,
+    };
+
+    it('返回 subsetResults 数组 (V2 结构)', async () => {
+      prismaMock.studentProfile.findUnique.mockResolvedValue(baseStudent);
+      prismaMock.batchConfig.findMany.mockResolvedValue([
+        {
+          id: 1,
+          batch: '本科批A段',
+          examType: '物理',
+          maxGroupCount: 45,
+          maxMajorPerGroup: 6,
+          volunteerMode: 'parallel',
+          admissionOrder: 5,
+          eligibilityRules: {
+            scoreFloor: { type: 'BATCH_LINE' },
+            examTypes: ['物理'],
+            volunteerMode: 'PARALLEL',
+            hardEligibility: [],
+            subsets: [
+              {
+                code: 'puton',
+                name: '普通类',
+                description: '一般本科',
+                hardRules: [],
+                references: [],
+              },
+              {
+                code: 'guojia',
+                name: '国家专项',
+                description: '面向贫困县',
+                hardRules: [
+                  {
+                    scope: 'SUBSET',
+                    subset: '国家专项',
+                    rule: 'RURAL_HOUSEHOLD_IN_REGION',
+                    params: { regions: ['叙永县'] },
+                  },
+                ],
+                references: [
+                  { title: '119 县名单', filename: 'p119.xlsx', type: 'xlsx' },
+                ],
+              },
+            ],
+          },
+        },
+      ]);
+      prismaMock.batchLine.findMany.mockResolvedValue([
+        { batch: '本科批次', examType: '物理类', score: 438 },
+      ]);
+
+      const result = await service.listEligibleForStudent(10, teacherUser);
+      expect(result[0].verdict).toBe('ELIGIBLE');
+      expect(result[0].subsetResults).toHaveLength(2);
+      expect(result[0].subsetResults?.[0].code).toBe('puton');
+      expect(result[0].subsetResults?.[1].code).toBe('guojia');
+      expect(result[0].subsetResults?.[1].references[0].downloadUrl).toBe(
+        '/attachments/policy/p119.xlsx',
+      );
+    });
+  });
 });
