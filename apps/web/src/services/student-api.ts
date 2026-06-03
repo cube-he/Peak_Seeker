@@ -213,8 +213,12 @@ export const studentApi = {
     }) as any;
   },
 
-  getEligibleBatches(id: string): Promise<EligibleBatch[]> {
-    return api.get(`/students/${id}/eligible-batches`) as any;
+  async getEligibleBatches(id: string): Promise<EligibleBatch[]> {
+    // 后端 listEligibleForStudent 返回 { batches, intakeGap }
+    // (旧版本直接返回数组, 兼容老 cache)
+    const raw = (await api.get(`/students/${id}/eligible-batches`)) as any;
+    if (Array.isArray(raw)) return raw as EligibleBatch[];
+    return (raw?.batches ?? []) as EligibleBatch[];
   },
 
   // Light recommendation for student self-service
