@@ -4,9 +4,9 @@ import { ReferencesList } from './ReferencesList';
 import type { SubsetResult } from '@/services/batch-recommendations-api';
 
 const VERDICT_LABEL: Record<string, string> = {
-  ELIGIBLE: '推荐',
-  CONDITIONAL: '可冲',
-  INELIGIBLE: '不可填',
+  ELIGIBLE: '资格通过',
+  CONDITIONAL: '条件通过',
+  INELIGIBLE: '资格不符',
   DATA_PENDING: '详情待补充',
 };
 const PASS_ICON: Record<string, string> = {

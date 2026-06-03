@@ -83,6 +83,9 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
         </div>
       )}
       <h1 className="text-xl font-bold">批次推荐</h1>
+      <div className="text-xs text-gray-600 bg-gray-50 px-3 py-2 rounded">
+        ℹ 推荐页仅判定资格 (硬性要求是否满足)。分数推荐请在勾选批次后前往候选池查看院校梯队 (冲/稳/保)。
+      </div>
       <a
         href={`/teacher/students/${studentId}`}
         className="text-blue-600 underline text-sm"

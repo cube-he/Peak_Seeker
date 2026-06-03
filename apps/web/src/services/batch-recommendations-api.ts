@@ -25,6 +25,17 @@ export interface SubsetResult {
   references: ReferenceItem[];
 }
 
+export interface ScoreInfo {
+  studentScore: number | null;
+  lineScore: number | null;
+  lineType: 'BATCH_LINE' | 'SPECIAL_LINE' | 'ZHUANKE_LINE';
+  lineMissing: boolean;
+  gap: number | null;
+  passesLine: boolean | null;
+  leniency?: number;
+  withinLeniency: boolean | null;
+}
+
 export interface BatchRecommendation {
   batchConfigId: number;
   batchName: string;
@@ -33,6 +44,7 @@ export interface BatchRecommendation {
   verdict: Verdict;
   reasons: Array<{ type: string; message: string }>;
   subsetResults?: SubsetResult[];
+  scoreInfo?: ScoreInfo;
 }
 
 export interface BatchRecommendationsResponse {
