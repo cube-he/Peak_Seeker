@@ -160,13 +160,18 @@ function MajorChip({
         transform: CSS.Translate.toString(transform),
         opacity: isDragging ? 0.4 : 1,
       }}
+      // listeners 放外层 = 整个 chip 都是拖动 hit area, 不只是中间文字.
+      // attributes 同样放外层让 ARIA 正确.
+      {...listeners}
+      {...attributes}
     >
-      <span className="pm-chip-handle" {...listeners} {...attributes}>
-        {major}
-      </span>
+      <span className="pm-chip-handle">{major}</span>
       <button
         type="button"
         className="pm-chip-close"
+        // PointerSensor 在 pointerdown 时已经开始追踪, 必须在 pointerdown 截断,
+        // 否则点 × 删除时光标只要移动 4px 就会触发拖动.
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
           onRemove();
