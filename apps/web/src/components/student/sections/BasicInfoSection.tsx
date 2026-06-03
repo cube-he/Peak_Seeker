@@ -18,8 +18,8 @@ const GENDER = [
 const EXAM_TYPE = [
   { label: '物理类', value: 'PHYSICS' },
   { label: '历史类', value: 'HISTORY' },
-  { label: '文科综合', value: 'COMPREHENSIVE_LIBERAL' },
-  { label: '理科综合', value: 'COMPREHENSIVE_SCIENCE' },
+  // 文科综合 / 理科综合 是 2024 前旧高考方案; 四川 2025+ 新高考
+  // 只有 物理类 / 历史类, 此处不再让用户选.
 ];
 
 const FORM_FILLER = [

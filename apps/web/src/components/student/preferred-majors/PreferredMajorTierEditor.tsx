@@ -1,9 +1,31 @@
 'use client';
 
-import { useState } from 'react';
-import { Button, Select, Tag, Space } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Select, Tag } from 'antd';
 import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import type { PreferredMajorTier } from './types';
+
+/**
+ * 内部编辑态: 池子(tier=0) 单独存, 梯队 tier>=1 单独存.
+ * onChange 时拼回 API shape ([{tier:0,majors}, {tier:1,majors}, ...]).
+ */
+interface EditorState {
+  pool: string[];
+  tiers: Array<{ tier: number; majors: string[] }>;
+}
 
 interface Props {
   value: PreferredMajorTier[];
@@ -12,150 +34,431 @@ interface Props {
   isLoading?: boolean;
 }
 
-// 把任意 shape 的值转成 PreferredMajorTier[]:
-//   - 新 shape ({tier, majors}[]): 验证每项有 majors 数组, 返回
-//   - 旧 shape A (string[]): 按数组顺序拆梯队 (1 个一梯队)
-//   - 旧 shape B (string[][]): 嵌套数组 = 多梯队
-//   - null / undefined / 非数组: 空数组
+const POOL_ID = 'pool';
+const tierContainerId = (tier: number) => `tier-${tier}`;
+
+/** 把任意 shape 的 value 转成 EditorState. 池子 = tier=0 的 majors. */
 export function coerceTierShape(value: unknown): PreferredMajorTier[] {
+  // 保留旧 API 兼容: 返回 PreferredMajorTier[], 调用方自己 split pool / tiers.
   if (!Array.isArray(value) || value.length === 0) return [];
   if (typeof value[0] === 'string') {
-    return (value as string[]).map((m, i) => ({ tier: i + 1, majors: [m] }));
+    // 旧扁平 string[] → 全扔意向池 (tier=0)
+    return [{ tier: 0, majors: (value as string[]).filter((m) => typeof m === 'string') }];
   }
   if (Array.isArray(value[0])) {
-    // 嵌套数组旧格式: [[majors of tier 1], [majors of tier 2], ...]
+    // 旧嵌套 string[][] → 第一个数组当梯队 1, 第二个梯队 2 ...
     return (value as string[][]).map((majors, i) => ({
       tier: i + 1,
       majors: Array.isArray(majors) ? majors.filter((m) => typeof m === 'string') : [],
     }));
   }
-  // 假设是 {tier, majors}[] 结构, 但 defensively guard against missing majors
   return (value as any[]).map((t, i) => ({
     tier: typeof t?.tier === 'number' ? t.tier : i + 1,
-    majors: Array.isArray(t?.majors) ? t.majors.filter((m: unknown) => typeof m === 'string') : [],
+    majors: Array.isArray(t?.majors)
+      ? t.majors.filter((m: unknown) => typeof m === 'string')
+      : [],
   }));
 }
 
-// submit 前规范化:
-//   1. 剔除空梯队 (没专业的梯队)
-//   2. 跨梯队同专业去重 (以前梯队为准, 即第一次出现的位置保留)
-//   3. renumber 梯队 (确保 tier 从 1 开始连续)
-export function normalize(tiers: PreferredMajorTier[]): PreferredMajorTier[] {
-  const seen = new Set<string>();
-  const out: PreferredMajorTier[] = [];
+/** EditorState → API shape (PreferredMajorTier[]).
+ *  pool 非空时输出 tier=0 项 (持久化池子), 空则省略 (避免无意义的 dirty 标记).
+ *  梯队按 tier 升序. */
+function stateToTiers(state: EditorState): PreferredMajorTier[] {
+  const sorted = state.tiers
+    .slice()
+    .sort((a, b) => a.tier - b.tier)
+    .map((t) => ({ tier: t.tier, majors: [...t.majors] }));
+  return state.pool.length > 0
+    ? [{ tier: 0, majors: [...state.pool] }, ...sorted]
+    : sorted;
+}
+
+/** PreferredMajorTier[] → EditorState. 防御 missing fields. */
+function tiersToState(tiers: PreferredMajorTier[]): EditorState {
+  const pool: string[] = [];
+  const tierMap = new Map<number, string[]>();
   for (const t of tiers) {
+    if (!t || typeof t.tier !== 'number') continue;
+    const majors = Array.isArray(t.majors) ? t.majors.filter((m) => typeof m === 'string') : [];
+    if (t.tier <= 0) {
+      pool.push(...majors);
+    } else {
+      const existing = tierMap.get(t.tier) ?? [];
+      tierMap.set(t.tier, [...existing, ...majors]);
+    }
+  }
+  const tierList = Array.from(tierMap.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([tier, majors]) => ({ tier, majors }));
+  return { pool, tiers: tierList };
+}
+
+/** submit 前规范化:
+ *  - 跨梯队同专业去重 (按池子→梯队 1→梯队 2 顺序, 首次出现保留)
+ *  - 删空梯队 (池子可空)
+ *  - 梯队 renumber 1..N
+ *  - 池子空时不输出 tier=0 项 (向后兼容: 旧调用方期望 normalize([])===[])
+ *  - 池子非空时输出 tier=0 项, 持久化到 DB, 后端推荐时 ignored
+ */
+export function normalize(tiers: PreferredMajorTier[]): PreferredMajorTier[] {
+  const state = tiersToState(tiers);
+  const seen = new Set<string>();
+  const pool: string[] = [];
+  for (const m of state.pool) {
+    if (typeof m === 'string' && m.trim() && !seen.has(m)) {
+      seen.add(m);
+      pool.push(m);
+    }
+  }
+  const newTiers: Array<{ tier: number; majors: string[] }> = [];
+  for (const t of state.tiers) {
     const majors: string[] = [];
-    for (const m of t.majors ?? []) {
+    for (const m of t.majors) {
       if (typeof m === 'string' && m.trim() && !seen.has(m)) {
         seen.add(m);
         majors.push(m);
       }
     }
-    if (majors.length > 0) {
-      out.push({ tier: out.length + 1, majors });
-    }
+    if (majors.length > 0) newTiers.push({ tier: newTiers.length + 1, majors });
   }
+  const out: PreferredMajorTier[] = newTiers.map((t) => ({ tier: t.tier, majors: t.majors }));
+  if (pool.length > 0) out.unshift({ tier: 0, majors: pool });
   return out;
 }
 
-export default function PreferredMajorTierEditor({ value, options, onChange, isLoading }: Props) {
-  // adding 记录"当前哪个梯队正在加专业", null = 没有
-  const [adding, setAdding] = useState<number | null>(null);
+/** dnd-kit draggable id 编码:
+ *  - 池子 chip: 'pool::<major>'
+ *  - 梯队 chip: 'tier-<n>::<major>'
+ *  解码: split '::' 取 container / major
+ */
+function encodeDragId(container: string, major: string) {
+  return `${container}::${major}`;
+}
+function decodeDragId(id: string): { container: string; major: string } {
+  const idx = id.indexOf('::');
+  if (idx < 0) return { container: id, major: '' };
+  return { container: id.slice(0, idx), major: id.slice(idx + 2) };
+}
 
-  const addTier = () => {
-    onChange([...value, { tier: value.length + 1, majors: [] }]);
-  };
-  const removeTier = (idx: number) => {
-    onChange(value.filter((_, i) => i !== idx).map((t, i) => ({ ...t, tier: i + 1 })));
-  };
-  const addMajor = (idx: number, major: string) => {
-    if (!major) return;
-    const next = [...value];
-    if (!next[idx].majors.includes(major)) {
-      next[idx] = { ...next[idx], majors: [...next[idx].majors, major] };
+function MajorChip({
+  dragId,
+  major,
+  onRemove,
+}: {
+  dragId: string;
+  major: string;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: dragId,
+  });
+  return (
+    <span
+      ref={setNodeRef}
+      className={`pm-chip ${isDragging ? 'is-dragging' : ''}`}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        opacity: isDragging ? 0.4 : 1,
+      }}
+    >
+      <span className="pm-chip-handle" {...listeners} {...attributes}>
+        {major}
+      </span>
+      <button
+        type="button"
+        className="pm-chip-close"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        aria-label={`移除 ${major}`}
+      >
+        <CloseOutlined />
+      </button>
+    </span>
+  );
+}
+
+function DropContainer({
+  id,
+  children,
+  className,
+}: {
+  id: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`pm-drop ${className ?? ''} ${isOver ? 'is-over' : ''}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+export default function PreferredMajorTierEditor({
+  value,
+  options,
+  onChange,
+  isLoading,
+}: Props) {
+  // 把外部 value (PreferredMajorTier[]) → 内部 EditorState
+  const [state, setState] = useState<EditorState>(() => tiersToState(value ?? []));
+  const [adding, setAdding] = useState<string | null>(null); // container id 或 null
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  // 防止外部 value 变了 (后端 refresh 或其他 form.setFieldsValue) 跟内部 state 失同步.
+  // 用 JSON.stringify 比较, 避免无限循环 (我们 emit 后 outer onChange 会 round-trip 回来).
+  const lastEmittedRef = useRef<string>('');
+  useEffect(() => {
+    const incoming = JSON.stringify(value ?? []);
+    if (incoming === lastEmittedRef.current) return;
+    setState(tiersToState(value ?? []));
+  }, [value]);
+
+  const emit = useCallback(
+    (next: EditorState) => {
+      setState(next);
+      const apiShape = stateToTiers(next);
+      lastEmittedRef.current = JSON.stringify(apiShape);
+      onChange(apiShape);
+    },
+    [onChange],
+  );
+
+  // 跨所有 container 已选, 用于 Select 过滤 + 拖动去重
+  const selectedSet = useMemo(
+    () => new Set([...state.pool, ...state.tiers.flatMap((t) => t.majors)]),
+    [state],
+  );
+
+  // —— actions ——
+  const addMajor = (containerId: string, major: string) => {
+    if (!major || selectedSet.has(major)) {
+      setAdding(null);
+      return;
     }
-    onChange(next);
+    if (containerId === POOL_ID) {
+      emit({ ...state, pool: [...state.pool, major] });
+    } else {
+      emit({
+        ...state,
+        tiers: state.tiers.map((t) =>
+          tierContainerId(t.tier) === containerId
+            ? { ...t, majors: [...t.majors, major] }
+            : t,
+        ),
+      });
+    }
     setAdding(null);
   };
-  const removeMajor = (idx: number, major: string) => {
-    const next = [...value];
-    next[idx] = { ...next[idx], majors: next[idx].majors.filter((m) => m !== major) };
-    onChange(next);
+
+  const removeMajor = (containerId: string, major: string) => {
+    if (containerId === POOL_ID) {
+      emit({ ...state, pool: state.pool.filter((m) => m !== major) });
+    } else {
+      emit({
+        ...state,
+        tiers: state.tiers.map((t) =>
+          tierContainerId(t.tier) === containerId
+            ? { ...t, majors: t.majors.filter((m) => m !== major) }
+            : t,
+        ),
+      });
+    }
   };
 
-  // 跨所有梯队已选的专业, 加专业时从 options 里剔除
-  const selectedSet = new Set(value.flatMap((t) => t.majors));
+  const addTier = () => {
+    const nextTier = state.tiers.length > 0
+      ? Math.max(...state.tiers.map((t) => t.tier)) + 1
+      : 1;
+    emit({
+      ...state,
+      tiers: [...state.tiers, { tier: nextTier, majors: [] }],
+    });
+  };
+
+  const removeTier = (tier: number) => {
+    // 删除梯队时, 把该梯队的专业回收到池子, 避免数据丢失
+    const target = state.tiers.find((t) => t.tier === tier);
+    const recovered = target ? target.majors : [];
+    emit({
+      pool: [...state.pool, ...recovered.filter((m) => !state.pool.includes(m))],
+      tiers: state.tiers
+        .filter((t) => t.tier !== tier)
+        .map((t, i) => ({ ...t, tier: i + 1 })),
+    });
+  };
+
+  // —— dnd handlers ——
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
+
+  const handleDragStart = (e: DragStartEvent) => {
+    setActiveDragId(String(e.active.id));
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = e;
+    if (!over) return;
+    const { container: srcContainer, major } = decodeDragId(String(active.id));
+    const dstContainer = String(over.id);
+    if (!srcContainer || !major || srcContainer === dstContainer) return;
+
+    // 先从 src 删, 再加到 dst (避免拖到不存在的容器导致数据丢失)
+    let newPool = [...state.pool];
+    let newTiers = state.tiers.map((t) => ({ ...t, majors: [...t.majors] }));
+
+    if (srcContainer === POOL_ID) {
+      newPool = newPool.filter((m) => m !== major);
+    } else {
+      const ti = newTiers.findIndex((t) => tierContainerId(t.tier) === srcContainer);
+      if (ti >= 0) newTiers[ti].majors = newTiers[ti].majors.filter((m) => m !== major);
+    }
+
+    if (dstContainer === POOL_ID) {
+      if (!newPool.includes(major)) newPool.push(major);
+    } else {
+      const ti = newTiers.findIndex((t) => tierContainerId(t.tier) === dstContainer);
+      if (ti >= 0 && !newTiers[ti].majors.includes(major)) {
+        newTiers[ti].majors.push(major);
+      } else {
+        // 目标容器不存在 (用户拖到空白处不在任一容器上方) → 数据回退, 不动
+        return;
+      }
+    }
+
+    emit({ pool: newPool, tiers: newTiers });
+  };
+
+  const activeMajor = activeDragId ? decodeDragId(activeDragId).major : null;
+
+  // —— render ——
+  const renderAddSelector = (containerId: string) => {
+    if (adding !== containerId) {
+      return (
+        <Button
+          size="small"
+          type="dashed"
+          icon={<PlusOutlined />}
+          onClick={() => setAdding(containerId)}
+        >
+          加专业
+        </Button>
+      );
+    }
+    return (
+      <Select
+        showSearch
+        autoFocus
+        size="small"
+        style={{ minWidth: 200 }}
+        placeholder="搜索专业"
+        options={options.filter((o) => !selectedSet.has(o.value))}
+        optionFilterProp="label"
+        loading={isLoading}
+        onSelect={(v) => addMajor(containerId, v as string)}
+        onBlur={() => setAdding(null)}
+      />
+    );
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {value.map((t, idx) => (
-        <div
-          key={idx}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: 6,
-            borderRadius: 4,
-            background: '#fafafa',
-          }}
-        >
-          <span style={{ minWidth: 56, color: '#666', fontWeight: 600 }}>
-            梯队 {t.tier}
-          </span>
-          <Space wrap size={[4, 4]} style={{ flex: 1 }}>
-            {t.majors.map((m) => (
-              <Tag
-                key={m}
-                closable
-                closeIcon={<CloseOutlined />}
-                onClose={(e) => {
-                  e.preventDefault();
-                  removeMajor(idx, m);
-                }}
-                color="green"
-              >
-                {m}
-              </Tag>
-            ))}
-            {adding === idx ? (
-              <Select
-                showSearch
-                autoFocus
-                size="small"
-                style={{ minWidth: 200 }}
-                placeholder="搜索专业"
-                options={options.filter((o) => !selectedSet.has(o.value))}
-                optionFilterProp="label"
-                loading={isLoading}
-                onSelect={(v) => addMajor(idx, v as string)}
-                onBlur={() => setAdding(null)}
-              />
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="pm-editor">
+        {/* —— 意向池 (tier=0) —— */}
+        <DropContainer id={POOL_ID} className="pm-pool">
+          <div className="pm-section-head">
+            <div>
+              <span className="pm-section-title">意向池</span>
+              <span className="pm-section-hint">尚未排梯队 · 不参与方案推荐</span>
+            </div>
+            {renderAddSelector(POOL_ID)}
+          </div>
+          <div className="pm-chips">
+            {state.pool.length === 0 ? (
+              <span className="pm-empty">先把可能想读的专业加进来, 之后再拖到梯队排顺序</span>
             ) : (
-              <Button
-                size="small"
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={() => setAdding(idx)}
-              >
-                加专业
-              </Button>
+              state.pool.map((m) => (
+                <MajorChip
+                  key={m}
+                  dragId={encodeDragId(POOL_ID, m)}
+                  major={m}
+                  onRemove={() => removeMajor(POOL_ID, m)}
+                />
+              ))
             )}
-          </Space>
-          <Button size="small" type="text" danger onClick={() => removeTier(idx)}>
-            删除梯队
-          </Button>
-        </div>
-      ))}
-      <Button
-        size="small"
-        type="dashed"
-        icon={<PlusOutlined />}
-        onClick={addTier}
-        style={{ width: 'fit-content' }}
-      >
-        加梯队
-      </Button>
-    </div>
+          </div>
+        </DropContainer>
+
+        {/* —— 梯队 (tier>=1) —— */}
+        {state.tiers.map((t) => {
+          const cid = tierContainerId(t.tier);
+          return (
+            <DropContainer key={t.tier} id={cid} className="pm-tier">
+              <div className="pm-section-head">
+                <div>
+                  <span className="pm-section-title">梯队 {t.tier}</span>
+                  <span className="pm-section-hint">
+                    {t.tier === 1 ? '最想去 / 冲一冲' : `第 ${t.tier} 优先`}
+                  </span>
+                </div>
+                <Button
+                  size="small"
+                  type="text"
+                  danger
+                  onClick={() => removeTier(t.tier)}
+                >
+                  删除梯队
+                </Button>
+              </div>
+              <div className="pm-chips">
+                {t.majors.length === 0 ? (
+                  <span className="pm-empty">拖动池子里的专业到这里</span>
+                ) : (
+                  t.majors.map((m) => (
+                    <MajorChip
+                      key={m}
+                      dragId={encodeDragId(cid, m)}
+                      major={m}
+                      onRemove={() => removeMajor(cid, m)}
+                    />
+                  ))
+                )}
+              </div>
+            </DropContainer>
+          );
+        })}
+
+        <Button
+          size="small"
+          type="dashed"
+          icon={<PlusOutlined />}
+          onClick={addTier}
+          style={{ width: 'fit-content' }}
+        >
+          加梯队
+        </Button>
+      </div>
+
+      {/* 拖动时的浮层显示 */}
+      <DragOverlay>
+        {activeMajor ? (
+          <Tag color="green" className="pm-chip-overlay">
+            {activeMajor}
+          </Tag>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }

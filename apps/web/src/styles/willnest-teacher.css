@@ -4193,6 +4193,126 @@
 .wn-teacher-scope .sc-input-card-label { font-weight: 600; color: var(--text); font-size: 13px; }
 .wn-teacher-scope .sc-input-card-max { font-size: 11px; color: var(--text-muted); }
 
+/* —— PreferredMajorTierEditor: 意向池 + 梯队拖动 ——
+ * 池子 = 暂存区, 不参与方案推荐;
+ * 梯队 = 已排序的志愿优先级, 第一梯队 = 最想去.
+ * 用 @dnd-kit 拖动, chip 是可拖动元素, container 是 droppable. */
+.wn-teacher-scope .pm-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wn-teacher-scope .pm-drop {
+  border-radius: 10px;
+  border: 1.5px dashed transparent;
+  padding: 10px 12px;
+  background: var(--bg);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.wn-teacher-scope .pm-pool {
+  background: rgba(228, 220, 192, 0.35);
+  border-color: rgba(168, 165, 150, 0.4);
+}
+.wn-teacher-scope .pm-tier {
+  background: rgba(232, 246, 240, 0.4);
+  border-color: rgba(130, 180, 160, 0.3);
+}
+.wn-teacher-scope .pm-drop.is-over {
+  border-color: var(--primary);
+  background: var(--primary-fixed);
+}
+.wn-teacher-scope .pm-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+.wn-teacher-scope .pm-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.wn-teacher-scope .pm-section-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.wn-teacher-scope .pm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  align-items: center;
+}
+.wn-teacher-scope .pm-empty {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-style: italic;
+}
+.wn-teacher-scope .pm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2px 4px 2px 10px;
+  font-size: 12px;
+  color: var(--text);
+  user-select: none;
+  cursor: grab;
+  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.wn-teacher-scope .pm-chip:hover {
+  border-color: var(--primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.wn-teacher-scope .pm-chip.is-dragging { cursor: grabbing; }
+.wn-teacher-scope .pm-chip-handle {
+  cursor: inherit;
+  outline: none;
+}
+.wn-teacher-scope .pm-chip-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; height: 18px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.wn-teacher-scope .pm-chip-close:hover { background: var(--surface-dim); color: var(--rush); }
+.wn-teacher-scope .pm-chip-overlay {
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 4px 12px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* —— 实时位次估算 hint (出现在位次输入框下方) —— */
+.wn-teacher-scope .sc-rank-estimate {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: var(--primary-fixed);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.wn-teacher-scope .sc-rank-estimate strong {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.wn-teacher-scope .sc-rank-estimate span { color: var(--text-muted); }
+
 /* —— 总分大字展示 —— */
 .wn-teacher-scope .sc-total-display {
   display: flex; align-items: baseline; gap: 4px;

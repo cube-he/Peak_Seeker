@@ -100,6 +100,7 @@ export interface UpdateStudentDto {
   excludedCities?: string[];
   excludedUniversities?: string[];
   excludedMajors?: string[];
+  excludedMajorCategories?: string[];
   acceptLevel?: 'STRICT' | 'MODERATE' | 'RELAXED' | 'UNDECIDED';
   remoteAreaAcceptance?: 'ABSOLUTELY_NO' | 'BACKUP_ONLY' | 'FAMOUS_OK' | 'GOOD_MAJOR_OK';
   coldMajorAcceptance?: 'ABSOLUTELY_NO' | 'FAMOUS_OK' | 'DEVELOPED_AREA_OK' | 'GOOD_PROSPECT_OK';

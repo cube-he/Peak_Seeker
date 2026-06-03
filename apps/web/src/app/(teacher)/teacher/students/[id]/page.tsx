@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
 import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Spin, message } from 'antd';
 import {
@@ -19,6 +19,7 @@ import { useProvinceOptions } from '@/components/student/picker/options/useProvi
 import { useCityOptions } from '@/components/student/picker/options/useCityOptions';
 import { useUniversityOptions } from '@/components/student/picker/options/useUniversityOptions';
 import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
+import { useMajorCategoryOptions } from '@/components/student/picker/options/useMajorCategoryOptions';
 import PreferredMajorTierFormItem from '@/components/student/preferred-majors/PreferredMajorTierFormItem';
 import { getRegionCascaderOptions, type CascaderOption } from '@/data/student-options';
 import { fieldLabel } from '@/components/student/stage-fields';
@@ -27,8 +28,10 @@ import {
   to9Subjects,
   from9Subjects,
   sum9Subjects,
+  validate6Subjects,
 } from '@/components/student/stage1-score-mapping';
 import { ETHNICITY_OPTIONS } from '@/data/student-options';
+import { scoreSegmentApi, type ExamType as RankExamType } from '@/services/score-segment';
 
 type SelectOption = { label: string; value: string };
 
@@ -96,7 +99,8 @@ const CHANGE_LOG_FIELD_LABEL: Record<string, string> = {
   preferredMajorCategories: '意向专业类别',
   preferredUniversities: '意向院校',
   excludedCities: '排除城市',
-  excludedMajors: '排除专业',
+  excludedMajors: '排除个别专业',
+  excludedMajorCategories: '排除专业类',
   stayPreference: '留省偏好',
   acceptLevel: '调剂接受度',
   colorBlind: '色盲',
@@ -1130,8 +1134,9 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
             options={[
               { value: 'PHYSICS', label: '物理类' },
               { value: 'HISTORY', label: '历史类' },
-              { value: 'COMPREHENSIVE_LIBERAL', label: '文科综合' },
-              { value: 'COMPREHENSIVE_SCIENCE', label: '理科综合' },
+              // 文科综合 / 理科综合 是 2024 前旧高考方案; 四川 2025+ 新高考
+              // 只有 物理类 / 历史类 两类, 此处不再提供.
+              // EXAM_TYPE_LABEL 映射仍保留这两个 key, 仅用于回显旧届数据.
             ]}
           />
         </Form.Item>
@@ -1288,10 +1293,11 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
         </Form.Item>
       </div>
       <div className="field">
-        <label>全省位次<span className="sc-hint"> 后端按一分一段自动算 · 老师可校正</span></label>
+        <label>全省位次<span className="sc-hint"> 6 科齐后实时估算 · 可手动校正</span></label>
         <Form.Item name="provincialRank" noStyle>
-          <InputNumber min={1} style={{ width: '100%' }} placeholder="留空由后端算" />
+          <InputNumber min={1} style={{ width: '100%' }} placeholder="6 科齐后自动估算" />
         </Form.Item>
+        <EstimatedRankHint />
         {rankCheck ? <div className="sc-hint"><RankCheckExtra rankCheck={rankCheck} /></div> : null}
       </div>
     </div>
@@ -1348,6 +1354,118 @@ function TeacherScoreInput({
           onChange={onChange}
         />
       </Form.Item>
+    </div>
+  );
+}
+
+/** 通用 debounce hook — 让 useQuery 在用户停止输入 500ms 后才 fire,
+ *  避免每按一个数字键就调一次 /score-segment/lookup。 */
+function useDebounceValue<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return debounced;
+}
+
+/** 实时位次估算 hint — 监听 form 里 9 科分数 + examYear, 6 科齐 + 物理/历史
+ *  确定后调 POST /score-segment/lookup, 自动写回 provincialRank 字段, 并显示
+ *  来源年份和总分。一分一段表里没有当年时, fallback 到最近可用年份
+ *  (PROXY_YEAR = 2025), 与 RankInput 组件保持一致。 */
+function EstimatedRankHint() {
+  const form = Form.useFormInstance();
+  const scoreChinese = Form.useWatch('scoreChinese', form);
+  const scoreMath = Form.useWatch('scoreMath', form);
+  const scoreEnglish = Form.useWatch('scoreEnglish', form);
+  const scorePhysics = Form.useWatch('scorePhysics', form);
+  const scoreHistory = Form.useWatch('scoreHistory', form);
+  const scoreChemistry = Form.useWatch('scoreChemistry', form);
+  const scoreBiology = Form.useWatch('scoreBiology', form);
+  const scorePolitics = Form.useWatch('scorePolitics', form);
+  const scoreGeography = Form.useWatch('scoreGeography', form);
+  const examYear = Form.useWatch('examYear', form);
+
+  const subj9: Subject9Form = useMemo(
+    () => ({
+      scoreChinese,
+      scoreMath,
+      scoreEnglish,
+      scorePhysics,
+      scoreHistory,
+      scoreChemistry,
+      scoreBiology,
+      scorePolitics,
+      scoreGeography,
+    }),
+    [
+      scoreChinese, scoreMath, scoreEnglish,
+      scorePhysics, scoreHistory,
+      scoreChemistry, scoreBiology, scorePolitics, scoreGeography,
+    ],
+  );
+
+  const validateErr = useMemo(() => validate6Subjects(subj9), [subj9]);
+  const total = useMemo(() => sum9Subjects(subj9), [subj9]);
+  const examTypeForRank: RankExamType | null = subj9.scorePhysics != null
+    ? '物理'
+    : subj9.scoreHistory != null
+    ? '历史'
+    : null;
+
+  // 2026 一分一段表通常 6 月底才出, 早期用 2025 代理 (与 RankInput.tsx 同步)
+  const requestedYear = typeof examYear === 'number' ? examYear : null;
+  const effectiveYear = requestedYear && requestedYear <= 2025 ? requestedYear : 2025;
+
+  const debouncedTotal = useDebounceValue(total, 500);
+  const debouncedYear = useDebounceValue(effectiveYear, 500);
+  const debouncedExam = useDebounceValue(examTypeForRank, 500);
+
+  const queryEnabled =
+    !validateErr && debouncedExam != null && debouncedTotal > 0 && !!debouncedYear;
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['estimate-rank', debouncedYear, debouncedExam, debouncedTotal],
+    queryFn: () => scoreSegmentApi.lookup({
+      year: debouncedYear,
+      examType: debouncedExam!,
+      score: debouncedTotal,
+    }),
+    enabled: queryEnabled,
+    retry: false,
+    staleTime: 60_000,
+  });
+
+  // 自动写回 form: 估算结果出来就更新 provincialRank, 让 input 显示当前估算.
+  // 老师改了 input 后, 下次分数变化触发新估算时仍会被覆盖 (因为这是"实时
+  // 估算", 老师手填的值就该被最新估算替代).
+  useEffect(() => {
+    if (data?.rank != null) {
+      form.setFieldValue('provincialRank', data.rank);
+    }
+  }, [data?.rank, form]);
+
+  if (validateErr) {
+    return <div className="sc-hint">{`填齐 6 科分数后, 实时估算位次 · 当前: ${validateErr}`}</div>;
+  }
+  if (isLoading) return <div className="sc-hint">…正在估算位次</div>;
+  if (isError) {
+    return (
+      <div className="sc-hint err">
+        位次估算暂不可用 (一分一段表 {effectiveYear} 数据缺失)
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  const usedProxy = requestedYear != null && requestedYear !== data.year;
+  return (
+    <div className="sc-rank-estimate">
+      <strong>实时估算 {data.rank.toLocaleString('zh-CN')} 位</strong>
+      <span>
+        {' · '}总分 {data.score} · 基于 {data.year} 一分一段
+        {usedProxy ? `（${requestedYear} 数据未出, 用 ${data.year} 代理）` : ''}
+      </span>
     </div>
   );
 }
@@ -1430,6 +1548,7 @@ function PreferenceFields() {
   const { data: cityOptions } = useCityOptions();
   const { data: universityOptions, isLoading: isUniversityLoading } = useUniversityOptions();
   const { data: majorOptions, isLoading: isMajorLoading } = useMajorOptions();
+  const { data: majorCategoryOptions, isLoading: isMajorCategoryLoading } = useMajorCategoryOptions();
 
   return (
     <div className="sd-form-grid">
@@ -1476,7 +1595,17 @@ function PreferenceFields() {
         </Form.Item>
       </div>
       <div className="field">
-        <label>排除专业</label>
+        <label>排除专业类<span className="sc-hint"> 整类不要 · 如机械类 / 安全类</span></label>
+        <Form.Item name="excludedMajorCategories" noStyle>
+          <Select
+            {...pickerSelectProps(majorCategoryOptions ?? [])}
+            loading={isMajorCategoryLoading}
+            placeholder="搜索专业类"
+          />
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>排除个别专业<span className="sc-hint"> 类内某几个不要 · 精确到名</span></label>
         <Form.Item name="excludedMajors" noStyle>
           <Select {...pickerSelectProps(majorOptions)} loading={isMajorLoading} placeholder="搜索专业" />
         </Form.Item>
