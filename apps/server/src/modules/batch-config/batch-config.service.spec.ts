@@ -11,6 +11,12 @@ describe('BatchConfigService', () => {
       batchConfig: {
         findMany: jest.fn(),
       },
+      studentProfile: {
+        findUnique: jest.fn(),
+      },
+      batchLine: {
+        findMany: jest.fn(),
+      },
     };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -60,6 +66,165 @@ describe('BatchConfigService', () => {
       ]);
       const result = await service.getPickerOptions(2026, '四川');
       expect(result).toEqual([{ code: '某批', name: '某批', order: 3 }]);
+    });
+  });
+
+  describe('listEligibleForStudent (升级版返回 verdict + reasons)', () => {
+    const baseStudent = {
+      id: 10,
+      teacherId: 99,
+      examType: 'PHYSICS',
+      examYear: 2026,
+      totalScore: 480,
+      province: '四川',
+      county: '叙永县',
+      isRural: true,
+      politicalStatus: null,
+      user: { birthDate: new Date('2008-01-01') },
+    };
+
+    const teacherUser = {
+      role: 'TEACHER',
+      teacherProfileId: 99,
+      studentProfileId: null,
+      isSupervisor: false,
+    };
+
+    it('ELIGIBLE 时返回 verdict=ELIGIBLE + SCORE_PASS + 现有 meta 字段', async () => {
+      prismaMock.studentProfile.findUnique.mockResolvedValue(baseStudent);
+      prismaMock.batchConfig.findMany.mockResolvedValue([
+        {
+          id: 1,
+          batch: '本科批A段',
+          examType: '物理',
+          maxGroupCount: 45,
+          maxMajorPerGroup: 6,
+          volunteerMode: 'parallel',
+          admissionOrder: 5,
+          eligibilityRules: {
+            scoreFloor: { type: 'BATCH_LINE' },
+            examTypes: ['物理', '历史'],
+            volunteerMode: 'PARALLEL',
+            hardEligibility: [],
+          },
+        },
+      ]);
+      prismaMock.batchLine.findMany.mockResolvedValue([
+        { batch: '本科批次', examType: '物理类', score: 438 },
+      ]);
+
+      const result = await service.listEligibleForStudent(10, teacherUser);
+      expect(result).toHaveLength(1);
+      expect(result[0].verdict).toBe('ELIGIBLE');
+      expect(result[0].reasons.find((r: any) => r.type === 'SCORE_PASS')).toBeDefined();
+      expect(result[0].batchConfigId).toBe(1);
+      expect(result[0].batchName).toBe('本科批A段');
+      expect(result[0].maxGroupCount).toBe(45);
+      expect(result[0].volunteerMode).toBe('parallel');
+      expect(result[0].admissionOrder).toBe(5);
+    });
+
+    it('SUBSET 硬资格不满足时 verdict=CONDITIONAL + HARD_SUBSET_FAIL', async () => {
+      prismaMock.studentProfile.findUnique.mockResolvedValue({
+        ...baseStudent,
+        county: '其他县',
+        isRural: true,
+      });
+      prismaMock.batchConfig.findMany.mockResolvedValue([
+        {
+          id: 1,
+          batch: '本科批A段',
+          examType: '物理',
+          maxGroupCount: 45,
+          maxMajorPerGroup: 6,
+          volunteerMode: 'parallel',
+          admissionOrder: 5,
+          eligibilityRules: {
+            scoreFloor: { type: 'BATCH_LINE' },
+            examTypes: ['物理'],
+            volunteerMode: 'PARALLEL',
+            hardEligibility: [
+              {
+                scope: 'SUBSET',
+                subset: '国家专项',
+                rule: 'HOUSEHOLD_IN_REGION',
+                params: { regions: ['叙永县'] },
+              },
+            ],
+          },
+        },
+      ]);
+      prismaMock.batchLine.findMany.mockResolvedValue([
+        { batch: '本科批次', examType: '物理类', score: 438 },
+      ]);
+
+      const result = await service.listEligibleForStudent(10, teacherUser);
+      expect(result[0].verdict).toBe('CONDITIONAL');
+      expect(
+        result[0].reasons.find((r: any) => r.type === 'HARD_SUBSET_FAIL' && r.subset === '国家专项'),
+      ).toBeDefined();
+    });
+
+    it('SCORE_FAIL 时 verdict=INELIGIBLE', async () => {
+      prismaMock.studentProfile.findUnique.mockResolvedValue({
+        ...baseStudent,
+        totalScore: 400,
+      });
+      prismaMock.batchConfig.findMany.mockResolvedValue([
+        {
+          id: 1,
+          batch: '本科批A段',
+          examType: '物理',
+          maxGroupCount: 45,
+          maxMajorPerGroup: 6,
+          volunteerMode: 'parallel',
+          admissionOrder: 5,
+          eligibilityRules: {
+            scoreFloor: { type: 'BATCH_LINE' },
+            examTypes: ['物理'],
+            volunteerMode: 'PARALLEL',
+            hardEligibility: [],
+          },
+        },
+      ]);
+      prismaMock.batchLine.findMany.mockResolvedValue([
+        { batch: '本科批次', examType: '物理类', score: 438 },
+      ]);
+
+      const result = await service.listEligibleForStudent(10, teacherUser);
+      expect(result[0].verdict).toBe('INELIGIBLE');
+      expect(result[0].reasons.find((r: any) => r.type === 'SCORE_FAIL')).toBeDefined();
+    });
+
+    it('Prisma 查询传 orderBy: admissionOrder asc, 排序交给 DB', async () => {
+      prismaMock.studentProfile.findUnique.mockResolvedValue(baseStudent);
+      prismaMock.batchConfig.findMany.mockResolvedValue([]);
+      prismaMock.batchLine.findMany.mockResolvedValue([]);
+
+      await service.listEligibleForStudent(10, teacherUser);
+      const batchConfigCall = prismaMock.batchConfig.findMany.mock.calls[0][0];
+      expect(batchConfigCall.orderBy).toEqual({ admissionOrder: 'asc' });
+    });
+
+    it('eligibilityRules 为 null (老数据) → ELIGIBLE 且 reasons 为空', async () => {
+      prismaMock.studentProfile.findUnique.mockResolvedValue(baseStudent);
+      prismaMock.batchConfig.findMany.mockResolvedValue([
+        {
+          id: 1,
+          batch: '本科批A段',
+          examType: '物理',
+          maxGroupCount: 45,
+          maxMajorPerGroup: 6,
+          volunteerMode: 'parallel',
+          admissionOrder: 5,
+          eligibilityRules: null,
+        },
+      ]);
+      prismaMock.batchLine.findMany.mockResolvedValue([]);
+
+      const result = await service.listEligibleForStudent(10, teacherUser);
+      expect(result[0].verdict).toBe('ELIGIBLE');
+      expect(result[0].reasons).toEqual([]);
     });
   });
 });
