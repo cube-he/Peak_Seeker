@@ -185,13 +185,39 @@ describe('getPickerOptions', () => {
     );
   });
 
-  it('queries with select projection (id/code/name only, no relations) and filters to in-Sichuan', async () => {
+  it('queries with select projection (id/code/name/renameHistory) and filters to in-Sichuan', async () => {
     const { service, prisma } = buildService();
     const findManySpy = jest.spyOn(prisma.university, 'findMany');
     await service.getPickerOptions();
     expect(findManySpy).toHaveBeenCalledWith({
       where: { enrollmentPlans: { some: { province: '四川' } } },
-      select: { id: true, code: true, name: true },
+      select: { id: true, code: true, name: true, renameHistory: true },
+      orderBy: { id: 'asc' },
+    });
+  });
+
+  it('batches 参数 → enrollmentPlans.some.batch in 过滤', async () => {
+    const { service, prisma } = buildService();
+    const findManySpy = jest.spyOn(prisma.university, 'findMany');
+    await service.getPickerOptions(['本科批A段', '本科批B段']);
+    expect(findManySpy).toHaveBeenCalledWith({
+      where: {
+        enrollmentPlans: {
+          some: { province: '四川', batch: { in: ['本科批A段', '本科批B段'] } },
+        },
+      },
+      select: { id: true, code: true, name: true, renameHistory: true },
+      orderBy: { id: 'asc' },
+    });
+  });
+
+  it('batches 为空数组 → 不加 batch in 过滤 (等同未传)', async () => {
+    const { service, prisma } = buildService();
+    const findManySpy = jest.spyOn(prisma.university, 'findMany');
+    await service.getPickerOptions([]);
+    expect(findManySpy).toHaveBeenCalledWith({
+      where: { enrollmentPlans: { some: { province: '四川' } } },
+      select: { id: true, code: true, name: true, renameHistory: true },
       orderBy: { id: 'asc' },
     });
   });

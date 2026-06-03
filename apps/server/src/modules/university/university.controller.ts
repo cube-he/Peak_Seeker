@@ -46,11 +46,17 @@ export class UniversityController {
 
   @Get('picker-options')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: '院校 picker 选项（id/code/name 精简）' })
+  @ApiOperation({ summary: '院校 picker 选项（id/code/name 精简，可按 batches 过滤）' })
   @ApiResponse({ status: 200, type: [UniversityPickerOptionDto] })
   @Header('Cache-Control', 'private, max-age=86400')
-  async getPickerOptions(): Promise<UniversityPickerOptionDto[]> {
-    return this.universityService.getPickerOptions();
+  async getPickerOptions(
+    @Query('batches') batches?: string,
+  ): Promise<UniversityPickerOptionDto[]> {
+    const list = batches
+      ?.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return this.universityService.getPickerOptions(list);
   }
 
   @Get('ranking-board')

@@ -52,4 +52,28 @@ describe('getPickerOptions', () => {
     // localeCompare zh-CN: 动物学 < 法学 < 哲学（按拼音）
     expect(result.map(r => r.name)).toEqual(['动物学', '法学', '哲学']);
   });
+
+  it('batches 参数 → enrollmentPlans.some.batch in 过滤', async () => {
+    const { service, prisma } = buildService();
+    const findManySpy = jest.spyOn(prisma.major, 'findMany').mockResolvedValueOnce([]);
+    await service.getPickerOptions(['本科批A段']);
+    expect(findManySpy).toHaveBeenCalledWith({
+      where: {
+        enrollmentPlans: { some: { province: '四川', batch: { in: ['本科批A段'] } } },
+      },
+      select: { id: true, code: true, name: true },
+      orderBy: { id: 'asc' },
+    });
+  });
+
+  it('batches 为空数组 → 不加 batch in 过滤', async () => {
+    const { service, prisma } = buildService();
+    const findManySpy = jest.spyOn(prisma.major, 'findMany').mockResolvedValueOnce([]);
+    await service.getPickerOptions([]);
+    expect(findManySpy).toHaveBeenCalledWith({
+      where: { enrollmentPlans: { some: { province: '四川' } } },
+      select: { id: true, code: true, name: true },
+      orderBy: { id: 'asc' },
+    });
+  });
 });

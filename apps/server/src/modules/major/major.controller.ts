@@ -50,11 +50,17 @@ export class MajorController {
 
   @Get('picker-options')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: '专业 picker 选项（id/code/name 精简）' })
+  @ApiOperation({ summary: '专业 picker 选项（id/code/name 精简，可按 batches 过滤）' })
   @ApiResponse({ status: 200, type: [MajorPickerOptionDto] })
   @Header('Cache-Control', 'private, max-age=86400')
-  async getPickerOptions(): Promise<MajorPickerOptionDto[]> {
-    return this.majorService.getPickerOptions();
+  async getPickerOptions(
+    @Query('batches') batches?: string,
+  ): Promise<MajorPickerOptionDto[]> {
+    const list = batches
+      ?.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return this.majorService.getPickerOptions(list);
   }
 
   @Get(':id')

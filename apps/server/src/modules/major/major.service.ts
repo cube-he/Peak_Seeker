@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { AdmissionService } from '../admission/admission.service';
@@ -150,13 +151,16 @@ export class MajorService {
     return result;
   }
 
-  async getPickerOptions(): Promise<{ id: number; code: string | null; name: string }[]> {
+  async getPickerOptions(batches?: string[]): Promise<{ id: number; code: string | null; name: string }[]> {
     // 仅返回在川招生计划中出现过的专业（避免学生在 picker 里选到四川没人招的专业）
+    // batches: 当学生已选定批次,只返回在这些批次有招生计划的专业 (商业化流程硬过滤)
+    const epWhere: Prisma.EnrollmentPlanWhereInput = { province: '四川' };
+    if (batches && batches.length > 0) {
+      epWhere.batch = { in: batches };
+    }
     const rows = await this.prisma.major.findMany({
       where: {
-        enrollmentPlans: {
-          some: { province: '四川' },
-        },
+        enrollmentPlans: { some: epWhere },
       },
       select: { id: true, code: true, name: true },
       orderBy: { id: 'asc' },  // deterministic order before dedup
