@@ -15,11 +15,26 @@
  * 幂等:每次跑都全量 update,可重复执行。
  */
 import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import type { EligibilityRulesJson } from '../src/modules/batch-eligibility/types';
 
-const prisma = new PrismaClient();
+// 内联类型(脚本独立, 不依赖 src/ 编译,生产服只下 dist/ 也能跑)
+type EligibilityRulesJson = {
+  scoreFloor: { type: 'BATCH_LINE' | 'SPECIAL_LINE' | 'ZHUANKE_LINE'; leniency?: number };
+  examTypes: string[];
+  volunteerMode: 'PARALLEL' | 'SEQUENTIAL';
+  hardEligibility: Array<{
+    scope: 'ALL' | 'SUBSET';
+    subset?: string;
+    rule: string;
+    params?: Record<string, unknown>;
+  }>;
+  softRecommendation?: Array<{ rule: string; message: string }>;
+};
+
+const adapter = new PrismaMariaDb(process.env.DATABASE_URL!);
+const prisma = new PrismaClient({ adapter } as any);
 
 // 县名单 JSON: 从 repo 根目录的 data/seed/ 读
 const COUNTIES_JSON_PATH = join(__dirname, '../../../data/seed/batch-region-counties.json');
@@ -39,7 +54,7 @@ if (REGION_119.length !== 119) throw new Error(`appendix_2_119 expects 119 got $
 if (REGION_143.length !== 143) throw new Error(`appendix_4_143 expects 143 got ${REGION_143.length}`);
 if (REGION_88.length !== 88) throw new Error(`appendix_5_88 expects 88 got ${REGION_88.length}`);
 
-const RULES: Record<string, EligibilityRulesJson> = {
+const RULES: Record<string, any> = {
   本科批A段: {
     scoreFloor: { type: 'BATCH_LINE' },
     examTypes: ['物理', '历史'],
