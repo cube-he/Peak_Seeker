@@ -13,15 +13,27 @@ interface Props {
 }
 
 // 把任意 shape 的值转成 PreferredMajorTier[]:
-//   - 新 shape: 直接返回
-//   - 旧 shape (string[]): 按数组顺序拆梯队 (1 个一梯队)
+//   - 新 shape ({tier, majors}[]): 验证每项有 majors 数组, 返回
+//   - 旧 shape A (string[]): 按数组顺序拆梯队 (1 个一梯队)
+//   - 旧 shape B (string[][]): 嵌套数组 = 多梯队
 //   - null / undefined / 非数组: 空数组
 export function coerceTierShape(value: unknown): PreferredMajorTier[] {
   if (!Array.isArray(value) || value.length === 0) return [];
   if (typeof value[0] === 'string') {
     return (value as string[]).map((m, i) => ({ tier: i + 1, majors: [m] }));
   }
-  return value as PreferredMajorTier[];
+  if (Array.isArray(value[0])) {
+    // 嵌套数组旧格式: [[majors of tier 1], [majors of tier 2], ...]
+    return (value as string[][]).map((majors, i) => ({
+      tier: i + 1,
+      majors: Array.isArray(majors) ? majors.filter((m) => typeof m === 'string') : [],
+    }));
+  }
+  // 假设是 {tier, majors}[] 结构, 但 defensively guard against missing majors
+  return (value as any[]).map((t, i) => ({
+    tier: typeof t?.tier === 'number' ? t.tier : i + 1,
+    majors: Array.isArray(t?.majors) ? t.majors.filter((m: unknown) => typeof m === 'string') : [],
+  }));
 }
 
 // submit 前规范化:
