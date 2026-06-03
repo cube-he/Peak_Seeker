@@ -22,6 +22,8 @@ export interface StudentForEligibility {
   county: string | null;
   politicalStatus: string | null;
   birthDate: Date | null;
+  ethnicity: string | null;   // 民族 (汉族/藏族/彝族/...)
+  gender: string | null;       // MALE/FEMALE
 }
 
 export interface BatchConfigForEligibility {
@@ -171,7 +173,8 @@ export function judgeBatchEligibility(
       // 聚合 batch verdict
       const activeVerdicts = result.subsetResults.filter((s) => s.verdict !== 'DATA_PENDING');
       if (activeVerdicts.length === 0) {
-        // 全 dataPending, 保持原 verdict 不动
+        // 全 dataPending → batch verdict 也 DATA_PENDING (不再误判 ELIGIBLE)
+        result.verdict = 'DATA_PENDING';
       } else if (activeVerdicts.some((s) => s.verdict === 'ELIGIBLE')) {
         result.verdict = 'ELIGIBLE';
       } else if (activeVerdicts.every((s) => s.verdict === 'INELIGIBLE')) {
@@ -196,6 +199,7 @@ const REQUIREMENT_LABEL: Record<string, string> = {
   SCHOOL_RECOMMENDATION: '需中学校长推荐',
   SERVICE_COMMITMENT: '需签 6 年服务承诺',
   GENDER: '性别限制',
+  ETHNICITY_MINORITY: '限少数民族考生',
 };
 
 function evalSubset(student: StudentForEligibility, subset: SubsetRule): SubsetResult {
@@ -292,10 +296,50 @@ function evalHardRule(
       return { satisfied: true, hint: 'PASS' };
     }
     case 'POLITICAL_REVIEW_REQUIRED':
-      return { satisfied: false, soft: true, hint: `${subsetLabel}需通过政治考核, 请老师核实学生政考状态` };
+      // 政考必须现场面审, 系统层只 SOFT_HINT, 学生 politicalStatus 仅作提示
+      return {
+        satisfied: false,
+        soft: true,
+        hint: `${subsetLabel}需通过政治考核${student.politicalStatus ? ` (学生当前: ${student.politicalStatus})` : ''}, 请老师面谈核实`,
+      };
     case 'PHYSICAL_EXAM_REQUIRED':
       return { satisfied: false, soft: true, hint: `${subsetLabel}需通过体检, 请老师核实学生体检结论` };
+    case 'VISION_STANDARD':
+      return { satisfied: false, soft: true, hint: `${subsetLabel}有视力/色觉要求, 请老师核实体检结论` };
+    case 'SCHOOL_RECOMMENDATION':
+      return { satisfied: false, soft: true, hint: `${subsetLabel}需中学校长实名推荐, 请老师核实推荐函` };
+    case 'SERVICE_COMMITMENT': {
+      const years = (rule.params?.years as number) ?? 6;
+      return {
+        satisfied: false,
+        soft: true,
+        hint: `${subsetLabel}需签 ${years} 年服务承诺书, 请老师与家长面谈确认意愿`,
+      };
+    }
+    case 'GENDER': {
+      const allowed = (rule.params?.allowed as 'MALE' | 'FEMALE' | 'BOTH') ?? 'BOTH';
+      if (allowed === 'BOTH') return { satisfied: true, hint: 'PASS' };
+      if (!student.gender) {
+        return { satisfied: false, soft: true, hint: `${subsetLabel}限 ${allowed === 'MALE' ? '男生' : '女生'} 报考, 学生未填性别, 请老师核实` };
+      }
+      if (student.gender !== allowed) {
+        return { satisfied: false, hint: `${subsetLabel}限 ${allowed === 'MALE' ? '男生' : '女生'} 报考, 学生为 ${student.gender === 'MALE' ? '男生' : '女生'}` };
+      }
+      return { satisfied: true, hint: 'PASS' };
+    }
+    case 'ETHNICITY_MINORITY': {
+      // 民族字段值通常为 "汉族" / "藏族" / "彝族" 等
+      // null/未填 → SOFT_HINT, 汉族 → FAIL, 其他 → PASS
+      if (!student.ethnicity) {
+        return { satisfied: false, soft: true, hint: `${subsetLabel}限少数民族考生, 学生未填民族, 请老师核实` };
+      }
+      if (student.ethnicity === '汉族' || student.ethnicity.toUpperCase() === 'HAN') {
+        return { satisfied: false, hint: `${subsetLabel}限少数民族考生, 学生为汉族` };
+      }
+      return { satisfied: true, hint: 'PASS' };
+    }
     default:
-      return { satisfied: false, soft: true, hint: `未知规则: ${(rule as any).rule}` };
+      // 不明规则码: 安全策略是 SOFT_HINT (待人工确认) 而非默认 PASS
+      return { satisfied: false, soft: true, hint: `${subsetLabel}存在未识别的规则 ${(rule as any).rule}, 请老师面谈核实` };
   }
 }

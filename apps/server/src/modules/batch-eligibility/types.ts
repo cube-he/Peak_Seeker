@@ -1,7 +1,7 @@
 // 学生 × 批次 的可填判定结果类型
 // 见 docs/superpowers/specs/2026-06-02-batch-selection-at-intake-design.md § 三
 
-export type BatchEligibilityVerdict = 'ELIGIBLE' | 'CONDITIONAL' | 'INELIGIBLE';
+export type BatchEligibilityVerdict = 'ELIGIBLE' | 'CONDITIONAL' | 'INELIGIBLE' | 'DATA_PENDING';
 
 export type EligibilityReasonType =
   | 'SCORE_PASS'           // 分数过线
@@ -68,7 +68,8 @@ export type HardEligibilityRuleCode =
   | 'GENDER'                     // 性别限制 (如军队/公安院校)
   | 'VISION_STANDARD'            // 视力标准 (如军队/公安院校)
   | 'SCHOOL_RECOMMENDATION'      // 校长实名推荐 (如强基计划/综合评价)
-  | 'SERVICE_COMMITMENT';        // 服务承诺 (如公费师范/定向培养)
+  | 'SERVICE_COMMITMENT'         // 服务承诺 (如公费师范/定向培养)
+  | 'ETHNICITY_MINORITY';        // 必须少数民族 (民语为主/民预/民族班)
 
 // 本期新增: subset-level 判定
 // 见 docs/superpowers/specs/2026-06-03-batch-recommendation-page-design.md § 四

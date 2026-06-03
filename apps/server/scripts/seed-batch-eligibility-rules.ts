@@ -445,7 +445,13 @@ const PLACEHOLDER_BATCHES: Record<string, any> = {
       code: 'qiangji',
       name: '强基计划',
       description: '基础学科拔尖人才, 5+3 校测综合评价, 单独申报',
-      dataPending: true,
+      hardRules: [
+        {
+          scope: 'SUBSET', subset: '强基计划',
+          rule: 'SCHOOL_RECOMMENDATION',
+        },
+      ],
+      softHints: ['需 5 月份单独申报, 6 月校测 (笔试+面试), 综合成绩录取'],
       references: [],
     }],
   },
@@ -457,8 +463,13 @@ const PLACEHOLDER_BATCHES: Record<string, any> = {
     subsets: [{
       code: 'shaomin_yuke',
       name: '省属高校少数民族预科',
-      description: '少数民族考生 + 户籍县在特定区域, 预科 1 年 + 本科',
-      dataPending: true,
+      description: '面向少数民族考生, 预科 1 年 + 本科 (线下 60-80 分可降)',
+      hardRules: [
+        {
+          scope: 'SUBSET', subset: '少数民族预科',
+          rule: 'ETHNICITY_MINORITY',
+        },
+      ],
       references: [],
     }],
   },

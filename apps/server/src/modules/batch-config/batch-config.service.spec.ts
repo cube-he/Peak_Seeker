@@ -80,7 +80,7 @@ describe('BatchConfigService', () => {
       county: '叙永县',
       isRural: true,
       politicalStatus: null,
-      user: { birthDate: new Date('2008-01-01') },
+      user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' },
     };
 
     const teacherUser = {
@@ -240,7 +240,7 @@ describe('BatchConfigService', () => {
       county: '叙永县',
       isRural: true,
       politicalStatus: null,
-      user: { birthDate: new Date('2008-01-01') },
+      user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' },
     };
     const teacherUser = {
       role: 'TEACHER',

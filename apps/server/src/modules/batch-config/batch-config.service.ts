@@ -56,7 +56,7 @@ export class BatchConfigService {
   ): Promise<EligibleBatchForStudent[]> {
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
-      include: { user: { select: { birthDate: true } } },
+      include: { user: { select: { birthDate: true, ethnicity: true, gender: true } } },
     });
     if (!student) throw new NotFoundException('学生不存在');
     if (
@@ -131,6 +131,8 @@ export class BatchConfigService {
           county: student.county,
           politicalStatus: student.politicalStatus as unknown as string | null,
           birthDate: student.user?.birthDate ?? null,
+          ethnicity: student.user?.ethnicity ?? null,
+          gender: student.user?.gender ?? null,
         },
         {
           id: b.id,

@@ -9,6 +9,8 @@ const baseStudent = {
   county: '叙永县',
   politicalStatus: null,
   birthDate: new Date('2008-01-01'),
+  ethnicity: '汉族',
+  gender: 'MALE',
 };
 const baseBatchConfig = (overrides: any = {}) => ({
   id: 1,
@@ -185,6 +187,8 @@ describe('judgeBatchEligibility V2 (subsets 数组)', () => {
     county: '叙永县',
     politicalStatus: null,
     birthDate: new Date('2008-01-01'),
+    ethnicity: '汉族',
+    gender: 'MALE',
   };
   const baseBatchConfig = (rules: any) => ({
     id: 1,
