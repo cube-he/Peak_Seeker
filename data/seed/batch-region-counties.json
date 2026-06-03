@@ -6,7 +6,43 @@
     "province": "四川",
     "applicableYear": 2025,
     "verificationStatus": "VERIFIED",
-    "notes": "基于 PDF 6x 渲染人工核对完成。附件 2/4/5/6 县数均与公告一致 (119/143/88/45 = 395)。"
+    "notes": "基于 PDF 6x 渲染人工核对完成。附件 2/4/5/6 县数均与公告一致 (119/143/88/45 = 395)。",
+    "crossCheckedAgainst": {
+      "policyDir": "data/07_政策文件/",
+      "checkedAt": "2026-06-03",
+      "tool": "scripts/verify-counties-vs-policy.py",
+      "outcome": "招生考试报 2025 与官方政策文件 2024 存在版本性差异, seed 数据以招生考试报 2025 为权威 (高考实际适用)",
+      "discrepancies": [
+        {
+          "appendix": "appendix_2_119",
+          "vsPolicy": "policy_6 (民族地区+艰苦边远 120 县, 2024 版)",
+          "result": "完全一致 119/119 县匹配 (policy 多 1 县是其他地州的, seed 119 严格按招生考试报 2025 附件 2)",
+          "discrepancy": "无"
+        },
+        {
+          "appendix": "appendix_4_143",
+          "vsPolicy": "policy_2 (2024省级公费师范生范围 133 县)",
+          "result": "seed 是 policy 的真超集 (133/133 都在 seed 中) + 10 县扩展",
+          "discrepancy": "seed 多出: 大邑县, 富顺县, 德格县, 新津区, 美姑县, 荣县, 蒲江县, 邛崃市, 郫都区, 金堂县 → 2025 年公费师范范围扩大"
+        },
+        {
+          "appendix": "appendix_5_88",
+          "vsPolicy": "policy_4 (乡村振兴 87 县, 2024 版)",
+          "result": "seed 88 vs policy 87, 共有 86 县",
+          "discrepancy": "seed 多: 南部县, 色达县; seed 少 (相对 policy): 冕宁县 → 招生考试报 2025 已调整凉山州冕宁退出乡村振兴范围, 新增南部/色达"
+        },
+        {
+          "appendix": "appendix_6_45",
+          "vsPolicy": "policy_5 (原深度贫困 46 县, 2024 版)",
+          "result": "seed 45 vs policy 46, 共有 45 县",
+          "discrepancy": "seed 少 (相对 policy): 冕宁县 → 招生考试报 2025 已把冕宁县从原深度贫困名单移除"
+        }
+      ],
+      "verifiedVisualSources": [
+        "data/招生考试报/extracted/p3x6_app5_bottom.png — 凉山州 11 个县, 不含冕宁县",
+        "data/招生考试报/extracted/p3x6_app6_45_原深度贫困县.png — 凉山州 11 个县, 不含冕宁县"
+      ]
+    }
   },
 
   "appendix_2_119": {
