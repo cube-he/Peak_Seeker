@@ -22,6 +22,12 @@ import { useMajorOptions } from '@/components/student/picker/options/useMajorOpt
 import PreferredMajorTierFormItem from '@/components/student/preferred-majors/PreferredMajorTierFormItem';
 import { getRegionCascaderOptions, type CascaderOption } from '@/data/student-options';
 import { fieldLabel } from '@/components/student/stage-fields';
+import {
+  type Subject9Form,
+  to9Subjects,
+  from9Subjects,
+  sum9Subjects,
+} from '@/components/student/stage1-score-mapping';
 
 type SelectOption = { label: string; value: string };
 
@@ -614,7 +620,42 @@ export default function StudentDetailPage() {
               type="button"
               className="btn"
               onClick={() =>
-                form.validateFields().then((values) => saveMutation.mutate(values))
+                form.validateFields().then((values) => {
+                  // 9 科 → 后端 6 槽位字段翻译。
+                  // 老师可能只动了一两个字段，但只要 9 科里任一有值就走翻译。
+                  const subj9: Subject9Form = {
+                    scoreChinese: values.scoreChinese,
+                    scoreMath: values.scoreMath,
+                    scoreEnglish: values.scoreEnglish,
+                    scorePhysics: values.scorePhysics,
+                    scoreHistory: values.scoreHistory,
+                    scoreChemistry: values.scoreChemistry,
+                    scoreBiology: values.scoreBiology,
+                    scorePolitics: values.scorePolitics,
+                    scoreGeography: values.scoreGeography,
+                  };
+                  const has9 = Object.values(subj9).some((v) => v != null);
+                  if (has9) {
+                    const t = from9Subjects(subj9);
+                    Object.assign(values, {
+                      totalScore: t.totalScore,
+                      examType: t.examType,
+                      firstChoice: t.firstChoice,
+                      scoreFirstChoice: t.scoreFirstChoice,
+                      reChoices: t.reChoices,
+                      scoreSub1: t.scoreSub1,
+                      scoreSub2: t.scoreSub2,
+                    });
+                  }
+                  // 后端 DTO 不接受 6 个具体科目字段名 (物/史/化/生/政/地)，删掉
+                  for (const k of [
+                    'scorePhysics', 'scoreHistory',
+                    'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
+                  ]) {
+                    delete (values as Record<string, unknown>)[k];
+                  }
+                  saveMutation.mutate(values);
+                })
               }
               disabled={saveMutation.isPending}
             >
@@ -826,6 +867,9 @@ export default function StudentDetailPage() {
                   initialValues={{
                     ...student,
                     ...student.user,
+                    // 9 科分数字段：把后端 firstChoice/scoreFirstChoice/reChoices/scoreSub1/2
+                    // 解开为具体科目分数（scorePhysics / scoreHistory / scoreChemistry...）
+                    ...to9Subjects(student),
                     provincialRank:
                       student.provincialRank ??
                       student.rankCheck?.calculatedRank ??
@@ -1067,13 +1111,15 @@ function RegionCascaderField({
 }
 
 function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
+  const form = Form.useFormInstance();
   return (
     <div className="sd-form-grid">
+      {/* —— 顶部三段: 科类(disabled) / 年份 / 来源 —— */}
       <div className="field">
-        <label>科类</label>
+        <label>科类<span className="sc-hint"> 自动同步</span></label>
         <Form.Item name="examType" noStyle>
           <Select
-            placeholder="选择科类"
+            disabled
             options={[
               { value: 'PHYSICS', label: '物理类' },
               { value: 'HISTORY', label: '历史类' },
@@ -1109,10 +1155,129 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
           />
         </Form.Item>
       </div>
+
+      {/* —— 必填三科: 语数英 —— */}
+      <div className="field full">
+        <label>必填三科<span className="sc-hint"> 语文 / 数学 / 英语</span></label>
+        <div className="sc-9subjects-grid">
+          <TeacherScoreInput name="scoreChinese" label="语文" max={150} required />
+          <TeacherScoreInput name="scoreMath" label="数学" max={150} required />
+          <TeacherScoreInput name="scoreEnglish" label="英语" max={150} required />
+        </div>
+      </div>
+
+      {/* —— 首选: 物理/历史互斥 —— */}
+      <div className="field full">
+        <label>首选科目<span className="sc-hint"> 物理 / 历史二选一</span></label>
+        <Form.Item
+          noStyle
+          shouldUpdate={(p, c) =>
+            p.scorePhysics !== c.scorePhysics || p.scoreHistory !== c.scoreHistory
+          }
+        >
+          {({ getFieldValue }) => {
+            const hasPhysics = getFieldValue('scorePhysics') != null;
+            const hasHistory = getFieldValue('scoreHistory') != null;
+            return (
+              <div className="sc-9subjects-grid sc-9subjects-grid--2col">
+                <TeacherScoreInput
+                  name="scorePhysics"
+                  label="物理"
+                  max={100}
+                  disabled={hasHistory}
+                  placeholder={hasHistory ? '已选历史' : undefined}
+                  onChange={(v) => {
+                    if (v != null) {
+                      form.setFieldValue('scoreHistory', undefined);
+                      form.setFieldsValue({ examType: 'PHYSICS', firstChoice: '物理' });
+                    }
+                  }}
+                />
+                <TeacherScoreInput
+                  name="scoreHistory"
+                  label="历史"
+                  max={100}
+                  disabled={hasPhysics}
+                  placeholder={hasPhysics ? '已选物理' : undefined}
+                  onChange={(v) => {
+                    if (v != null) {
+                      form.setFieldValue('scorePhysics', undefined);
+                      form.setFieldsValue({ examType: 'HISTORY', firstChoice: '历史' });
+                    }
+                  }}
+                />
+              </div>
+            );
+          }}
+        </Form.Item>
+      </div>
+
+      {/* —— 再选: 化 / 生 / 政 / 地 — 4 选 2 —— */}
+      <div className="field full">
+        <label>再选科目<span className="sc-hint"> 化 / 生 / 政 / 地 四选二</span></label>
+        <Form.Item
+          noStyle
+          shouldUpdate={(p, c) =>
+            p.scoreChemistry !== c.scoreChemistry ||
+            p.scoreBiology !== c.scoreBiology ||
+            p.scorePolitics !== c.scorePolitics ||
+            p.scoreGeography !== c.scoreGeography
+          }
+        >
+          {({ getFieldValue }) => {
+            const reKeys = [
+              'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
+            ] as const;
+            const filledCount = reKeys.filter((k) => getFieldValue(k) != null).length;
+            const lockOthers = filledCount >= 2;
+            const isFilled = (k: string) => getFieldValue(k) != null;
+            return (
+              <div className="sc-9subjects-grid">
+                <TeacherScoreInput name="scoreChemistry" label="化学" max={100}
+                  disabled={lockOthers && !isFilled('scoreChemistry')} />
+                <TeacherScoreInput name="scoreBiology" label="生物" max={100}
+                  disabled={lockOthers && !isFilled('scoreBiology')} />
+                <TeacherScoreInput name="scorePolitics" label="政治" max={100}
+                  disabled={lockOthers && !isFilled('scorePolitics')} />
+                <TeacherScoreInput name="scoreGeography" label="地理" max={100}
+                  disabled={lockOthers && !isFilled('scoreGeography')} />
+              </div>
+            );
+          }}
+        </Form.Item>
+      </div>
+
+      {/* —— 总分(自动累加) + 全省位次 —— */}
       <div className="field">
-        <label>总分<span className="req">必填</span></label>
-        <Form.Item name="totalScore" noStyle>
-          <InputNumber min={0} max={750} style={{ width: '100%' }} />
+        <label>总分<span className="sc-hint"> 自动累加</span></label>
+        <Form.Item
+          noStyle
+          shouldUpdate={(p, c) =>
+            p.scoreChinese !== c.scoreChinese ||
+            p.scoreMath !== c.scoreMath ||
+            p.scoreEnglish !== c.scoreEnglish ||
+            p.scorePhysics !== c.scorePhysics ||
+            p.scoreHistory !== c.scoreHistory ||
+            p.scoreChemistry !== c.scoreChemistry ||
+            p.scoreBiology !== c.scoreBiology ||
+            p.scorePolitics !== c.scorePolitics ||
+            p.scoreGeography !== c.scoreGeography
+          }
+        >
+          {({ getFieldsValue }) => {
+            const v = getFieldsValue([
+              'scoreChinese', 'scoreMath', 'scoreEnglish',
+              'scorePhysics', 'scoreHistory',
+              'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
+            ]) as Subject9Form;
+            const total = sum9Subjects(v);
+            return (
+              <div className="sc-total-display">
+                <span className="sc-total-num">{total}</span>
+                <span className="sc-total-unit"> 分</span>
+              </div>
+            );
+          }}
         </Form.Item>
       </div>
       <div className="field">
@@ -1122,24 +1287,51 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
         </Form.Item>
         {rankCheck ? <div className="sc-hint"><RankCheckExtra rankCheck={rankCheck} /></div> : null}
       </div>
-      <div className="field"><label>语文</label>
-        <Form.Item name="scoreChinese" noStyle><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
+    </div>
+  );
+}
+
+/** 老师端独立 ScoreInput — 视觉风格 (rounded-xl 卡片 + 满分提示) 与学生端 ScoreInput
+ *  对齐, 老师可帮学生录入信息时, UI 和学生看到的一致, 避免误填。
+ *  独立组件 (不共享文件) 防止跨页面状态泄漏 / hydration 错位。 */
+function TeacherScoreInput({
+  name,
+  label,
+  max,
+  required,
+  disabled,
+  placeholder,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  max: number;
+  required?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
+  onChange?: (value: number | null) => void;
+}) {
+  return (
+    <div className={`sc-input-card ${disabled ? 'is-disabled' : ''}`}>
+      <div className="sc-input-card-head">
+        <span className="sc-input-card-label">{label}</span>
+        <span className="sc-input-card-max">满分 {max}</span>
       </div>
-      <div className="field"><label>数学</label>
-        <Form.Item name="scoreMath" noStyle><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field"><label>英语</label>
-        <Form.Item name="scoreEnglish" noStyle><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field"><label>首选科目分</label>
-        <Form.Item name="scoreFirstChoice" noStyle><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field"><label>再选一</label>
-        <Form.Item name="scoreSub1" noStyle><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field"><label>再选二</label>
-        <Form.Item name="scoreSub2" noStyle><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
-      </div>
+      <Form.Item
+        name={name}
+        rules={required ? [{ required: true, message: '必填' }] : undefined}
+        className="mb-0"
+        style={{ marginBottom: 0 }}
+      >
+        <InputNumber
+          min={0}
+          max={max}
+          style={{ width: '100%' }}
+          disabled={disabled}
+          placeholder={placeholder}
+          onChange={onChange}
+        />
+      </Form.Item>
     </div>
   );
 }

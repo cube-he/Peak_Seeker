@@ -4159,6 +4159,52 @@
 .wn-teacher-scope .sc-hint { font-size: 11.5px; color: var(--text-muted); }
 .wn-teacher-scope .sc-hint.err { color: var(--rush); }
 
+/* —— 9 科分数 grid + 卡片 (与学生端 ScoreInput 视觉对齐) —— */
+.wn-teacher-scope .sc-9subjects-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.wn-teacher-scope .sc-9subjects-grid--2col { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 900px) {
+  .wn-teacher-scope .sc-9subjects-grid { grid-template-columns: repeat(2, 1fr); }
+  .wn-teacher-scope .sc-9subjects-grid--2col { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .wn-teacher-scope .sc-9subjects-grid { grid-template-columns: 1fr; }
+}
+.wn-teacher-scope .sc-input-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 10px 12px;
+  transition: border-color var(--dur) var(--ease);
+}
+.wn-teacher-scope .sc-input-card:hover { border-color: var(--primary); }
+.wn-teacher-scope .sc-input-card.is-disabled {
+  background: var(--surface-dim);
+  opacity: 0.65;
+}
+.wn-teacher-scope .sc-input-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+.wn-teacher-scope .sc-input-card-label { font-weight: 600; color: var(--text); font-size: 13px; }
+.wn-teacher-scope .sc-input-card-max { font-size: 11px; color: var(--text-muted); }
+
+/* —— 总分大字展示 —— */
+.wn-teacher-scope .sc-total-display {
+  display: flex; align-items: baseline; gap: 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--primary-fixed);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.wn-teacher-scope .sc-total-num { font-size: 26px; font-weight: 700; }
+.wn-teacher-scope .sc-total-unit { font-size: 13px; color: var(--text-muted); }
+
 .wn-teacher-scope .sc-radio-group { display: flex; gap: 10px; }
 .wn-teacher-scope .sc-radio {
   display: inline-flex; align-items: center; gap: 8px;
