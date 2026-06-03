@@ -166,4 +166,4 @@ export type StudentEditableField = typeof _STUDENT_EDITABLE_TUPLE[number];
 export type TeacherOnlyField = typeof TEACHER_ONLY_FIELDS[number];
 
 /** 注：realName/phone/gender/ethnicity 在 User 模型上，余字段在 StudentProfile 模型上 */
-export const USER_LEVEL_FIELDS = ['realName', 'phone', 'gender', 'ethnicity'] as const;
+export const USER_LEVEL_FIELDS = ['realName', 'phone', 'gender', 'ethnicity', 'birthDate'] as const;

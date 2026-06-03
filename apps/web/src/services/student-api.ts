@@ -34,6 +34,9 @@ export interface UpdateStudentDto {
   dataVersion?: number;
 
   // ── 基本信息 (②) ──
+  // birthDate 实际存在 user 表 (USER_LEVEL_FIELDS), 后端 DTO 接 ISO 字符串
+  // 用 @Type(() => Date) 转 Date. 前端用 dayjs 处理后再 toISOString 提交.
+  birthDate?: string;
   parentPhone?: string;
   highSchool?: string;
   classInfo?: string;

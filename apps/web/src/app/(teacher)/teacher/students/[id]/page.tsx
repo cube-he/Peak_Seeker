@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
 import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Spin, message } from 'antd';
+import dayjs from 'dayjs';
 import {
   LockOutlined,
   SwapOutlined,
@@ -77,6 +78,11 @@ const EXAM_TYPE_LABEL: Record<string, string> = {
 
 // 字段 key → 中文 label 映射(与后端 student-change-log.config.ts 保持一致)
 const CHANGE_LOG_FIELD_LABEL: Record<string, string> = {
+  // CORE_FOR_RECOMMEND 字段 — 跟后端 field-policy.ts 对齐
+  realName: '姓名',
+  phone: '学生手机号',
+  parentPhone: '家长手机号',
+  birthDate: '出生日期',
   examType: '选科类型',
   examYear: '高考年份',
   totalScore: '模考总分',
@@ -672,6 +678,14 @@ export default function StudentDetailPage() {
                   ]) {
                     delete (values as Record<string, unknown>)[k];
                   }
+                  // DatePicker 给出 dayjs 对象 (或 null), 后端 DTO 期望 ISO 字符串.
+                  // dayjs.isDayjs 安全检测后转 ISO; null/undefined 不发送.
+                  const bd = (values as any).birthDate;
+                  if (bd && typeof bd === 'object' && typeof bd.toISOString === 'function') {
+                    (values as any).birthDate = bd.toISOString();
+                  } else if (bd == null) {
+                    delete (values as Record<string, unknown>).birthDate;
+                  }
                   saveMutation.mutate(values);
                 })
               }
@@ -888,6 +902,11 @@ export default function StudentDetailPage() {
                     // 9 科分数字段：把后端 firstChoice/scoreFirstChoice/reChoices/scoreSub1/2
                     // 解开为具体科目分数（scorePhysics / scoreHistory / scoreChemistry...）
                     ...to9Subjects(student),
+                    // birthDate 在 user 表 (ISO 字符串), DatePicker 期望 dayjs 对象
+                    birthDate: (() => {
+                      const raw = student.user?.birthDate ?? student.birthDate;
+                      return raw ? dayjs(raw) : undefined;
+                    })(),
                     provincialRank:
                       student.provincialRank ??
                       student.rankCheck?.calculatedRank ??
@@ -938,7 +957,19 @@ export default function StudentDetailPage() {
                   type="info"
                   showIcon
                   message={'档案未达到"可推荐"阈值'}
-                  description="补完整分数、位次、加分、选科等关键字段后，生成方案按钮才会启用。"
+                  description={(() => {
+                    const missing = Array.isArray(progress.missingFieldsForRecommend)
+                      ? progress.missingFieldsForRecommend
+                      : [];
+                    if (missing.length === 0) {
+                      return '补完整关键字段后，"生成方案"按钮才会启用。';
+                    }
+                    // 把后端字段 key 翻译成中文 label, 直接列出来让老师知道缺什么
+                    const labels = (missing as string[]).map(
+                      (f: string) => CHANGE_LOG_FIELD_LABEL[f] ?? f,
+                    );
+                    return `还缺 ${missing.length} 项关键字段: ${labels.join('、')}。补齐后"生成方案"按钮才会启用。`;
+                  })()}
                 />
               ) : null}
             </div>
@@ -996,6 +1027,17 @@ function BasicFields() {
             <Radio value="MALE">男</Radio>
             <Radio value="FEMALE">女</Radio>
           </Radio.Group>
+        </Form.Item>
+      </div>
+      <div className="field">
+        <label>出生日期<span className="sc-hint"> 批次年龄校验用</span></label>
+        <Form.Item name="birthDate" noStyle>
+          <DatePicker
+            style={{ width: '100%' }}
+            format="YYYY-MM-DD"
+            placeholder="选择出生日期"
+            disabledDate={(d) => d && d.isAfter(dayjs())}
+          />
         </Form.Item>
       </div>
       <div className="field">

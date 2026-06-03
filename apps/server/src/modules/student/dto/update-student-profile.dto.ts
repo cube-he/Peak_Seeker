@@ -56,6 +56,14 @@ export class UpdateStudentProfileDto {
 
   // --- 基本信息 ---
 
+  // birthDate 在 user 表 (USER_LEVEL_FIELDS 路由到 user.update),
+  // 批次资格用它算年龄 (RPA/民航等), IntakeGap 也把它列为必填.
+  @ApiPropertyOptional({ description: '出生日期 (ISO 8601 字符串)' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  birthDate?: Date;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

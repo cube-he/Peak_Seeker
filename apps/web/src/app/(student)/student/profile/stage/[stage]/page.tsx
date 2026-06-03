@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
+  DatePicker,
   Form,
   Input,
   InputNumber,
@@ -15,6 +16,7 @@ import {
   Alert,
   message,
 } from 'antd';
+import dayjs from 'dayjs';
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
@@ -156,6 +158,10 @@ export default function StudentStageFormPage() {
         'formFiller',
       ];
       for (const f of nonScoreFields) initial[f] = profile[f];
+      // birthDate 是 Date 字段, DatePicker 期望 dayjs 对象. 后端返回 ISO 字符串.
+      // 兼容 profile.birthDate (扁平) 或 profile.user?.birthDate (嵌套).
+      const rawBirth = profile.birthDate ?? profile.user?.birthDate ?? null;
+      initial.birthDate = rawBirth ? dayjs(rawBirth) : undefined;
       Object.assign(initial, to9Subjects(profile));
     } else {
       for (const f of fields) initial[f] = profile[f];
@@ -230,6 +236,8 @@ export default function StudentStageFormPage() {
           ethnicity: values.ethnicity,
           politicalStatus: values.politicalStatus,
           formFiller: values.formFiller,
+          // DatePicker 给出 dayjs 对象, 后端 DTO 要 ISO 字符串
+          birthDate: values.birthDate?.toISOString?.() ?? undefined,
           ...translated,
         };
         saveMutation.mutate(payload);
@@ -582,6 +590,18 @@ function Stage1Fields() {
                 { value: 'MALE', label: '男' },
                 { value: 'FEMALE', label: '女' },
               ]}
+            />
+          </Form.Item>
+          <Form.Item
+            name="birthDate"
+            label="出生日期"
+            rules={[{ required: true, message: '请选择出生日期 (批次年龄校验需要)' }]}
+          >
+            <DatePicker
+              className="w-full"
+              format="YYYY-MM-DD"
+              placeholder="请选择出生日期"
+              disabledDate={(d) => d && d.isAfter(dayjs())}
             />
           </Form.Item>
           <Form.Item name="ethnicity" label="民族" rules={[{ required: true }]}>
