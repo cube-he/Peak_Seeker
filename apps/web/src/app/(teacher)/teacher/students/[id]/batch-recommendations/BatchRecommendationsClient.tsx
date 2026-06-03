@@ -4,9 +4,8 @@ import { useRouter } from 'next/navigation';
 import {
   batchRecommendationsApi,
   type BatchRecommendationsResponse,
-  type BatchRecommendation,
-  type SubsetResult,
 } from '@/services/batch-recommendations-api';
+import { BatchCard } from './BatchCard';
 
 export function BatchRecommendationsClient({ studentId }: { studentId: number }) {
   const router = useRouter();
@@ -90,12 +89,17 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
       >
         ← 返回学生详情 / 回填资料
       </a>
-      <BatchCardList
-        batches={data.batches}
-        selected={selected}
-        onToggle={toggle}
-        disabled={isLocked || submitting}
-      />
+      <div className="space-y-4">
+        {data.batches.map((b) => (
+          <BatchCard
+            key={b.batchConfigId}
+            batch={b}
+            selected={selected.has(b.batchName)}
+            onToggle={() => toggle(b.batchName)}
+            disabled={isLocked || submitting}
+          />
+        ))}
+      </div>
       {!isLocked && (
         <div className="border-t pt-4 sticky bottom-0 bg-white">
           <div className="mb-2">已选 {selected.size} 个批次</div>
@@ -114,45 +118,6 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-// 占位组件, Task 11 实装为完整 BatchCard
-function BatchCardList({
-  batches,
-  selected,
-  onToggle,
-  disabled,
-}: {
-  batches: BatchRecommendation[];
-  selected: Set<string>;
-  onToggle: (b: string) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="space-y-4">
-      {batches.map((b) => (
-        <div key={b.batchConfigId} className="border p-4 rounded">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={selected.has(b.batchName)}
-              onChange={() => onToggle(b.batchName)}
-              disabled={disabled}
-            />
-            <span className="font-semibold">{b.batchName}</span>
-            <span className="text-sm text-gray-600">[{b.verdict}]</span>
-          </label>
-          <div className="mt-2 text-sm">
-            {(b.subsetResults ?? []).map((s: SubsetResult) => (
-              <div key={s.code} className="ml-4 text-gray-700">
-                ▸ {s.name} — {s.verdict}
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
