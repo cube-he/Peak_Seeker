@@ -626,6 +626,18 @@ export default function StudentDetailPage() {
             >
               <TIcon.excel /> 导出登记表
             </button>
+            {/* 推荐批次入口 — SUBMITTED/NEEDS_CHANGES/VERIFIED 可见, DRAFT 不显示 */}
+            {(intakeStatus === 'SUBMITTED' ||
+              intakeStatus === 'NEEDS_CHANGES' ||
+              intakeStatus === 'VERIFIED') && (
+              <Link
+                href={`/teacher/students/${studentId}/batch-recommendations`}
+                className="btn"
+              >
+                <TIcon.shield />{' '}
+                {student?.batchesConfirmedAt ? '查看/修改批次' : '查看推荐批次'}
+              </Link>
+            )}
             {intakeStatus !== 'VERIFIED' ? (
               <>
                 <button
