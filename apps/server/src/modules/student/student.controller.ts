@@ -160,6 +160,22 @@ export class StudentController {
     );
   }
 
+  @Post(':id/confirm-batches')
+  @ApiOperation({ summary: '老师在批次推荐页确认最终批次' })
+  @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
+  async confirmBatches(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: { preferredBatches: string[]; reviewComment?: string },
+  ) {
+    return this.studentService.confirmBatches(id, {
+      teacherProfileId: user.role === 'ADMIN' ? undefined : user.teacherProfileId ?? undefined,
+      reviewerUserId: user.id,
+      preferredBatches: body.preferredBatches,
+      reviewComment: body.reviewComment,
+    });
+  }
+
   @Put(':id')
   @ApiOperation({ summary: 'Update student profile through legacy route' })
   @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
