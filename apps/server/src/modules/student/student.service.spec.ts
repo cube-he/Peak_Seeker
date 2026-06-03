@@ -665,6 +665,7 @@ describe('StudentService', () => {
         id: 1,
         userId: 100,
         intakeStatus: 'DRAFT',
+        preferredBatches: ['本科批A段'],
         user: { id: 100, realName: '小王', phone: '13800000000', gender: 'MALE' },
       });
       prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'SUBMITTED' });
@@ -679,9 +680,35 @@ describe('StudentService', () => {
             intakeStatus: 'SUBMITTED',
             intakeSubmittedAt: expect.any(Date),
             intakeReviewComment: null,
+            batchesConfirmedAt: expect.any(Date),
           }),
         }),
       );
+    });
+
+    it('submitMyIntake 在 preferredBatches 为空时拒绝', async () => {
+      (service as any).progressService.compute.mockReturnValue({
+        studentSelfCompleteness: 100,
+        teacherDataCompleteness: 0,
+        stageProgress: {
+          stage1: { filled: 16, total: 16, completed: true },
+          stage2: { filled: 0, total: 15, completed: false },
+          stage3: { filled: 0, total: 26, completed: false },
+        },
+        overallCompleteness: 60,
+        isRecommendable: false,
+        missingFieldsForRecommend: [],
+      });
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        intakeStatus: 'DRAFT',
+        preferredBatches: [],
+        user: { id: 100, realName: '小王', phone: '13800000000', gender: 'MALE' },
+      });
+
+      await expect((service as any).submitMyIntake(100)).rejects.toThrow(/批次/);
+      expect(prisma.studentProfile.update).not.toHaveBeenCalled();
     });
 
     it('reviewIntake verifies an assigned student for plan creation', async () => {
