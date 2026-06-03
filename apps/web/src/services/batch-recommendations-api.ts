@@ -5,10 +5,12 @@ export type Verdict = 'ELIGIBLE' | 'CONDITIONAL' | 'INELIGIBLE' | 'DATA_PENDING'
 export interface ReferenceItem {
   title: string;
   filename: string | null;
-  type: 'pdf' | 'xlsx' | 'announcement';
+  type: 'pdf' | 'xlsx' | 'doc' | 'announcement';
   downloadUrl: string | null;
   available: boolean;
   sourceNote?: string;
+  /** true: 外站资源 (官网公告), 只显示"查看"按钮; false/undefined: 本地文件 显示"预览"+"下载" */
+  external?: boolean;
 }
 
 export interface SubsetResult {

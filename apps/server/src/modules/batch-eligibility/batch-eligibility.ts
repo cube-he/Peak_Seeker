@@ -241,11 +241,32 @@ function evalSubset(student: StudentForEligibility, subset: SubsetRule): SubsetR
   };
 }
 
-function refToItem(ref: { title: string; filename: string | null; type: string; sourceNote?: string }): SubsetResult['references'][number] {
+function refToItem(ref: {
+  title: string;
+  filename: string | null;
+  type: string;
+  externalUrl?: string;
+  sourceNote?: string;
+}): SubsetResult['references'][number] {
+  // 三种情况:
+  //   1) externalUrl 优先 (官网公告 / 教育考试院链接), 直接外跳, external=true
+  //   2) filename 有, 走本地 /attachments/policy/<filename>
+  //   3) 都没 → null, available=false ("文件待补")
+  if (ref.externalUrl) {
+    return {
+      title: ref.title,
+      filename: null,
+      type: ref.type as 'pdf' | 'xlsx' | 'doc' | 'announcement',
+      downloadUrl: ref.externalUrl,
+      available: true,
+      sourceNote: ref.sourceNote,
+      external: true,
+    };
+  }
   return {
     title: ref.title,
     filename: ref.filename,
-    type: ref.type as 'pdf' | 'xlsx' | 'announcement',
+    type: ref.type as 'pdf' | 'xlsx' | 'doc' | 'announcement',
     downloadUrl: ref.filename ? `/attachments/policy/${ref.filename}` : null,
     available: !!ref.filename,
     sourceNote: ref.sourceNote,

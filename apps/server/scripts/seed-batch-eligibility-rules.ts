@@ -67,6 +67,95 @@ const ref_junjian = {
   filename: 'junjian_tijian.pdf',
   type: 'pdf' as const,
 };
+// —— 军队/公安/司法政审 (POLITICAL_REVIEW_REQUIRED) 共用 4 个 references ——
+const ref_zhengshen_biao = {
+  title: '征集和招录人员政治考核表（式样）',
+  filename: 'zhengshen_kaohe_biao.doc',
+  type: 'doc' as const,
+};
+const ref_zhengshen_shuoming = {
+  title: '《征集和招录人员政治考核表》填写说明',
+  filename: 'zhengshen_kaohe_shuoming.docx',
+  type: 'doc' as const,
+};
+const ref_zhengshen_tongji = {
+  title: '政治考核情况统计表',
+  filename: 'zhengshen_tongji.docx',
+  type: 'doc' as const,
+};
+const ref_sceea_2026_zhengshen = {
+  title: '四川教育考试院 2026 军队院校政考通知 (官网)',
+  filename: null,
+  externalUrl: 'https://www.sceea.cn/Html/202605/Newsdetail_4815.html',
+  type: 'announcement' as const,
+};
+// —— 公安院校专有 references (2025 版本, 待 2026 出后替换) ——
+const ref_gongan_xianchang_ceshi = {
+  title: '公安院校现场招生测试有关注意事项 (2025)',
+  filename: 'gongan_xianchang_ceshi_zhuyi.docx',
+  type: 'doc' as const,
+  sourceNote: '2025 版本, 待 2026 通知出后替换',
+};
+const ref_gongan_huanbing_shenbao = {
+  title: '公安院校公安专业招生患病经历申报表 (2025)',
+  filename: 'gongan_huanbing_shenbaobiao.docx',
+  type: 'doc' as const,
+  sourceNote: '2025 版本, 待 2026 通知出后替换',
+};
+const ref_gongan_2025_sichuan_zhaosheng = {
+  title: '四川省 2025 年公安院校公安专业招生通知',
+  filename: 'gongan_2025_sichuan_zhaosheng.docx',
+  type: 'doc' as const,
+  sourceNote: '2025 版本, 待 2026 通知出后替换',
+};
+const ref_sceea_2025_gongan = {
+  title: '四川教育考试院 2025 公安院校招生通知 (官网, 待 2026 替换)',
+  filename: null,
+  externalUrl: 'https://www.sceea.cn/Html/202506/Newsdetail_4309.html',
+  type: 'announcement' as const,
+  sourceNote: '2025 版本, 待 2026 出后替换为今年链接',
+};
+// —— 公安招生稳定标准 (相对稳定, 不标"待替换") ——
+const ref_gongan_tineng = {
+  title: '公安院校公安专业招生体能测评标准',
+  filename: 'gongan_tineng_ceping.docx',
+  type: 'doc' as const,
+};
+const ref_gongan_zhengzhi = {
+  title: '公安院校公安专业招生政治考察标准',
+  filename: 'gongan_zhengzhi_kaocha.docx',
+  type: 'doc' as const,
+};
+const ref_gongan_tijian = {
+  title: '公安院校公安专业招生体检标准',
+  filename: 'gongan_tijian.docx',
+  type: 'doc' as const,
+};
+// —— 司法警官类 (中央司法警官学院, 2025 占位, 待 2026 出后替换) ——
+const ref_sifa_2025_zhengzhi = {
+  title: '中央司法警官学院 2025 年招生政治考察表',
+  filename: 'sifa_2025_zhengzhi_kaocha.docx',
+  type: 'doc' as const,
+  sourceNote: '2025 版本, 待 2026 通知出后替换',
+};
+const ref_sifa_mianshi_tijian = {
+  title: '中央司法警官学院面试体检体能测试登记表',
+  filename: 'sifa_mianshi_tijian_tineng.docx',
+  type: 'doc' as const,
+};
+const ref_sceea_2025_sifa = {
+  title: '四川教育考试院 2025 司法警官类招生通知 (官网, 待 2026 替换)',
+  filename: null,
+  externalUrl: 'https://www.sceea.cn/Html/202506/Newsdetail_4312.html',
+  type: 'announcement' as const,
+  sourceNote: '2025 版本, 待 2026 出后替换为今年链接',
+};
+// —— 航海类: 国标 GB 30035-2021 船员健康检查要求 ——
+const ref_chuanyuan_jiankang = {
+  title: '《船员健康检查要求》GB 30035-2021 (国标)',
+  filename: 'chuanyuan_jiankang_jiancha_gb30035.pdf',
+  type: 'pdf' as const,
+};
 
 const RULES: Record<string, any> = {
   本科批A段: {
@@ -187,7 +276,14 @@ const RULES: Record<string, any> = {
           },
         ],
         softHints: ['需通过体能测试, 体重身高视力具体标准看军检 PDF, 老师跟家长核实'],
-        references: [ref_junjian, ref_zhaosheng_wuli],
+        references: [
+          ref_junjian,
+          ref_zhengshen_biao,
+          ref_zhengshen_shuoming,
+          ref_zhengshen_tongji,
+          ref_sceea_2026_zhengshen,
+          ref_zhaosheng_wuli,
+        ],
       },
       {
         code: 'gongan',
@@ -208,7 +304,23 @@ const RULES: Record<string, any> = {
             rule: 'PHYSICAL_EXAM_REQUIRED',
           },
         ],
-        references: [ref_zhaosheng_wuli],
+        references: [
+          // 公安稳定标准 (体能/政治/体检, 不随年份变)
+          ref_gongan_tineng,
+          ref_gongan_zhengzhi,
+          ref_gongan_tijian,
+          // 公安专有 (2025 占位, 等今年通知出后替换)
+          ref_gongan_2025_sichuan_zhaosheng,
+          ref_gongan_xianchang_ceshi,
+          ref_gongan_huanbing_shenbao,
+          ref_sceea_2025_gongan,
+          // 政审通用 (与军队/司法共用)
+          ref_zhengshen_biao,
+          ref_zhengshen_shuoming,
+          ref_zhengshen_tongji,
+          ref_sceea_2026_zhengshen,
+          ref_zhaosheng_wuli,
+        ],
       },
       {
         code: 'sifa',
@@ -224,7 +336,18 @@ const RULES: Record<string, any> = {
             rule: 'PHYSICAL_EXAM_REQUIRED',
           },
         ],
-        references: [ref_zhaosheng_wuli],
+        references: [
+          // 司法警官专有 (中央司法警官学院, 2025 占位)
+          ref_sifa_2025_zhengzhi,
+          ref_sifa_mianshi_tijian,
+          ref_sceea_2025_sifa,
+          // 政审通用 (军队/公安/司法共用)
+          ref_zhengshen_biao,
+          ref_zhengshen_shuoming,
+          ref_zhengshen_tongji,
+          ref_sceea_2026_zhengshen,
+          ref_zhaosheng_wuli,
+        ],
       },
       {
         code: 'hanghai',
@@ -237,7 +360,7 @@ const RULES: Record<string, any> = {
           },
         ],
         softHints: ['裸眼视力 4.7 以上 + 无色盲色弱, 体检表参考招生章程'],
-        references: [ref_zhaosheng_wuli],
+        references: [ref_chuanyuan_jiankang, ref_zhaosheng_wuli],
       },
       {
         code: 'liuxue_dingxiang',

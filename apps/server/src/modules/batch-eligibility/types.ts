@@ -88,10 +88,14 @@ export interface RuleEvalResult {
 export interface ReferenceItem {
   title: string;
   filename: string | null;
-  type: 'pdf' | 'xlsx' | 'announcement';
+  type: 'pdf' | 'xlsx' | 'doc' | 'announcement';
+  /** 优先 = externalUrl (官网链接); 次 = /attachments/policy/<filename>; 都没 = null */
   downloadUrl: string | null;
+  /** true 表示有可点击的链接 (本地文件存在 or 外链有效) */
   available: boolean;
   sourceNote?: string;
+  /** announcement / 外站资源: true 时前端只显示"查看", 不分预览/下载 */
+  external?: boolean;
 }
 
 export interface SubsetRule {
@@ -108,7 +112,9 @@ export interface SubsetRule {
 export interface ReferenceFile {
   title: string;
   filename: string | null;
-  type: 'pdf' | 'xlsx' | 'announcement';
+  type: 'pdf' | 'xlsx' | 'doc' | 'announcement';
+  /** 外站链接 (官网公告等), 跟 filename 互斥 */
+  externalUrl?: string;
   sourceNote?: string;
 }
 
