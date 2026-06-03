@@ -1,5 +1,6 @@
 import {
   Injectable,
+  BadRequestException,
   NotFoundException,
   ForbiddenException,
   ConflictException,
@@ -11,6 +12,7 @@ import { CreatePlanV2Dto } from './dto/create-plan-v2.dto';
 import { ReviewPlanDto } from './dto/review-plan.dto';
 import { PlanStateMachineService, PlanAction } from './plan-state-machine.service';
 import { RiskEngineService } from './risk-engine/risk-engine.service';
+import { FEATURE_FLAGS } from '../../config/feature-flags';
 
 @Injectable()
 export class PlanService {
@@ -346,6 +348,19 @@ export class PlanService {
       where: { id: dto.batchConfigId },
     });
     if (!batchConfig) throw new NotFoundException('批次配置不存在');
+
+    // 商业化流程: 只能为学生选定的批次出方案
+    // 见 docs/superpowers/specs/2026-06-02-batch-selection-at-intake-design.md § 十
+    const studentBatches = Array.isArray(student.preferredBatches)
+      ? (student.preferredBatches as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [];
+    if (studentBatches.length > 0 && !studentBatches.includes(batchConfig.batch)) {
+      const msg = `批次「${batchConfig.batch}」未被学生选定 (已选: ${studentBatches.join(', ')})`;
+      if (FEATURE_FLAGS.STRICT_BATCH_VALIDATION) {
+        throw new BadRequestException(msg);
+      }
+      console.warn('[STRICT_BATCH_VALIDATION disabled]', msg);
+    }
 
     const existingPlan = await this.prisma.volunteerPlan.findFirst({
       where: { studentId, batchConfigId: batchConfig.id },

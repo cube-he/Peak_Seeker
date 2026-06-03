@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, ForbiddenException, Optional } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { FEATURE_FLAGS } from '../../config/feature-flags';
 import { ScoreSegmentService } from '../score-segment/score-segment.service';
 import { buildHardFilterWhere } from './filters/hard-filter';
 import { GenderRule } from './filters/soft-rules/gender.rule';
@@ -12,13 +13,23 @@ import { SoftRule, SoftFailReason } from './filters/soft-rule.interface';
 import { calcDynamicGradient, calcGradient } from './gradient-calculator';
 import type { RankStrategyResult } from '../recommend/interfaces/recommend.types';
 import { RankStrategyService } from '../recommend/services/rank-strategy.service';
+import {
+  flattenPreferredMajors,
+  getTierMajors,
+  listTiers,
+  type PreferredMajorTier,
+} from '../../utils/preferred-majors';
 
 interface GetCandidatesQuery {
   page: number;
   pageSize: number;
-  keyword?: string;
+  keyword?: string; // 旧接口兼容: 院校/专业合并
+  keywordUniversity?: string; // 仅匹配 university.name
+  keywordMajor?: string; // 匹配 major.name OR majorName
   includeSoftFails?: boolean;
   sort?: CandidateGroupSort;
+  tier?: number;
+  excludeAdded?: boolean;
 }
 
 type CandidateGroupSort =
@@ -56,6 +67,11 @@ interface CandidateGroupFullResult {
   scoreBasedRank: number | null;
   sort: CandidateGroupSort;
   groups: any[];
+  // 学生当前的意向梯队结构(给前端 chip 渲染); groupCount = 假设切到该 tier 能看到的候选 group 数
+  // 不考虑 RECOMMENDED/BACKUP 是否为空 (粗略统计), 已应用硬过滤 + keyword + excludeAdded
+  availableTiers: Array<{ tier: number; majors: string[]; groupCount: number }>;
+  // 当前应用的 tier (echo 回去, 便于前端 URL 同步)
+  appliedTier: number;
 }
 
 function uniqueValues<T extends string | number>(values: Array<T | null | undefined>): T[] {
@@ -478,8 +494,12 @@ export class PlanCandidateService {
       planUpdatedAt: plan.updatedAt instanceof Date ? plan.updatedAt.getTime() : plan.updatedAt,
       studentUpdatedAt: plan.student?.updatedAt instanceof Date ? plan.student.updatedAt.getTime() : plan.student?.updatedAt,
       keyword: q.keyword?.trim() || '',
+      keywordUniversity: q.keywordUniversity?.trim() || '',
+      keywordMajor: q.keywordMajor?.trim() || '',
       includeSoftFails: q.includeSoftFails !== false,
       sort: q.sort ?? 'MAJOR_MATCH',
+      tier: q.tier ?? 0,
+      excludeAdded: q.excludeAdded !== false,
     });
   }
 
@@ -754,12 +774,19 @@ export class PlanCandidateService {
     return where;
   }
 
-  private buildSoftRules(restrictions: any[]): SoftRule[] {
+  // 硬过滤规则: 学生身份属性 (性别 / 健康 / 户籍 / 民族), 不可改变, 不符合直接剔除该专业, 不进任何分区
+  private buildHardRules(restrictions: any[]): SoftRule[] {
     return [
       new HealthRestrictionRule(restrictions),
       new GenderRule(),
       new HouseholdRule(),
       new EthnicityRule(),
+    ];
+  }
+
+  // 软规则: 学生/家长可权衡的偏好 (学费 / 办学性质), 不符合时进风险区, 由 includeSoftFails 控制是否显示
+  private buildSoftRules(): SoftRule[] {
+    return [
       new TuitionRule(),
       new NatureRule(),
     ];
@@ -798,7 +825,7 @@ export class PlanCandidateService {
   }
 
   private scoreMajorMatch(student: any, ep: any) {
-    const preferredMajors = asStringArray(student.preferredMajors);
+    const preferredMajors = flattenPreferredMajors(student.preferredMajors);
     const preferredCategories = asStringArray(student.preferredMajorCategories);
     const excludedMajors = asStringArray(student.excludedMajors);
     const excludedCategories = asStringArray(student.excludedMajorCategories);
@@ -1034,18 +1061,29 @@ export class PlanCandidateService {
   }
 
   private hasStrictMajorPreference(student: any) {
-    return asStringArray(student.preferredMajors).length > 0 ||
+    return flattenPreferredMajors(student.preferredMajors).length > 0 ||
       asStringArray(student.preferredMajorCategories).length > 0;
   }
 
   private isPreferredMajor(student: any, ep: any) {
     const majorName = ep.majorName || ep.major?.name || '';
     const category = ep.major?.category || '';
-    return asStringArray(student.preferredMajors).includes(majorName) ||
+    return flattenPreferredMajors(student.preferredMajors).includes(majorName) ||
       (category ? asStringArray(student.preferredMajorCategories).includes(category) : false);
   }
 
-  private classifyMajorDisplay(student: any, ep: any, failReasons: SoftFailReason[], rankStrategy: RankStrategyResult) {
+  // 判断 EP 是否命中搜索关键词 (只看专业名 / 类别, 不看院校名 / groupName,
+  // 因为院校/组名命中不指向具体专业, 不应当作锚定)
+  private isMajorMatchKeyword(ep: any, keyword?: string): boolean {
+    if (!keyword) return false;
+    const k = keyword.trim();
+    if (!k) return false;
+    const majorName = ep.majorName ?? ep.major?.name ?? '';
+    const category = ep.major?.category ?? '';
+    return String(majorName).includes(k) || String(category).includes(k);
+  }
+
+  private classifyMajorDisplay(student: any, ep: any, failReasons: SoftFailReason[], rankStrategy: RankStrategyResult, tierMajors?: string[]) {
     if (failReasons.length > 0) {
       return {
         displaySection: 'RISK' as CandidateMajorDisplaySection,
@@ -1062,6 +1100,21 @@ export class PlanCandidateService {
       return {
         displaySection: 'RISK' as CandidateMajorDisplaySection,
         displayReason: '位次明显超出历史可解释范围',
+      };
+    }
+
+    // tier 过滤模式 (老师选了具体梯队): 优先于学生 profile 的整体意向集合
+    // 命中梯队 → RECOMMENDED; 同组其他 PASS 专业 → BACKUP (作服从调剂参考)
+    if (tierMajors && tierMajors.length > 0) {
+      if (tierMajors.includes(ep.majorName)) {
+        return {
+          displaySection: 'RECOMMENDED' as CandidateMajorDisplaySection,
+          displayReason: '梯队意向专业',
+        };
+      }
+      return {
+        displaySection: 'BACKUP' as CandidateMajorDisplaySection,
+        displayReason: '同专业组其他专业,作服从调剂参考',
       };
     }
 
@@ -1152,7 +1205,10 @@ export class PlanCandidateService {
   async getCandidateGroups(planId: number, q: GetCandidatesQuery, userId?: number) {
     const plan = await this.prisma.volunteerPlan.findUnique({
       where: { id: planId },
-      include: { student: true },
+      include: {
+        student: true,
+        planItems: true,
+      },
     });
     if (!plan) throw new NotFoundException('方案不存在');
     if (userId && plan.createdById !== userId && plan.student.userId !== userId) {
@@ -1166,6 +1222,34 @@ export class PlanCandidateService {
     });
     if (!student) throw new NotFoundException('学生不存在');
 
+    // 商业化流程: plan 批次必须在学生 preferredBatches 中
+    // 见 docs/superpowers/specs/2026-06-02-batch-selection-at-intake-design.md § 十
+    const studentBatches = Array.isArray(student.preferredBatches)
+      ? (student.preferredBatches as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [];
+    if (studentBatches.length > 0 && plan.batchName && !studentBatches.includes(plan.batchName)) {
+      const msg = `该 plan 的批次「${plan.batchName}」未被学生选定 (已选: ${studentBatches.join(', ')})`;
+      if (FEATURE_FLAGS.STRICT_BATCH_VALIDATION) {
+        throw new BadRequestException(msg);
+      }
+      console.warn('[STRICT_BATCH_VALIDATION disabled]', msg);
+    }
+
+    // 意向梯队过滤: 取该梯队的专业列表用于后续 group/major 级过滤; 0 / undefined 表示不过滤
+    const tierMajors = (q.tier && q.tier > 0)
+      ? getTierMajors(student.preferredMajors, q.tier)
+      : [];
+    // 已加入当前 plan 的 group 简易 key (universityId|groupCode) 集合, 默认隐藏
+    // 同一 plan 下 batch/recruitType/subjects 都相同, 不需要完整 5 元组
+    const excludeAdded = q.excludeAdded !== false;
+    const addedGroupKeys = new Set<string>();
+    if (excludeAdded && Array.isArray((plan as any).planItems)) {
+      for (const item of (plan as any).planItems) {
+        if (!item) continue;
+        addedGroupKeys.add(`${item.universityId}|${item.groupCode ?? ''}`);
+      }
+    }
+
     const province = student.province ?? '四川';
     const subjects = EXAM_TYPE_TO_SUBJECTS[student.examType ?? 'PHYSICS'] || '物理';
     const source = await this.resolveEnrollmentPlanSource({
@@ -1174,12 +1258,16 @@ export class PlanCandidateService {
       batchName: plan.batchName,
       subjects,
     });
+    // keyword 不能在 EnrollmentPlan 行级直接 OR 过滤,否则同一专业组里非命中的专业行会被丢掉,
+    // 导致 UI 上"专业组里只显示搜到的那个专业"。
+    // 改法:先用 keyword 圈出命中的 groupKey 集合,再用 groupKey 限制后续 fetch,
+    // 这样命中专业所在专业组的"其余专业"也会被拉回。
     const where = buildHardFilterWhere({
       year: source.sourceYear,
       province,
       batchName: plan.batchName,
       subjects,
-      keyword: q.keyword,
+      // keyword 不传 — 由下面 groupKey 预查询处理
     });
     const page = q.page ?? 1;
     const pageSize = q.pageSize ?? 20;
@@ -1189,6 +1277,91 @@ export class PlanCandidateService {
       return this.paginateCandidateGroups(cached, page, pageSize);
     }
 
+    // 拆分搜索: 院校 / 专业各自独立; 同时填则 AND 组合 (院校的特定专业)
+    // 兜底: 旧 keyword 参数视为"同时匹配院校或专业" (OR 组合, 老 URL / 老前端兼容)
+    const kwUniversity = q.keywordUniversity?.trim();
+    const kwMajor = q.keywordMajor?.trim();
+    const kwLegacy = q.keyword?.trim();
+    const hasNewKeywords = Boolean(kwUniversity || kwMajor);
+    const hasAnyKeyword = hasNewKeywords || Boolean(kwLegacy);
+    // 专业层"搜索匹配"chip 用的 keyword: 优先专业搜索, 兜底旧 keyword
+    const matchKeyword = kwMajor || kwLegacy;
+    if (hasAnyKeyword) {
+      // 构造 where 条件:
+      //   - 新接口: AND 院校 + 专业 (任一为空时只加另一边)
+      //   - 旧接口: OR 院校/专业 (单关键词合并语义, 不匹配 groupName 因为老师不会搜)
+      const keywordWhere: Record<string, unknown> = {};
+      if (hasNewKeywords) {
+        const ands: any[] = [];
+        // 院校匹配同时查当前名 + renameHistory (合并/改名前的旧名). 老师搜"北方交通大学"也能命中"北京交通大学"
+        if (kwUniversity) ands.push({
+          university: {
+            OR: [
+              { name: { contains: kwUniversity } },
+              { renameHistory: { contains: kwUniversity } },
+            ],
+          },
+        });
+        if (kwMajor) ands.push({
+          OR: [
+            { major: { name: { contains: kwMajor } } },
+            { majorName: { contains: kwMajor } },
+          ],
+        });
+        if (ands.length > 0) keywordWhere.AND = ands;
+      } else if (kwLegacy) {
+        keywordWhere.OR = [
+          { university: { name: { contains: kwLegacy } } },
+          { university: { renameHistory: { contains: kwLegacy } } },
+          { major: { name: { contains: kwLegacy } } },
+          { majorName: { contains: kwLegacy } },
+        ];
+      }
+      const matchedGroups = await this.prisma.enrollmentPlan.findMany({
+        where: { ...where, ...keywordWhere },
+        select: {
+          universityId: true,
+          groupCode: true,
+          batch: true,
+          recruitType: true,
+          subjects: true,
+        },
+        distinct: ['universityId', 'groupCode', 'batch', 'recruitType', 'subjects'],
+      });
+      if (matchedGroups.length === 0) {
+        // keyword 命中 0 个 group, 直接返回空(避免后续昂贵查询)
+        const studentRankInfo = await this.resolveStudentRank(student, source.sourceYear);
+        const emptyResult: CandidateGroupFullResult = {
+          total: 0,
+          planYear: source.planYear,
+          sourceYear: source.sourceYear,
+          previousYear: source.sourceYear - 1,
+          sourceBatchName: source.sourceBatchName,
+          isFallbackYear: source.isFallbackYear,
+          studentRankUsed: studentRankInfo.rank,
+          studentRankSource: studentRankInfo.source,
+          storedRank: studentRankInfo.storedRank,
+          scoreBasedRank: studentRankInfo.scoreBasedRank,
+          sort: q.sort ?? 'MAJOR_MATCH',
+          groups: [],
+          availableTiers: listTiers(student.preferredMajors).map((t) => ({
+            ...t,
+            groupCount: 0,
+          })),
+          appliedTier: q.tier ?? 0,
+        };
+        this.setCandidateGroupCache(cacheKey, emptyResult);
+        return this.paginateCandidateGroups(emptyResult, page, pageSize);
+      }
+      (where as any).OR = matchedGroups.map((g) => ({
+        universityId: g.universityId,
+        groupCode: g.groupCode,
+        batch: g.batch,
+        recruitType: g.recruitType,
+        subjects: g.subjects,
+      }));
+    }
+
     const [eps, restrictions] = await Promise.all([
       this.prisma.enrollmentPlan.findMany({
         where,
@@ -1196,7 +1369,8 @@ export class PlanCandidateService {
       }),
       this.prisma.healthRestriction.findMany(),
     ]);
-    const rules = this.buildSoftRules(restrictions);
+    const hardRules = this.buildHardRules(restrictions);
+    const softRules = this.buildSoftRules();
     // 3 年历史：sourceYear / -1 / -2（前端 TrendChart 需要 3 点）
     const years = [source.sourceYear, source.sourceYear - 1, source.sourceYear - 2];
     const adRecords = eps.length
@@ -1314,6 +1488,16 @@ export class PlanCandidateService {
     }
     const studentRank = studentRankInfo.rank;
     const resultGroups = (await Promise.all(Array.from(groups.entries()).map(async ([groupKey, rows]) => {
+      // tier 过滤: 整个 group 至少含该梯队任一专业, 否则整组隐藏
+      const hitsTier = tierMajors.length > 0 && rows.some((ep: any) => tierMajors.includes(ep.majorName));
+      if (tierMajors.length > 0 && !hitsTier) return null;
+      // excludeAdded 过滤: 已加入当前 plan 的组隐藏 (用简易 key universityId|groupCode)
+      if (excludeAdded) {
+        const first = rows[0];
+        const simpleKey = `${first.universityId}|${first.groupCode ?? ''}`;
+        if (addedGroupKeys.has(simpleKey)) return null;
+      }
+
       const groupRecords = [
         ...(adByGroupYear.get(`${groupKey}|${source.sourceYear}`) ?? []),
         ...(adByGroupYear.get(`${groupKey}|${source.sourceYear - 1}`) ?? []),
@@ -1328,10 +1512,15 @@ export class PlanCandidateService {
       const supplementary = supplementaryByGroup.get(groupKey) ?? null;
       const riskSupplementary = supplementaryForGroupRisk(supplementary);
 
-      const majors = await Promise.all(rows.map(async (ep) => {
+      const majorsRaw = await Promise.all(rows.map(async (ep) => {
+        // 硬过滤: 学生身份属性不符合 (性别/健康/户籍/民族) 直接剔除该专业, 不进任何分区
+        const hardFails = this.checkSoftFails(student, ep, hardRules);
+        if (hardFails.length > 0) return null;
+
         const currentRecord = adIndex.get(recordKeyOf({ ...ep, year: source.sourceYear }));
         const previousRecord = adIndex.get(recordKeyOf({ ...ep, year: source.sourceYear - 1 }));
-        const failReasons = this.checkSoftFails(student, ep, rules);
+        // 软规则: 学费/办学性质 — 不符合时进 SOFT_FAIL, 由 includeSoftFails 控制
+        const failReasons = this.checkSoftFails(student, ep, softRules);
         const match = this.scoreMajorMatch(student, ep);
         const rankStrategy = await this.evaluateRankStrategy({
           studentRank,
@@ -1342,7 +1531,7 @@ export class PlanCandidateService {
           batch: plan.batchName,
           sourceAdmissionYear: source.sourceYear,
         });
-        const display = this.classifyMajorDisplay(student, ep, failReasons, rankStrategy);
+        const display = this.classifyMajorDisplay(student, ep, failReasons, rankStrategy, tierMajors);
         const historyMin = groupScore.groupMinRank ?? currentRecord?.majorMinRank ?? null;
         const rankDiffRatio = historyMin ? studentRank / historyMin : null;
         const dynamicGradient = calcDynamicGradient({
@@ -1405,15 +1594,29 @@ export class PlanCandidateService {
           displayReason: display.displayReason,
           rankStrategy,
           isRecommendedAnchor: false,
+          // 临时视觉标记: keyword 命中 majorName / category 时为 true,
+          // 前端据此把命中专业排到所在分区头部 + 加"搜索匹配"chip。
+          // 不影响 displaySection / anchor / 加入方案时的第 1 志愿 — 那些都按持久语义 (意向) 走。
+          matchesKeyword: this.isMajorMatchKeyword(ep, matchKeyword),
+          // tier 命中标记: 当前应用 tier 时, 该 EP 的 majorName 在该梯队的专业列表里。
+          // 前端据此把命中专业排到分区头部 + 加绿色"🎯 梯队意向"chip。
+          matchesPreferredTier: tierMajors.length > 0 && tierMajors.includes(ep.majorName),
         };
       }));
+      // 剔除硬过滤命中的专业 (hardRules: 性别/健康/户籍/民族, 不可改变 → 学生根本去不了)
+      const majors = (majorsRaw as any[]).filter((m): m is any => m !== null);
 
       const visibleMajors = q.includeSoftFails === false
         ? majors.filter((major) => major.matchStatus === 'PASS')
         : majors;
       this.sortCandidateMajors(visibleMajors);
       const majorSections = this.splitMajorSections(visibleMajors);
-      if (majorSections.recommended.length === 0 && majorSections.backup.length === 0) return null;
+      // recommended + backup 都空时通常丢弃 (避免噪音), 但下面两种情况保留全 RISK group
+      // 让老师看到该院校的录取数据与位次差距, 知道"差多少":
+      //   1. tier 模式下命中 tier (老师明确想看该梯队意向)
+      //   2. keyword 搜索 (老师主动搜某院校 / 专业, 应该看到 — 哪怕位次远不达)
+      const isAllRisk = majorSections.recommended.length === 0 && majorSections.backup.length === 0;
+      if (isAllRisk && !hitsTier && !hasAnyKeyword) return null;
 
       const orderedMajors = [
         ...majorSections.recommended,
@@ -1520,6 +1723,9 @@ export class PlanCandidateService {
         recommendedAnchorEnrollmentPlanId: recommendedAnchor?.enrollmentPlanId ?? null,
         majors: orderedMajors,
         majorSections,
+        // 全 RISK 标记: 当 tier 命中但所有专业都进 RISK 时为 true. 前端据此显示位次差预警 +
+        // 禁用/警告"加入"按钮 (避免老师误加位次远远不到的专业)
+        allRisk: isAllRisk,
       };
     }))).filter((group): group is any => Boolean(group));
 
@@ -1542,6 +1748,22 @@ export class PlanCandidateService {
       }
     }
 
+    // 每个梯队的命中数: 在硬过滤 + keyword + excludeAdded 后, 含该 tier 任一专业的 group 数
+    // 现在循环里 tier 模式下全 RISK 也保留, 所以这个数字 = 切到该梯队后真实看到的 group 数 (准确)
+    const tiersStructure = listTiers(student.preferredMajors);
+    const availableTiers = tiersStructure.map((t) => {
+      let count = 0;
+      for (const [, rows] of groups.entries()) {
+        if (excludeAdded) {
+          const first = rows[0] as any;
+          const simpleKey = `${first.universityId}|${first.groupCode ?? ''}`;
+          if (addedGroupKeys.has(simpleKey)) continue;
+        }
+        if (rows.some((ep: any) => t.majors.includes(ep.majorName))) count++;
+      }
+      return { tier: t.tier, majors: t.majors, groupCount: count };
+    });
+
     const fullResult: CandidateGroupFullResult = {
       total: resultGroups.length,
       planYear: source.planYear,
@@ -1555,6 +1777,8 @@ export class PlanCandidateService {
       scoreBasedRank: studentRankInfo.scoreBasedRank,
       sort: q.sort ?? 'MAJOR_MATCH',
       groups: resultGroups,
+      availableTiers,
+      appliedTier: q.tier ?? 0,
     };
     this.setCandidateGroupCache(cacheKey, fullResult);
     return this.paginateCandidateGroups(fullResult, page, pageSize);
@@ -1603,14 +1827,8 @@ export class PlanCandidateService {
     });
 
     const restrictions = await this.prisma.healthRestriction.findMany();
-    const rules: SoftRule[] = [
-      new HealthRestrictionRule(restrictions),
-      new GenderRule(),
-      new HouseholdRule(),
-      new EthnicityRule(),
-      new TuitionRule(),
-      new NatureRule(),
-    ];
+    const hardRules = this.buildHardRules(restrictions);
+    const softRules = this.buildSoftRules();
 
     const adRecords = eps.length
       ? await this.prisma.admissionRecord.findMany({
@@ -1640,9 +1858,14 @@ export class PlanCandidateService {
 
     const studentRankInfo = await this.resolveStudentRank(student, source.sourceYear);
     const studentRank = studentRankInfo.rank;
-    const enriched = eps.map((ep) => {
+    const enriched = eps.flatMap((ep): any[] => {
+      // 硬过滤: 学生身份不符合 (性别/健康/户籍/民族) 直接剔除该 EP
+      for (const rule of hardRules) {
+        const res = rule.check(student as any, ep as any);
+        if (!res.pass) return [];
+      }
       const reasons: SoftFailReason[] = [];
-      for (const rule of rules) {
+      for (const rule of softRules) {
         const res = rule.check(student as any, ep as any);
         if (!res.pass && res.reason) reasons.push(res.reason);
       }
@@ -1651,7 +1874,7 @@ export class PlanCandidateService {
       const suggestedGradient = calcGradient(studentRank, historyMin);
       const rankDiffRatio = historyMin ? studentRank / historyMin : null;
 
-      return {
+      return [{
         enrollmentPlanId: ep.id,
         universityId: ep.universityId,
         universityName: ep.university.name,
@@ -1669,7 +1892,7 @@ export class PlanCandidateService {
         suggestedGradient,
         matchStatus: reasons.length === 0 ? 'PASS' : 'SOFT_FAIL',
         failReasons: reasons,
-      };
+      }];
     });
 
     let visible = enriched;

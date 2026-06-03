@@ -1,9 +1,10 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PlanService } from './plan.service';
 import { PlanStateMachineService } from './plan-state-machine.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RiskEngineService } from './risk-engine/risk-engine.service';
+import { FEATURE_FLAGS } from '../../config/feature-flags';
 
 describe('PlanService workflow gates', () => {
   let service: PlanService;
@@ -223,6 +224,68 @@ describe('PlanService workflow gates', () => {
       maxGroupCount: 45,
       maxMajorPerGroup: 6,
       volunteerMode: 'parallel',
+    });
+  });
+
+  describe('createForStudent batch validation (STRICT_BATCH_VALIDATION)', () => {
+    const originalFlag = FEATURE_FLAGS.STRICT_BATCH_VALIDATION;
+    afterEach(() => {
+      FEATURE_FLAGS.STRICT_BATCH_VALIDATION = originalFlag;
+    });
+
+    const setupMocks = (preferredBatches: string[], targetBatch: string) => {
+      prisma.teacherProfile.findUnique.mockResolvedValue({ id: 5, userId: 20 });
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        intakeStatus: 'VERIFIED',
+        preferredBatches,
+        user: { realName: '小王', username: 'student' },
+      });
+      prisma.batchConfig.findUnique.mockResolvedValue({
+        id: 22,
+        year: 2026,
+        province: '四川',
+        batch: targetBatch,
+      });
+      prisma.volunteerPlan.findFirst.mockResolvedValue(null);
+      prisma.volunteerPlan.create.mockResolvedValue({ id: 99, status: 'DRAFT' });
+    };
+
+    it('STRICT=false 时 batch 不在 preferredBatches 中只 warn, 创建成功', async () => {
+      FEATURE_FLAGS.STRICT_BATCH_VALIDATION = false;
+      setupMocks(['本科批A段'], '本科批B段');
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const result = await service.createForStudent(20, 10, { batchConfigId: 22 } as any);
+      expect(result).toEqual({ id: 99, status: 'DRAFT' });
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[STRICT_BATCH_VALIDATION disabled]',
+        expect.stringMatching(/本科批B段.*未被学生选定/),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('STRICT=true 时 batch 不在 preferredBatches 中抛 BadRequestException', async () => {
+      FEATURE_FLAGS.STRICT_BATCH_VALIDATION = true;
+      setupMocks(['本科批A段'], '本科批B段');
+      await expect(
+        service.createForStudent(20, 10, { batchConfigId: 22 } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.volunteerPlan.create).not.toHaveBeenCalled();
+    });
+
+    it('preferredBatches 为空 (老学生) 时不校验, 直接创建', async () => {
+      FEATURE_FLAGS.STRICT_BATCH_VALIDATION = true;
+      setupMocks([], '本科批B段');
+      const result = await service.createForStudent(20, 10, { batchConfigId: 22 } as any);
+      expect(result).toEqual({ id: 99, status: 'DRAFT' });
+    });
+
+    it('batch 在 preferredBatches 中正常创建', async () => {
+      FEATURE_FLAGS.STRICT_BATCH_VALIDATION = true;
+      setupMocks(['本科批A段', '本科批B段'], '本科批B段');
+      const result = await service.createForStudent(20, 10, { batchConfigId: 22 } as any);
+      expect(result).toEqual({ id: 99, status: 'DRAFT' });
     });
   });
 
