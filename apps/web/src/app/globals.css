@@ -318,14 +318,25 @@ p {
 }
 
 /* Inputs */
+/* 让输入框 default 状态就有"可编辑"的视觉暗示, 老师不再误以为表单是 disabled.
+   border-color 用 #d6d3c4 (米色边框) 而非 transparent, 在浅色背景上可见;
+   hover/focus 时升级强度. */
 .ant-input,
 .ant-input-number,
 .ant-select-selector,
 .ant-picker {
   border-radius: 8px !important;
   background: #f0eee6 !important;
-  border-color: transparent !important;
+  border-color: #d6d3c4 !important;
   transition: all 0.2s ease-out !important;
+}
+
+.ant-input:hover,
+.ant-input-number:hover,
+.ant-select:not(.ant-select-disabled):hover .ant-select-selector,
+.ant-picker:hover {
+  border-color: #a8a596 !important;
+  background: #f6f3ea !important;
 }
 
 .ant-input:focus,
@@ -337,6 +348,18 @@ p {
   border-color: #1e3a5f !important;
   box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.1) !important;
   background: #ffffff !important;
+}
+
+/* disabled / readonly 状态加深灰底以明示不可编辑 (跟可编辑态形成对比) */
+.ant-input[disabled],
+.ant-input-disabled,
+.ant-input-number-disabled,
+.ant-select-disabled .ant-select-selector,
+.ant-picker.ant-picker-disabled {
+  background: #e8e6dc !important;
+  border-color: #d6d3c4 !important;
+  color: rgba(0, 0, 0, 0.45) !important;
+  cursor: not-allowed !important;
 }
 
 .ant-input::placeholder,
