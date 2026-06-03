@@ -64,16 +64,18 @@ export interface BatchRecommendationsResponse {
 export const batchRecommendationsApi = {
   async fetch(studentId: number): Promise<BatchRecommendationsResponse> {
     // 服务端 eligible-batches 现在返回 { batches, intakeGap }
-    const eb = (await api.get<{ batches: BatchRecommendation[]; intakeGap: IntakeDataGap }>(
-      `/students/${studentId}/eligible-batches`,
-    )) as unknown as { batches: BatchRecommendation[]; intakeGap: IntakeDataGap };
+    // 兼容旧返回 (数组): Array.isArray 检查后 fallback
+    const raw = (await api.get(`/students/${studentId}/eligible-batches`)) as unknown;
+    const eb: { batches: BatchRecommendation[]; intakeGap: IntakeDataGap } = Array.isArray(raw)
+      ? { batches: raw as BatchRecommendation[], intakeGap: { ok: true, missing: [] } }
+      : (raw as { batches: BatchRecommendation[]; intakeGap: IntakeDataGap });
     const student = (await api.get<{ batchesConfirmedAt: string | null }>(
       `/students/${studentId}`,
     )) as unknown as { batchesConfirmedAt: string | null };
     return {
-      batches: eb.batches,
-      intakeGap: eb.intakeGap,
-      batchesConfirmedAt: student.batchesConfirmedAt,
+      batches: eb.batches ?? [],
+      intakeGap: eb.intakeGap ?? { ok: true, missing: [] },
+      batchesConfirmedAt: student?.batchesConfirmedAt ?? null,
     };
   },
 

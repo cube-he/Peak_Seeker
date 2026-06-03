@@ -86,11 +86,11 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
       <div className="text-xs text-gray-600 bg-gray-50 px-3 py-2 rounded">
         ℹ 推荐页仅判定资格 (硬性要求是否满足)。分数推荐请在勾选批次后前往候选池查看院校梯队 (冲/稳/保)。
       </div>
-      {!data.intakeGap.ok && (
+      {data.intakeGap && !data.intakeGap.ok && (
         <div className="border-2 border-red-300 bg-red-50 p-4 rounded">
           <div className="font-semibold text-red-700 mb-2">⚠ 学生关键资料未完成 — 当前判定可能不准</div>
           <div className="text-sm text-red-700 mb-2">
-            缺失字段: {data.intakeGap.missing.map((m) => m.label).join(' / ')}
+            缺失字段: {(data.intakeGap.missing ?? []).map((m) => m.label).join(' / ')}
           </div>
           <div className="text-xs text-red-600">
             请先催学生补完资料再确认批次。资料未完成时无法确认批次, 也无法进入做方案阶段。
@@ -131,11 +131,11 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
           />
           <button
             className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-            disabled={submitting || selected.size === 0 || !data.intakeGap.ok}
+            disabled={submitting || selected.size === 0 || (data.intakeGap && !data.intakeGap.ok)}
             onClick={handleSubmit}
-            title={!data.intakeGap.ok ? '学生关键资料未完成, 请先催学生补完' : undefined}
+            title={data.intakeGap && !data.intakeGap.ok ? '学生关键资料未完成, 请先催学生补完' : undefined}
           >
-            {!data.intakeGap.ok ? '资料未完成 - 无法确认' : '确认并提交'}
+            {data.intakeGap && !data.intakeGap.ok ? '资料未完成 - 无法确认' : '确认并提交'}
           </button>
         </div>
       )}
