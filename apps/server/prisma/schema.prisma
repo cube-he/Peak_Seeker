@@ -865,6 +865,11 @@ model StudentProfile {
   // --- 意向批次（② 学生可编辑，batch_config.batch 字段值数组，多省份兼容）---
   preferredBatches Json? @map("preferred_batches")
 
+  // --- 批次选定锁定状态 (商业化流程: 学生填资料时选定批次后锁定, 老师可解锁) ---
+  batchesConfirmedAt DateTime? @map("batches_confirmed_at")
+  batchesUnlockedBy  Int?      @map("batches_unlocked_by")
+  batchesUnlockedAt  DateTime? @map("batches_unlocked_at")
+
   // --- 偏远 / 冷门接受度（② 学生可编辑）---
   remoteAreaAcceptance RemoteAreaAcceptance? @map("remote_area_acceptance")
   coldMajorAcceptance  ColdMajorAcceptance?  @map("cold_major_acceptance")
