@@ -28,6 +28,7 @@ import {
   from9Subjects,
   sum9Subjects,
 } from '@/components/student/stage1-score-mapping';
+import { ETHNICITY_OPTIONS } from '@/data/student-options';
 
 type SelectOption = { label: string; value: string };
 
@@ -983,7 +984,13 @@ function BasicFields() {
       <div className="field">
         <label>民族</label>
         <Form.Item name="ethnicity" noStyle>
-          <Input placeholder="如 汉族" />
+          <Select
+            showSearch
+            allowClear
+            placeholder="选择民族"
+            optionFilterProp="label"
+            options={ETHNICITY_OPTIONS}
+          />
         </Form.Item>
       </div>
       <div className="field">
@@ -1114,12 +1121,12 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
   const form = Form.useFormInstance();
   return (
     <div className="sd-form-grid">
-      {/* —— 顶部三段: 科类(disabled) / 年份 / 来源 —— */}
+      {/* —— 顶部三段: 科类(可手选, 选物理/历史首选时自动同步) / 年份 / 来源 —— */}
       <div className="field">
-        <label>科类<span className="sc-hint"> 自动同步</span></label>
+        <label>科类<span className="sc-hint"> 可手选 · 选物理/历史首选时自动同步</span></label>
         <Form.Item name="examType" noStyle>
           <Select
-            disabled
+            placeholder="选择科类"
             options={[
               { value: 'PHYSICS', label: '物理类' },
               { value: 'HISTORY', label: '历史类' },
@@ -1281,9 +1288,9 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
         </Form.Item>
       </div>
       <div className="field">
-        <label>全省位次<span className="req">必填</span></label>
+        <label>全省位次<span className="sc-hint"> 后端按一分一段自动算 · 老师可校正</span></label>
         <Form.Item name="provincialRank" noStyle>
-          <InputNumber min={1} style={{ width: '100%' }} />
+          <InputNumber min={1} style={{ width: '100%' }} placeholder="留空由后端算" />
         </Form.Item>
         {rankCheck ? <div className="sc-hint"><RankCheckExtra rankCheck={rankCheck} /></div> : null}
       </div>
@@ -1319,13 +1326,22 @@ function TeacherScoreInput({
       </div>
       <Form.Item
         name={name}
-        rules={required ? [{ required: true, message: '必填' }] : undefined}
+        rules={[
+          ...(required ? [{ required: true, message: '必填' }] : []),
+          // 用 rules 校验而不是 InputNumber 的 max prop —— max prop 会在 blur 时
+          // 自动 clamp 到 150 (silent 截断, 老师以为 input 自己改了数字).
+          // 改 rules: 用户输 200 不 clamp, 但提交时显示红字"不能超过 150".
+          {
+            type: 'number',
+            max,
+            message: `不能超过 ${max} 分`,
+          },
+        ]}
         className="mb-0"
         style={{ marginBottom: 0 }}
       >
         <InputNumber
           min={0}
-          max={max}
           style={{ width: '100%' }}
           disabled={disabled}
           placeholder={placeholder}
