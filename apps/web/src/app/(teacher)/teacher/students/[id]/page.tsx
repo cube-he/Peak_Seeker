@@ -4,6 +4,12 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
+import {
+  to9Subjects,
+  from9Subjects,
+  sum9Subjects,
+  type Subject9Form,
+} from '@/components/student/stage1-score-mapping';
 import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Spin, message } from 'antd';
 import {
   LockOutlined,
@@ -614,7 +620,38 @@ export default function StudentDetailPage() {
               type="button"
               className="btn"
               onClick={() =>
-                form.validateFields().then((values) => saveMutation.mutate(values))
+                form.validateFields().then((values) => {
+                  // 把 9 字段(scorePhysics/scoreHistory/scoreChemistry/...)翻译成
+                  // 后端 6 字段(scoreFirstChoice/scoreSub1/scoreSub2/firstChoice/reChoices)+ examType + totalScore
+                  const has6 =
+                    (values as any).scorePhysics != null ||
+                    (values as any).scoreHistory != null;
+                  if (has6) {
+                    const sub9: Subject9Form = {
+                      scoreChinese: (values as any).scoreChinese,
+                      scoreMath: (values as any).scoreMath,
+                      scoreEnglish: (values as any).scoreEnglish,
+                      scorePhysics: (values as any).scorePhysics,
+                      scoreHistory: (values as any).scoreHistory,
+                      scoreChemistry: (values as any).scoreChemistry,
+                      scoreBiology: (values as any).scoreBiology,
+                      scorePolitics: (values as any).scorePolitics,
+                      scoreGeography: (values as any).scoreGeography,
+                    };
+                    const translated = from9Subjects(sub9);
+                    // 清掉 9 字段, 用 6 字段覆盖
+                    const clean: Record<string, unknown> = { ...(values as any) };
+                    delete clean.scorePhysics;
+                    delete clean.scoreHistory;
+                    delete clean.scoreChemistry;
+                    delete clean.scoreBiology;
+                    delete clean.scorePolitics;
+                    delete clean.scoreGeography;
+                    saveMutation.mutate({ ...clean, ...translated });
+                  } else {
+                    saveMutation.mutate(values);
+                  }
+                })
               }
               disabled={saveMutation.isPending}
             >
@@ -826,6 +863,9 @@ export default function StudentDetailPage() {
                   initialValues={{
                     ...student,
                     ...student.user,
+                    // 把后端 6 字段 (scoreFirstChoice/scoreSub1/scoreSub2 + firstChoice/reChoices)
+                    // 翻译成 9 字段 (scorePhysics/scoreHistory/scoreChemistry/etc), UI 跟学生端一致
+                    ...to9Subjects(student),
                     provincialRank:
                       student.provincialRank ??
                       student.rankCheck?.calculatedRank ??
@@ -1070,20 +1110,6 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
   return (
     <div className="sd-form-grid">
       <div className="field">
-        <label>科类</label>
-        <Form.Item name="examType" noStyle>
-          <Select
-            placeholder="选择科类"
-            options={[
-              { value: 'PHYSICS', label: '物理类' },
-              { value: 'HISTORY', label: '历史类' },
-              { value: 'COMPREHENSIVE_LIBERAL', label: '文科综合' },
-              { value: 'COMPREHENSIVE_SCIENCE', label: '理科综合' },
-            ]}
-          />
-        </Form.Item>
-      </div>
-      <div className="field">
         <label>高考年份</label>
         <Form.Item name="examYear" noStyle>
           <Select
@@ -1109,37 +1135,168 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
           />
         </Form.Item>
       </div>
-      <div className="field">
-        <label>总分<span className="req">必填</span></label>
-        <Form.Item name="totalScore" noStyle>
-          <InputNumber min={0} max={750} style={{ width: '100%' }} />
+
+      {/* 必填三科 */}
+      <div className="field sd-field-full">
+        <label>必填三科 (语 / 数 / 英)</label>
+        <div className="sd-form-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          <Form.Item name="scoreChinese" noStyle>
+            <InputNumber min={0} max={150} style={{ width: '100%' }} placeholder="语文 (满分 150)" />
+          </Form.Item>
+          <Form.Item name="scoreMath" noStyle>
+            <InputNumber min={0} max={150} style={{ width: '100%' }} placeholder="数学 (满分 150)" />
+          </Form.Item>
+          <Form.Item name="scoreEnglish" noStyle>
+            <InputNumber min={0} max={150} style={{ width: '100%' }} placeholder="英语 (满分 150)" />
+          </Form.Item>
+        </div>
+      </div>
+
+      {/* 首选科目: 物理 / 历史 二选一 */}
+      <div className="field sd-field-full">
+        <label>首选科目 (物理 / 历史 二选一, 满分 100)</label>
+        <Form.Item
+          noStyle
+          shouldUpdate={(p, c) => p.scorePhysics !== c.scorePhysics || p.scoreHistory !== c.scoreHistory}
+        >
+          {({ getFieldValue, setFieldsValue }) => {
+            const hasPhysics = getFieldValue('scorePhysics') != null;
+            const hasHistory = getFieldValue('scoreHistory') != null;
+            return (
+              <div className="sd-form-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                <Form.Item name="scorePhysics" noStyle>
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    style={{ width: '100%' }}
+                    placeholder={hasHistory ? '已选历史' : '物理'}
+                    disabled={hasHistory}
+                    onChange={(v) => {
+                      if (v != null) setFieldsValue({ scoreHistory: null });
+                    }}
+                  />
+                </Form.Item>
+                <Form.Item name="scoreHistory" noStyle>
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    style={{ width: '100%' }}
+                    placeholder={hasPhysics ? '已选物理' : '历史'}
+                    disabled={hasPhysics}
+                    onChange={(v) => {
+                      if (v != null) setFieldsValue({ scorePhysics: null });
+                    }}
+                  />
+                </Form.Item>
+              </div>
+            );
+          }}
         </Form.Item>
       </div>
-      <div className="field">
-        <label>全省位次<span className="req">必填</span></label>
+
+      {/* 再选两科: 化生政地 选 2 */}
+      <div className="field sd-field-full">
+        <label>再选科目 (化 / 生 / 政 / 地 选 2, 满分 100)</label>
+        <Form.Item
+          noStyle
+          shouldUpdate={(p, c) =>
+            p.scoreChemistry !== c.scoreChemistry ||
+            p.scoreBiology !== c.scoreBiology ||
+            p.scorePolitics !== c.scorePolitics ||
+            p.scoreGeography !== c.scoreGeography
+          }
+        >
+          {({ getFieldsValue }) => {
+            const v = getFieldsValue(['scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography']);
+            const filled = Object.values(v).filter((x) => x != null).length;
+            const lock = filled >= 2;
+            const isFilled = (k: string) => (v as any)[k] != null;
+            const subs = [
+              { name: 'scoreChemistry', label: '化学' },
+              { name: 'scoreBiology', label: '生物' },
+              { name: 'scorePolitics', label: '政治' },
+              { name: 'scoreGeography', label: '地理' },
+            ];
+            return (
+              <div className="sd-form-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {subs.map((s) => (
+                  <Form.Item key={s.name} name={s.name} noStyle>
+                    <InputNumber
+                      min={0}
+                      max={100}
+                      style={{ width: '100%' }}
+                      placeholder={s.label}
+                      disabled={lock && !isFilled(s.name)}
+                    />
+                  </Form.Item>
+                ))}
+              </div>
+            );
+          }}
+        </Form.Item>
+      </div>
+
+      {/* 总分自动累加 */}
+      <div className="field sd-field-full">
+        <Form.Item
+          noStyle
+          shouldUpdate={(p, c) =>
+            p.scoreChinese !== c.scoreChinese ||
+            p.scoreMath !== c.scoreMath ||
+            p.scoreEnglish !== c.scoreEnglish ||
+            p.scorePhysics !== c.scorePhysics ||
+            p.scoreHistory !== c.scoreHistory ||
+            p.scoreChemistry !== c.scoreChemistry ||
+            p.scoreBiology !== c.scoreBiology ||
+            p.scorePolitics !== c.scorePolitics ||
+            p.scoreGeography !== c.scoreGeography
+          }
+        >
+          {({ getFieldsValue }) => {
+            const v = getFieldsValue([
+              'scoreChinese', 'scoreMath', 'scoreEnglish',
+              'scorePhysics', 'scoreHistory',
+              'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
+            ]) as Subject9Form;
+            const total = sum9Subjects(v);
+            const subject = v.scorePhysics != null ? '物理' : v.scoreHistory != null ? '历史' : '未选首选';
+            return (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                background: '#fffaf0',
+                borderRadius: 8,
+                border: '1px solid #f5e0c4',
+              }}>
+                <span style={{ fontSize: 14, color: '#666' }}>总分自动累加 · 首选 {subject}</span>
+                <span style={{ fontSize: 28, fontWeight: 600, color: '#d97706', fontVariantNumeric: 'tabular-nums' }}>
+                  {total} 分
+                </span>
+              </div>
+            );
+          }}
+        </Form.Item>
+      </div>
+
+      <div className="field sd-field-full">
+        <label>全省位次 (系统自动估算, 老师可校正)</label>
         <Form.Item name="provincialRank" noStyle>
-          <InputNumber min={1} style={{ width: '100%' }} />
+          <InputNumber min={1} style={{ width: '100%' }} placeholder="留空则用一分一段表自动算" />
         </Form.Item>
         {rankCheck ? <div className="sc-hint"><RankCheckExtra rankCheck={rankCheck} /></div> : null}
       </div>
-      <div className="field"><label>语文</label>
-        <Form.Item name="scoreChinese" noStyle><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field"><label>数学</label>
-        <Form.Item name="scoreMath" noStyle><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field"><label>英语</label>
-        <Form.Item name="scoreEnglish" noStyle><InputNumber min={0} max={150} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field"><label>首选科目分</label>
-        <Form.Item name="scoreFirstChoice" noStyle><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field"><label>再选一</label>
-        <Form.Item name="scoreSub1" noStyle><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field"><label>再选二</label>
-        <Form.Item name="scoreSub2" noStyle><InputNumber min={0} max={100} style={{ width: '100%' }} /></Form.Item>
-      </div>
+
+      {/* totalScore 隐藏字段 (submit 时由 from9Subjects 覆盖) */}
+      <Form.Item name="totalScore" hidden><InputNumber /></Form.Item>
+      {/* examType / firstChoice / reChoices / scoreFirstChoice / scoreSub1 / scoreSub2 也由 submit 翻译写入, 这里 hidden 防止丢失 */}
+      <Form.Item name="examType" hidden><Input /></Form.Item>
+      <Form.Item name="firstChoice" hidden><Input /></Form.Item>
+      <Form.Item name="reChoices" hidden><Input /></Form.Item>
+      <Form.Item name="scoreFirstChoice" hidden><InputNumber /></Form.Item>
+      <Form.Item name="scoreSub1" hidden><InputNumber /></Form.Item>
+      <Form.Item name="scoreSub2" hidden><InputNumber /></Form.Item>
     </div>
   );
 }
