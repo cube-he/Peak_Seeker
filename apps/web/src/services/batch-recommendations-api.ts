@@ -54,12 +54,25 @@ export interface IntakeDataGap {
   missing: Array<{ field: string; label: string }>;
 }
 
+export interface StudentSummary {
+  id: number;
+  realName: string | null;
+  examType: string | null;
+  examYear: number | null;
+  totalScore: number | null;
+  provincialRank: number | null;
+  firstChoice: string | null;
+  reChoices: string[] | null;
+  intakeReviewComment: string | null;
+}
+
 export interface BatchRecommendationsResponse {
   batches: BatchRecommendation[];
   batchesConfirmedAt: string | null;
   /** 老师上次 confirm 时选定的批次列表 (DB 里的 preferredBatches), null 表示从未 confirm 过. */
   preferredBatches: string[] | null;
   intakeGap: IntakeDataGap;
+  student: StudentSummary;
 }
 
 // axios 响应拦截器 (services/api.ts) 已 unwrap 成 response.data,
@@ -73,18 +86,24 @@ export const batchRecommendationsApi = {
     const eb: { batches: BatchRecommendation[]; intakeGap: IntakeDataGap } = Array.isArray(raw)
       ? { batches: raw as BatchRecommendation[], intakeGap: { ok: true, missing: [] } }
       : (raw as { batches: BatchRecommendation[]; intakeGap: IntakeDataGap });
-    const student = (await api.get<{
-      batchesConfirmedAt: string | null;
-      preferredBatches: string[] | null;
-    }>(`/students/${studentId}`)) as unknown as {
-      batchesConfirmedAt: string | null;
-      preferredBatches: string[] | null;
+    const studentRaw = (await api.get(`/students/${studentId}`)) as unknown as Record<string, any>;
+    const summary: StudentSummary = {
+      id: studentRaw?.id ?? studentId,
+      realName: studentRaw?.user?.realName ?? studentRaw?.realName ?? null,
+      examType: studentRaw?.examType ?? null,
+      examYear: studentRaw?.examYear ?? null,
+      totalScore: studentRaw?.totalScore ?? null,
+      provincialRank: studentRaw?.provincialRank ?? null,
+      firstChoice: studentRaw?.firstChoice ?? null,
+      reChoices: Array.isArray(studentRaw?.reChoices) ? studentRaw.reChoices : null,
+      intakeReviewComment: studentRaw?.intakeReviewComment ?? null,
     };
     return {
       batches: eb.batches ?? [],
       intakeGap: eb.intakeGap ?? { ok: true, missing: [] },
-      batchesConfirmedAt: student?.batchesConfirmedAt ?? null,
-      preferredBatches: Array.isArray(student?.preferredBatches) ? student.preferredBatches : null,
+      batchesConfirmedAt: studentRaw?.batchesConfirmedAt ?? null,
+      preferredBatches: Array.isArray(studentRaw?.preferredBatches) ? studentRaw.preferredBatches : null,
+      student: summary,
     };
   },
 
