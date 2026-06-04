@@ -36,6 +36,8 @@ export interface ScoreInfo {
   passesLine: boolean | null;
   leniency?: number;
   withinLeniency: boolean | null;
+  /** 后端在当年线缺失时回退用 (examYear-1) 估算, 透出年份让前端加"按 N 年估"标注. */
+  lineYearUsed?: number;
 }
 
 export interface BatchRecommendation {
@@ -64,6 +66,9 @@ export interface StudentSummary {
   firstChoice: string | null;
   reChoices: string[] | null;
   intakeReviewComment: string | null;
+  /** 位次按往年一分一段估算 (后端 rankCheck.isEstimated). 前端给位次加"按 N 年估"小尾注. */
+  rankEstimated?: boolean;
+  rankSourceYear?: number;
 }
 
 export interface BatchRecommendationsResponse {
@@ -87,6 +92,7 @@ export const batchRecommendationsApi = {
       ? { batches: raw as BatchRecommendation[], intakeGap: { ok: true, missing: [] } }
       : (raw as { batches: BatchRecommendation[]; intakeGap: IntakeDataGap });
     const studentRaw = (await api.get(`/students/${studentId}`)) as unknown as Record<string, any>;
+    const rankCheck = studentRaw?.rankCheck ?? null;
     const summary: StudentSummary = {
       id: studentRaw?.id ?? studentId,
       realName: studentRaw?.user?.realName ?? studentRaw?.realName ?? null,
@@ -97,6 +103,8 @@ export const batchRecommendationsApi = {
       firstChoice: studentRaw?.firstChoice ?? null,
       reChoices: Array.isArray(studentRaw?.reChoices) ? studentRaw.reChoices : null,
       intakeReviewComment: studentRaw?.intakeReviewComment ?? null,
+      rankEstimated: rankCheck?.isEstimated === true,
+      rankSourceYear: typeof rankCheck?.sourceYear === 'number' ? rankCheck.sourceYear : undefined,
     };
     return {
       batches: eb.batches ?? [],

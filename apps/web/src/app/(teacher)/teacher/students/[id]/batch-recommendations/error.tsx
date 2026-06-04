@@ -1,6 +1,11 @@
 'use client';
 import { useEffect } from 'react';
+import { TIcon } from './icons';
 
+/**
+ * Next 错误边界 (组件渲染抛异常时整页接管).
+ * §9.7 全页崩溃态: 与 §9.2 API 加载失败不同, 后者只是一行 br-error.
+ */
 export default function Error({
   error,
   reset,
@@ -14,36 +19,18 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="p-6">
-      <div className="border-2 border-red-300 bg-red-50 p-4 rounded">
-        <div className="font-semibold text-red-700 mb-2">页面加载出错</div>
-        <div className="text-sm text-red-700 mb-3">
-          {error?.message ?? '未知错误'}
-          {error?.digest && (
-            <div className="text-xs text-gray-500 mt-1">
-              错误 ID: {error.digest}
-            </div>
-          )}
+    <div className="br-page">
+      <div className="br-crash">
+        <span className="glyph"><TIcon.alert/></span>
+        <h2>页面加载出错</h2>
+        <div className="msg">{error?.message ?? '渲染批次推荐时发生异常。'}</div>
+        {error?.digest && <span className="errid">错误 ID: {error.digest}</span>}
+        <div className="hint">
+          刚部署可能是缓存, 请按 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> 硬刷新。
         </div>
-        <div className="text-xs text-gray-600 mb-3">
-          如果是刚刚部署后第一次访问, 可能是浏览器缓存了旧版本。
-          请按 <kbd className="px-1 border rounded">Ctrl</kbd>+
-          <kbd className="px-1 border rounded">Shift</kbd>+
-          <kbd className="px-1 border rounded">R</kbd> 硬刷新。
-        </div>
-        <div className="flex gap-2">
-          <button
-            className="px-3 py-1 border rounded bg-white text-sm hover:bg-gray-50"
-            onClick={() => reset()}
-          >
-            重试
-          </button>
-          <button
-            className="px-3 py-1 border rounded bg-white text-sm hover:bg-gray-50"
-            onClick={() => window.location.reload()}
-          >
-            刷新页面
-          </button>
+        <div className="br-crash-actions">
+          <button className="primary" onClick={() => reset()}>重试</button>
+          <button className="ghost" onClick={() => window.location.reload()}>刷新页面</button>
         </div>
       </div>
     </div>
