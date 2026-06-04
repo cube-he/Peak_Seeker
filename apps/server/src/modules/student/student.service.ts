@@ -817,21 +817,8 @@ export class StudentService {
       reviewComment?: string;
     },
   ) {
-    const KNOWN_BATCHES = new Set([
-      '本科批A段',
-      '本科批B段',
-      '本科提前批A段',
-      '本科提前批B段',
-      '高职提前批',
-      '高职批',
-    ]);
     if (!Array.isArray(opts.preferredBatches) || opts.preferredBatches.length === 0) {
       throw new BadRequestException('至少选定 1 个批次');
-    }
-    for (const b of opts.preferredBatches) {
-      if (!KNOWN_BATCHES.has(b)) {
-        throw new BadRequestException(`未知批次: ${b}`);
-      }
     }
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
@@ -848,6 +835,26 @@ export class StudentService {
     //   - DRAFT: 学生还没自填提交, 不允许
     if (student.intakeStatus === 'DRAFT') {
       throw new ConflictException('学生尚未提交资料, 无法选定批次');
+    }
+    // 批次名校验: 必须都在该生可见的 batchConfig 批次集合内 (与 batch-recommendations 页同口径).
+    // 真值源是 batch_configs 表 — 旧实现用硬编码白名单(仅 6 批次), 把强基/专项/艺体等真实批次误判为"未知".
+    const examTypeLabel =
+      ({ PHYSICS: '物理', HISTORY: '历史', COMPREHENSIVE_LIBERAL: '文科', COMPREHENSIVE_SCIENCE: '理科' } as Record<string, string>)[
+        String(student.examType ?? 'PHYSICS')
+      ] || '物理';
+    const validBatchRows = await this.prisma.batchConfig.findMany({
+      where: {
+        year: student.examYear ?? 2026,
+        province: student.province ?? '四川',
+        examType: examTypeLabel,
+      },
+      select: { batch: true },
+    });
+    const validBatchSet = new Set(validBatchRows.map((r) => r.batch));
+    for (const b of opts.preferredBatches) {
+      if (!validBatchSet.has(b)) {
+        throw new BadRequestException(`未知批次: ${b}`);
+      }
     }
     // 关键资料缺失则禁止确认 (推荐 + 方案制作的前提)
     const intakeGap = validateIntakeForBatchSelection(student);

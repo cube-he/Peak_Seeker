@@ -31,6 +31,9 @@ describe('StudentService', () => {
       count: jest.Mock;
       update: jest.Mock;
     };
+    batchConfig: {
+      findMany: jest.Mock;
+    };
     studentFieldChangeLog: {
       createMany: jest.Mock;
     };
@@ -51,6 +54,19 @@ describe('StudentService', () => {
         findMany: jest.fn(),
         count: jest.fn(),
         update: jest.fn(),
+      },
+      batchConfig: {
+        // C1 修复: confirmBatches 改用 batchConfig 真值源校验批次名 (不再硬编码白名单).
+        // 默认返回代表性批次集合 (含旧白名单 5 项 + 强基计划等旧白名单遗漏的真实批次).
+        findMany: jest.fn().mockResolvedValue([
+          { batch: '本科提前批A段' },
+          { batch: '本科提前批B段' },
+          { batch: '本科批B段' },
+          { batch: '本科批A段（国家专项）' },
+          { batch: '强基计划' },
+          { batch: '高职提前批' },
+          { batch: '高职批' },
+        ]),
       },
       studentFieldChangeLog: {
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -681,8 +697,6 @@ describe('StudentService', () => {
     });
 
     describe('confirmBatches', () => {
-      const KNOWN_BATCHES = ['本科批A段', '本科批B段', '本科提前批A段', '本科提前批B段', '高职提前批', '高职批'];
-
       it('成功: 写入 preferredBatches + batchesConfirmedAt + intakeStatus=VERIFIED', async () => {
         prisma.studentProfile.findUnique.mockResolvedValue({
           id: 1,
@@ -698,7 +712,7 @@ describe('StudentService', () => {
         const result = await (service as any).confirmBatches(1, {
           teacherProfileId: 5,
           reviewerUserId: 20,
-          preferredBatches: ['本科批A段', '本科批B段'],
+          preferredBatches: ['本科提前批A段', '本科批B段'],
           reviewComment: '面谈后确认',
         });
 
@@ -707,7 +721,7 @@ describe('StudentService', () => {
           expect.objectContaining({
             where: { id: 1 },
             data: expect.objectContaining({
-              preferredBatches: ['本科批A段', '本科批B段'],
+              preferredBatches: ['本科提前批A段', '本科批B段'],
               batchesConfirmedAt: expect.any(Date),
               intakeStatus: 'VERIFIED',
               intakeReviewedBy: 20,
@@ -729,15 +743,39 @@ describe('StudentService', () => {
         ).rejects.toThrow(/至少选定/);
       });
 
-      it('校验失败: preferredBatches 包含未知批次 → BadRequest', async () => {
+      it('校验失败: preferredBatches 含 batchConfig 外的批次 → BadRequest', async () => {
         prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED', examType: 'PHYSICS', county: '叙永县', isRural: true, user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' } });
         await expect(
           (service as any).confirmBatches(1, {
             teacherProfileId: 5,
             reviewerUserId: 20,
-            preferredBatches: ['强基计划'],
+            preferredBatches: ['火星大学批次'],
           }),
         ).rejects.toThrow(/未知批次/);
+      });
+
+      // C1 回归: 旧实现用硬编码白名单 (仅 6 批次), 把 batchConfig 里真实存在的多数批次误判为"未知".
+      // 修复后改用 batchConfig 真值源, 强基计划等应可正常提交.
+      it('C1 修复: 旧白名单外但 batchConfig 内的批次 (强基计划) 应可提交成功', async () => {
+        prisma.studentProfile.findUnique.mockResolvedValue({
+          id: 1, teacherId: 5, intakeStatus: 'SUBMITTED', examType: 'PHYSICS',
+          county: '叙永县', isRural: true,
+          user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' },
+        });
+        prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'VERIFIED' });
+
+        const result = await (service as any).confirmBatches(1, {
+          teacherProfileId: 5,
+          reviewerUserId: 20,
+          preferredBatches: ['强基计划'],
+        });
+
+        expect(result).toHaveProperty('intakeStatus', 'VERIFIED');
+        expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ preferredBatches: ['强基计划'] }),
+          }),
+        );
       });
 
       it('校验失败: 学生 intakeStatus = DRAFT → Conflict', async () => {
