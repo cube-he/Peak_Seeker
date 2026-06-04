@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { SubsetItem } from './SubsetItem';
 import type { BatchRecommendation } from '@/services/batch-recommendations-api';
 
@@ -20,38 +21,60 @@ export function BatchCard({
   selected,
   onToggle,
   disabled,
+  defaultExpanded = false,
 }: {
   batch: BatchRecommendation;
   selected: boolean;
   onToggle: () => void;
   disabled: boolean;
+  /** 已选批次 section 里展开能让老师快速 review, 其他段默认 collapsed */
+  defaultExpanded?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const v = VERDICT_TEXT[batch.verdict] ?? VERDICT_TEXT.DATA_PENDING;
   const modeLabel = VOLUNTEER_MODE_LABEL[batch.volunteerMode] ?? batch.volunteerMode;
   return (
-    <div className="border rounded p-4">
-      <div className="flex items-start justify-between gap-2">
-        <label className="flex items-start gap-2 flex-1">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onToggle}
-            disabled={disabled}
-            className="mt-1"
-          />
+    <div className="border rounded">
+      {/* —— header (checkbox + name + verdict + 展开按钮) —— */}
+      <div className="flex items-center gap-2 p-3">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          disabled={disabled}
+          className="cursor-pointer"
+        />
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="flex-1 flex items-center justify-between gap-2 text-left"
+        >
           <div>
             <div className="font-semibold">{batch.batchName}</div>
             <div className="text-xs text-gray-500">志愿模式: {modeLabel}</div>
           </div>
-        </label>
-        <span className={`text-xs px-2 py-1 rounded ${v.color}`}>{v.label}</span>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs px-2 py-1 rounded ${v.color}`}>{v.label}</span>
+            <span className="text-xs text-blue-600">{expanded ? '收起 ▲' : '展开 ▼'}</span>
+          </div>
+        </button>
       </div>
-      {batch.scoreInfo && <ScoreInfoRow info={batch.scoreInfo} />}
-      <div className="mt-3 space-y-2">
-        {(batch.subsetResults ?? []).map((s) => (
-          <SubsetItem key={s.code} subset={s} />
-        ))}
-      </div>
+      {/* —— expanded body —— */}
+      {expanded && (
+        <div className="border-t p-3 space-y-2 bg-gray-50/50">
+          {batch.scoreInfo && <ScoreInfoRow info={batch.scoreInfo} />}
+          {(batch.subsetResults ?? []).length > 0 ? (
+            <div className="space-y-2 mt-2">
+              <div className="text-xs font-medium text-gray-700">子类别 / 资格判定:</div>
+              {(batch.subsetResults ?? []).map((s) => (
+                <SubsetItem key={s.code} subset={s} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500">无子类别信息</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -70,14 +93,14 @@ function ScoreInfoRow({
   const lineLabel = LINE_TYPE_LABEL[info.lineType] ?? info.lineType;
   if (info.lineMissing) {
     return (
-      <div className="mt-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+      <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
         当年 {lineLabel} 数据缺失
       </div>
     );
   }
   if (info.studentScore == null || info.lineScore == null) {
     return (
-      <div className="mt-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+      <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
         {lineLabel}: {info.lineScore ?? '?'}, 学生总分: {info.studentScore ?? '未填'}
       </div>
     );
@@ -93,7 +116,7 @@ function ScoreInfoRow({
           : 'text-red-700 bg-red-50';
   const sign = gap >= 0 ? '+' : '';
   return (
-    <div className={`mt-2 text-xs px-2 py-1 rounded ${tone}`}>
+    <div className={`text-xs px-2 py-1 rounded ${tone}`}>
       你 {info.studentScore} / {lineLabel} {info.lineScore} ({sign}
       {gap} 分)
       {info.leniency && !info.passesLine && info.withinLeniency &&

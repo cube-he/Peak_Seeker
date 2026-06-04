@@ -57,6 +57,8 @@ export interface IntakeDataGap {
 export interface BatchRecommendationsResponse {
   batches: BatchRecommendation[];
   batchesConfirmedAt: string | null;
+  /** 老师上次 confirm 时选定的批次列表 (DB 里的 preferredBatches), null 表示从未 confirm 过. */
+  preferredBatches: string[] | null;
   intakeGap: IntakeDataGap;
 }
 
@@ -71,13 +73,18 @@ export const batchRecommendationsApi = {
     const eb: { batches: BatchRecommendation[]; intakeGap: IntakeDataGap } = Array.isArray(raw)
       ? { batches: raw as BatchRecommendation[], intakeGap: { ok: true, missing: [] } }
       : (raw as { batches: BatchRecommendation[]; intakeGap: IntakeDataGap });
-    const student = (await api.get<{ batchesConfirmedAt: string | null }>(
-      `/students/${studentId}`,
-    )) as unknown as { batchesConfirmedAt: string | null };
+    const student = (await api.get<{
+      batchesConfirmedAt: string | null;
+      preferredBatches: string[] | null;
+    }>(`/students/${studentId}`)) as unknown as {
+      batchesConfirmedAt: string | null;
+      preferredBatches: string[] | null;
+    };
     return {
       batches: eb.batches ?? [],
       intakeGap: eb.intakeGap ?? { ok: true, missing: [] },
       batchesConfirmedAt: student?.batchesConfirmedAt ?? null,
+      preferredBatches: Array.isArray(student?.preferredBatches) ? student.preferredBatches : null,
     };
   },
 
