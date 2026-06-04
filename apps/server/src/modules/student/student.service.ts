@@ -841,8 +841,13 @@ export class StudentService {
     if (opts.teacherProfileId !== undefined && student.teacherId !== opts.teacherProfileId) {
       throw new ForbiddenException('无权确认不属于自己的学生的批次');
     }
-    if (student.intakeStatus !== 'SUBMITTED' && student.intakeStatus !== 'NEEDS_CHANGES') {
-      throw new ConflictException('学生尚未提交资料或已确认');
+    // 允许 SUBMITTED / NEEDS_CHANGES / VERIFIED 三种状态调整批次:
+    //   - SUBMITTED / NEEDS_CHANGES: 初次 confirm, 写入 preferredBatches + 升 VERIFIED
+    //   - VERIFIED: 老师事后想调整批次 (例如学生详情页先点过"确认资料"再回头选批次,
+    //     或方案制作中发现批次不合适需要换), 也允许 overwrite preferredBatches.
+    //   - DRAFT: 学生还没自填提交, 不允许
+    if (student.intakeStatus === 'DRAFT') {
+      throw new ConflictException('学生尚未提交资料, 无法选定批次');
     }
     // 关键资料缺失则禁止确认 (推荐 + 方案制作的前提)
     const intakeGap = validateIntakeForBatchSelection(student);
