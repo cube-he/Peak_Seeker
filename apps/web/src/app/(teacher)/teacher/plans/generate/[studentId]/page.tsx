@@ -1158,6 +1158,18 @@ export default function GeneratePlanPage() {
     }
   }, [existingPlans, planId]);
 
+  // batchConfigId 可能来自老 plan 的批次, 但老师改了 preferredBatches 后那个批次
+  // 不再被允许 → batchOptions 里没匹配, Select 会显示 raw value (例 "23") 而非 label.
+  // 这里发现 batchConfigId 不在新 options 里就清掉, 让老师重新选.
+  useEffect(() => {
+    if (batchConfigId == null || batches.length === 0) return;
+    const exists = batches.some((b) => b.batchConfigId === batchConfigId);
+    if (!exists) {
+      setBatchConfigId(undefined);
+      setPlanId(undefined);
+    }
+  }, [batches, batchConfigId]);
+
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
