@@ -291,7 +291,9 @@ const RULES: Record<string, any> = {
     ],
   },
   本科提前批A段: {
-    scoreFloor: { type: 'SPECIAL_LINE' },
+    // 该批次混合: 军事/公安/司法/航海/消防都按本科线; 综合评价子类需达特控线 (老师面谈核实).
+    // 取多数口径 BATCH_LINE; 综合评价子类设 dataPending 让老师人工把关.
+    scoreFloor: { type: 'BATCH_LINE' },
     examTypes: ['物理', '历史'],
     volunteerMode: 'SEQUENTIAL',
     hardEligibility: [],
@@ -494,7 +496,7 @@ const RULES: Record<string, any> = {
       {
         code: 'gaoxiao_zonghe',
         name: '高校综合评价 (北电中传等)',
-        description: '艺术综合评价, 单独招生流程',
+        description: '艺术综合评价, 单独招生流程。文化成绩需达特殊类型招生录取控制分数线 (特控线: 2025 物理 518 / 历史 533), 老师面谈核实。',
         dataPending: true,
         references: [],
       },
@@ -725,13 +727,30 @@ const RULES: Record<string, any> = {
 // DB 中实际存在的细分批次名 → 共享哪个顶层规则
 // 但每个细分批次卡片只展示自己专属的 subset, 避免 4 张本科批 A 卡片重复显示
 // 解决 Plan A Task 12 遗留: DB 有"本科批A段（国家专项）"等细分行而无纯"本科批A段"
-const BATCH_ALIASES: Array<{ alias: string; parent: string; onlySubsets: string[] }> = [
+//
+// scoreFloor 可选 override: 多数 alias 跟 parent 即可; 但高校专项/高水平运动队等
+// 分数门槛与 parent 不同, 必须 override (见调研: 高校专项走特控线 SPECIAL_LINE).
+type AliasScoreFloor = { type: 'BATCH_LINE' | 'SPECIAL_LINE' | 'ZHUANKE_LINE'; leniency?: number };
+const BATCH_ALIASES: Array<{
+  alias: string;
+  parent: string;
+  onlySubsets: string[];
+  scoreFloor?: AliasScoreFloor;
+}> = [
   { alias: '本科批A段（国家专项）', parent: '本科批A段', onlySubsets: ['guojia_zhuanxiang'] },
   { alias: '本科批A段（地方专项）', parent: '本科批A段', onlySubsets: ['difang_zhuanxiang'] },
-  { alias: '本科批高校专项', parent: '本科批B段', onlySubsets: ['gaoxiao_zhuanxiang'] },
-  { alias: '本科批高水平运动队', parent: '本科批A段', onlySubsets: ['gaoshui_yundong'] },
+  // 高校专项: 教育部规定走特殊类型招生录取控制分数线 (特控线 518 物理 / 533 历史 @2025).
+  { alias: '本科批高校专项', parent: '本科批B段', onlySubsets: ['gaoxiao_zhuanxiang'],
+    scoreFloor: { type: 'SPECIAL_LINE' } },
+  // 高水平运动队: 双一流要本科线; 其他高校要本科线 80% (leniency=88 ≈ 442*0.2 @2025 物理);
+  //   体测特别突出可降至本科线 65% (老师面谈把关, 不写死规则).
+  { alias: '本科批高水平运动队', parent: '本科批A段', onlySubsets: ['gaoshui_yundong'],
+    scoreFloor: { type: 'BATCH_LINE', leniency: 88 } },
+  // 提前批国家专项: 走本科线 (2025 物理 442 / 历史 503).
   { alias: '本科提前批国家专项', parent: '本科批A段', onlySubsets: ['guojia_zhuanxiang'] },
-  { alias: '本科提前批高校专项', parent: '本科批B段', onlySubsets: ['gaoxiao_zhuanxiang'] },
+  // 提前批高校专项: 同上 - 走特控线.
+  { alias: '本科提前批高校专项', parent: '本科批B段', onlySubsets: ['gaoxiao_zhuanxiang'],
+    scoreFloor: { type: 'SPECIAL_LINE' } },
 ];
 
 // 完全独立的占位批次 (只填 dataPending placeholder)
@@ -785,7 +804,7 @@ async function main() {
   for (const [batch, rules] of Object.entries(RULES)) {
     allTargets.push({ batch, rules });
   }
-  for (const { alias, parent, onlySubsets } of BATCH_ALIASES) {
+  for (const { alias, parent, onlySubsets, scoreFloor } of BATCH_ALIASES) {
     const parentRules = RULES[parent];
     if (!parentRules) {
       console.warn(`⚠ alias "${alias}" 找不到 parent "${parent}"`);
@@ -798,7 +817,12 @@ async function main() {
     }
     allTargets.push({
       batch: alias,
-      rules: { ...parentRules, subsets: filteredSubsets },
+      // alias 可 override scoreFloor (e.g. 高校专项走特控线; 高水平运动队加 leniency).
+      rules: {
+        ...parentRules,
+        subsets: filteredSubsets,
+        scoreFloor: scoreFloor ?? parentRules.scoreFloor,
+      },
     });
   }
   for (const [batch, rules] of Object.entries(PLACEHOLDER_BATCHES)) {
