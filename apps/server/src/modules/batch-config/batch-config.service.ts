@@ -168,6 +168,14 @@ export class BatchConfigService {
           birthDate: student.user?.birthDate ?? null,
           ethnicity: student.user?.ethnicity ?? null,
           gender: student.user?.gender ?? null,
+          // 体检字段 (军/警/航/空乘资格审查), 来自 student_profiles 自身列.
+          // Prisma 返回 Decimal, 转 number; null/undefined 维持原状让 evaluator 走 "未填" 分支.
+          height: student.height != null ? Number(student.height) : null,
+          weight: student.weight != null ? Number(student.weight) : null,
+          visionLeft: student.visionLeft != null ? Number(student.visionLeft) : null,
+          visionRight: student.visionRight != null ? Number(student.visionRight) : null,
+          colorBlind: student.colorBlind ?? null,
+          colorWeak: student.colorWeak ?? null,
         },
         {
           id: b.id,

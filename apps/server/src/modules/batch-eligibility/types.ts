@@ -64,12 +64,17 @@ export type HardEligibilityRuleCode =
   | 'HOUSEHOLD_IN_REGION'        // 户籍县 ∈ regions(不限城乡)
   | 'AGE_RANGE'                  // {min,max,asOf} 年龄区间
   | 'POLITICAL_REVIEW_REQUIRED'  // SOFT_HINT, 提示老师面谈
-  | 'PHYSICAL_EXAM_REQUIRED'     // SOFT_HINT, 提示老师面谈
+  | 'PHYSICAL_EXAM_REQUIRED'     // SOFT_HINT, 提示老师面谈 (粗粒度门槛)
   | 'GENDER'                     // 性别限制 (如军队/公安院校)
-  | 'VISION_STANDARD'            // 视力标准 (如军队/公安院校)
+  | 'VISION_STANDARD'            // 视力标准 (legacy SOFT_HINT, 新规则用 VISION_NAKED_MIN)
   | 'SCHOOL_RECOMMENDATION'      // 校长实名推荐 (如强基计划/综合评价)
   | 'SERVICE_COMMITMENT'         // 服务承诺 (如公费师范/定向培养)
-  | 'ETHNICITY_MINORITY';        // 必须少数民族 (民语为主/民预/民族班)
+  | 'ETHNICITY_MINORITY'         // 必须少数民族 (民语为主/民预/民族班)
+  // —— 体检细化规则 (硬性, 学生未填字段 → FAIL, 矫正视力不算) ——
+  | 'HEIGHT_MIN_BY_GENDER'       // {male:cm, female:cm} 例: 公安男 170 / 女 160
+  | 'BMI_RANGE'                  // {min:number, max:number} 例: 军队 17.5-30
+  | 'VISION_NAKED_MIN'           // {value:number} 例: 4.8 (单眼裸眼下限, 两眼都要 >= 该值)
+  | 'COLOR_VISION_NORMAL';       // 无 params, 要求 colorBlind=false 且 colorWeak=false
 
 // 本期新增: subset-level 判定
 // 见 docs/superpowers/specs/2026-06-03-batch-recommendation-page-design.md § 四

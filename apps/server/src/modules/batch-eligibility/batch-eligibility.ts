@@ -24,6 +24,13 @@ export interface StudentForEligibility {
   birthDate: Date | null;
   ethnicity: string | null;   // 民族 (汉族/藏族/彝族/...)
   gender: string | null;       // MALE/FEMALE
+  // —— 体检字段 (军/警/航/空乘资格审查需要, 矫正视力不算) ——
+  height: number | null;       // cm
+  weight: number | null;       // kg
+  visionLeft: number | null;   // 裸眼, 例 4.8
+  visionRight: number | null;
+  colorBlind: boolean | null;
+  colorWeak: boolean | null;
 }
 
 export interface BatchConfigForEligibility {
@@ -200,6 +207,10 @@ const REQUIREMENT_LABEL: Record<string, string> = {
   SERVICE_COMMITMENT: '需签 6 年服务承诺',
   GENDER: '性别限制',
   ETHNICITY_MINORITY: '限少数民族考生',
+  HEIGHT_MIN_BY_GENDER: '身高下限',
+  BMI_RANGE: 'BMI 范围',
+  VISION_NAKED_MIN: '裸眼视力下限',
+  COLOR_VISION_NORMAL: '色觉正常 (无色盲色弱)',
 };
 
 function evalSubset(student: StudentForEligibility, subset: SubsetRule): SubsetResult {
@@ -359,6 +370,67 @@ function evalHardRule(
       }
       if (student.ethnicity === '汉族' || student.ethnicity.toUpperCase() === 'HAN') {
         return { satisfied: false, hint: `${subsetLabel}限少数民族考生, 学生为汉族` };
+      }
+      return { satisfied: true, hint: 'PASS' };
+    }
+    // —— 体检细化 4 类硬规则 (用户决策: 未填 → FAIL; 矫正视力不算) ——
+    case 'HEIGHT_MIN_BY_GENDER': {
+      const { male, female } = (rule.params ?? {}) as { male: number; female: number };
+      if (!student.gender) {
+        return { satisfied: false, hint: `${subsetLabel}需身高男 ≥${male}cm / 女 ≥${female}cm, 学生未填性别 → 请先催学生补完资料` };
+      }
+      const minH = student.gender === 'MALE' ? male : female;
+      if (student.height == null) {
+        return { satisfied: false, hint: `${subsetLabel}需身高 ≥${minH}cm, 学生未填身高 → 请先催学生补完体检数据` };
+      }
+      if (student.height < minH) {
+        return { satisfied: false, hint: `${subsetLabel}需身高 ≥${minH}cm, 学生身高 ${student.height}cm 不达标` };
+      }
+      return { satisfied: true, hint: 'PASS' };
+    }
+    case 'BMI_RANGE': {
+      // 兼容两种 params:
+      //   {min, max}                     → 统一范围 (军队/公安/司法用此)
+      //   {male:{min,max}, female:{...}} → 男女分开 (定向军士按应征公民标准: 男 17.5-30, 女 17-24)
+      const p = rule.params as any;
+      const range: { min: number; max: number } = p?.male && p?.female
+        ? (student.gender === 'FEMALE' ? p.female : p.male)
+        : { min: p?.min as number, max: p?.max as number };
+      if (!student.gender && p?.male) {
+        return { satisfied: false, hint: `${subsetLabel}需 BMI 男女不同 (男 ${p.male.min}-${p.male.max} / 女 ${p.female.min}-${p.female.max}), 学生未填性别 → 请先催学生补完资料` };
+      }
+      if (student.height == null || student.weight == null) {
+        return { satisfied: false, hint: `${subsetLabel}需 BMI 在 ${range.min}-${range.max}, 学生未填身高或体重 → 请先催学生补完体检数据` };
+      }
+      const bmi = student.weight / Math.pow(student.height / 100, 2);
+      if (bmi < range.min || bmi > range.max) {
+        return { satisfied: false, hint: `${subsetLabel}需 BMI 在 ${range.min}-${range.max}, 学生 BMI ${bmi.toFixed(1)} (身高 ${student.height}cm / 体重 ${student.weight}kg) 不达标` };
+      }
+      return { satisfied: true, hint: 'PASS' };
+    }
+    case 'VISION_NAKED_MIN': {
+      // 两眼裸眼都需要 ≥value, 矫正视力按用户决策不算
+      const { value } = (rule.params ?? {}) as { value: number };
+      if (student.visionLeft == null || student.visionRight == null) {
+        return { satisfied: false, hint: `${subsetLabel}需两眼裸眼 ≥${value} (矫正不算), 学生未填裸眼视力 → 请先催学生补完体检数据` };
+      }
+      const lo = Math.min(student.visionLeft, student.visionRight);
+      if (lo < value) {
+        return { satisfied: false, hint: `${subsetLabel}需两眼裸眼 ≥${value} (矫正不算), 学生最差眼 ${lo} 不达标 (L:${student.visionLeft} R:${student.visionRight})` };
+      }
+      return { satisfied: true, hint: 'PASS' };
+    }
+    case 'COLOR_VISION_NORMAL': {
+      // 严格态度: null/未填 → FAIL ("未确认"); 任一为 true → FAIL ("有色弱/色盲")
+      if (student.colorBlind == null || student.colorWeak == null) {
+        return { satisfied: false, hint: `${subsetLabel}需色觉正常 (无色盲色弱), 学生未确认色觉项 → 请先催学生补完体检数据` };
+      }
+      if (student.colorBlind || student.colorWeak) {
+        const issues = [
+          student.colorBlind ? '色盲' : null,
+          student.colorWeak ? '色弱' : null,
+        ].filter(Boolean).join('/');
+        return { satisfied: false, hint: `${subsetLabel}需色觉正常 (无色盲色弱), 学生有 ${issues}` };
       }
       return { satisfied: true, hint: 'PASS' };
     }

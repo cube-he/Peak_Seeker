@@ -11,6 +11,12 @@ const baseStudent = {
   birthDate: new Date('2008-01-01'),
   ethnicity: '汉族',
   gender: 'MALE',
+  height: 175,
+  weight: 65,
+  visionLeft: 5.0,
+  visionRight: 5.0,
+  colorBlind: false,
+  colorWeak: false,
 };
 const baseBatchConfig = (overrides: any = {}) => ({
   id: 1,
@@ -189,6 +195,12 @@ describe('judgeBatchEligibility V2 (subsets 数组)', () => {
     birthDate: new Date('2008-01-01'),
     ethnicity: '汉族',
     gender: 'MALE',
+    height: 175,
+    weight: 65,
+    visionLeft: 5.0,
+    visionRight: 5.0,
+    colorBlind: false,
+    colorWeak: false,
   };
   const baseBatchConfig = (rules: any) => ({
     id: 1,

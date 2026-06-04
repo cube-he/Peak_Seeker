@@ -138,6 +138,39 @@ const ref_gongan_tijian = {
   filename: 'gongan_tijian.docx',
   type: 'doc' as const,
 };
+// —— 定向培养军士 (高职提前批 / dingxiang_junshi) ——
+const ref_dxjs_2025_jihua = {
+  title: '四川省 2025 年定向培养军士招生计划表',
+  filename: 'dxjs_2025_sichuan_jihua.doc',
+  type: 'doc' as const,
+  sourceNote: '2025 版本, 待 2026 计划表出后替换',
+};
+const ref_yingzheng_tijian = {
+  title: '《应征公民体格检查标准》(国家征兵体检通用标准)',
+  filename: 'yingzheng_tijian.doc',
+  type: 'doc' as const,
+};
+const ref_sceea_2025_dxjs = {
+  title: '四川教育考试院 2025 定向培养军士通知 (官网, 待 2026 替换)',
+  filename: null,
+  externalUrl: 'https://www.sceea.cn/Html/202506/Newsdetail_4322.html',
+  type: 'announcement' as const,
+  sourceNote: '2025 版本, 待 2026 出后替换为今年链接',
+};
+// —— 农村订单定向医学生 (mianfei_yixue) ——
+const ref_noddyxs_2025 = {
+  title: '四川省 2025 年农村订单定向医学生通知',
+  filename: 'noddyxs_2025_sichuan.docx',
+  type: 'doc' as const,
+  sourceNote: '2025 版本, 待 2026 通知出后替换',
+};
+const ref_sceea_2025_noddyxs = {
+  title: '四川教育考试院 2025 农村订单定向医学生通知 (官网, 待 2026 替换)',
+  filename: null,
+  externalUrl: 'https://www.sceea.cn/Html/202506/Newsdetail_4325.html',
+  type: 'announcement' as const,
+  sourceNote: '2025 版本, 待 2026 出后替换为今年链接',
+};
 // —— 司法警官类 (中央司法警官学院, 2025 占位, 待 2026 出后替换) ——
 const ref_sifa_2025_zhengzhi = {
   title: '中央司法警官学院 2025 年招生政治考察表',
@@ -266,7 +299,7 @@ const RULES: Record<string, any> = {
       {
         code: 'junxiao',
         name: '军队院校',
-        description: '军队 27 院校, 录取后入伍',
+        description: '军队 27 院校, 录取后入伍 (体检按《军队选拔军官和文职人员体检标准》)',
         hardRules: [
           {
             scope: 'SUBSET', subset: '军队院校',
@@ -276,6 +309,31 @@ const RULES: Record<string, any> = {
           {
             scope: 'SUBSET', subset: '军队院校',
             rule: 'POLITICAL_REVIEW_REQUIRED',
+          },
+          // 军队体检 第三条: 男 < 162cm / 女 < 158cm 不合格
+          {
+            scope: 'SUBSET', subset: '军队院校',
+            rule: 'HEIGHT_MIN_BY_GENDER',
+            params: { male: 162, female: 158 },
+          },
+          // 军队体检 第四条: 男 17.5-30 / 女 17-24
+          {
+            scope: 'SUBSET', subset: '军队院校',
+            rule: 'BMI_RANGE',
+            params: {
+              male: { min: 17.5, max: 30 },
+              female: { min: 17, max: 24 },
+            },
+          },
+          // 军队体检 第三十六条: 任何一眼裸眼 < 4.5 不合格
+          {
+            scope: 'SUBSET', subset: '军队院校',
+            rule: 'VISION_NAKED_MIN',
+            params: { value: 4.5 },
+          },
+          {
+            scope: 'SUBSET', subset: '军队院校',
+            rule: 'COLOR_VISION_NORMAL',
           },
           {
             scope: 'SUBSET', subset: '军队院校',
@@ -295,7 +353,7 @@ const RULES: Record<string, any> = {
       {
         code: 'gongan',
         name: '公安院校',
-        description: '公安部直属院校, 政考要求高',
+        description: '公安部直属院校, 政考要求高, 体检按公安院校招生体检标准',
         hardRules: [
           {
             scope: 'SUBSET', subset: '公安院校',
@@ -305,6 +363,31 @@ const RULES: Record<string, any> = {
           {
             scope: 'SUBSET', subset: '公安院校',
             rule: 'POLITICAL_REVIEW_REQUIRED',
+          },
+          // 公安院校体检 第一条: 男 ≥170cm, 女 ≥160cm
+          {
+            scope: 'SUBSET', subset: '公安院校',
+            rule: 'HEIGHT_MIN_BY_GENDER',
+            params: { male: 170, female: 160 },
+          },
+          // 公安院校体检 第二条: 男 17.3-27.3 / 女 17.1-25.7 (男女不同)
+          {
+            scope: 'SUBSET', subset: '公安院校',
+            rule: 'BMI_RANGE',
+            params: {
+              male: { min: 17.3, max: 27.3 },
+              female: { min: 17.1, max: 25.7 },
+            },
+          },
+          // 公安院校体检 第二十九条: 任何一眼裸眼 < 4.8 不合格
+          {
+            scope: 'SUBSET', subset: '公安院校',
+            rule: 'VISION_NAKED_MIN',
+            params: { value: 4.8 },
+          },
+          {
+            scope: 'SUBSET', subset: '公安院校',
+            rule: 'COLOR_VISION_NORMAL',
           },
           {
             scope: 'SUBSET', subset: '公安院校',
@@ -332,11 +415,36 @@ const RULES: Record<string, any> = {
       {
         code: 'sifa',
         name: '司法警官类',
-        description: '司法部院校, 警务方向',
+        description: '司法部院校, 警务方向 (体检参照公安院校招生体检标准)',
         hardRules: [
           {
             scope: 'SUBSET', subset: '司法警官',
             rule: 'POLITICAL_REVIEW_REQUIRED',
+          },
+          // 参照公安院校体检: 男 ≥170cm / 女 ≥160cm
+          {
+            scope: 'SUBSET', subset: '司法警官',
+            rule: 'HEIGHT_MIN_BY_GENDER',
+            params: { male: 170, female: 160 },
+          },
+          // 参照公安: 男 17.3-27.3 / 女 17.1-25.7
+          {
+            scope: 'SUBSET', subset: '司法警官',
+            rule: 'BMI_RANGE',
+            params: {
+              male: { min: 17.3, max: 27.3 },
+              female: { min: 17.1, max: 25.7 },
+            },
+          },
+          // 参照公安: 两眼裸眼 ≥4.8
+          {
+            scope: 'SUBSET', subset: '司法警官',
+            rule: 'VISION_NAKED_MIN',
+            params: { value: 4.8 },
+          },
+          {
+            scope: 'SUBSET', subset: '司法警官',
+            rule: 'COLOR_VISION_NORMAL',
           },
           {
             scope: 'SUBSET', subset: '司法警官',
@@ -361,12 +469,19 @@ const RULES: Record<string, any> = {
         name: '航海类',
         description: '航海技术、轮机工程等专业, 视力色觉要求',
         hardRules: [
+          // TODO 人工校验: GB 30035-2021 是扫描版未能 OCR, 下列为招生章程通用值,
+          // 待人工核对《船员健康检查要求》后精确化
           {
             scope: 'SUBSET', subset: '航海类',
-            rule: 'VISION_STANDARD',
+            rule: 'VISION_NAKED_MIN',
+            params: { value: 4.7 },
+          },
+          {
+            scope: 'SUBSET', subset: '航海类',
+            rule: 'COLOR_VISION_NORMAL',
           },
         ],
-        softHints: ['裸眼视力 4.7 以上 + 无色盲色弱, 体检表参考招生章程'],
+        softHints: ['裸眼视力 4.7 以上 + 无色盲色弱 (通用值待人工核对 GB 30035), 体检表参考招生章程'],
         references: [ref_chuanyuan_jiankang, ref_zhaosheng_wuli],
       },
       {
@@ -407,7 +522,12 @@ const RULES: Record<string, any> = {
             params: { years: 6 },
           },
         ],
-        references: [ref_119, ref_zhaosheng_wuli],
+        references: [
+          ref_noddyxs_2025,
+          ref_sceea_2025_noddyxs,
+          ref_119,
+          ref_zhaosheng_wuli,
+        ],
       },
       {
         code: 'sheng_gongfei_shifan',
@@ -474,7 +594,7 @@ const RULES: Record<string, any> = {
       {
         code: 'dingxiang_junshi',
         name: '定向培养军士',
-        description: '部分高职院校面向陆海空军方向培养',
+        description: '部分高职院校面向陆海空军方向培养, 按《应征公民体格检查标准》',
         hardRules: [
           {
             scope: 'SUBSET', subset: '定向军士',
@@ -485,24 +605,74 @@ const RULES: Record<string, any> = {
             scope: 'SUBSET', subset: '定向军士',
             rule: 'POLITICAL_REVIEW_REQUIRED',
           },
+          // 应征公民体格检查标准 第一条: 男 ≥160cm, 女 ≥158cm
+          {
+            scope: 'SUBSET', subset: '定向军士',
+            rule: 'HEIGHT_MIN_BY_GENDER',
+            params: { male: 160, female: 158 },
+          },
+          // 第二条: 男 17.5 ≤ BMI < 30, 女 17 ≤ BMI < 24
+          {
+            scope: 'SUBSET', subset: '定向军士',
+            rule: 'BMI_RANGE',
+            params: {
+              male: { min: 17.5, max: 30 },
+              female: { min: 17, max: 24 },
+            },
+          },
+          // 第三十五条: 任何一眼裸眼 < 4.5 → 不合格
+          {
+            scope: 'SUBSET', subset: '定向军士',
+            rule: 'VISION_NAKED_MIN',
+            params: { value: 4.5 },
+          },
+          // 第三十六条: 色弱、色盲不合格
+          {
+            scope: 'SUBSET', subset: '定向军士',
+            rule: 'COLOR_VISION_NORMAL',
+          },
           {
             scope: 'SUBSET', subset: '定向军士',
             rule: 'PHYSICAL_EXAM_REQUIRED',
           },
         ],
-        references: [ref_junjian, ref_zhaosheng_wuli],
+        references: [
+          // 定向军士专有 (招生计划 / 国家征兵体检 / 官网公告)
+          ref_dxjs_2025_jihua,
+          ref_yingzheng_tijian,
+          ref_sceea_2025_dxjs,
+          // 政审通用 (与军队/公安/司法共用)
+          ref_zhengshen_biao,
+          ref_zhengshen_shuoming,
+          ref_zhengshen_tongji,
+          // 军队体检 + 招生考试报物理前言
+          ref_junjian,
+          ref_zhaosheng_wuli,
+        ],
       },
       {
         code: 'kongcheng',
         name: '空中乘务',
         description: '高职空乘专业, 身高/视力/面试',
         hardRules: [
+          // TODO 人工校验: 空乘无统一国标, 各校招生章程身高/视力要求略有差异.
+          // 下列为行业常见值 (男 172 / 女 162, 视力 4.7), 待人工核对具体院校章程.
           {
             scope: 'SUBSET', subset: '空乘',
-            rule: 'VISION_STANDARD',
+            rule: 'HEIGHT_MIN_BY_GENDER',
+            params: { male: 172, female: 162 },
+          },
+          {
+            scope: 'SUBSET', subset: '空乘',
+            rule: 'VISION_NAKED_MIN',
+            params: { value: 4.7 },
+          },
+          {
+            scope: 'SUBSET', subset: '空乘',
+            rule: 'COLOR_VISION_NORMAL',
           },
         ],
-        softHints: ['男生身高 172cm 以上, 女生 162cm 以上 + 面试合格'],
+        softHints: ['男生身高 172cm 以上, 女生 162cm 以上 + 面试合格 (通用值待人工核对院校章程)'],
         references: [ref_zhaosheng_wuli],
       },
       {
