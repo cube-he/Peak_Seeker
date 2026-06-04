@@ -9,9 +9,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Spin, message } from 'antd';
+import {
+  Button, DatePicker, Form, Input, InputNumber, Modal, Select, Spin, message,
+} from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { consultationApi } from '@/services/consultation-api';
+import { studentApi } from '@/services/student-api';
 import {
   Avatar,
   ChannelIcon,
@@ -55,11 +58,40 @@ export default function ClinicPage() {
   const qc = useQueryClient();
   const [endModalOpen, setEndModalOpen] = useState(false);
   const [notesInput, setNotesInput] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteForm] = Form.useForm();
 
   const { data, isLoading } = useQuery({
     queryKey: ['clinic-state'],
     queryFn: () => consultationApi.getClinicState(),
     refetchInterval: 5000,
+  });
+
+  // 老师邀约家长 — 复用 consultations.create (createdByActor='teacher', status='scheduled', 家长被动看到)
+  // 学生列表延迟加载到 Modal 打开时
+  const { data: studentsResp } = useQuery({
+    queryKey: ['teacher-students-options'],
+    queryFn: () => studentApi.getList({ pageSize: 200 }),
+    enabled: inviteOpen,
+    staleTime: 60_000,
+  });
+  const studentOptions = (() => {
+    const raw: any[] = (studentsResp as any)?.data?.data ?? (studentsResp as any)?.data ?? [];
+    return raw.map((s: any) => ({
+      value: s.id,
+      label: `${s.user?.realName ?? s.realName ?? `学生 ${s.id}`}${s.user?.phone ? ` · ${s.user.phone}` : ''}`,
+    }));
+  })();
+  const inviteMutation = useMutation({
+    mutationFn: (payload: any) => consultationApi.create(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['clinic-state'] });
+      message.success('已为家长创建预约');
+      setInviteOpen(false);
+      inviteForm.resetFields();
+    },
+    onError: (e: any) =>
+      message.error(e?.response?.data?.message ?? '创建预约失败'),
   });
 
   const callNextMutation = useMutation({
@@ -110,6 +142,11 @@ export default function ClinicPage() {
             </>
           }
           fresh="实时"
+          actions={
+            <Button type="primary" onClick={() => setInviteOpen(true)}>
+              邀约家长
+            </Button>
+          }
         />
 
         <div className="clinic-board fade-up d1">
@@ -456,6 +493,76 @@ export default function ClinicPage() {
           </div>
         </>
       )}
+
+      {/* —— 邀约家长 Modal — 老师主动发起 (createdByActor=teacher, status=scheduled 直接生效) —— */}
+      <Modal
+        title="邀约家长沟通"
+        open={inviteOpen}
+        onCancel={() => setInviteOpen(false)}
+        onOk={() =>
+          inviteForm.validateFields().then((values) => {
+            inviteMutation.mutate({
+              studentId: values.studentId,
+              scheduledAt: values.scheduledAt.toISOString(),
+              channel: values.channel,
+              durationEst: values.durationEst,
+              purpose: values.purpose,
+              notes: values.notes,
+            });
+          })
+        }
+        okText="确认邀约"
+        confirmLoading={inviteMutation.isPending}
+        destroyOnClose
+      >
+        <Form
+          form={inviteForm}
+          layout="vertical"
+          initialValues={{ channel: 'phone', durationEst: 30 }}
+        >
+          <Form.Item
+            name="studentId"
+            label="学生"
+            rules={[{ required: true, message: '请选择学生' }]}
+          >
+            <Select
+              showSearch
+              placeholder="输入姓名或电话搜索"
+              options={studentOptions}
+              filterOption={(input, option) =>
+                ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              loading={studentOptions.length === 0 && inviteOpen}
+            />
+          </Form.Item>
+          <Form.Item
+            name="scheduledAt"
+            label="预约时间"
+            rules={[{ required: true, message: '请选择时间' }]}
+          >
+            <DatePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="channel" label="沟通方式" rules={[{ required: true }]}>
+            <Select
+              options={[
+                { label: '电话', value: 'phone' },
+                { label: '微信', value: 'wechat' },
+                { label: '线下', value: 'in_person' },
+                { label: '视频', value: 'video' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="durationEst" label="预估时长 (分钟)">
+            <InputNumber min={5} max={300} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="purpose" label="沟通主题">
+            <Input placeholder="例: 讨论选校 / 强基备战 / 进度反馈" />
+          </Form.Item>
+          <Form.Item name="notes" label="备注 (可选)">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 }

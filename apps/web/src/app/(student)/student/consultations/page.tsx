@@ -72,6 +72,11 @@ export default function StudentConsultationsPage() {
                   <p className="m-0 text-sm font-medium">
                     {when} · {CHANNEL_LABEL[c.channel] ?? c.channel}
                     {c.purpose ? ` · ${c.purpose}` : ''}
+                    {c.createdByActor === 'teacher' && (
+                      <span className="ml-2 inline-block rounded bg-primary-fixed px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                        由老师为你创建
+                      </span>
+                    )}
                   </p>
                   <p className="m-0 text-xs text-text-muted">
                     状态:{STATUS_LABEL[c.status] ?? c.status}
