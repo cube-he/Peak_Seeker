@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { pickerApi } from '@/services/picker';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -1020,7 +1021,15 @@ export default function GeneratePlanPage() {
     queryKey: ['eligible-batches', studentId],
     queryFn: () => studentApi.getEligibleBatches(studentId),
   });
-  const batches = unwrap<EligibleBatch[]>(batchData) ?? [];
+  const allBatches = unwrap<EligibleBatch[]>(batchData) ?? [];
+  // 只在老师"确认过的批次"里选 — preferredBatches 是老师在批次推荐页提交的子集.
+  // 没确认 (空 / null) 时 fallback 显示全部, 提示老师先去确认.
+  const preferredBatchNames: string[] | null = Array.isArray(student?.preferredBatches)
+    ? (student!.preferredBatches as string[])
+    : null;
+  const batches = preferredBatchNames && preferredBatchNames.length > 0
+    ? allBatches.filter((b) => preferredBatchNames.includes(b.batchName))
+    : allBatches;
 
   const { data: existingPlanData, isLoading: existingPlansLoading } = useQuery({
     queryKey: ['student-plans-latest', studentId],
@@ -1505,9 +1514,27 @@ export default function GeneratePlanPage() {
         </div>
         <div className="pgv2-top-r">
           <div className="pgv2-batch">
-            <label>批次</label>
+            <label>
+              批次
+              {preferredBatchNames && preferredBatchNames.length > 0 ? (
+                <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                  已确认 {preferredBatchNames.length} 个
+                </span>
+              ) : (
+                <Link
+                  href={`/teacher/students/${studentId}/batch-recommendations`}
+                  style={{ marginLeft: 6, fontSize: 11, color: 'var(--rush)' }}
+                >
+                  未确认批次, 去推荐页选 →
+                </Link>
+              )}
+            </label>
             <Select
-              placeholder="请选择批次..."
+              placeholder={
+                preferredBatchNames && preferredBatchNames.length > 0
+                  ? '请选择批次...'
+                  : '(老师未确认批次, 当前显示全部) 请选择...'
+              }
               value={batchConfigId}
               loading={batchLoading}
               options={batchOptions}

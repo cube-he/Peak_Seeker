@@ -637,6 +637,15 @@ export default function StudentDetailPage() {
                   </span>
                 </>
               ) : null}
+              {Array.isArray(student?.preferredBatches) && student.preferredBatches.length > 0 ? (
+                <>
+                  <span className="sep" />
+                  <span>
+                    确认批次 <span className="num">{student.preferredBatches.length}</span> 个:{' '}
+                    {student.preferredBatches.join(' / ')}
+                  </span>
+                </>
+              ) : null}
             </div>
           </div>
           <div className="actions">
@@ -2033,6 +2042,37 @@ function KeyDataPanel({ student }: { student: any }) {
             <br />
             <span>目标专业 {prefMajorsStr}</span>
           </p>
+        </div>
+        {/* 老师在批次推荐页确认过的批次, 方案制作只在这些批次里出方案. */}
+        <div className="border-t border-border-subtle pt-3">
+          <p className="m-0 mb-1 text-xs font-medium text-text-muted">已确认批次</p>
+          {Array.isArray(student?.preferredBatches) && student.preferredBatches.length > 0 ? (
+            <p className="m-0 leading-relaxed">
+              {student.preferredBatches.map((b: string) => (
+                <span
+                  key={b}
+                  className="inline-block mr-1 mb-1 rounded-full bg-accent-fixed px-2 py-0.5 text-xs text-accent"
+                >
+                  {b}
+                </span>
+              ))}
+              {student?.batchesConfirmedAt ? (
+                <span className="text-text-faint text-xs ml-1">
+                  确认于 {new Date(student.batchesConfirmedAt).toLocaleDateString('zh-CN')}
+                </span>
+              ) : null}
+            </p>
+          ) : (
+            <p className="m-0 text-xs text-text-muted">
+              未确认 ·{' '}
+              <Link
+                href={`/teacher/students/${student?.id}/batch-recommendations`}
+                className="text-primary no-underline hover:underline"
+              >
+                去推荐页选批次 →
+              </Link>
+            </p>
+          )}
         </div>
         {/* 历史案例参考 (需要 examType + totalScore 才能算 ±20 分范围). */}
         {student?.examType && totalScore != null ? (
