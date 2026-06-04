@@ -10,8 +10,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Button, DatePicker, Form, Input, InputNumber, Modal, Select, Spin, message,
+  Button, DatePicker, Form, Input, Modal, Select, Spin, message,
 } from 'antd';
+const { RangePicker } = DatePicker;
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { consultationApi } from '@/services/consultation-api';
 import { studentApi } from '@/services/student-api';
@@ -501,11 +502,14 @@ export default function ClinicPage() {
         onCancel={() => setInviteOpen(false)}
         onOk={() =>
           inviteForm.validateFields().then((values) => {
+            // RangePicker 给 [start, end] 两个 Dayjs; 拆成 scheduledAt + durationEst
+            const [start, end] = values.timeRange as [any, any];
+            const durationEst = Math.max(5, Math.round((end.valueOf() - start.valueOf()) / 60000));
             inviteMutation.mutate({
               studentId: values.studentId,
-              scheduledAt: values.scheduledAt.toISOString(),
+              scheduledAt: start.toISOString(),
               channel: values.channel,
-              durationEst: values.durationEst,
+              durationEst,
               purpose: values.purpose,
               notes: values.notes,
             });
@@ -515,11 +519,7 @@ export default function ClinicPage() {
         confirmLoading={inviteMutation.isPending}
         destroyOnClose
       >
-        <Form
-          form={inviteForm}
-          layout="vertical"
-          initialValues={{ channel: 'phone', durationEst: 30 }}
-        >
+        <Form form={inviteForm} layout="vertical" initialValues={{ channel: 'phone' }}>
           <Form.Item
             name="studentId"
             label="学生"
@@ -536,11 +536,16 @@ export default function ClinicPage() {
             />
           </Form.Item>
           <Form.Item
-            name="scheduledAt"
-            label="预约时间"
-            rules={[{ required: true, message: '请选择时间' }]}
+            name="timeRange"
+            label="预约时段 (开始 → 结束)"
+            rules={[{ required: true, message: '请选择时间段' }]}
           >
-            <DatePicker showTime style={{ width: '100%' }} />
+            <RangePicker
+              showTime={{ format: 'HH:mm', minuteStep: 5 }}
+              format="YYYY-MM-DD HH:mm"
+              style={{ width: '100%' }}
+              placeholder={['开始时间', '结束时间']}
+            />
           </Form.Item>
           <Form.Item name="channel" label="沟通方式" rules={[{ required: true }]}>
             <Select
@@ -551,9 +556,6 @@ export default function ClinicPage() {
                 { label: '视频', value: 'video' },
               ]}
             />
-          </Form.Item>
-          <Form.Item name="durationEst" label="预估时长 (分钟)">
-            <InputNumber min={5} max={300} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="purpose" label="沟通主题">
             <Input placeholder="例: 讨论选校 / 强基备战 / 进度反馈" />
