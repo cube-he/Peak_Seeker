@@ -31,7 +31,8 @@ export type CandidateGroupSort =
   | 'MAJOR_STRENGTH'
   | 'PLAN_COUNT_DESC'
   | 'SUPPLEMENTARY_RATE_DESC'
-  | 'SAFETY_DESC';
+  | 'SAFETY_DESC'
+  | 'PURITY_BEST';
 
 export interface CandidateGroupListParams extends CandidateListParams {
   sort?: CandidateGroupSort;
@@ -39,6 +40,8 @@ export interface CandidateGroupListParams extends CandidateListParams {
   tier?: number;
   // 是否隐藏已加入当前 plan 的院校组 (默认 true)
   excludeAdded?: boolean;
+  // 客观纯净度过滤. 空数组或 undefined = 不过滤; ['S','A'] = 仅显示干净/较纯
+  purity?: string[];
 }
 
 export interface TeacherPlanListParams {
@@ -110,6 +113,9 @@ export const planApi = {
         sort: params?.sort ?? 'MAJOR_MATCH',
         tier: params?.tier,
         excludeAdded: params?.excludeAdded,
+        purity: params?.purity && params.purity.length > 0 && params.purity.length < 4
+          ? params.purity.join(',')
+          : undefined,
       },
     }) as any;
   },
@@ -244,6 +250,11 @@ export const planApi = {
 
   async resolveRisk(riskId: number, resolution: 'accepted' | 'replaced' | 'ignored', note?: string) {
     return await api.post(`/plans/risks/${riskId}/resolve`, { resolution, note });
+  },
+
+  // 方案导出 PDF
+  exportPlan(id: string): Promise<any> {
+    return api.get(`/plans/${id}/export.pdf`, { responseType: 'blob' }) as any;
   },
 
   // Student endpoints

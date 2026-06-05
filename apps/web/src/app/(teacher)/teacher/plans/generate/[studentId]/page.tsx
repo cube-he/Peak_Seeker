@@ -243,6 +243,8 @@ interface CandidateGroup {
   majorCount: number;
   selectableMajorCount: number;
   softFailCount: number;
+  // 软规则失败分类计数（#3）
+  softFailBreakdown?: { tuition: number; nature: number; other: number };
   matchScore?: number | null;
   matchReasons?: string[];
   matchReason?: string | null;
@@ -264,6 +266,18 @@ interface CandidateGroup {
   // 后端标记: tier 模式下命中梯队但全 RISK (位次差距过大 / 软规则全失败)
   // 前端据此显示位次差预警, 并禁用 / 警告"加入"按钮
   allRisk?: boolean;
+  // 客观纯净度（GroupPurity 预计算结果）— S/A/B/C 四档
+  purity?: {
+    level: 'S' | 'A' | 'B' | 'C';
+    majorCount: number;
+    dominantCategory: string | null;
+    dominantDiscipline: string | null;
+    dominantDisciplineRatio: number;
+    crossCategoryCount: number;
+    hasForeign: boolean;
+    mixedForeign: boolean;
+    reasons: string[] | null;
+  } | null;
 }
 
 interface CandidateGroupListResult {
@@ -343,6 +357,7 @@ const CANDIDATE_SORT_OPTIONS: Array<{ label: string; value: CandidateGroupSort }
   { label: '专业实力优先', value: 'MAJOR_STRENGTH' },
   { label: '招生人数多', value: 'PLAN_COUNT_DESC' },
   { label: '征集比例高', value: 'SUPPLEMENTARY_RATE_DESC' },
+  { label: '纯净度优先（干净→较纯→较乱→混乱）', value: 'PURITY_BEST' },
   { label: '安全程度高', value: 'SAFETY_DESC' },
 ];
 
@@ -964,6 +979,10 @@ export default function GeneratePlanPage() {
   const [excludeAdded, setExcludeAdded] = useState<boolean>(
     searchParams.get('excludeAdded') !== 'false',
   );
+  // 客观纯净度过滤. 空数组 = 全部; 多选 (#4)
+  const [purityFilter, setPurityFilter] = useState<string[]>([]);
+  const togglePurity = (lv: string) =>
+    setPurityFilter((prev) => (prev.includes(lv) ? prev.filter((x) => x !== lv) : [...prev, lv]));
   // FilterBar / 趋势 toggle 已下线: pgv2 设计稿用 4 chip 梯度 + showHidden 替代
   // 不持久化的"不考虑"集合（per-session）
   const [hiddenGroupKeys, setHiddenGroupKeys] = useState<Set<string>>(new Set());
@@ -1009,7 +1028,7 @@ export default function GeneratePlanPage() {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(STICKY_BAR_STORAGE_KEY) === '1';
   });
-  const candidatePageSize = 12;
+  const candidatePageSize = 20;
 
   const { data: studentData, isLoading: studentLoading } = useQuery({
     queryKey: ['student-detail', studentId],
@@ -1050,7 +1069,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, keyword, keywordUniversity, keywordMajor, includeSoftFails, candidateSort, candidatePage, appliedTier, excludeAdded],
+    queryKey: ['plan-candidate-groups', planId, keyword, keywordUniversity, keywordMajor, includeSoftFails, candidateSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(',')],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: candidatePageSize,
@@ -1061,6 +1080,7 @@ export default function GeneratePlanPage() {
       sort: candidateSort,
       tier: appliedTier,
       excludeAdded,
+      purity: purityFilter,
     }),
     enabled: !!planId,
   });
@@ -1091,6 +1111,24 @@ export default function GeneratePlanPage() {
     });
     return acc;
   }, [planItems]);
+
+  // 方案体检（#5）: 按行业经验 25/42/33 比例算偏差，输出待改进项
+  const planHealth = useMemo(() => {
+    const total = planItems.length;
+    if (total === 0) return null;
+    const expectedRush = Math.round(total * 0.25);
+    const expectedStable = Math.round(total * 0.42);
+    const expectedSafe = Math.max(0, total - expectedRush - expectedStable);
+    const rushDelta = tierStats.rush - expectedRush;
+    const stableDelta = tierStats.stable - expectedStable;
+    const safeDelta = tierStats.safe - expectedSafe;
+    const issues: string[] = [];
+    if (rushDelta < -1) issues.push(`冲档少 ${-rushDelta} 个（建议 ${expectedRush}，当前 ${tierStats.rush}）`);
+    if (rushDelta > 3) issues.push(`冲档过多 ${rushDelta} 个，落榜风险高`);
+    if (stableDelta < -2) issues.push(`稳档少 ${-stableDelta} 个（建议 ${expectedStable}，当前 ${tierStats.stable}）`);
+    if (safeDelta < -1) issues.push(`保底少 ${-safeDelta} 个（建议 ${expectedSafe}），录取无兜底`);
+    return { total, expectedRush, expectedStable, expectedSafe, rushDelta, stableDelta, safeDelta, issues };
+  }, [planItems, tierStats]);
   const isUsingFallbackYear = Boolean(candidateGroups?.isFallbackYear && candidateGroups.sourceYear && candidateGroups.planYear);
   const isUsingScoreBasedRank = Boolean(
     candidateGroups?.studentRankSource === 'SCORE_SEGMENT' &&
@@ -1273,6 +1311,23 @@ export default function GeneratePlanPage() {
     },
   });
 
+  // 导出 PDF（#10）
+  const exportMutation = useMutation({
+    mutationFn: () => planApi.exportPlan(String(planId)),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `plan-${planId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      void message.success('PDF 已导出');
+    },
+    onError: (error: any) => {
+      void message.error(error?.response?.data?.message ?? '导出失败');
+    },
+  });
+
   const updateMajorSelectionMutation = useMutation({
     mutationFn: ({
       itemId,
@@ -1343,6 +1398,19 @@ export default function GeneratePlanPage() {
   const openPlan = (nextPlan: WorkbenchPlan) => {
     setPlanId(nextPlan.id);
     setBatchConfigId(nextPlan.batchConfigId ?? undefined);
+  };
+
+  // 切换到不同方案前 confirm，避免误点丢失上下文（#12）
+  const switchPlanWithConfirm = (nextPlan: WorkbenchPlan) => {
+    if (nextPlan.id === planId) return;
+    const nextBatch = nextPlan.batchName ?? nextPlan.batch ?? `批次 ${nextPlan.batchConfigId ?? nextPlan.id}`;
+    Modal.confirm({
+      title: '切换批次方案？',
+      content: `当前编辑：${selectedBatchName}。切换到「${nextBatch}」？候选筛选与对比选择会保留。`,
+      okText: '切换',
+      cancelText: '取消',
+      onOk: () => openPlan(nextPlan),
+    });
   };
 
   const openOrCreatePlan = () => {
@@ -1724,7 +1792,7 @@ export default function GeneratePlanPage() {
                       key={existingPlan.id}
                       type="button"
                       className={`pgv2-existing-chip ${isActive ? 'is-active' : ''}`}
-                      onClick={() => openPlan(existingPlan)}
+                      onClick={() => switchPlanWithConfirm(existingPlan)}
                     >
                       <span className="bch">{batchName}</span>
                       <span className="ver">V{existingPlan.versionNo ?? 1}</span>
@@ -1750,6 +1818,18 @@ export default function GeneratePlanPage() {
             <span><b>位次</b>{formatRankValue(studentRankForDecision)}</span>
             <span><b>选科</b>{subjectCombination}</span>
           </div>
+          {planId ? (
+            <button
+              type="button"
+              className={styles.stickyBarToggle}
+              title="把当前方案导出为 PDF，可直接给学生/家长查看"
+              onClick={() => exportMutation.mutate()}
+              disabled={exportMutation.isPending || planItems.length === 0}
+              style={{ marginRight: 8 }}
+            >
+              {exportMutation.isPending ? '导出中...' : '📄 导出 PDF'}
+            </button>
+          ) : null}
           <button
             type="button"
             className={styles.stickyBarToggle}
@@ -1857,6 +1937,40 @@ export default function GeneratePlanPage() {
                   />
                   显示已填报院校专业组
                 </label>
+              </div>
+
+              {/* —— 纯净度过滤 chip (多选;空 = 全部) (#4) —— */}
+              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
+                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>纯净度</span>
+                {[
+                  { lv: 'S', label: '干净', tone: 'safe' },
+                  { lv: 'A', label: '较纯', tone: 'accent' },
+                  { lv: 'B', label: '较乱', tone: 'rush-soft' },
+                  { lv: 'C', label: '混乱', tone: 'rush' },
+                ].map((opt) => {
+                  const active = purityFilter.includes(opt.lv);
+                  return (
+                    <button
+                      key={opt.lv}
+                      type="button"
+                      className={`pgv2-tier-chip ${active ? 'is-active' : ''}`}
+                      onClick={() => togglePurity(opt.lv)}
+                      title={`仅显示「${opt.label}」组（再点取消，全不选 = 全部显示）`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+                {purityFilter.length > 0 ? (
+                  <button
+                    type="button"
+                    className="pgv2-tier-chip"
+                    onClick={() => setPurityFilter([])}
+                    style={{ opacity: 0.7 }}
+                  >
+                    清除
+                  </button>
+                ) : null}
               </div>
 
               {/* —— 意向梯队过滤 chip (每个 chip 带粗略命中数) —— */}
@@ -2143,6 +2257,34 @@ export default function GeneratePlanPage() {
                     <span className="num">{planItems.length} / 45</span>
                   </div>
                 </div>
+
+                {/* 方案体检 (#5): 按 25/42/33 经验比例诊断 */}
+                {planHealth ? (
+                  <div
+                    style={{
+                      margin: '8px 0',
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      background: planHealth.issues.length === 0 ? 'rgba(52, 211, 153, 0.12)' : 'rgba(251, 191, 36, 0.14)',
+                      border: `1px solid ${planHealth.issues.length === 0 ? 'rgba(52, 211, 153, 0.4)' : 'rgba(251, 191, 36, 0.45)'}`,
+                      fontSize: 12,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                      {planHealth.issues.length === 0 ? '✓ 梯度比例合理' : `⚠ 方案体检（${planHealth.issues.length} 项待改进）`}
+                    </div>
+                    {planHealth.issues.length === 0 ? (
+                      <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                        按 25/42/33 经验比例：冲 {planHealth.expectedRush} / 稳 {planHealth.expectedStable} / 保 {planHealth.expectedSafe}
+                      </div>
+                    ) : (
+                      planHealth.issues.map((tip, i) => (
+                        <div key={i} style={{ color: '#a16207' }}>• {tip}</div>
+                      ))
+                    )}
+                  </div>
+                ) : null}
 
                 {/* 已选志愿列表 (HTML5 drag-and-drop 排序, onDragEnd 调 reorderItems 持久化) */}
                 <div className="pgv2-rail-list">

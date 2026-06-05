@@ -30,6 +30,7 @@ interface GetCandidatesQuery {
   sort?: CandidateGroupSort;
   tier?: number;
   excludeAdded?: boolean;
+  purity?: string; // csv 'S,A,B,C'; 空 = 不过滤
 }
 
 type CandidateGroupSort =
@@ -40,7 +41,8 @@ type CandidateGroupSort =
   | 'MAJOR_STRENGTH'
   | 'PLAN_COUNT_DESC'
   | 'SUPPLEMENTARY_RATE_DESC'
-  | 'SAFETY_DESC';
+  | 'SAFETY_DESC'
+  | 'PURITY_BEST';
 type CandidateGroupScoreSource = 'GROUP' | 'FILING' | 'MAJOR' | 'NONE';
 type StudentRankSource = 'PROFILE' | 'SCORE_SEGMENT' | 'MISSING';
 type FirstChoice = 'PHYSICS' | 'HISTORY';
@@ -87,6 +89,16 @@ function addInFilter(where: Record<string, unknown>, field: string, values: Arra
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+// GroupPurity 唯一键不含 recruitType — 单独提供 4 字段拼接
+function groupPurityKeyOf(row: {
+  universityId: number;
+  groupCode?: string | null;
+  batch?: string | null;
+  subjects?: string | null;
+}) {
+  return [row.universityId, row.groupCode ?? '', row.batch ?? '', row.subjects ?? ''].join('|');
 }
 
 function groupKeyOf(row: {
@@ -894,9 +906,18 @@ export class PlanCandidateService {
   }
 
   private sortCandidateGroups(groups: any[], sort: CandidateGroupSort = 'MAJOR_MATCH', studentRank: number) {
+    const PURITY_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 };
+    const purityScore = (g: any): number => PURITY_ORDER[g?.purity?.level] ?? 99;
+
     groups.sort((a, b) => {
       const soft = (a.softFailCount ?? 0) - (b.softFailCount ?? 0);
       if (soft !== 0) return soft;
+
+      if (sort === 'PURITY_BEST') {
+        const p = purityScore(a) - purityScore(b);
+        if (p !== 0) return p;
+        return this.compareCandidateGroupFallback(a, b, studentRank, false);
+      }
 
       if (sort === 'SAFETY_DESC') {
         const safety = tierSafetyPriority(a.dynamicGradient?.tier, a.suggestedGradient) -
@@ -1466,18 +1487,69 @@ export class PlanCandidateService {
       return predictionMap;
     })();
 
+    // GroupPurity 客观纯净度（S/A/B/C）— 预计算好直接读，N+1 安全：批量 IN 查询
+    const purityMapPromise = (async () => {
+      const purityMap = new Map<string, any>();
+      if (groups.size === 0 || !(this.prisma as any).groupPurity?.findMany) {
+        return purityMap;
+      }
+      const groupRows = Array.from(groups.values()).map((rows) => rows[0]);
+      const purityWhere: Record<string, unknown> = {
+        year: source.sourceYear,
+        province,
+      };
+      addInFilter(purityWhere, 'universityId', groupRows.map((row) => row.universityId));
+      addInFilter(purityWhere, 'groupCode', groupRows.map((row) => row.groupCode));
+      addInFilter(purityWhere, 'batch', groupRows.map((row) => row.batch));
+      addInFilter(purityWhere, 'subjects', groupRows.map((row) => row.subjects));
+      const rows = await (this.prisma as any).groupPurity.findMany({
+        where: purityWhere,
+        select: {
+          universityId: true,
+          groupCode: true,
+          batch: true,
+          subjects: true,
+          level: true,
+          majorCount: true,
+          dominantCategory: true,
+          dominantDiscipline: true,
+          dominantDisciplineRatio: true,
+          crossCategoryCount: true,
+          hasForeign: true,
+          mixedForeign: true,
+          reasons: true,
+        },
+      });
+      for (const p of rows) {
+        purityMap.set(groupPurityKeyOf(p), {
+          level: p.level,
+          majorCount: p.majorCount,
+          dominantCategory: p.dominantCategory,
+          dominantDiscipline: p.dominantDiscipline,
+          dominantDisciplineRatio: p.dominantDisciplineRatio,
+          crossCategoryCount: p.crossCategoryCount,
+          hasForeign: p.hasForeign,
+          mixedForeign: p.mixedForeign,
+          reasons: p.reasons,
+        });
+      }
+      return purityMap;
+    })();
+
     const [
       previousPlans,
       predictionMap,
       batchCompetition,
       supplementaryByGroup,
       studentRankInfo,
+      purityMap,
     ] = await Promise.all([
       previousPlansPromise,
       predictionMapPromise,
       this.resolveBatchCompetition(province, subjects, plan.batchName, source.sourceYear),
       this.loadSupplementaryByGroup(groups, province, [source.sourceYear, source.sourceYear - 1, source.sourceYear - 2]),
       this.resolveStudentRank(student, source.sourceYear),
+      purityMapPromise,
     ]);
     const previousByGroup = new Map<string, any[]>();
     for (const row of previousPlans) {
@@ -1684,6 +1756,7 @@ export class PlanCandidateService {
         groupAdmissionCount: groupScore.groupAdmissionCount,
         scoreSource: groupScore.scoreSource,
         predictedMinRank: predictionMap.get(groupKey) ?? null,
+        purity: purityMap.get(groupPurityKeyOf(first)) ?? null,
         dynamicGradient,
         competition: batchCompetition,
         selectionCompetition,
@@ -1695,6 +1768,20 @@ export class PlanCandidateService {
         majorCount: rows.length,
         selectableMajorCount: majorSections.recommended.length + majorSections.backup.length,
         softFailCount: majorSections.risk.filter((major) => major.matchStatus === 'SOFT_FAIL').length,
+        // 软规则分类计数（#3）: 学费 / 办学性质 / 其他；同 major 多原因都计入
+        softFailBreakdown: majorSections.risk.reduce(
+          (acc: { tuition: number; nature: number; other: number }, major: any) => {
+            if (major.matchStatus !== 'SOFT_FAIL') return acc;
+            const seen = new Set<string>();
+            (major.failReasons ?? []).forEach((r: any) => {
+              if (r?.rule === 'tuition' && !seen.has('tuition')) { acc.tuition += 1; seen.add('tuition'); }
+              else if (r?.rule === 'nature' && !seen.has('nature')) { acc.nature += 1; seen.add('nature'); }
+              else if (!['tuition', 'nature'].includes(r?.rule) && !seen.has('other')) { acc.other += 1; seen.add('other'); }
+            });
+            return acc;
+          },
+          { tuition: 0, nature: 0, other: 0 },
+        ),
         matchScore: recommendedAnchor?.matchScore ?? -999,
         matchReasons: recommendedAnchor?.matchReasons ?? [],
         matchReason: buildMatchReason({
@@ -1728,6 +1815,20 @@ export class PlanCandidateService {
         allRisk: isAllRisk,
       };
     }))).filter((group): group is any => Boolean(group));
+
+    // 客观纯净度过滤（#4）: q.purity 为 csv 'S,A'，空 = 不过滤
+    const purityWhitelist = (q.purity ?? '')
+      .split(',')
+      .map((s) => s.trim().toUpperCase())
+      .filter((s) => ['S', 'A', 'B', 'C'].includes(s));
+    if (purityWhitelist.length > 0 && purityWhitelist.length < 4) {
+      const allowed = new Set(purityWhitelist);
+      // 无 purity 数据的组保留（避免老组完全消失）
+      for (let i = resultGroups.length - 1; i >= 0; i--) {
+        const lv = (resultGroups[i] as any)?.purity?.level;
+        if (lv && !allowed.has(lv)) resultGroups.splice(i, 1);
+      }
+    }
 
     this.sortCandidateGroups(resultGroups, q.sort ?? 'MAJOR_MATCH', studentRank);
 

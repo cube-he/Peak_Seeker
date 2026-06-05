@@ -27,6 +27,29 @@ function tone8(tier: string): 'rush' | 'stable' | 'safe' {
   return 'stable';
 }
 
+// 客观纯净度档位 → 颜色 + 文案
+const PURITY_META: Record<string, { tone: string; label: string; desc: string }> = {
+  S: { tone: 'safe', label: '干净', desc: '专业组高度纯净，几乎无调剂风险' },
+  A: { tone: 'accent', label: '较纯', desc: '同门类、主导专业类 ≥70%' },
+  B: { tone: 'rush-soft', label: '较乱', desc: '跨 2 门类有主导，需注意调剂' },
+  C: { tone: 'rush', label: '混乱', desc: '冷热混装，调剂风险高' },
+};
+
+function purityTitle(purity: any): string {
+  if (!purity) return '';
+  const m = PURITY_META[purity.level] ?? { desc: '' };
+  const parts: string[] = [m.desc];
+  if (purity.majorCount) parts.push(`组内 ${purity.majorCount} 个专业`);
+  if (purity.dominantDiscipline) {
+    const pct = Math.round((purity.dominantDisciplineRatio ?? 0) * 100);
+    parts.push(`主导 ${purity.dominantDiscipline} ${pct}%`);
+  }
+  if (purity.crossCategoryCount > 1) parts.push(`跨 ${purity.crossCategoryCount} 门类`);
+  if (purity.mixedForeign) parts.push('混入中外合作');
+  if (Array.isArray(purity.reasons) && purity.reasons[0]) parts.push(purity.reasons[0]);
+  return parts.join(' · ');
+}
+
 /** rank gap 文案(轻量版,候选卡显示用) */
 function rankGapText(studentRank?: number, adjustedRank?: number | null): string {
   if (!studentRank || !adjustedRank) return '位次口径不足';
@@ -190,7 +213,23 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
             <h3>{uniName}</h3>
             <span className={`pgv2-tier-tag tone-${tone}`}>{GRADIENT_LABEL_8[tier] ?? tier}</span>
             {isAdded ? <span className="pgv2-tag tone-muted">已加入</span> : null}
-            {group?.softFailCount > 0 ? (
+            {/* 软规则失败分类显示（#3）— 学费/办学性质各自 chip，便于老师判定 */}
+            {group?.softFailBreakdown?.tuition > 0 ? (
+              <span className="pgv2-tag tone-rush-soft" title="组内有学费超学生预算的专业（调剂可能命中）">
+                ¥{group.softFailBreakdown.tuition} 学费超
+              </span>
+            ) : null}
+            {group?.softFailBreakdown?.nature > 0 ? (
+              <span className="pgv2-tag tone-rush-soft" title="组内有办学性质不符学生偏好（公办/民办/合作）的专业">
+                🏛{group.softFailBreakdown.nature} 办学不符
+              </span>
+            ) : null}
+            {group?.softFailBreakdown?.other > 0 ? (
+              <span className="pgv2-tag tone-rush-soft" title="其他软规则不符">
+                {group.softFailBreakdown.other} 其他风险
+              </span>
+            ) : group?.softFailCount > 0 && !group?.softFailBreakdown ? (
+              // 后端老接口 fallback
               <span className="pgv2-tag tone-rush-soft">{group.softFailCount} 风险专业</span>
             ) : null}
             {isHidden ? <span className="pgv2-tag tone-muted">已隐藏</span> : null}
@@ -201,8 +240,20 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
             {uni.isDoubleFirstClass ? <span className="pgv2-tag tone-accent">双一流</span> : null}
             {uni.runningNature ? <span className="pgv2-tag tone-muted">{uni.runningNature}</span> : null}
             {group?.groupCode || group?.groupName ? (
-              <span className="pgv2-tag tone-muted">
-                {group?.groupCode ? `[${group.groupCode}] ` : ''}{group?.groupName ?? ''}
+              <span
+                className="pgv2-tag tone-accent"
+                style={{ fontSize: '0.95rem', fontWeight: 600, padding: '4px 10px', letterSpacing: '0.2px' }}
+              >
+                {group?.groupCode ? `[${group.groupCode}] ` : ''}{group?.groupName ?? '专业组'}
+              </span>
+            ) : null}
+            {group?.purity?.level ? (
+              <span
+                className={`pgv2-tag tone-${PURITY_META[group.purity.level]?.tone ?? 'muted'}`}
+                title={purityTitle(group.purity)}
+                style={{ fontSize: '0.95rem', fontWeight: 600, padding: '4px 10px' }}
+              >
+                {PURITY_META[group.purity.level]?.label ?? group.purity.level}
               </span>
             ) : null}
             {location ? <span className="pgv2-tag tone-muted">{location}</span> : null}

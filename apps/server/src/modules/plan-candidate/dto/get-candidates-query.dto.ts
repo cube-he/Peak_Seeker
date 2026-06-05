@@ -11,6 +11,7 @@ export const CANDIDATE_GROUP_SORTS = [
   'PLAN_COUNT_DESC',
   'SUPPLEMENTARY_RATE_DESC',
   'SAFETY_DESC',
+  'PURITY_BEST', // 客观纯净度优先 (S<A<B<C)
 ] as const;
 
 export type CandidateGroupSort = typeof CANDIDATE_GROUP_SORTS[number];
@@ -27,4 +28,6 @@ export class GetCandidatesQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) tier?: number;
   // 是否隐藏已加入当前 plan 的院校组. 默认 true (老师只看未加入的)
   @IsOptional() @Type(() => Boolean) @IsBoolean() excludeAdded?: boolean = true;
+  // 客观纯净度过滤. csv 形式 'S,A,B,C'; 空或 undefined = 不过滤
+  @IsOptional() @IsString() purity?: string;
 }
