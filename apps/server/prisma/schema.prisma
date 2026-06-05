@@ -1952,6 +1952,50 @@ model RankPrediction {
   @@map("rank_predictions")
 }
 
+// ==================== 客观纯净度 ====================
+//
+// 专业组"客观纯净度"——只看组内结构（同专业类占比、跨门类数、N），
+// 与学生偏好无关。和 PlanItem.cleanliness（主观，按学生 preferredMajors 算）正交。
+//
+// 档位 S/A/B/C：
+//   S 纯净（全同类 / 单门类 N≤6 可填满）
+//   A 较纯净（同门类、主导专业类 ≥70%、N≤10）
+//   B 混杂（跨 2 门类有主导、N≤15）
+//   C 高风险（跨 3+ 门类、N>15、主导 <50%、N=2 跨门类、空组）
+model GroupPurity {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 业务唯一键（同 RankPrediction 风格）
+  year         Int    @db.SmallInt
+  province     String @db.VarChar(50)
+  universityId Int    @map("university_id")
+  groupCode    String @map("group_code") @db.VarChar(50)
+  batch        String @db.VarChar(50)
+  subjects     String @db.VarChar(50) // 物理 | 历史 | 不分科目
+
+  // 档位
+  level String @db.VarChar(2) // S | A | B | C
+
+  // 统计字段
+  majorCount              Int    @map("major_count")
+  dominantCategory        String? @map("dominant_category") @db.VarChar(100) // 主导学科门类
+  dominantCategoryRatio   Float   @map("dominant_category_ratio") // 0-1
+  dominantDiscipline      String? @map("dominant_discipline") @db.VarChar(100) // 主导专业类
+  dominantDisciplineRatio Float   @map("dominant_discipline_ratio") // 0-1
+  crossCategoryCount      Int    @map("cross_category_count")
+  hasForeign              Boolean @default(false) @map("has_foreign")
+  mixedForeign            Boolean @default(false) @map("mixed_foreign")
+  reasons                 Json?   @map("reasons") // string[]
+
+  @@unique([year, province, universityId, groupCode, batch, subjects], name: "group_purity_natural_key")
+  @@index([year, province])
+  @@index([universityId])
+  @@index([level])
+  @@map("group_purities")
+}
+
 // ==================== 校区 ====================
 
 model UniversityCampus {
