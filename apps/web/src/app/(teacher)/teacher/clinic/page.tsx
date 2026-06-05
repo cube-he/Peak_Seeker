@@ -84,10 +84,17 @@ export default function ClinicPage() {
     }));
   })();
   const inviteMutation = useMutation({
-    mutationFn: (payload: any) => consultationApi.create(payload),
+    // 串行: create → enqueue. 不 enqueue 的话 queueNumber=null, clinic 面板不显示.
+    // enqueue 不挑日期, getClinicState 按 scheduledAt 当日过滤, 所以未来日期 enqueue 也安全
+    // (今日预约立即入今日队列; 未来日期到那天才出现在面板).
+    mutationFn: async (payload: any) => {
+      const created = await consultationApi.create(payload);
+      await consultationApi.enqueue(created.id);
+      return created;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clinic-state'] });
-      message.success('已为家长创建预约');
+      message.success('已为家长创建预约并加入等待队列');
       setInviteOpen(false);
       inviteForm.resetFields();
     },
