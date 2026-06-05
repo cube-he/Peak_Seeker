@@ -64,9 +64,15 @@ export default function FooterSection() {
           </div>
         </div>
 
-        <div className="flex flex-col justify-between gap-2 border-t border-white/10 pt-4 text-white/45 sm:flex-row sm:gap-0">
-          <span>© 2026 立方科技（成都）有限公司</span>
-          <span>蜀 ICP 备 2026000000 号 · 川公网安备 51010000000000 号</span>
+        <div className="flex justify-center border-t border-white/10 pt-4 text-white/45">
+          <a
+            href="https://beian.miit.gov.cn"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white/45 no-underline hover:text-white/80"
+          >
+            蜀ICP备2025174992号
+          </a>
         </div>
       </div>
     </footer>

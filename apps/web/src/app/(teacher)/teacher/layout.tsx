@@ -27,6 +27,7 @@ import {
   BarChartOutlined,
   PieChartOutlined,
   HistoryOutlined,
+  DotChartOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import BrandLogo from '@/components/layout/BrandLogo';
@@ -48,6 +49,7 @@ const supervisorOnlyCommNavItems = [
 ];
 
 const browseNavItems = [
+  { href: '/teacher/insights/rank-map', icon: <DotChartOutlined />, label: '位次档位' },
   { href: '/universities', icon: <BankOutlined />, label: '院校库' },
   { href: '/majors', icon: <ReadOutlined />, label: '专业库' },
 ];

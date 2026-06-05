@@ -1197,11 +1197,19 @@ export default function GeneratePlanPage() {
 
   useEffect(() => {
     if (!planId && existingPlans.length > 0) {
+      // 死循环防护: 仅在 firstPlan 的 batchConfigId 仍在 batches 白名单里时 auto-set;
+      // 否则会与下方 1209 useEffect (检测 batchConfigId 不在 batches 就 reset) 形成
+      // set/reset 振荡, 触发 React 错误 #185。
+      // batches 还在加载 (空) 时也跳过 auto-set, 等 batches 就绪再触发。
+      if (batches.length === 0) return;
       const firstPlan = existingPlans[0];
+      const targetBatchId = firstPlan.batchConfigId ?? undefined;
+      const batchOk = targetBatchId != null && batches.some((b) => b.batchConfigId === targetBatchId);
+      if (!batchOk) return; // 老 plan 的批次已被排除 → 不自动打开, 让老师手动选新批次
       setPlanId(firstPlan.id);
-      setBatchConfigId(firstPlan.batchConfigId ?? undefined);
+      setBatchConfigId(targetBatchId);
     }
-  }, [existingPlans, planId]);
+  }, [existingPlans, planId, batches]);
 
   // batchConfigId 可能来自老 plan 的批次, 但老师改了 preferredBatches 后那个批次
   // 不再被允许 → batchOptions 里没匹配, Select 会显示 raw value (例 "23") 而非 label.
@@ -2098,10 +2106,31 @@ export default function GeneratePlanPage() {
                       );
                     }
                     if (excludeAdded) {
+                      const added = planItems.length;
                       return (
                         <>
-                          剩余候选都已加入方案
-                          <div style={{ marginTop: 8, fontSize: 12 }}>勾选「显示已填报院校专业组」可查看已加入的</div>
+                          {added > 0 ? `已加入 ${added} 个志愿, 候选池已无未加入的组` : '候选池为空(本批次可能无符合条件的院校)'}
+                          <div style={{ marginTop: 12, fontSize: 12 }}>
+                            <button
+                              type="button"
+                              onClick={() => setExcludeAdded(false)}
+                              style={{
+                                background: 'var(--primary, #1677ff)',
+                                color: 'white',
+                                border: 'none',
+                                padding: '6px 14px',
+                                borderRadius: 4,
+                                cursor: 'pointer',
+                                fontSize: 12,
+                                fontWeight: 500,
+                              }}
+                            >
+                              显示已填报的院校专业组 →
+                            </button>
+                            <div style={{ marginTop: 6, color: 'var(--text-tertiary)' }}>
+                              排序与筛选会作用于显示出的所有组（含已加入）
+                            </div>
+                          </div>
                         </>
                       );
                     }

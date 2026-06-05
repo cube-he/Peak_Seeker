@@ -605,6 +605,7 @@ function TodoTrack({
               actionText={actionText ?? s.nextAction}
               actionKind={actionKind}
               onClick={() => onOpenStudent(s.href)}
+              onAction={() => onOpenStudent(s.href)}
             />
           ))
         )}

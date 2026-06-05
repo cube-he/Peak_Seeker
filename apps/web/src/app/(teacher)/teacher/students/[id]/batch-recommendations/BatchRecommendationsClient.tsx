@@ -316,6 +316,11 @@ function Overview({ student: s }: { student: StudentSummary }) {
     : examTxt;
   const fmtNum = (n: number | null | undefined) => (n == null ? '--' : n.toLocaleString());
   const idChip = s.examYear ? `S-${String(s.examYear).slice(-2)}-${String(s.id).padStart(3, '0')}` : `S-${String(s.id).padStart(3, '0')}`;
+  // 位次档位地图跳转: 物理/历史 + 位次预填
+  const rankMapTrack = s.examType === 'PHYSICS' ? '物理' : s.examType === 'HISTORY' ? '历史' : null;
+  const rankMapHref = rankMapTrack && s.provincialRank != null
+    ? `/teacher/insights/rank-map?track=${encodeURIComponent(rankMapTrack)}&rank=${s.provincialRank}`
+    : '/teacher/insights/rank-map';
 
   return (
     <div className="br-overview">
@@ -349,6 +354,22 @@ function Overview({ student: s }: { student: StudentSummary }) {
         <div className="br-ov-stat">
           <div className="k">高考年份</div>
           <div className="v">{s.examYear == null ? '--' : s.examYear}</div>
+        </div>
+        <div className="br-ov-stat" style={{ marginLeft: 'auto' }}>
+          <a
+            href={rankMapHref}
+            style={{
+              fontSize: 12,
+              padding: '6px 12px',
+              border: '1px solid var(--primary, #1677ff)',
+              color: 'var(--primary, #1677ff)',
+              borderRadius: 4,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            位次档位地图 →
+          </a>
         </div>
       </div>
     </div>
