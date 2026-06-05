@@ -4,6 +4,16 @@ import { CreateConsultationDto } from './dto/create-consultation.dto';
 import { UpdateConsultationDto } from './dto/update-consultation.dto';
 import { RequestConsultationDto } from './dto/request-consultation.dto';
 
+/**
+ * 计算实际沟通时长 (分钟). 最少 1 分钟 — 避免 < 30s 的沟通被 round 成 0,
+ * 复盘里显示 "0 分" 让老师误以为没记录.
+ */
+function calcDurationActMin(startedAt: Date | null, endedAt: Date): number | null {
+  if (!startedAt) return null;
+  const mins = Math.round((endedAt.getTime() - startedAt.getTime()) / 60000);
+  return Math.max(1, mins);
+}
+
 @Injectable()
 export class ConsultationService {
   constructor(private prisma: PrismaService) {}
@@ -73,9 +83,7 @@ export class ConsultationService {
     if (appt.teacherId !== teacherId) throw new ForbiddenException('无权操作');
 
     const endedAt = new Date();
-    const durationAct = appt.startedAt
-      ? Math.round((endedAt.getTime() - appt.startedAt.getTime()) / 60000)
-      : null;
+    const durationAct = calcDurationActMin(appt.startedAt, endedAt);
 
     return this.prisma.consultationAppointment.update({
       where: { id },
@@ -349,9 +357,7 @@ export class ConsultationService {
       });
       if (current) {
         const endedAt = new Date();
-        const durationAct = current.startedAt
-          ? Math.round((endedAt.getTime() - current.startedAt.getTime()) / 60000)
-          : null;
+        const durationAct = calcDurationActMin(current.startedAt, endedAt);
         await tx.consultationAppointment.update({
           where: { id: current.id },
           data: {
