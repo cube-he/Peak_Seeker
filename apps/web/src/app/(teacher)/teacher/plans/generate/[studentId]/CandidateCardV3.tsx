@@ -210,7 +210,14 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
             <span className={`pgv2-uni-logo tone-${tone}`}>
               <UniversityLogo name={uniName} logoUrl={uni.logoUrl} size={36} />
             </span>
-            <h3>{uniName}</h3>
+            <h3>
+              {uniName}
+              {group?.universityCode ? (
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85em', marginLeft: 8, fontWeight: 400, letterSpacing: '0.5px' }}>
+                  {group.universityCode}
+                </span>
+              ) : null}
+            </h3>
             <span className={`pgv2-tier-tag tone-${tone}`}>{GRADIENT_LABEL_8[tier] ?? tier}</span>
             {isAdded ? <span className="pgv2-tag tone-muted">已加入</span> : null}
             {/* 软规则失败分类显示（#3）— 学费/办学性质各自 chip，便于老师判定 */}

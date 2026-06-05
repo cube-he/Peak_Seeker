@@ -643,7 +643,14 @@ function CandidateMajorSection({
               <div className={`${compareStyles.majorStarV2} ${starClass}`}>★</div>
 
               <div className={compareStyles.majorNameV2}>
-                <b>{major.majorName}</b>
+                <b>
+                  {major.majorName}
+                  {major.majorCode ? (
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85em', marginLeft: 6, fontWeight: 400, letterSpacing: '0.5px' }}>
+                      {major.majorCode}
+                    </span>
+                  ) : null}
+                </b>
                 {/* 评级优先级：① 学科评估等级 disciplineEval (A+/A/B+ 字母) - 学校×专业最权威
                     ② 专业排名 majorRanking (#N 数字) - 全国该专业排名，覆盖率更高
                     都没有就不显示 */}
@@ -2327,10 +2334,22 @@ export default function GeneratePlanPage() {
                             <span className="idx">{String(idx).padStart(2, '0')}</span>
                             <span className={`pgv2-tier-tag tone-${tone}`}>{tierLabel}</span>
                             <span className="meta">
-                              <span className="uni">{item.universityName}</span>
+                              <span className="uni">
+                                {item.universityName}
+                                {item.universityCode ? (
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85em', marginLeft: 4, fontWeight: 400, letterSpacing: '0.3px' }}>
+                                    {item.universityCode}
+                                  </span>
+                                ) : null}
+                              </span>
                               <span className="grp">
                                 {item.groupCode ? `[${item.groupCode}] ` : ''}
                                 {item.recommendedOrder ?? item.majorName ?? ''}
+                                {item.majorCode && !item.recommendedOrder ? (
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85em', marginLeft: 4, fontWeight: 400, letterSpacing: '0.3px' }}>
+                                    {item.majorCode}
+                                  </span>
+                                ) : null}
                               </span>
                             </span>
                             {plan?.status === 'DRAFT' ? (
