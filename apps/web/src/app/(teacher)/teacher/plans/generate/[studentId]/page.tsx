@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { pickerApi } from '@/services/picker';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -38,6 +38,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type EligibleBatch } from '@/services/student-api';
 import { planApi, type CandidateGroupSort } from '@/services/plan-api';
 import { CandidateCardV3 } from './CandidateCardV3';
+import UniversityCandidateCard from './UniversityCandidateCard';
 import PlanMajorSelectionEditor from '../../components/PlanMajorSelectionEditor';
 import {
   findPlanForBatch,
@@ -213,6 +214,8 @@ interface CandidateGroup {
     avgSalary?: string | null;
     satisfactionOverall?: number | null;
     satisfactionCount?: number | null;
+    universityBackground?: string | null; // 院校背景标签 ('/' 分隔)
+    firstClassCategory?: string | null; // 一流学科分类
   };
   groupCode?: string | null;
   groupName?: string | null;
@@ -280,8 +283,29 @@ interface CandidateGroup {
   } | null;
 }
 
+// 院校优先视图: 后端 rollup 返回的院校条目
+interface CandidateUniversity {
+  universityId: number;
+  universityName: string;
+  universityCode?: string | null;
+  university?: any;
+  groups: CandidateGroup[];
+  summary: {
+    groupCount: number;
+    gradientSpread: { chong: number; wen: number; bao: number };
+    bestMatchScore: number | null;
+    easiestGroupMinRank: number | null;
+    hardestGroupMinRank: number | null;
+    isPreferred: boolean;
+    preferredRank: number | null;
+    regionMatch: boolean;
+  };
+}
+
 interface CandidateGroupListResult {
   groups: CandidateGroup[];
+  universities?: CandidateUniversity[]; // 仅 groupBy=UNIVERSITY 时返回
+  groupBy?: 'GROUP' | 'UNIVERSITY';
   total: number;
   planYear?: number;
   sourceYear?: number;
@@ -359,6 +383,15 @@ const CANDIDATE_SORT_OPTIONS: Array<{ label: string; value: CandidateGroupSort }
   { label: '征集比例高', value: 'SUPPLEMENTARY_RATE_DESC' },
   { label: '纯净度优先（干净→较纯→较乱→混乱）', value: 'PURITY_BEST' },
   { label: '安全程度高', value: 'SAFETY_DESC' },
+];
+
+// 院校优先视图的排序 (groupBy=UNIVERSITY)
+type UniversitySortValue = 'UNIVERSITY_OVERALL' | 'UNIVERSITY_RANK' | 'REGION_FIRST' | 'UNIVERSITY_TIER';
+const UNIVERSITY_SORT_OPTIONS: Array<{ label: string; value: UniversitySortValue }> = [
+  { label: '综合（意向→排名→匹配）', value: 'UNIVERSITY_OVERALL' },
+  { label: '软科排名优先', value: 'UNIVERSITY_RANK' },
+  { label: '地域优先（意向省市）', value: 'REGION_FIRST' },
+  { label: '院校层次（985→211→双一流）', value: 'UNIVERSITY_TIER' },
 ];
 
 const PRIORITY_MODE_LABEL: Record<string, string> = {
@@ -977,6 +1010,15 @@ export default function GeneratePlanPage() {
   const [searchTextMajor, setSearchTextMajor] = useState('');
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
+  // 视图模式: MAJOR=专业组卡(专业优先); UNIVERSITY=院校卡(院校优先).
+  // 默认读 URL ?view=, 否则后续 effect 跟随 plan/student.priorityMode 自动定一次.
+  const [viewMode, setViewMode] = useState<'MAJOR' | 'UNIVERSITY'>(
+    searchParams.get('view') === 'university' ? 'UNIVERSITY' : 'MAJOR',
+  );
+  const viewModeAutoApplied = useRef(false);
+  const [uniSort, setUniSort] = useState<UniversitySortValue>('UNIVERSITY_OVERALL');
+  // 院校优先视图: 办学性质过滤 (null=全部, 'public'=公办, 'private'=民办)
+  const [natureFilter, setNatureFilter] = useState<'public' | 'private' | null>(null);
   // 意向梯队过滤 (0 = 全部, 1+ = 该梯队). 默认 1 (学生没填意向时自动落到 0)
   const [appliedTier, setAppliedTier] = useState<number>(() => {
     const t = Number(searchParams.get('tier'));
@@ -1036,6 +1078,10 @@ export default function GeneratePlanPage() {
     return window.localStorage.getItem(STICKY_BAR_STORAGE_KEY) === '1';
   });
   const candidatePageSize = 20;
+  const universityPageSize = 10;
+  // 当前生效的分页大小 / 排序 (随视图模式切换)
+  const effectivePageSize = viewMode === 'UNIVERSITY' ? universityPageSize : candidatePageSize;
+  const effectiveSort: string = viewMode === 'UNIVERSITY' ? uniSort : candidateSort;
 
   const { data: studentData, isLoading: studentLoading } = useQuery({
     queryKey: ['student-detail', studentId],
@@ -1076,23 +1122,26 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, keyword, keywordUniversity, keywordMajor, includeSoftFails, candidateSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(',')],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, includeSoftFails, effectiveSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
-      pageSize: candidatePageSize,
+      pageSize: effectivePageSize,
       keyword,
       keywordUniversity,
       keywordMajor,
       includeSoftFails,
-      sort: candidateSort,
+      sort: effectiveSort as CandidateGroupSort,
       tier: appliedTier,
       excludeAdded,
       purity: purityFilter,
+      groupBy: viewMode === 'UNIVERSITY' ? 'UNIVERSITY' : undefined,
+      nature: viewMode === 'UNIVERSITY' ? (natureFilter ?? undefined) : undefined,
     }),
     enabled: !!planId,
   });
   const candidateGroups = unwrap<CandidateGroupListResult>(groupData);
   const groups = candidateGroups?.groups ?? [];
+  const candidateUniversities = candidateGroups?.universities ?? [];
 
   // 前端筛选: pgv2 设计稿 4 chip 梯度 + 显示已隐藏 toggle
   const visibleGroups = useMemo(() => {
@@ -1226,7 +1275,21 @@ export default function GeneratePlanPage() {
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
-  }, [planId, keyword, keywordUniversity, keywordMajor, includeSoftFails, candidateSort, appliedTier, excludeAdded]);
+  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, includeSoftFails, candidateSort, uniSort, appliedTier, excludeAdded, natureFilter]);
+
+  // 视图模式默认跟随 plan/student.priorityMode (仅在无 ?view= URL 参数时, 自动定一次)
+  useEffect(() => {
+    if (viewModeAutoApplied.current) return;
+    if (searchParams.get('view')) {
+      viewModeAutoApplied.current = true;
+      return;
+    }
+    const pm = (plan as any)?.priorityMode ?? (student as any)?.priorityMode;
+    if (pm === 'UNIVERSITY_FIRST' || pm === 'MAJOR_FIRST') {
+      viewModeAutoApplied.current = true;
+      setViewMode(pm === 'UNIVERSITY_FIRST' ? 'UNIVERSITY' : 'MAJOR');
+    }
+  }, [plan, student, searchParams]);
 
   // URL 同步: appliedTier / excludeAdded 写回 ?tier=N&excludeAdded=false
   // (沿用 P1-11 模式: 前进后退 + 分享链接保留状态)
@@ -1712,17 +1775,29 @@ export default function GeneratePlanPage() {
                 v={formatScoreValue(student?.totalScore)}
                 sub={scoreRankNote || '高考实考'}
               />
-              <Fact
-                k="档案位次"
-                v={formatRankValue(student?.provincialRank)}
-                sub="学生档案记录"
-              />
-              <Fact
-                k="排序位次"
-                v={formatRankValue(studentRankForDecision)}
-                sub={isUsingScoreBasedRank ? '已按一分一段修正' : '候选池计算口径'}
-                tone="accent"
-              />
+              {/* 档案位次与排序位次相等时只显示一个; 被一分一段修正后才并列, 让差异凸显 */}
+              {isUsingScoreBasedRank ? (
+                <>
+                  <Fact
+                    k="档案位次"
+                    v={formatRankValue(student?.provincialRank)}
+                    sub="学生档案记录"
+                  />
+                  <Fact
+                    k="排序位次"
+                    v={formatRankValue(studentRankForDecision)}
+                    sub="已按一分一段修正"
+                    tone="accent"
+                  />
+                </>
+              ) : (
+                <Fact
+                  k="全省位次"
+                  v={formatRankValue(studentRankForDecision)}
+                  sub="候选池计算口径"
+                  tone="accent"
+                />
+              )}
               <Fact
                 k="资料状态"
                 v={
@@ -1772,7 +1847,13 @@ export default function GeneratePlanPage() {
                 <h5>意向信息</h5>
                 <ProfLine k="优先模式" v={<strong>{formatLabel(student?.priorityMode, PRIORITY_MODE_LABEL)}</strong>} />
                 <ProfLine k="留省偏好" v={formatLabel(student?.stayPreference, STAY_PREFERENCE_LABEL)} />
-                <ProfLine k="升学/职业" v={`${formatLabel(student?.careerPlan, CAREER_PLAN_LABEL)} · ${formatPlainText(student?.careerDirection)}`} />
+                <ProfLine k="升学/职业" v={(() => {
+                  // 两端都空时不显示 "- · -"
+                  const plan = formatLabel(student?.careerPlan, CAREER_PLAN_LABEL);
+                  const dir = formatPlainText(student?.careerDirection);
+                  const parts = [plan, dir].filter((x) => x && !['-', '—', '暂无', ''].includes(String(x).trim()));
+                  return parts.length ? parts.join(' · ') : '暂无';
+                })()} />
                 <ProfLine k="地域意向" v={pgvChips([...getArrayValues(student?.preferredProvinces), ...getArrayValues(student?.preferredCities)], 'primary')} />
                 <ProfLine k="院校意向" v={pgvChips(student?.preferredUniversities, 'primary')} />
                 <ProfLine k="专业意向" v={pgvChips([...getArrayValues(student?.preferredMajors), ...getArrayValues(student?.preferredMajorCategories)], 'safe')} />
@@ -1904,6 +1985,45 @@ export default function GeneratePlanPage() {
                 </div>
               </div>
 
+              {/* —— 视图模式切换: 专业优先 / 院校优先 —— */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    border: '1px solid var(--border, #d9d9d9)',
+                    borderRadius: 6,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {([
+                    { key: 'MAJOR', label: '专业优先' },
+                    { key: 'UNIVERSITY', label: '院校优先' },
+                  ] as const).map((m) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => setViewMode(m.key)}
+                      style={{
+                        border: 'none',
+                        padding: '6px 16px',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        fontWeight: viewMode === m.key ? 600 : 400,
+                        background: viewMode === m.key ? 'var(--primary, #1677ff)' : 'transparent',
+                        color: viewMode === m.key ? '#fff' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                  {viewMode === 'UNIVERSITY'
+                    ? '一张卡 = 一所院校,内含该校够得着的专业组'
+                    : '一张卡 = 一个院校专业组'}
+                </span>
+              </div>
+
               {/* —— Region 4: pgv2-toolbar 搜索 + 排序 + 显示已隐藏 —— */}
               <div className="pgv2-toolbar">
                 <UniversitySearchAutoComplete
@@ -1916,15 +2036,27 @@ export default function GeneratePlanPage() {
                   onChange={setSearchTextMajor}
                   onCommit={setKeywordMajor}
                 />
-                <select
-                  className="pgv2-sort"
-                  value={candidateSort}
-                  onChange={(event) => setCandidateSort(event.target.value as CandidateGroupSort)}
-                >
-                  {CANDIDATE_SORT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>排序:{o.label}</option>
-                  ))}
-                </select>
+                {viewMode === 'UNIVERSITY' ? (
+                  <select
+                    className="pgv2-sort"
+                    value={uniSort}
+                    onChange={(event) => setUniSort(event.target.value as UniversitySortValue)}
+                  >
+                    {UNIVERSITY_SORT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>排序:{o.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    className="pgv2-sort"
+                    value={candidateSort}
+                    onChange={(event) => setCandidateSort(event.target.value as CandidateGroupSort)}
+                  >
+                    {CANDIDATE_SORT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>排序:{o.label}</option>
+                    ))}
+                  </select>
+                )}
                 <label className="pgv2-toggle">
                   <input
                     type="checkbox"
@@ -1988,8 +2120,8 @@ export default function GeneratePlanPage() {
                 ) : null}
               </div>
 
-              {/* —— 意向梯队过滤 chip (每个 chip 带粗略命中数) —— */}
-              {((candidateGroups as any)?.availableTiers ?? []).length > 0 ? (
+              {/* —— 意向梯队过滤 chip (每个 chip 带粗略命中数); 院校优先模式下隐藏(专业维度) —— */}
+              {viewMode === 'MAJOR' && ((candidateGroups as any)?.availableTiers ?? []).length > 0 ? (
                 <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
                   <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>意向梯队</span>
                   <button
@@ -2019,30 +2151,56 @@ export default function GeneratePlanPage() {
                 </div>
               ) : null}
 
-              {/* —— Region 5: pgv2-tier-bar 8 段梯度过滤 chip —— */}
-              <div className="pgv2-tier-bar">
-                {GRADIENT_FILTER_OPTIONS.map((o) => {
-                  const baseGroups = groups.filter((g) => showHidden || !hiddenGroupKeys.has(g.groupKey));
-                  const n = o.tones
-                    ? baseGroups.filter((g) => o.tones!.includes(gradientTier(g))).length
-                    : baseGroups.length;
-                  return (
+              {/* —— Region 5: pgv2-tier-bar 8 段梯度过滤 chip; 院校优先模式下隐藏(专业维度) —— */}
+              {viewMode === 'MAJOR' ? (
+                <div className="pgv2-tier-bar">
+                  {GRADIENT_FILTER_OPTIONS.map((o) => {
+                    const baseGroups = groups.filter((g) => showHidden || !hiddenGroupKeys.has(g.groupKey));
+                    const n = o.tones
+                      ? baseGroups.filter((g) => o.tones!.includes(gradientTier(g))).length
+                      : baseGroups.length;
+                    return (
+                      <button
+                        key={o.value}
+                        type="button"
+                        className={`pgv2-tier-chip ${gradientFilter === o.value ? 'is-active' : ''}`}
+                        onClick={() => setGradientFilter(o.value)}
+                      >
+                        {o.label} <span className="n">{n}</span>
+                      </button>
+                    );
+                  })}
+                  <span className="pgv2-tier-sep" aria-hidden="true" />
+                  <span className="pgv2-density-note">
+                    当前展示 <strong>{visibleGroups.length}</strong> 个候选, 按
+                    <strong> {currentSortLabel}</strong> 排序
+                  </span>
+                </div>
+              ) : (
+                <div className="pgv2-tier-bar">
+                  <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>办学性质</span>
+                  {([
+                    { v: null, label: '全部' },
+                    { v: 'public' as const, label: '公办' },
+                    { v: 'private' as const, label: '民办' },
+                  ]).map((opt) => (
                     <button
-                      key={o.value}
+                      key={opt.label}
                       type="button"
-                      className={`pgv2-tier-chip ${gradientFilter === o.value ? 'is-active' : ''}`}
-                      onClick={() => setGradientFilter(o.value)}
+                      className={`pgv2-tier-chip ${natureFilter === opt.v ? 'is-active' : ''}`}
+                      onClick={() => setNatureFilter(opt.v)}
                     >
-                      {o.label} <span className="n">{n}</span>
+                      {opt.label}
                     </button>
-                  );
-                })}
-                <span className="pgv2-tier-sep" aria-hidden="true" />
-                <span className="pgv2-density-note">
-                  当前展示 <strong>{visibleGroups.length}</strong> 个候选, 按
-                  <strong> {currentSortLabel}</strong> 排序
-                </span>
-              </div>
+                  ))}
+                  <span className="pgv2-tier-sep" aria-hidden="true" />
+                  <span className="pgv2-density-note">
+                    当前展示 <strong>{candidateUniversities.length}</strong> 所院校（本页）,
+                    共 <strong>{candidateGroups?.total ?? 0}</strong> 所 · 按
+                    <strong> {UNIVERSITY_SORT_OPTIONS.find((o) => o.value === uniSort)?.label ?? ''}</strong> 排序
+                  </span>
+                </div>
+              )}
 
               {/* —— Region 6: pgv2-source-note 计划口径回退提示 —— */}
               {isUsingFallbackYear ? (
@@ -2061,6 +2219,61 @@ export default function GeneratePlanPage() {
                   <div className="mt-4 text-sm font-medium text-text">正在计算候选专业组</div>
                   <div className="mt-1 text-xs text-text-tertiary">系统正在综合位次、计划变化、竞争人数、选科池和征集数据</div>
                 </div>
+              ) : viewMode === 'UNIVERSITY' ? (
+                candidateUniversities.length === 0 ? (
+                  <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                    {excludeAdded && planItems.length > 0 ? (
+                      <>
+                        本页院校的可填组都已加入方案
+                        <div style={{ marginTop: 12 }}>
+                          <button
+                            type="button"
+                            onClick={() => setExcludeAdded(false)}
+                            style={{ background: 'var(--primary, #1677ff)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500 }}
+                          >
+                            显示已填报的院校 →
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      '没有符合条件的院校 · 试试调整搜索 / 排序 / 批次'
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="pgv2-cards">
+                      {candidateUniversities.map((uni) => (
+                        <UniversityCandidateCard
+                          key={uni.universityId}
+                          university={uni}
+                          studentRank={studentRankForDecision}
+                          isGroupAdded={(g) => isCandidateGroupAlreadyAdded(g, planItems)}
+                          onAddGroup={(g) => {
+                            const anchor = getAnchorMajor(g);
+                            if (anchor) addCandidateGroup(g, anchor);
+                          }}
+                          onOpenDetail={(g) => {
+                            const anchor = getAnchorMajor(g);
+                            if (anchor) setActiveDetail({ group: g, major: anchor });
+                          }}
+                        />
+                      ))}
+                    </div>
+                    {candidateGroups && candidateGroups.total > effectivePageSize ? (
+                      <div className="flex justify-end pt-1">
+                        <Pagination
+                          size="small"
+                          current={candidatePage}
+                          pageSize={effectivePageSize}
+                          total={candidateGroups.total}
+                          showSizeChanger={false}
+                          showTotal={(total) => `共 ${total} 所院校`}
+                          onChange={setCandidatePage}
+                        />
+                      </div>
+                    ) : null}
+                  </>
+                )
               ) : visibleGroups.length === 0 ? (
                 <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
                   {(() => {
@@ -2245,12 +2458,12 @@ export default function GeneratePlanPage() {
                       );
                     })}
                   </div>
-                  {candidateGroups && candidateGroups.total > candidatePageSize ? (
+                  {candidateGroups && candidateGroups.total > effectivePageSize ? (
                     <div className="flex justify-end pt-1">
                       <Pagination
                         size="small"
                         current={candidatePage}
-                        pageSize={candidatePageSize}
+                        pageSize={effectivePageSize}
                         total={candidateGroups.total}
                         showSizeChanger={false}
                         showTotal={(total) => `共 ${total} 个专业组`}

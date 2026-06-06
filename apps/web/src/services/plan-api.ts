@@ -34,14 +34,25 @@ export type CandidateGroupSort =
   | 'SAFETY_DESC'
   | 'PURITY_BEST';
 
+// 院校优先视图 (groupBy=UNIVERSITY) 的排序
+export type CandidateUniversitySort =
+  | 'UNIVERSITY_OVERALL'
+  | 'UNIVERSITY_RANK'
+  | 'REGION_FIRST'
+  | 'UNIVERSITY_TIER';
+
 export interface CandidateGroupListParams extends CandidateListParams {
-  sort?: CandidateGroupSort;
+  sort?: CandidateGroupSort | CandidateUniversitySort;
   // 意向梯队过滤 (0 / undefined = 不过滤, 1+ = 该梯队号)
   tier?: number;
   // 是否隐藏已加入当前 plan 的院校组 (默认 true)
   excludeAdded?: boolean;
   // 客观纯净度过滤. 空数组或 undefined = 不过滤; ['S','A'] = 仅显示干净/较纯
   purity?: string[];
+  // 视图模式: 不传/GROUP = 专业组卡; UNIVERSITY = 院校卡上卷
+  groupBy?: 'GROUP' | 'UNIVERSITY';
+  // 院校优先视图: 办学性质过滤 (public=公办, private=民办, 不传=全部)
+  nature?: 'public' | 'private';
 }
 
 export interface TeacherPlanListParams {
@@ -116,6 +127,8 @@ export const planApi = {
         purity: params?.purity && params.purity.length > 0 && params.purity.length < 4
           ? params.purity.join(',')
           : undefined,
+        groupBy: params?.groupBy,
+        nature: params?.nature,
       },
     }) as any;
   },

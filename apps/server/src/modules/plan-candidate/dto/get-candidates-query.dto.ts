@@ -1,6 +1,7 @@
 // dto/get-candidates-query.dto.ts
 import { Type } from 'class-transformer';
 import { IsOptional, IsInt, Min, IsString, IsBoolean, IsIn } from 'class-validator';
+import { CANDIDATE_UNIVERSITY_SORTS } from '../university-rollup';
 
 export const CANDIDATE_GROUP_SORTS = [
   'MAJOR_MATCH',
@@ -16,6 +17,9 @@ export const CANDIDATE_GROUP_SORTS = [
 
 export type CandidateGroupSort = typeof CANDIDATE_GROUP_SORTS[number];
 
+// 院校优先视图额外接受的排序值 (groupBy=UNIVERSITY 时); 校验时合并进白名单
+const ACCEPTED_SORTS = [...CANDIDATE_GROUP_SORTS, ...CANDIDATE_UNIVERSITY_SORTS] as const;
+
 export class GetCandidatesQueryDto {
   @Type(() => Number) @IsInt() @Min(1) page: number = 1;
   @Type(() => Number) @IsInt() @Min(1) pageSize: number = 20;
@@ -23,7 +27,11 @@ export class GetCandidatesQueryDto {
   @IsOptional() @IsString() keywordUniversity?: string; // 仅匹配 university.name
   @IsOptional() @IsString() keywordMajor?: string; // 匹配 major.name OR majorName
   @IsOptional() @Type(() => Boolean) @IsBoolean() includeSoftFails?: boolean = true;
-  @IsOptional() @IsIn(CANDIDATE_GROUP_SORTS) sort?: CandidateGroupSort = 'MAJOR_MATCH';
+  @IsOptional() @IsIn(ACCEPTED_SORTS) sort?: string = 'MAJOR_MATCH';
+  // 视图模式: GROUP=院校专业组卡(默认, 专业优先); UNIVERSITY=院校卡上卷(院校优先)
+  @IsOptional() @IsIn(['GROUP', 'UNIVERSITY']) groupBy?: 'GROUP' | 'UNIVERSITY';
+  // 办学性质过滤 (仅院校优先视图): public=只看公办, private=只看民办, 空=全部
+  @IsOptional() @IsIn(['public', 'private']) nature?: 'public' | 'private';
   // 意向梯队过滤: 0 / undefined = 不过滤 (全部); 1+ = 只显示含该梯队任一专业的院校组
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) tier?: number;
   // 是否隐藏已加入当前 plan 的院校组. 默认 true (老师只看未加入的)

@@ -104,7 +104,9 @@ function Sparkline({ data }: { data?: Array<{ year: number; score: number; rank:
 }
 
 function MBar({ k, v, suffix = '', chg }: { k: string; v?: string | number | null; suffix?: string; chg?: number | null }) {
-  const show = v == null || v === '' ? '—' : `${v}${suffix}`;
+  // 数据源用 "/" 表示无数据, 视同空值, 否则会显示成裸 "/"
+  const isEmpty = v == null || v === '' || String(v).trim() === '/';
+  const show = isEmpty ? '—' : `${v}${suffix}`;
   return (
     <div className="pgv2-mbar">
       <span className="lbl">{k}</span>
@@ -157,9 +159,20 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   const sectionTotal = (sections.recommended?.length || 0)
     + (sections.backup?.length || 0)
     + (sections.risk?.length || 0);
+  // 组内专业数: 优先 purity.majorCount (后端客观统计), fallback 组 majorCount / 可见 section 合计
+  const groupMajorCount = group?.purity?.majorCount ?? group?.majorCount ?? sectionTotal;
 
   // location: 优先 city, 否则 province
   const location = uni.city || uni.province || '';
+
+  // 院校背景标签 (卓越教师/C9联盟/五院四系/部委直属等), 数据源 '/' 分隔; 最多取 4 个防刷屏
+  // 剔除与 985/211/双一流/一流学科 badge 重复的词, 避免冗余
+  const bgTags = String(uni.universityBackground ?? '')
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((t) => !['985', '211', '双一流', '一流学科', '一流大学'].some((x) => t.includes(x)))
+    .slice(0, 4);
 
   // 趋势数据 (history3y 优先,fallback historyFiling3y)
   const trend = group?.history3y && group.history3y.length >= 2
@@ -241,17 +254,36 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
             ) : null}
             {isHidden ? <span className="pgv2-tag tone-muted">已隐藏</span> : null}
           </div>
+          {/* —— 院校级标签 —— */}
           <div className="pgv2-card-tags">
             {uni.is985 ? <span className="pgv2-tag tone-accent">985</span> : null}
             {uni.is211 ? <span className="pgv2-tag tone-accent">211</span> : null}
             {uni.isDoubleFirstClass ? <span className="pgv2-tag tone-accent">双一流</span> : null}
+            {uni.firstClassCategory ? <span className="pgv2-tag tone-accent">{uni.firstClassCategory}</span> : null}
             {uni.runningNature ? <span className="pgv2-tag tone-muted">{uni.runningNature}</span> : null}
+            {/* 院校背景标签 (卓越教师/C9联盟/五院四系等); '/' 分隔, 最多显示 4 个 */}
+            {bgTags.map((t) => (
+              <span key={t} className="pgv2-tag tone-accent-soft" title={uni.universityBackground ?? undefined}>{t}</span>
+            ))}
+            {location ? <span className="pgv2-tag tone-muted">{location}</span> : null}
+            {uni.softRanking ? (
+              <span
+                className="pgv2-tag tone-muted"
+                title={String(uni.runningNature ?? '').includes('民办') ? '民办院校按软科民办榜单独排名' : undefined}
+              >
+                软科{String(uni.runningNature ?? '').includes('民办') ? '民办' : ''} #{uni.softRanking}
+              </span>
+            ) : null}
+          </div>
+          {/* —— 专业组级标签 (与院校级分行) + 组内专业数 —— */}
+          <div className="pgv2-card-tags" style={{ marginTop: 2 }}>
             {group?.groupCode || group?.groupName ? (
               <span
                 className="pgv2-tag tone-accent"
                 style={{ fontSize: '0.95rem', fontWeight: 600, padding: '4px 10px', letterSpacing: '0.2px' }}
               >
                 {group?.groupCode ? `[${group.groupCode}] ` : ''}{group?.groupName ?? '专业组'}
+                {groupMajorCount ? ` · ${groupMajorCount} 专业` : ''}
               </span>
             ) : null}
             {group?.purity?.level ? (
@@ -263,19 +295,13 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 {PURITY_META[group.purity.level]?.label ?? group.purity.level}
               </span>
             ) : null}
-            {location ? <span className="pgv2-tag tone-muted">{location}</span> : null}
-            {uni.softRanking ? <span className="pgv2-tag tone-muted">软科 #{uni.softRanking}</span> : null}
           </div>
           <div className="pgv2-card-sub">
             {group?.subjects ? <span>选科 {group.subjects}</span> : null}
-            {group?.subjects && (group?.groupMinScore || group?.groupMinRank) ? <span className="dot" /> : null}
-            {group?.groupMinScore != null || group?.groupMinRank != null ? (
-              <span>
-                历史最低{' '}
-                <strong>{group?.groupMinScore ?? '—'}</strong>
-                {' / 位次 '}
-                <strong>{group?.groupMinRank != null ? group.groupMinRank.toLocaleString() : '—'}</strong>
-              </span>
+            {/* 历史最低位次已在下方指标条显示, 这里只留分数避免重复 */}
+            {group?.subjects && group?.groupMinScore != null ? <span className="dot" /> : null}
+            {group?.groupMinScore != null ? (
+              <span>历史最低 <strong>{group.groupMinScore}</strong> 分</span>
             ) : null}
           </div>
         </div>
@@ -312,18 +338,26 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
         </div>
       </div>
 
-      {/* —— MetricStrip 6 项就业指标 —— */}
+      {/* —— MetricStrip ——
+           折叠: 组级决策(最低位次/招生总计划) + 升学(保研率/升学率)
+           展开追加: 就业类(就业率/平均薪资/满意度)
+           注: postgradRate 字段实为「保研率」数据, furtherStudyRate 实为「升学率」(导入时如此映射) */}
       <div className="pgv2-metric-bar" onClick={onToggleExpand}>
-        <MBar k="招生" v={group?.currentPlanCount} suffix=" 人" chg={group?.planCountChange} />
-        <MBar k="考研率" v={uni.postgradRate} suffix="" />
-        <MBar k="深造率" v={uni.furtherStudyRate} suffix="" />
-        <MBar k="就业率" v={uni.employmentRate} suffix="" />
-        <MBar k="平均薪资" v={uni.avgSalary} suffix="" />
-        <MBar
-          k="满意度"
-          v={uni.satisfactionOverall}
-          suffix={uni.satisfactionCount ? ` / ${uni.satisfactionCount} 人` : ''}
-        />
+        <MBar k="最低位次" v={group?.groupMinRank != null ? group.groupMinRank.toLocaleString() : null} />
+        <MBar k="招生总计划" v={group?.currentPlanCount} suffix=" 人" chg={group?.planCountChange} />
+        <MBar k="保研率" v={uni.postgradRate} suffix="" />
+        <MBar k="升学率" v={uni.furtherStudyRate} suffix={uni.furtherStudyRate != null && !String(uni.furtherStudyRate).includes('%') ? '%' : ''} />
+        {isExpanded ? (
+          <>
+            <MBar k="就业率" v={uni.employmentRate} suffix="" />
+            <MBar k="平均薪资" v={uni.avgSalary} suffix="" />
+            <MBar
+              k="满意度"
+              v={uni.satisfactionOverall}
+              suffix={uni.satisfactionCount ? ` / ${uni.satisfactionCount} 人` : ''}
+            />
+          </>
+        ) : null}
       </div>
 
       {/* —— 展开态: 3 Tab 框架 + 由父组件提供内容 —— */}

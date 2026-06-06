@@ -3,6 +3,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FEATURE_FLAGS } from '../../config/feature-flags';
 import { ScoreSegmentService } from '../score-segment/score-segment.service';
 import { buildHardFilterWhere } from './filters/hard-filter';
+import {
+  rollupByUniversity,
+  sortCandidateUniversities,
+  RollupContext,
+} from './university-rollup';
 import { GenderRule } from './filters/soft-rules/gender.rule';
 import { HealthRestrictionRule } from './filters/soft-rules/health-restriction.rule';
 import { HouseholdRule } from './filters/soft-rules/household.rule';
@@ -27,10 +32,12 @@ interface GetCandidatesQuery {
   keywordUniversity?: string; // 仅匹配 university.name
   keywordMajor?: string; // 匹配 major.name OR majorName
   includeSoftFails?: boolean;
-  sort?: CandidateGroupSort;
+  sort?: CandidateGroupSort | string; // 院校模式接受 university sort 值
   tier?: number;
   excludeAdded?: boolean;
   purity?: string; // csv 'S,A,B,C'; 空 = 不过滤
+  groupBy?: 'GROUP' | 'UNIVERSITY'; // 视图模式; UNIVERSITY=院校卡上卷
+  nature?: 'public' | 'private'; // 院校优先视图: 办学性质过滤
 }
 
 type CandidateGroupSort =
@@ -67,7 +74,7 @@ interface CandidateGroupFullResult {
   studentRankSource: StudentRankSource;
   storedRank: number | null;
   scoreBasedRank: number | null;
-  sort: CandidateGroupSort;
+  sort: string; // 院校模式可为 university sort, 故放宽
   groups: any[];
   // 学生当前的意向梯队结构(给前端 chip 渲染); groupCount = 假设切到该 tier 能看到的候选 group 数
   // 不考虑 RECOMMENDED/BACKUP 是否为空 (粗略统计), 已应用硬过滤 + keyword + excludeAdded
@@ -398,6 +405,8 @@ const CANDIDATE_ENROLLMENT_PLAN_SELECT = {
       avgSalary: true,
       satisfactionOverall: true,
       satisfactionCount: true,
+      universityBackground: true, // 院校背景标签 (卓越教师/C9联盟/五院四系等, '/' 分隔)
+      firstClassCategory: true, // 一流学科分类
     },
   },
   major: {
@@ -543,6 +552,70 @@ export class PlanCandidateService {
       page,
       pageSize,
       groups: value.groups.slice(start, start + pageSize),
+    };
+  }
+
+  // 从学生档案抽取「院校优先」上卷所需的意向集合 (院校名/id/序号 + 意向省市)
+  // preferredUniversities 兼容两种形态: ['北大', ...] 或 [{ id, name }, ...]
+  private buildRollupContext(student: any): RollupContext {
+    const names = new Set<string>();
+    const ids = new Set<number>();
+    const order = new Map<string, number>();
+    const prefU = Array.isArray(student?.preferredUniversities) ? student.preferredUniversities : [];
+    prefU.forEach((item: any, idx: number) => {
+      if (typeof item === 'string') {
+        names.add(item);
+        if (!order.has(item)) order.set(item, idx + 1);
+      } else if (item && typeof item === 'object') {
+        if (typeof item.name === 'string') {
+          names.add(item.name);
+          if (!order.has(item.name)) order.set(item.name, idx + 1);
+        }
+        if (typeof item.id === 'number') ids.add(item.id);
+      }
+    });
+    const regions = new Set<string>();
+    for (const field of ['preferredProvinces', 'preferredCities']) {
+      const arr = Array.isArray(student?.[field]) ? student[field] : [];
+      for (const r of arr) if (typeof r === 'string') regions.add(r);
+    }
+    return {
+      preferredUniversityNames: names,
+      preferredUniversityIds: ids,
+      preferredUniversityOrder: order,
+      preferredRegions: regions,
+    };
+  }
+
+  // 院校优先视图: 复用已算好的 group 全集 (value.groups), 按院校上卷 + 院校维度排序 + 按院校分页。
+  // 不动 value.groups 顺序 (rollup 内部建新数组), 故缓存对象不被破坏, 两模式共享同一份组聚合。
+  private paginateAsUniversities(
+    value: CandidateGroupFullResult,
+    q: GetCandidatesQuery,
+    student: any,
+    page: number,
+    pageSize: number,
+  ) {
+    const ctx = this.buildRollupContext(student);
+    let universities = rollupByUniversity(value.groups, ctx);
+    // 办学性质过滤 (公办/民办), 在排序+分页前
+    if (q.nature === 'public' || q.nature === 'private') {
+      universities = universities.filter((u) => {
+        const isPub = String(u.university?.runningNature ?? '').includes('公办') ||
+          String(u.university?.runningNature ?? '').includes('公立');
+        return q.nature === 'public' ? isPub : !isPub;
+      });
+    }
+    sortCandidateUniversities(universities, q.sort ?? 'UNIVERSITY_OVERALL', value.studentRankUsed);
+    const start = (page - 1) * pageSize;
+    const { groups: _groups, ...meta } = value;
+    return {
+      ...meta,
+      groupBy: 'UNIVERSITY' as const,
+      total: universities.length,
+      page,
+      pageSize,
+      universities: universities.slice(start, start + pageSize),
     };
   }
 
@@ -905,7 +978,7 @@ export class PlanCandidateService {
     return (b.currentPlanCount ?? 0) - (a.currentPlanCount ?? 0);
   }
 
-  private sortCandidateGroups(groups: any[], sort: CandidateGroupSort = 'MAJOR_MATCH', studentRank: number) {
+  private sortCandidateGroups(groups: any[], sort: string = 'MAJOR_MATCH', studentRank: number) {
     const PURITY_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 };
     const purityScore = (g: any): number => PURITY_ORDER[g?.purity?.level] ?? 99;
 
@@ -1295,6 +1368,9 @@ export class PlanCandidateService {
     const cacheKey = this.candidateGroupCacheKey(plan, q);
     const cached = this.getCandidateGroupCache(cacheKey);
     if (cached) {
+      if (q.groupBy === 'UNIVERSITY') {
+        return this.paginateAsUniversities(cached, q, student, page, pageSize);
+      }
       return this.paginateCandidateGroups(cached, page, pageSize);
     }
 
@@ -1737,6 +1813,8 @@ export class PlanCandidateService {
           avgSalary: first.university?.avgSalary ?? null,
           satisfactionOverall: first.university?.satisfactionOverall ?? null,
           satisfactionCount: first.university?.satisfactionCount ?? null,
+          universityBackground: first.university?.universityBackground ?? null,
+          firstClassCategory: first.university?.firstClassCategory ?? null,
         },
         groupCode: first.groupCode,
         groupName: first.groupName,
@@ -1882,6 +1960,9 @@ export class PlanCandidateService {
       appliedTier: q.tier ?? 0,
     };
     this.setCandidateGroupCache(cacheKey, fullResult);
+    if (q.groupBy === 'UNIVERSITY') {
+      return this.paginateAsUniversities(fullResult, q, student, page, pageSize);
+    }
     return this.paginateCandidateGroups(fullResult, page, pageSize);
   }
 
