@@ -91,6 +91,11 @@ SCRIPT_FILES = {
         'local': os.path.join(LOCAL_ROOT, 'scripts', 'import-enriched.ts'),
         'remote': 'scripts/import-enriched.ts',
     },
+    # 专业热度 TOP50 导入(一次性, 部署后 SSH 手动跑: npx ts-node scripts/import-major-popularity.ts)
+    'import_major_popularity': {
+        'local': os.path.join(LOCAL_ROOT, 'scripts', 'import-major-popularity.ts'),
+        'remote': 'scripts/import-major-popularity.ts',
+    },
 }
 
 # 根目录需要上传的配置文件
