@@ -21,7 +21,12 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 EXCEL = ROOT / 'data' / '03_专家版主表' / 'output' / '专业招生主表.xlsx'
+# 主表无办学性质列, 需 join 院校信息表(按院校代码)拿公办/民办
+UNI_INFO_EXCEL = ROOT / 'data' / '03_专家版主表' / 'output' / '院校信息表.xlsx'
 OUTPUT = ROOT / 'apps' / 'web' / 'public' / 'data' / 'rank-map-2025.json'
+
+# 公办&民办都达到此组数, 该(批次,类型)才纳入公私对比(自然得到本科批B段普通类/专科批普通类)
+NATURE_MIN_GROUPS = 10
 
 # 2025 批次结构 (同步自 2025年批次结构.xlsx, 删 NaN + 整理顺序)
 STRUCT_2025 = [
@@ -86,9 +91,73 @@ RANK_BANDS = {
 TOTAL_APPLICANTS = {'物理': 284789, '历史': 177978}
 
 
+def norm_nature(v):
+    """办学性质归一. 公私对比只关心公办/民办, 中外合作等返回 None 不纳入。"""
+    s = str(v)
+    if '公办' in s or '公立' in s:
+        return '公办'
+    if '民办' in s or '独立' in s:
+        return '民办'
+    return None
+
+
+def build_nature_breakdown(df, track):
+    """按 (批次, 类型, 性质) 算「组末位」五分位分布。
+
+    单看末位公私无差异(批次地板共用), 差异在分布: 公办整体靠前、民办靠后。
+    末位取自专业组级字段 25专业组最低位次, 故先去重到专业组粒度(一组一个末位)。
+    只收公办&民办都 >= NATURE_MIN_GROUPS 组的 (批次,类型), 其他批次基本全公办无对比意义。
+    """
+    sub = df[(df['科目'] == track) & (df['性质'].notna()) & (df['25专业组最低位次'] > 0)].copy()
+    grp = sub.drop_duplicates(['院校代码', '专业组代码', '录取批次', '招生类型'])
+
+    result = []
+    for (batch, rtype), g in grp.groupby(['录取批次', '招生类型']):
+        natures = {}
+        for nat in ['公办', '民办']:
+            v = g[g['性质'] == nat]['25专业组最低位次']
+            if len(v) == 0:
+                continue
+            # 计划: 该 (批次,类型,性质) 全部专业行(非去重)的计划人数之和
+            plan = int(
+                sub[(sub['录取批次'] == batch) & (sub['招生类型'] == rtype) & (sub['性质'] == nat)]['计划人数']
+                .fillna(0)
+                .sum()
+            )
+            natures[nat] = {
+                '组数': int(len(v)),
+                '最优': int(v.min()),
+                'p25': int(v.quantile(0.25)),
+                '中位': int(v.median()),
+                'p75': int(v.quantile(0.75)),
+                '末位': int(v.max()),
+                '计划': plan,
+            }
+        if (
+            '公办' in natures
+            and '民办' in natures
+            and natures['公办']['组数'] >= NATURE_MIN_GROUPS
+            and natures['民办']['组数'] >= NATURE_MIN_GROUPS
+        ):
+            result.append({'批次': batch, '招生类型': rtype, 'natures': natures})
+
+    # 按投档顺序排(本科在前专科在后), 用 STRUCT_2025 里该批次类型的最小排序号
+    order = {}
+    for 序号, 顺序排序, 投档顺序, 录取批次, 招生类型 in STRUCT_2025:
+        order.setdefault((录取批次, 招生类型), 顺序排序)
+    result.sort(key=lambda x: order.get((x['批次'], x['招生类型']), 999))
+    return result
+
+
 def main():
     df = pd.read_excel(EXCEL)
     print(f'读取主表: {len(df)} 行')
+
+    # join 院校信息表拿办学性质(主表无此列), 归一成 公办/民办
+    uni_info = pd.read_excel(UNI_INFO_EXCEL)[['院校代码', '办学性质']]
+    df = df.merge(uni_info, on='院校代码', how='left')
+    df['性质'] = df['办学性质'].map(norm_nature)
+    print(f'办学性质命中: {df["办学性质"].notna().sum()}/{len(df)}')
 
     # 聚合
     agg = df.groupby(['录取批次', '招生类型', '科目'], dropna=False).agg(
@@ -110,7 +179,7 @@ def main():
         return v
 
     out = {
-        'version': '2025-06-05',
+        'version': '2026-06-07',
         'year': 2025,
         'province': '四川',
         'tracks': {},
@@ -176,6 +245,11 @@ def main():
             'batches': batches,
         }
 
+    # 公办 vs 民办 录取位次分布(新增区块用)
+    out['natureBreakdown'] = {
+        track: build_nature_breakdown(df, track) for track in ['物理', '历史']
+    }
+
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT, 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
@@ -183,6 +257,12 @@ def main():
     print(f'\n写入: {OUTPUT}')
     print(f'物理类: {len(out["tracks"]["物理"]["batches"])} 批次 / 招生计划合计 {out["tracks"]["物理"]["招生计划合计"]}')
     print(f'历史类: {len(out["tracks"]["历史"]["batches"])} 批次 / 招生计划合计 {out["tracks"]["历史"]["招生计划合计"]}')
+    for track in ['物理', '历史']:
+        nb = out['natureBreakdown'][track]
+        print(f'natureBreakdown {track}: {len(nb)} 批次 → ' + ', '.join(
+            f'{x["批次"]}·{x["招生类型"]}(公办中位{x["natures"]["公办"]["中位"]}/民办中位{x["natures"]["民办"]["中位"]})'
+            for x in nb
+        ))
 
 
 if __name__ == '__main__':

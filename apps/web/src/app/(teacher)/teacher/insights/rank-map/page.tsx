@@ -51,12 +51,30 @@ interface TrackData {
   batches: BatchEntry[];
 }
 
+// 公办/民办 录取位次分布 (一个性质一套五分位)
+interface NatureStat {
+  组数: number;
+  最优: number;
+  p25: number;
+  中位: number;
+  p75: number;
+  末位: number;
+  计划: number;
+}
+
+interface NatureBatchEntry {
+  批次: string;
+  招生类型: string;
+  natures: Partial<Record<'公办' | '民办', NatureStat>>;
+}
+
 interface RankMapData {
   version: string;
   year: number;
   province: string;
   tracks: Record<Track, TrackData>;
   rankBands: Record<Track, RankBand[]>;
+  natureBreakdown?: Record<Track, NatureBatchEntry[]>;
 }
 
 function bandOfRank(rank: number, bands: RankBand[]): RankBand | null {
@@ -421,6 +439,37 @@ function RankMapPageInner() {
         </div>
       </div>
 
+      {/* 公办 vs 民办 录取位次分布 */}
+      {(data.natureBreakdown?.[track]?.length ?? 0) > 0 && (
+        <div className="in-card fade-up d3" style={{ marginBottom: 16 }}>
+          <h4>{track}类 公办 vs 民办 录取位次分布</h4>
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.7 }}>
+            盒子 = 中间 50% 院校 (P25–P75) 的录取位次区间，盒中竖线 = 中位，左右须 = 最优 / 末位。
+            位次数越大越靠右、越好进。
+            {studentRank
+              ? '红线 = 学生位次：红线在盒子左侧 → 稳，落在盒内 → 临界，在右侧 → 基本无望。'
+              : '输入学生位次后，红色竖线贯穿各图，直观看落在公办还是民办区间。'}
+            <br />
+            ※ 单看「末位」公私无差异 (批次地板共用)，故改看整体分布；仅列公办、民办都有量的批次。
+          </div>
+          {data.natureBreakdown![track].map((entry) => (
+            <div key={`${entry.批次}-${entry.招生类型}`} style={{ marginBottom: 4 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  marginBottom: 2,
+                }}
+              >
+                {entry.批次} · {entry.招生类型}
+              </div>
+              <LazyEChart option={buildNatureBoxOption(entry, studentRank)} height={150} />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* 速查表 */}
       <div className="in-card fade-up d4">
         <h4>{track}类 位次档位速查表</h4>
@@ -493,4 +542,84 @@ function shortBatchName(name: string): string {
     .replace('高职(专科)', '专')
     .replace('(', '·')
     .replace(')', '');
+}
+
+const NATURE_COLOR: Record<'公办' | '民办', string> = { 公办: '#5b8ff9', 民办: '#ffa940' };
+
+// 单个批次的「公办 vs 民办」横向箱线图 option。
+// 盒子 = P25–P75 (中间 50% 院校), 盒中线 = 中位, 须 = 最优/末位; 学生位次画红竖线。
+// 每批次单独成图: 本科/专科位次量级差大, 各自适配 x 轴, 避免共享轴把本科盒子压扁。
+function buildNatureBoxOption(entry: NatureBatchEntry, studentRank: number | null) {
+  const rows = (['公办', '民办'] as const)
+    .map((nat) => ({ nat, stat: entry.natures[nat] }))
+    .filter((r): r is { nat: '公办' | '民办'; stat: NatureStat } => !!r.stat);
+
+  const boxData = rows.map((r) => ({
+    value: [r.stat.最优, r.stat.p25, r.stat.中位, r.stat.p75, r.stat.末位],
+    itemStyle: {
+      color: `${NATURE_COLOR[r.nat]}33`,
+      borderColor: NATURE_COLOR[r.nat],
+      borderWidth: 1.5,
+    },
+  }));
+
+  const markLine = studentRank
+    ? {
+        symbol: 'none',
+        lineStyle: { color: '#cf1322', width: 2 },
+        label: {
+          formatter: `学生 ${studentRank.toLocaleString()}`,
+          position: 'insideEndTop',
+          color: '#cf1322',
+          fontWeight: 600,
+          fontSize: 11,
+        },
+        data: [{ xAxis: studentRank }],
+      }
+    : undefined;
+
+  return {
+    grid: { left: 56, right: 80, top: 12, bottom: 36 },
+    tooltip: {
+      trigger: 'item',
+      formatter: (p: any) => {
+        const r = rows[p.dataIndex];
+        if (!r) return '';
+        const s = r.stat;
+        return `
+          <div><b>${entry.批次} · ${r.nat}</b></div>
+          <div>组数 ${s.组数} · 计划 ${s.计划.toLocaleString()}</div>
+          <div>最优 ${s.最优.toLocaleString()}</div>
+          <div>P25 ${s.p25.toLocaleString()}</div>
+          <div>中位 <b>${s.中位.toLocaleString()}</b></div>
+          <div>P75 ${s.p75.toLocaleString()}</div>
+          <div>末位 ${s.末位.toLocaleString()}</div>
+        `;
+      },
+    },
+    xAxis: {
+      type: 'value',
+      name: '录取位次',
+      nameLocation: 'middle',
+      nameGap: 24,
+      axisLabel: {
+        formatter: (v: number) => (v >= 10000 ? `${(v / 10000).toFixed(0)}万` : `${v}`),
+      },
+    },
+    yAxis: {
+      type: 'category',
+      data: rows.map((r) => r.nat),
+      inverse: true,
+      axisLabel: { fontSize: 12, fontWeight: 600 },
+    },
+    series: [
+      {
+        type: 'boxplot',
+        data: boxData,
+        layout: 'horizontal',
+        boxWidth: [12, 26],
+        markLine: markLine as any,
+      },
+    ],
+  };
 }
