@@ -520,6 +520,11 @@ model Major {
   employmentDirectionDesc String? @map("employment_direction_desc") @db.Text
   yearSalaryMap           Json?   @map("year_salary_map")
 
+  // === 专业热度（2025 本科热度 TOP50 榜单）仅上榜专业有值 ===
+  popularityRank Int? @map("popularity_rank") // 全国本科热度排名 1-50
+  popularityHeat Int? @map("popularity_heat") // 热度值(人), 如 82000 → 展示 8.2万
+  popularityYear Int? @map("popularity_year") @db.SmallInt // 榜单年份 2025
+
   // 关联
   enrollmentPlans  EnrollmentPlan[]
   admissionRecords AdmissionRecord[]

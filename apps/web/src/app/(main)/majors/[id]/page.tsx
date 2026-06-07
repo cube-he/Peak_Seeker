@@ -14,6 +14,12 @@ import AdmissionRow from '@/components/admission/AdmissionRow';
 import LowConfidenceBanner from '@/components/admission/LowConfidenceBanner';
 import { useUserStore } from '@/stores/userStore';
 
+// 热度值(人) → "X.X万"；非上榜专业返回 null（不显示）
+function formatHeat(value: unknown): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return `${(value / 10000).toFixed(1)}万`;
+}
+
 export default function MajorDetailPage() {
   const params = useParams();
   const id = Number(params.id);
@@ -219,6 +225,13 @@ export default function MajorDetailPage() {
               {typeof m.setupYear === 'number' && m.setupYear >= 2024 && (
                 <span className="rounded-md bg-accent px-3 py-1 text-sm font-medium text-white">
                   新兴专业 · {m.setupYear} 年增设
+                </span>
+              )}
+              {/* 热度徽章：仅 2025 本科热度 TOP50 显示 */}
+              {typeof m.popularityRank === 'number' && (
+                <span className="rounded-md bg-[#fa541c] px-3 py-1 text-sm font-medium text-white">
+                  🔥 {m.popularityYear ?? 2025} 本科热度 全国第 {m.popularityRank}
+                  {formatHeat(m.popularityHeat) ? ` · ${formatHeat(m.popularityHeat)}` : ''}
                 </span>
               )}
             </h1>

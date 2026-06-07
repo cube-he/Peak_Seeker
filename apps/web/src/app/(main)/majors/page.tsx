@@ -71,6 +71,12 @@ function formatSalary(value: unknown) {
   return `¥${value}`;
 }
 
+// 热度值(人) → "X.X万"；非上榜专业返回 null（不显示）
+function formatHeat(value: unknown): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return `${(value / 10000).toFixed(1)}万`;
+}
+
 function CategoryNav({
   categories,
   selected,
@@ -166,6 +172,13 @@ function MajorCard({ major }: { major: any }) {
             {typeof major.setupYear === 'number' && major.setupYear >= 2024 && (
               <span className="inline-flex rounded bg-accent px-2 py-0.5 text-[11px] font-medium text-white">
                 {major.setupYear} 新增
+              </span>
+            )}
+            {/* 热度徽标：仅 2025 本科热度 TOP50 显示 */}
+            {typeof major.popularityRank === 'number' && (
+              <span className="inline-flex items-center rounded bg-[#fff2e8] px-2 py-0.5 text-[11px] font-medium text-[#fa541c]">
+                🔥 热度第{major.popularityRank}
+                {formatHeat(major.popularityHeat) ? ` · ${formatHeat(major.popularityHeat)}` : ''}
               </span>
             )}
           </div>
@@ -302,6 +315,7 @@ export default function MajorsPage() {
     if (filters.emerging) items.push({ key: 'emerging', label: '新兴专业' });
     if (filters.electiveSubject) items.push({ key: 'electiveSubject', label: `选考 ${filters.electiveSubject}` });
     if (filters.sortBy === 'salary') items.push({ key: 'sortBy', label: '按薪资排序' });
+    if (filters.sortBy === 'popularity') items.push({ key: 'sortBy', label: '按热度排序' });
     return items;
   }, [filters.category, filters.level, filters.emerging, filters.electiveSubject, filters.sortBy]);
 
@@ -404,6 +418,15 @@ export default function MajorsPage() {
                   }`}
                 >
                   按薪资排序
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilters({ ...filters, sortBy: filters.sortBy === 'popularity' ? undefined : 'popularity', page: 1 })}
+                  className={`rounded-md border-0 px-3.5 py-2 text-[13px] transition-colors ${
+                    filters.sortBy === 'popularity' ? 'bg-surface-high font-medium text-text shadow-[0_1px_2px_rgba(0,0,0,0.04)]' : 'bg-bg text-text-tertiary hover:text-primary'
+                  }`}
+                >
+                  按热度排序
                 </button>
               </div>
             </div>
