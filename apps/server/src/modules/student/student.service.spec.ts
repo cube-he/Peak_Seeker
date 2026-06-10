@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -7,7 +8,7 @@ import {
 import { StudentService } from './student.service';
 import { ProgressService } from './progress.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { StudentStatus } from '@prisma/client';
+import { Prisma, StudentStatus } from '@prisma/client';
 
 // Mock bcrypt — keep hash deterministic for tests
 jest.mock('bcrypt', () => ({
@@ -415,6 +416,31 @@ describe('StudentService', () => {
       await expect(
         service.updateProfile(999, { dataVersion: 0 }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    // 手机号唯一约束冲突应转成友好 400，而不是冒成 500（Internal server error）
+    it('手机号重复时抛 BadRequestException 而非原始 Prisma 500', async () => {
+      const current = {
+        id: 10,
+        dataVersion: 3,
+        status: StudentStatus.ACTIVE,
+        examYear: null,
+        examType: null,
+        firstChoice: null,
+        totalScore: null,
+        priorityMode: null,
+        careerPlan: null,
+      };
+      prisma.studentProfile.findUnique.mockResolvedValue(current);
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the constraint: `users_phone_key`',
+        { code: 'P2002', clientVersion: '7.4.2', meta: { target: 'users_phone_key' } },
+      );
+      prisma.studentProfile.update.mockRejectedValue(p2002);
+
+      await expect(
+        service.updateProfile(10, { dataVersion: 3, phone: '13800138000' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     // 自动保存场景：前端 PATCH 单字段时不发 dataVersion，应跳过乐观锁正常更新（last-write-wins）

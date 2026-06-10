@@ -18,7 +18,8 @@ import type {
 export interface StudentForEligibility {
   examType: 'PHYSICS' | 'HISTORY' | string | null;
   totalScore: number | null;
-  isRural: boolean;
+  // null = 学生未填户籍性质 (RURAL_HOUSEHOLD 规则区分"未填"与"城镇")
+  isRural: boolean | null;
   county: string | null;
   politicalStatus: string | null;
   birthDate: Date | null;
@@ -207,7 +208,9 @@ const REQUIREMENT_LABEL: Record<string, string> = {
   SERVICE_COMMITMENT: '需签 6 年服务承诺',
   GENDER: '性别限制',
   ETHNICITY_MINORITY: '限少数民族考生',
+  RURAL_HOUSEHOLD: '农村户籍',
   HEIGHT_MIN_BY_GENDER: '身高下限',
+  WEIGHT_MIN_BY_GENDER: '体重下限',
   BMI_RANGE: 'BMI 范围',
   VISION_NAKED_MIN: '裸眼视力下限',
   COLOR_VISION_NORMAL: '色觉正常 (无色盲色弱)',
@@ -222,6 +225,7 @@ function evalSubset(student: StudentForEligibility, subset: SubsetRule): SubsetR
       verdict: 'DATA_PENDING',
       rulesEval: [],
       references: (subset.references ?? []).map(refToItem),
+      policyText: subset.policyText,
     };
   }
   const rulesEval: RuleEvalResult[] = [];
@@ -242,6 +246,17 @@ function evalSubset(student: StudentForEligibility, subset: SubsetRule): SubsetR
     if (!satisfied && !soft) verdict = 'INELIGIBLE';
     else if (soft && verdict === 'ELIGIBLE') verdict = 'CONDITIONAL';
   }
+  // softHints 是机器无法判定、必须老师人工核实的要求（户籍/学籍年限、体能测试、
+  // 民语学籍等）。渲染成 SOFT_HINT 条目让页面可见，并把通过降为"条件通过"。
+  for (const hint of subset.softHints ?? []) {
+    rulesEval.push({
+      ruleCode: 'SOFT_HINT',
+      requirement: hint,
+      actual: '需老师人工核实',
+      pass: 'SOFT_HINT',
+    });
+    if (verdict === 'ELIGIBLE') verdict = 'CONDITIONAL';
+  }
   return {
     code: subset.code,
     name: subset.name,
@@ -249,6 +264,7 @@ function evalSubset(student: StudentForEligibility, subset: SubsetRule): SubsetR
     verdict,
     rulesEval,
     references: (subset.references ?? []).map(refToItem),
+    policyText: subset.policyText,
   };
 }
 
@@ -305,6 +321,16 @@ function evalHardRule(
       }
       if (!regions.includes(student.county)) {
         return { satisfied: false, hint: `${subsetLabel}要求户籍县在实施区域内 (${regions.length} 县名单), 学生户籍县「${student.county}」不在` };
+      }
+      return { satisfied: true, hint: 'PASS' };
+    }
+    case 'RURAL_HOUSEHOLD': {
+      // 仅要求农村户籍, 不限定县 (农村订单定向医学生: "户籍地须在农村")
+      if (student.isRural == null) {
+        return { satisfied: false, hint: `${subsetLabel}要求农村户籍, 学生未填户籍性质 → 请先催学生补完资料` };
+      }
+      if (!student.isRural) {
+        return { satisfied: false, hint: `${subsetLabel}要求农村户籍, 学生为城镇户籍` };
       }
       return { satisfied: true, hint: 'PASS' };
     }
@@ -385,6 +411,20 @@ function evalHardRule(
       }
       if (student.height < minH) {
         return { satisfied: false, hint: `${subsetLabel}需身高 ≥${minH}cm, 学生身高 ${student.height}cm 不达标` };
+      }
+      return { satisfied: true, hint: 'PASS' };
+    }
+    case 'WEIGHT_MIN_BY_GENDER': {
+      const { male, female } = (rule.params ?? {}) as { male: number; female: number };
+      if (!student.gender) {
+        return { satisfied: false, hint: `${subsetLabel}需体重男 ≥${male}kg / 女 ≥${female}kg, 学生未填性别 → 请先催学生补完资料` };
+      }
+      const minW = student.gender === 'MALE' ? male : female;
+      if (student.weight == null) {
+        return { satisfied: false, hint: `${subsetLabel}需体重 ≥${minW}kg, 学生未填体重 → 请先催学生补完体检数据` };
+      }
+      if (student.weight < minW) {
+        return { satisfied: false, hint: `${subsetLabel}需体重 ≥${minW}kg, 学生体重 ${student.weight}kg 不达标` };
       }
       return { satisfied: true, hint: 'PASS' };
     }

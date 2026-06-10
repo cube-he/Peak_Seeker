@@ -17,6 +17,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "prisma generate",
+    "seed:teachers": "ts-node -r dotenv/config scripts/create-teacher-accounts.ts",
+    "seed:eligibility": "ts-node -r dotenv/config scripts/seed-batch-eligibility-rules.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",

@@ -20,6 +20,7 @@ import {
 } from './field-policy';
 import { ScoreSegmentService } from '../score-segment/score-segment.service';
 import type { ExamType } from '../score-segment/exam-type.helper';
+import type { JwtPayloadUser } from '../casl/types';
 import {
   TRACKED_FIELD_KEYS,
   serializeFieldValue,
@@ -569,7 +570,8 @@ export class StudentService {
     const provenance = this.computeProvenanceUpdates(updateData, actor);
     const hasUserUpdates = Object.keys(userUpdates).length > 0;
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const runUpdate = async () =>
+      this.prisma.$transaction(async (tx) => {
       const result = await tx.studentProfile.update({
         where: { id },
         // bonusItems / preferredBatches 是 Json 列，DTO 用 class 做嵌套校验，
@@ -611,6 +613,27 @@ export class StudentService {
 
       return result;
     });
+
+    // 唯一约束冲突（手机号/邮箱/用户名重复）转成友好 400，避免冒成 500 Internal server error
+    let updated;
+    try {
+      updated = await runUpdate();
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const hint = `${(e.meta as any)?.target ?? ''} ${e.message}`.toLowerCase();
+        if (hint.includes('phone')) {
+          throw new BadRequestException('该手机号已被其他账号使用');
+        }
+        if (hint.includes('email')) {
+          throw new BadRequestException('该邮箱已被其他账号使用');
+        }
+        if (hint.includes('username')) {
+          throw new BadRequestException('该用户名已被占用');
+        }
+        throw new BadRequestException('保存失败：存在重复的唯一字段');
+      }
+      throw e;
+    }
 
     return { ...updated, infoCompleteness: completeness, rankCheck };
   }
@@ -657,6 +680,55 @@ export class StudentService {
         },
       },
     });
+  }
+
+  /**
+   * 彻底删除学生（含登录账号），不可逆。
+   *
+   * 外键现状：指向 StudentProfile 的关系里只有 VolunteerPlan 未级联，
+   * 指向 User 的子表（收藏/搜索/对比/订单/通知/审计/旧方案）也都未级联。
+   * 所以必须在一个事务里按依赖顺序手动清干净，否则外键约束会让删除失败。
+   */
+  async deleteStudentPermanently(studentId: number, requester: JwtPayloadUser) {
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      select: { id: true, userId: true, teacherId: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('学生不存在');
+    }
+
+    // 权限：管理员可删任意；老师只能删自己带的（主管可删团队内）
+    const isAdmin = requester.role === Role.ADMIN;
+    const isOwnerTeacher =
+      requester.role === Role.TEACHER &&
+      (requester.isSupervisor === true ||
+        profile.teacherId === requester.teacherProfileId);
+    if (!isAdmin && !isOwnerTeacher) {
+      throw new ForbiddenException('无权删除该学生');
+    }
+
+    const { userId } = profile;
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. 先删方案（VolunteerPlan→StudentProfile 未级联），其子表随 plan 级联
+      await tx.volunteerPlan.deleteMany({ where: { studentId } });
+      await tx.volunteerPlan.deleteMany({ where: { userId } }); // 旧 legacyUser 方案
+
+      // 2. 清该用户名下的子表（均未级联）
+      await tx.searchHistory.deleteMany({ where: { userId } });
+      await tx.favorite.deleteMany({ where: { userId } });
+      await tx.comparison.deleteMany({ where: { userId } });
+      await tx.order.deleteMany({ where: { userId } });
+      await tx.notification.deleteMany({ where: { userId } });
+      await tx.auditLog.deleteMany({ where: { userId } });
+
+      // 3. 删档案（录取记录/附件等随档案级联），再删登录账号
+      await tx.studentProfile.delete({ where: { id: studentId } });
+      await tx.user.delete({ where: { id: userId } });
+    });
+
+    return { message: '学生已彻底删除' };
   }
 
   /**

@@ -44,4 +44,12 @@ export const userService = {
   updatePreferences(data: UpdatePreferencesDto): Promise<any> {
     return api.put('/users/me/preferences', data) as any;
   },
+
+  changePassword(data: { oldPassword: string; newPassword: string }): Promise<any> {
+    return api.put('/users/me/password', data) as any;
+  },
+
+  changeUsername(data: { username: string }): Promise<any> {
+    return api.put('/users/me/username', data) as any;
+  },
 };

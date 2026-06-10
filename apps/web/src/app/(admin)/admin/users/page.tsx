@@ -55,6 +55,9 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm] = Form.useForm();
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editForm] = Form.useForm();
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users', activeTab, search],
@@ -90,6 +93,33 @@ export default function AdminUsersPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
     },
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, values }: { id: number; values: Record<string, unknown> }) =>
+      adminApi.updateUser(id, values),
+    onSuccess: () => {
+      message.success('已更新');
+      setEditModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || '更新失败'),
+  });
+
+  const resetPwMutation = useMutation({
+    mutationFn: (id: number) => adminApi.resetPassword(id),
+    onSuccess: () => message.success('密码已重置为 123456'),
+    onError: () => message.error('重置失败'),
+  });
+
+  const openEdit = (record: User) => {
+    setEditingUser(record);
+    editForm.setFieldsValue({
+      username: record.username,
+      realName: record.realName,
+      phone: record.phone,
+    });
+    setEditModalOpen(true);
+  };
 
   const columns: ColumnsType<User> = [
     {
@@ -150,15 +180,20 @@ export default function AdminUsersPage() {
     {
       title: '操作',
       key: 'actions',
-      width: 220,
+      width: 240,
       render: (_, record) => (
         <Space size="small">
-          <Button type="text" size="small" icon={<EditOutlined />} disabled title="编辑待接入">
+          <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
             编辑
           </Button>
-          <Button type="text" size="small" icon={<KeyOutlined />} disabled title="权限弹窗待接入">
-            权限
-          </Button>
+          <Popconfirm
+            title="重置密码为 123456？"
+            onConfirm={() => resetPwMutation.mutate(record.id)}
+          >
+            <Button type="text" size="small" icon={<KeyOutlined />}>
+              重置密码
+            </Button>
+          </Popconfirm>
           <Popconfirm title="确定删除此用户？" onConfirm={() => deleteMutation.mutate(record.id)}>
             <Button type="text" size="small" icon={<DeleteOutlined />} danger>
               删除
@@ -231,7 +266,7 @@ export default function AdminUsersPage() {
       />
 
       <div className="rounded-2xl border border-dashed border-border bg-surface px-5 py-4 text-sm text-text-muted">
-        编辑资料和权限细分已有接口基础，但当前页面缺少完整交互弹窗，本轮先保留创建、删除和筛选能力。
+        支持创建、编辑（用户名/姓名/手机）、重置密码（默认 123456）、删除与筛选；细粒度权限分配待接入。
       </div>
 
       <Modal
@@ -267,6 +302,32 @@ export default function AdminUsersPage() {
                 { label: '管理员', value: 'ADMIN' },
               ]}
             />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="编辑用户"
+        open={editModalOpen}
+        onCancel={() => setEditModalOpen(false)}
+        onOk={() => editForm.submit()}
+        confirmLoading={updateMutation.isPending}
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+          onFinish={(values) =>
+            editingUser && updateMutation.mutate({ id: editingUser.id, values })
+          }
+        >
+          <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+            <Input placeholder="登录用户名" />
+          </Form.Item>
+          <Form.Item name="realName" label="姓名">
+            <Input placeholder="真实姓名" />
+          </Form.Item>
+          <Form.Item name="phone" label="手机号">
+            <Input placeholder="手机号" />
           </Form.Item>
         </Form>
       </Modal>

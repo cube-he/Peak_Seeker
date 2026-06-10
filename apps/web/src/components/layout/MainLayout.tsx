@@ -100,12 +100,9 @@ export default function MainLayout({ children, maxWidth, noPadding, hideMobileBo
               </>
             ) : (
               <Space size={8}>
-                <Link href="/login" className="text-sm text-text-tertiary no-underline transition-colors duration-200 hover:text-primary">
+                <Link href="/login" className="btn-willnest btn-primary-willnest px-4 py-2 text-[13px]">
                   <LoginOutlined className="mr-1" />
                   登录
-                </Link>
-                <Link href="/register" className="btn-willnest btn-primary-willnest px-4 py-2 text-[13px]">
-                  注册
                 </Link>
               </Space>
             )}

@@ -51,8 +51,15 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
+    // 登录/注册接口的 401 是「凭据错误」而非「token 过期」——必须排除在刷新逻辑外。
+    // 否则登录失败时会走到下面的 window.location 重定向，把整页刷新掉，
+    // 错误提示还没显示就被冲走（表现为「登录失败没有任何提示」）。
+    const reqUrl = originalRequest?.url || '';
+    const isAuthEndpoint =
+      reqUrl.includes('/auth/login') || reqUrl.includes('/auth/register');
+
     // Token 过期，尝试刷新
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
         // Wait for the ongoing refresh to complete
         return new Promise((resolve, reject) => {

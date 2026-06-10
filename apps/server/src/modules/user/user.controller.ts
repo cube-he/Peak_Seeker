@@ -16,6 +16,8 @@ import { PoliciesGuard, CheckPolicies } from '../casl';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateExamInfoDto } from './dto/update-exam-info.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { ChangeUsernameDto } from './dto/change-username.dto';
 import { PermissionOverride } from '../casl/types';
 
 @ApiTags('用户')
@@ -59,6 +61,22 @@ export class UserController {
     const user = await this.userService.updatePreferences(req.user.id, dto);
     const { passwordHash, ...result } = user;
     return result;
+  }
+
+  @Put('me/password')
+  @ApiOperation({ summary: '修改密码' })
+  async changePassword(@Request() req: any, @Body() dto: ChangePasswordDto) {
+    return this.userService.changePassword(
+      req.user.id,
+      dto.oldPassword,
+      dto.newPassword,
+    );
+  }
+
+  @Put('me/username')
+  @ApiOperation({ summary: '修改用户名' })
+  async changeUsername(@Request() req: any, @Body() dto: ChangeUsernameDto) {
+    return this.userService.changeUsername(req.user.id, dto.username);
   }
 
   // ── Admin endpoints ─────────────────────────────────────

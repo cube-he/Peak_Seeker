@@ -264,6 +264,119 @@ describe('judgeBatchEligibility V2 (subsets 数组)', () => {
     expect(r.verdict).toBe('INELIGIBLE');
   });
 
+  const weightRuleConfig = () => ({
+    scoreFloor: { type: 'BATCH_LINE' },
+    examTypes: ['物理'],
+    volunteerMode: 'PARALLEL',
+    hardEligibility: [],
+    subsets: [
+      {
+        code: 'sifa',
+        name: '司法警官类',
+        description: '',
+        hardRules: [
+          {
+            scope: 'SUBSET',
+            subset: '司法警官类',
+            rule: 'WEIGHT_MIN_BY_GENDER',
+            params: { male: 50, female: 45 },
+          },
+        ],
+        references: [],
+      },
+    ],
+  });
+
+  it('WEIGHT_MIN_BY_GENDER: 男生体重 ≥50kg → ELIGIBLE', () => {
+    const r = judgeBatchEligibility(
+      { ...baseStudent, gender: 'MALE', weight: 65 },
+      baseBatchConfig(weightRuleConfig()),
+      { score: 438 },
+    );
+    expect(r.verdict).toBe('ELIGIBLE');
+  });
+
+  it('WEIGHT_MIN_BY_GENDER: 男生体重 <50kg → INELIGIBLE', () => {
+    const r = judgeBatchEligibility(
+      { ...baseStudent, gender: 'MALE', weight: 45 },
+      baseBatchConfig(weightRuleConfig()),
+      { score: 438 },
+    );
+    expect(r.verdict).toBe('INELIGIBLE');
+  });
+
+  // softHints 必须渲染成 SOFT_HINT 条目并把 verdict 降为 CONDITIONAL（之前完全丢失）
+  it('softHints 渲染为 rulesEval SOFT_HINT 条目, verdict=CONDITIONAL', () => {
+    const rules = {
+      scoreFloor: { type: 'BATCH_LINE' },
+      examTypes: ['物理'],
+      volunteerMode: 'PARALLEL',
+      hardEligibility: [],
+      subsets: [
+        {
+          code: 'demo',
+          name: '演示子类',
+          description: '',
+          hardRules: [],
+          softHints: ['户籍连续 3 年 + 学籍连续 3 年, 老师核实'],
+          references: [],
+        },
+      ],
+    };
+    const r = judgeBatchEligibility(baseStudent, baseBatchConfig(rules), { score: 438 });
+    const sub = (r as any).subsetResults[0];
+    expect(sub.verdict).toBe('CONDITIONAL');
+    const hint = sub.rulesEval.find((x: any) => x.pass === 'SOFT_HINT');
+    expect(hint).toBeDefined();
+    expect(hint.requirement).toContain('户籍连续 3 年');
+  });
+
+  // RURAL_HOUSEHOLD: 仅要求农村户籍（不限定县）, 用于农村订单定向医学生
+  const ruralRuleConfig = () => ({
+    scoreFloor: { type: 'BATCH_LINE' },
+    examTypes: ['物理'],
+    volunteerMode: 'PARALLEL',
+    hardEligibility: [],
+    subsets: [
+      {
+        code: 'yixue',
+        name: '农村订单定向医学生',
+        description: '',
+        hardRules: [{ scope: 'SUBSET', subset: '农村医学', rule: 'RURAL_HOUSEHOLD' }],
+        references: [],
+      },
+    ],
+  });
+
+  it('RURAL_HOUSEHOLD: 农村户籍 → ELIGIBLE', () => {
+    const r = judgeBatchEligibility(
+      { ...baseStudent, isRural: true },
+      baseBatchConfig(ruralRuleConfig()),
+      { score: 438 },
+    );
+    expect(r.verdict).toBe('ELIGIBLE');
+  });
+
+  it('RURAL_HOUSEHOLD: 非农村户籍 → INELIGIBLE', () => {
+    const r = judgeBatchEligibility(
+      { ...baseStudent, isRural: false },
+      baseBatchConfig(ruralRuleConfig()),
+      { score: 438 },
+    );
+    expect(r.verdict).toBe('INELIGIBLE');
+  });
+
+  it('RURAL_HOUSEHOLD: 未填写 isRural → INELIGIBLE (催补提示)', () => {
+    const r = judgeBatchEligibility(
+      { ...baseStudent, isRural: null },
+      baseBatchConfig(ruralRuleConfig()),
+      { score: 438 },
+    );
+    expect(r.verdict).toBe('INELIGIBLE');
+    const sub = (r as any).subsetResults[0];
+    expect(sub.rulesEval[0].actual).toContain('未填');
+  });
+
   it('subsets dataPending → 该 subset 不参与聚合, 整批仍 ELIGIBLE', () => {
     const rules = {
       scoreFloor: { type: 'BATCH_LINE' },

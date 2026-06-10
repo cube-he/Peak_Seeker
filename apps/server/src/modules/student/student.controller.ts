@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   BadRequestException,
   Body,
   Param,
@@ -210,6 +211,16 @@ export class StudentController {
     }
 
     return this.studentService.assignTeacher(id, body.teacherProfileId ?? null);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: '彻底删除学生（含登录账号，不可逆）' })
+  @CheckPolicies((ability) => ability.can('delete', 'StudentProfile'))
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.studentService.deleteStudentPermanently(id, user);
   }
 
   @Get(':id/export-intake')

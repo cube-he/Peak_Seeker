@@ -39,6 +39,10 @@ export const adminApi = {
     return api.delete(`/admin/users/${id}`) as any;
   },
 
+  resetPassword(id: number, password?: string): Promise<any> {
+    return api.put(`/admin/users/${id}/reset-password`, { password }) as any;
+  },
+
   updatePermissions(id: number, permissions: Record<string, boolean>): Promise<any> {
     return api.put(`/admin/users/${id}/permissions`, { permissions }) as any;
   },

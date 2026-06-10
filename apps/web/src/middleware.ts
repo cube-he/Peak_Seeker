@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Routes accessible without authentication
-const PUBLIC_ROUTES = ['/login', '/register'];
+// 注册已关闭对外开放（账号由管理员创建），/register 不再公开。
+const PUBLIC_ROUTES = ['/login'];
 const PUBLIC_PREFIXES = ['/share/', '/universities', '/majors', '/scores'];
 
 // Role-based route prefixes

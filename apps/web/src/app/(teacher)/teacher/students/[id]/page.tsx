@@ -452,6 +452,41 @@ export default function StudentDetailPage() {
     });
   };
 
+  const deleteMutation = useMutation({
+    mutationFn: () => studentApi.delete(studentId),
+    onSuccess: () => {
+      message.success('学生已彻底删除');
+      router.push('/teacher/students');
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message;
+      message.error(Array.isArray(msg) ? msg[0] : msg ?? '删除失败');
+    },
+  });
+
+  // 二次确认：列清后果再删，物理删不可逆
+  const onDeleteStudent = () => {
+    Modal.confirm({
+      title: '彻底删除该学生?',
+      width: 460,
+      okText: '彻底删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      content: (
+        <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+          将永久删除 <strong>{name}</strong> 的：
+          <ul style={{ margin: '8px 0 8px 18px' }}>
+            <li>学生档案与全部志愿方案</li>
+            <li>沟通记录、附件、收藏等关联数据</li>
+            <li>该学生的登录账号</li>
+          </ul>
+          <span style={{ color: '#dc2626' }}>此操作不可恢复。</span>
+        </div>
+      ),
+      onOk: () => deleteMutation.mutateAsync(),
+    });
+  };
+
   const onExportIntake = async () => {
     try {
       const blob = await studentApi.exportIntake(studentId);
@@ -760,6 +795,15 @@ export default function StudentDetailPage() {
               onClick={() => setShowPrereqModal(true)}
             >
               <TIcon.sparkles /> 生成方案
+            </button>
+            <button
+              type="button"
+              className="btn"
+              style={{ color: '#dc2626' }}
+              onClick={onDeleteStudent}
+              disabled={deleteMutation.isPending}
+            >
+              <TIcon.alert /> 删除学生
             </button>
           </div>
         </div>

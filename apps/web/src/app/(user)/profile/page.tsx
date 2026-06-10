@@ -44,6 +44,8 @@ export default function ProfilePage() {
   const [profileForm] = Form.useForm();
   const [examForm] = Form.useForm();
   const [prefForm] = Form.useForm();
+  const [pwForm] = Form.useForm();
+  const [usernameForm] = Form.useForm();
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['user-me'],
@@ -73,6 +75,26 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ['user-me'] });
       message.success('偏好设置已更新');
     },
+  });
+
+  const changePassword = useMutation({
+    mutationFn: userService.changePassword,
+    onSuccess: () => {
+      message.success('密码修改成功');
+      pwForm.resetFields();
+    },
+    onError: (err: any) =>
+      message.error(err?.response?.data?.message || '密码修改失败'),
+  });
+
+  const changeUsername = useMutation({
+    mutationFn: userService.changeUsername,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-me'] });
+      message.success('用户名已修改，下次登录请使用新用户名');
+    },
+    onError: (err: any) =>
+      message.error(err?.response?.data?.message || '用户名修改失败'),
   });
 
   // STUDENT 角色在 effect 跳转前先显示 loading，避免闪烁旧 form
@@ -272,6 +294,102 @@ export default function ProfilePage() {
             </button>
           </Form.Item>
         </Form>
+      ),
+    },
+    {
+      key: 'security',
+      label: '账号安全',
+      children: (
+        <div className="max-w-md">
+          <h3 className="font-serif text-base font-semibold text-text mb-4">修改密码</h3>
+          <Form
+            form={pwForm}
+            layout="vertical"
+            onFinish={(values) =>
+              changePassword.mutate({
+                oldPassword: values.oldPassword,
+                newPassword: values.newPassword,
+              })
+            }
+          >
+            <Form.Item
+              name="oldPassword"
+              label="原密码"
+              rules={[{ required: true, message: '请输入原密码' }]}
+            >
+              <Input.Password placeholder="请输入原密码" className="bg-surface-dim" />
+            </Form.Item>
+            <Form.Item
+              name="newPassword"
+              label="新密码"
+              rules={[
+                { required: true, message: '请输入新密码' },
+                { min: 6, message: '密码至少 6 位' },
+              ]}
+            >
+              <Input.Password placeholder="至少 6 位" className="bg-surface-dim" />
+            </Form.Item>
+            <Form.Item
+              name="confirmPassword"
+              label="确认新密码"
+              dependencies={['newPassword']}
+              rules={[
+                { required: true, message: '请再次输入新密码' },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('newPassword') === value) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error('两次输入的密码不一致'));
+                  },
+                }),
+              ]}
+            >
+              <Input.Password placeholder="再次输入新密码" className="bg-surface-dim" />
+            </Form.Item>
+            <Form.Item>
+              <button
+                type="submit"
+                disabled={changePassword.isPending}
+                className="bg-accent text-white px-6 py-2.5 rounded font-medium shadow-glow-accent hover:opacity-90 transition-all duration-200 inline-flex items-center gap-1.5 border-0 cursor-pointer text-sm"
+              >
+                <SaveOutlined />
+                {changePassword.isPending ? '提交中...' : '修改密码'}
+              </button>
+            </Form.Item>
+          </Form>
+
+          <div className="my-6 border-t border-border" />
+
+          <h3 className="font-serif text-base font-semibold text-text mb-4">修改用户名</h3>
+          <Form
+            form={usernameForm}
+            layout="vertical"
+            onFinish={(values) => changeUsername.mutate({ username: values.username })}
+            initialValues={{ username: user?.username }}
+          >
+            <Form.Item
+              name="username"
+              label="用户名"
+              rules={[
+                { required: true, message: '请输入用户名' },
+                { min: 3, message: '用户名至少 3 位' },
+              ]}
+            >
+              <Input placeholder="登录用户名" className="bg-surface-dim" />
+            </Form.Item>
+            <Form.Item>
+              <button
+                type="submit"
+                disabled={changeUsername.isPending}
+                className="bg-accent text-white px-6 py-2.5 rounded font-medium shadow-glow-accent hover:opacity-90 transition-all duration-200 inline-flex items-center gap-1.5 border-0 cursor-pointer text-sm"
+              >
+                <SaveOutlined />
+                {changeUsername.isPending ? '提交中...' : '修改用户名'}
+              </button>
+            </Form.Item>
+          </Form>
+        </div>
       ),
     },
   ];

@@ -70,8 +70,10 @@ export type HardEligibilityRuleCode =
   | 'SCHOOL_RECOMMENDATION'      // 校长实名推荐 (如强基计划/综合评价)
   | 'SERVICE_COMMITMENT'         // 服务承诺 (如公费师范/定向培养)
   | 'ETHNICITY_MINORITY'         // 必须少数民族 (民语为主/民预/民族班)
+  | 'RURAL_HOUSEHOLD'            // 仅要求农村户籍, 不限定县 (农村订单定向医学生)
   // —— 体检细化规则 (硬性, 学生未填字段 → FAIL, 矫正视力不算) ——
   | 'HEIGHT_MIN_BY_GENDER'       // {male:cm, female:cm} 例: 公安男 170 / 女 160
+  | 'WEIGHT_MIN_BY_GENDER'       // {male:kg, female:kg} 例: 司法男 50 / 女 45 (绝对体重下限)
   | 'BMI_RANGE'                  // {min:number, max:number} 例: 军队 17.5-30
   | 'VISION_NAKED_MIN'           // {value:number} 例: 4.8 (单眼裸眼下限, 两眼都要 >= 该值)
   | 'COLOR_VISION_NORMAL';       // 无 params, 要求 colorBlind=false 且 colorWeak=false
@@ -112,6 +114,8 @@ export interface SubsetRule {
   hardRules?: HardEligibilityRule[];
   softHints?: string[];
   references?: ReferenceFile[];
+  /** 招生考试报前言该项目的原文文案（前端"详细"可展开显示） */
+  policyText?: string;
 }
 
 export interface ReferenceFile {
@@ -130,6 +134,8 @@ export interface SubsetResult {
   verdict: SubsetVerdict;
   rulesEval: RuleEvalResult[];
   references: ReferenceItem[];
+  /** 招生考试报前言原文文案 */
+  policyText?: string;
 }
 
 export interface EligibilityRulesJsonV2 extends EligibilityRulesJson {

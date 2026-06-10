@@ -1,4 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { PermissionOverride } from '../casl/types';
@@ -109,6 +115,44 @@ export class UserService {
       where: { id },
       data: { passwordHash },
     });
+  }
+
+  /**
+   * 用户自助改密码：先用旧密码核身，再写新哈希。
+   * 旧密码错误直接拒绝，避免会话被盗后能静默改密。
+   */
+  async changePassword(id: number, oldPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('用户不存在');
+    }
+    const valid = await bcrypt.compare(oldPassword, user.passwordHash);
+    if (!valid) {
+      throw new BadRequestException('原密码错误');
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+    });
+    return { message: '密码修改成功' };
+  }
+
+  /**
+   * 用户自助改用户名：username 唯一，要查重。
+   * 命中的若是自己（未真正改动）放行，避免误报“已存在”。
+   */
+  async changeUsername(id: number, username: string) {
+    const existing = await this.prisma.user.findUnique({ where: { username } });
+    if (existing && existing.id !== id) {
+      throw new ConflictException('用户名已存在');
+    }
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { username },
+    });
+    const { passwordHash, ...rest } = user;
+    return rest;
   }
 
   async updateVipLevel(id: number, vipLevel: string, expireAt: Date) {

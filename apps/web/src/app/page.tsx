@@ -128,7 +128,7 @@ export default function HomePage() {
             </p>
 
             <div className="hero-cta">
-              <Link className="btn btn-primary" href="/register">
+              <Link className="btn btn-primary" href="/login">
                 免费开始智能推荐<span className="arrow">→</span>
               </Link>
               <Link className="btn btn-secondary" href="/universities">
@@ -369,7 +369,7 @@ export default function HomePage() {
 
             <div className="sample-foot">
               <div>共展示 3 条示例；完整方案通常 40—50 条，按 冲 / 稳 / 保 分层排序。</div>
-              <Link href="/register">用我的分数生成 →</Link>
+              <Link href="/login">用我的分数生成 →</Link>
             </div>
           </div>
         </div>
@@ -398,7 +398,7 @@ export default function HomePage() {
             注册后即可输入你的分数与偏好，几分钟得到一份基于真实录取数据的初步志愿方案。
           </p>
           <div className="cta-buttons">
-            <Link className="btn btn-primary" href="/register">
+            <Link className="btn btn-primary" href="/login">
               免费开始智能推荐<span className="arrow">→</span>
             </Link>
             <Link className="btn btn-secondary" href="/universities">

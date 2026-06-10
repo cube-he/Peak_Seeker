@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import type { SubsetResult } from '@/services/batch-recommendations-api';
 import { ReferencesList } from './ReferencesList';
 import { TIcon } from './icons';
@@ -19,6 +20,7 @@ export function SubsetItem({
   onToggle: () => void;
 }) {
   const v = VERDICT_INFO[subset.verdict] ?? { txt: subset.verdict, tone: 'pending' as const };
+  const [showPolicy, setShowPolicy] = useState(false);
 
   // 折叠态一句话原因 (§7.8.B): 第一条 FAIL → 第一条 SOFT_HINT → description
   const fail = (subset.rulesEval ?? []).find(r => r.pass === 'FAIL');
@@ -59,6 +61,22 @@ export function SubsetItem({
           )}
 
           <ReferencesList references={subset.references} />
+
+          {subset.policyText && (
+            <div style={{ marginTop: 10, borderTop: '1px dashed #e2e2dd', paddingTop: 8 }}>
+              <div
+                onClick={(e) => { e.stopPropagation(); setShowPolicy((s) => !s); }}
+                style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#1f4e78', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                招生考试报原文 {showPolicy ? '▲' : '▼'}
+              </div>
+              {showPolicy && (
+                <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.75, color: '#444', whiteSpace: 'pre-wrap', background: '#f7f7f5', padding: '8px 10px', borderRadius: 6 }}>
+                  {subset.policyText}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

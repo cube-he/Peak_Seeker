@@ -200,9 +200,19 @@ export class AdminController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: Partial<AdminUserPayload>,
   ) {
+    // username 唯一，改名前查重；命中自己则放行
+    if (body.username) {
+      const existing = await this.prisma.user.findUnique({
+        where: { username: body.username },
+      });
+      if (existing && existing.id !== id) {
+        throw new ConflictException('用户名已存在');
+      }
+    }
     const user = await this.prisma.user.update({
       where: { id },
       data: {
+        username: body.username,
         realName: body.realName,
         phone: body.phone,
         email: body.email,
@@ -218,6 +228,20 @@ export class AdminController {
       },
     });
     return { data: { ...user, status: 'ACTIVE' } };
+  }
+
+  @Put('users/:id/reset-password')
+  @CheckPolicies((ability) => ability.can('manage', 'User'))
+  @ApiOperation({ summary: '管理后台重置用户密码' })
+  async resetPassword(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('password') password?: string,
+  ) {
+    // 默认重置回 123456，方便老师忘密码时一键恢复
+    const newPassword = password || '123456';
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({ where: { id }, data: { passwordHash } });
+    return { message: '密码已重置', data: { password: newPassword } };
   }
 
   @Delete('users/:id')

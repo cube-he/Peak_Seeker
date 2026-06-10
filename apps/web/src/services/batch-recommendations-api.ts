@@ -25,6 +25,8 @@ export interface SubsetResult {
     pass: 'PASS' | 'FAIL' | 'UNCERTAIN' | 'SOFT_HINT';
   }>;
   references: ReferenceItem[];
+  /** 招生考试报前言原文文案 */
+  policyText?: string;
 }
 
 export interface ScoreInfo {

@@ -1,10 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
-import { message } from 'antd';
 import { authService, LoginParams } from '@/services/auth';
 import { useAuthStore } from '@/stores/authStore';
 import AuthLayout from '@/components/layout/AuthLayout';
@@ -16,7 +14,9 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(true);
+  // 内联提示：成功/失败都在表单里直接显示，不依赖 antd message
+  // （这个全屏登录页上 antd message 不可靠，且失败时整页会刷新冲掉 toast）。
+  const [status, setStatus] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
 
   const loginMutation = useMutation({
@@ -27,7 +27,7 @@ export default function LoginPage() {
         accessToken: data.accessToken,
         refreshToken: data.refreshToken,
       });
-      message.success('登录成功');
+      setStatus({ type: 'success', text: '登录成功，正在跳转…' });
       const role = data.user?.role;
       // 直接跳到 role-specific dashboard, 不用 '/' 走 middleware 二次重定向.
       // 用 location.assign 硬刷新而非 router.replace 客户端 navigation —— 否则切换
@@ -46,7 +46,8 @@ export default function LoginPage() {
     },
     onError: (error: any) => {
       const msg = error.response?.data?.message;
-      message.error(Array.isArray(msg) ? msg[0] : msg || '登录失败');
+      const text = Array.isArray(msg) ? msg[0] : msg || '用户名或密码错误';
+      setStatus({ type: 'error', text });
     },
   });
 
@@ -67,8 +68,10 @@ export default function LoginPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (loginMutation.isPending) return;
+    setStatus(null);
     if (!username.trim() || !password) {
       shakeSubmit();
+      setStatus({ type: 'error', text: '请输入用户名和密码' });
       return;
     }
     loginMutation.mutate({ username, password });
@@ -84,27 +87,20 @@ export default function LoginPage() {
           进度都为你保留。
         </>
       }
-      subtitle="你的推荐方案、收藏院校与位次查询记录会跟随账号保存，换设备也能从上次离开的地方继续。"
+      subtitle="学生档案、沟通记录与志愿方案都跟随账号保存，换设备也能接着上次的进度继续。"
       features={[
-        { strong: '基于真实录取数据', text: '—— 从 14.4 万条 2022—2025 真实录取里反推冲 / 稳 / 保。' },
-        { strong: '方案逐条可编辑', text: '—— 不喜欢的院校换掉、专业重排，结果同步重算。' },
-        { strong: '进度多端同步', text: '—— 手机查院校、电脑改方案，登录后无缝接续。' },
+        { strong: '学生全程在档', text: '—— 基础信息、成绩位次、沟通记录集中管理。' },
+        { strong: '按批次梯队出方案', text: '—— 院校专业逐条可调，冲 / 稳 / 保分层清晰。' },
+        { strong: '多端进度同步', text: '—— 电脑出方案、手机查院校，登录后无缝接续。' },
       ]}
     >
-      <div className="auth-switch fade-up">
-        <span>还没账号？</span>
-        <Link href="/register">
-          免费注册 <span aria-hidden="true">→</span>
-        </Link>
-      </div>
-
       <div className="auth-title fade-up d1">
         <div className="eyebrow">SIGN IN · 登录</div>
         <h1>欢迎回来</h1>
         <p className="sub">
-          输入账号继续你的志愿规划，
+          输入账号继续你的工作，
           <br />
-          所有方案与收藏都已为你保留。
+          学生资料与方案进度都已为你保留。
         </p>
       </div>
 
@@ -133,6 +129,7 @@ export default function LoginPage() {
               type="text"
               autoComplete="username"
               placeholder="请输入用户名"
+              autoFocus
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
@@ -189,22 +186,24 @@ export default function LoginPage() {
         </div>
 
         <div className="field-row">
-          <label className="cbx">
-            <input
-              type="checkbox"
-              name="remember"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-            />
-            <span className="box" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </span>
-            <span>30 天内自动登录</span>
-          </label>
+          <span />
           <span className="hint-link">忘记密码请联系管理员</span>
         </div>
+
+        {status && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: 12,
+              fontSize: 13,
+              fontWeight: 500,
+              lineHeight: 1.5,
+              color: status.type === 'error' ? '#dc2626' : '#16a34a',
+            }}
+          >
+            {status.text}
+          </div>
+        )}
 
         <button ref={submitRef} type="submit" className="btn-submit" disabled={loginMutation.isPending}>
           {loginMutation.isPending ? (
