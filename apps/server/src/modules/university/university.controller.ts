@@ -44,6 +44,12 @@ export class UniversityController {
     return this.universityService.getFilters();
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: '院校库总览统计 (总数/985/211/双一流)' })
+  async getStats() {
+    return this.universityService.getStats();
+  }
+
   @Get('picker-options')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: '院校 picker 选项（id/code/name 精简，可按 batches 过滤）' })

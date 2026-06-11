@@ -345,6 +345,12 @@ model University {
   predRankPhysics Int? @map("pred_rank_physics")
   predRankHistory Int? @map("pred_rank_history")
 
+  // 在川招录统计（物化列, apps/server/scripts/materialize-major-sichuan-stats.ts 全量重算）
+  scPlanCount  Int?    @map("sc_plan_count") // 最新计划年在川计划总人数
+  scGroupCount Int?    @map("sc_group_count") // 最新计划年在川专业组数
+  scBatches    String? @map("sc_batches") @db.VarChar(300) // 计划批次集合, 顿号分隔
+  scSupplCount Int?    @map("sc_suppl_count") // 最新征集年该校征集志愿计划总人数
+
   // 院校基础补充（来自 01_基础名录）
   firstClassCategory          String?  @map("first_class_category") @db.VarChar(50)
   hasGradSchool               Boolean  @default(false) @map("has_grad_school")

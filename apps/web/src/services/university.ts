@@ -74,6 +74,11 @@ export interface UniversityListItem {
   softRankYear: number | null;
   /** 院校 tags(JSON 数组,如 ["985","211","双一流","C9联盟","卓越工程师"]) */
   tags?: string[] | null;
+  /** 在川招录物化统计 (materialize-major-sichuan-stats.ts) */
+  scPlanCount?: number | null;
+  scGroupCount?: number | null;
+  scBatches?: string | null;
+  scSupplCount?: number | null;
 }
 
 export interface UniversityListResponse {
@@ -154,6 +159,8 @@ export const universityService = {
   getAdmissions: (id: number): Promise<any> => api.get(`/universities/${id}/admissions`) as any,
   getHot: (limit?: number): Promise<any> => api.get('/universities/hot', { params: { limit } }) as any,
   getFilters: (): Promise<UniversityFilters> => api.get('/universities/filters'),
+  getStats: (): Promise<{ total: number; n985: number; n211: number; nDoubleFirstClass: number }> =>
+    api.get('/universities/stats') as any,
   getRankingBoard: (examType: ExamType): Promise<RankingBoard[]> =>
     api.get('/universities/ranking-board', { params: { examType } }) as any,
   getMap: (params: MapQueryParams): Promise<MapUniversity[]> =>

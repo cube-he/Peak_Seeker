@@ -1728,7 +1728,17 @@ function PreferenceFields() {
         </Form.Item>
       </div>
       <div className="field">
-        <label>意向院校</label>
+        <label>
+          意向院校
+          <a
+            href={`/universities?studentId=${prefParams.id}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{ marginLeft: 10, fontSize: 12, fontWeight: 400 }}
+          >
+            去院校库挑选（带冲稳保）→
+          </a>
+        </label>
         <Form.Item name="preferredUniversities" noStyle>
           <Select {...pickerSelectProps(universityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
         </Form.Item>

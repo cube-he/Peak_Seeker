@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import MainLayout from '@/components/layout/MainLayout';
 import { RankingBoardTab } from './components/RankingBoardTab';
 import { UniversityListTab } from './components/UniversityListTab';
 import { MapTab } from './components/MapTab';
 import { TrophyIcon, ListIcon, MapIcon, TrendIcon } from './components/shared/Icon';
+import { useWorkbench } from '@/stores/workbenchStore';
 import './styles.css';
 
 /**
@@ -21,11 +23,19 @@ const TABS: Array<{ key: TabKey; label: string; Icon: typeof TrophyIcon; count?:
   { key: 'ranking', label: '排行导览', Icon: TrophyIcon, count: '25' },
   { key: 'list', label: '全部院校', Icon: ListIcon, count: '2,237' },
   { key: 'map', label: '地图', Icon: MapIcon },
-  { key: 'experimental', label: '志愿星图', Icon: TrendIcon, isNew: true, disabled: true },
+  { key: 'experimental', label: '志愿星图', Icon: TrendIcon, isNew: true },
 ];
 
-export default function UniversitiesPage() {
-  const [tab, setTab] = useState<TabKey>('ranking');
+function UniversitiesPageInner() {
+  // 从学生详情/专业库带 ?studentId= 进入时: 写入共享工作台上下文并直达列表 tab
+  const searchParams = useSearchParams();
+  const setStudentId = useWorkbench((s) => s.setStudentId);
+  const [tab, setTab] = useState<TabKey>(() => (searchParams.get('studentId') ? 'list' : 'ranking'));
+  useEffect(() => {
+    const sid = searchParams.get('studentId');
+    if (sid) setStudentId(sid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <MainLayout maxWidth="1500px">
@@ -56,8 +66,36 @@ export default function UniversitiesPage() {
           {tab === 'ranking' && <RankingBoardTab />}
           {tab === 'list' && <UniversityListTab />}
           {tab === 'map' && <MapTab />}
+          {tab === 'experimental' && <ExperimentalPlaceholder />}
         </div>
       </div>
     </MainLayout>
+  );
+}
+
+// 志愿星图预告占位: 不再 disabled 挂着, 点进来有交代
+function ExperimentalPlaceholder() {
+  return (
+    <div
+      className="card"
+      style={{ padding: '64px 24px', textAlign: 'center', color: 'var(--text-tertiary)' }}
+    >
+      <div style={{ fontSize: 40, marginBottom: 12 }}>✨</div>
+      <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: 'var(--text)', marginBottom: 8 }}>
+        志愿星图 · 即将上线
+      </div>
+      <p style={{ margin: 0, fontSize: 13 }}>
+        以学生位次为中心，把可冲 / 可稳 / 可保的院校铺成一张星图，直观看到志愿梯度的分布。
+      </p>
+    </div>
+  );
+}
+
+// useSearchParams 在静态预渲染页面要求 Suspense 边界 (Next 14 CSR bailout)
+export default function UniversitiesPage() {
+  return (
+    <Suspense fallback={null}>
+      <UniversitiesPageInner />
+    </Suspense>
   );
 }

@@ -1,12 +1,18 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Spin } from 'antd';
-import { useQuery } from '@tanstack/react-query';
+import { Alert, Button, Drawer, Select, Spin, Table, Tooltip, message } from 'antd';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { universityService, type UniversityQueryParams, type UniversityListItem } from '@/services/university';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useStudentRank } from '@/stores/studentRankStore';
 import { useUniversityFilters } from '@/stores/universityFilterStore';
+import { useWorkStudent, useWorkStudentOptions } from '@/hooks/useWorkStudent';
+import { useAuthStore } from '@/stores/authStore';
+import { favoriteService } from '@/services/favorite';
+import { studentApi } from '@/services/student-api';
+import { FIELD_LABELS } from '@/components/student/stage-fields';
 import { SubjectToggle } from './shared/SubjectToggle';
 import { Empty } from './shared/Empty';
 import { SearchIcon } from './shared/Icon';
@@ -38,9 +44,24 @@ export function UniversityListTab() {
   const setExamType = useStudentRank((s) => s.setExamType);
   const studentRank = useStudentRank((s) => s.rank);
 
+  // ===== 工作台学生上下文 (与专业库共享): 选定学生后位次/科类自动注入, 手填模式兜底 =====
+  const {
+    isTeacher,
+    studentId: workStudentId,
+    setStudentId: setWorkStudentId,
+    student: workStudent,
+    name: workStudentName,
+    lane: workLane,
+    rank: workRank,
+    refetch: refetchWorkStudent,
+  } = useWorkStudent();
+  const studentOptions = useWorkStudentOptions(isTeacher);
+  const effRank: number | null = workRank ?? studentRank ?? null;
+  const effExamType = (workLane ?? examType) as '物理' | '历史';
+
   // 位次清空时重置依赖位次的排序/筛选
   useEffect(() => {
-    if (studentRank != null) return;
+    if (effRank != null) return;
     setFilters((prev) => {
       if (prev.sortBy !== 'tier' && prev.tierFilter == null) return prev;
       return {
@@ -50,19 +71,88 @@ export function UniversityListTab() {
         tierFilter: undefined,
       };
     });
-  }, [studentRank, setFilters]);
+  }, [effRank, setFilters]);
+
+  // 意向院校 (preferredUniversities, string[] 院校名) — 加入即落库
+  const uniPool: string[] = Array.isArray(workStudent?.preferredUniversities)
+    ? workStudent.preferredUniversities
+    : [];
+  const addUniToPool = async (u: UniversityListItem) => {
+    if (!workStudentId) return;
+    if (uniPool.includes(u.name)) {
+      message.info(`「${u.name}」已在意向院校`);
+      return;
+    }
+    try {
+      await studentApi.update(workStudentId, { preferredUniversities: [...uniPool, u.name] } as any);
+      message.success(`已把「${u.name}」加入${workStudentName ? ` ${workStudentName} 的` : ''}意向院校`);
+      refetchWorkStudent();
+    } catch {
+      message.error('保存失败，请重试');
+    }
+  };
+
+  // ===== 收藏 (与 /favorites 同体系, type=university) =====
+  const { isLoggedIn } = useAuthStore();
+  const queryClient = useQueryClient();
+  const { data: favData } = useQuery({
+    queryKey: ['favorites', 'university'],
+    queryFn: () => favoriteService.getList('university'),
+    enabled: isLoggedIn,
+  });
+  const favByUniId = useMemo(() => {
+    const map = new Map<number, number>();
+    const list = (favData as any)?.data ?? favData ?? [];
+    for (const f of Array.isArray(list) ? list : []) {
+      if (f.universityId) map.set(f.universityId, f.id);
+    }
+    return map;
+  }, [favData]);
+  const toggleFav = async (u: UniversityListItem) => {
+    if (!isLoggedIn) {
+      message.info('登录后即可收藏院校');
+      return;
+    }
+    const favId = favByUniId.get(u.id);
+    try {
+      if (favId) {
+        await favoriteService.remove(favId);
+        message.success(`已取消收藏「${u.name}」`);
+      } else {
+        await favoriteService.add({ type: 'university', universityId: u.id });
+        message.success(`已收藏「${u.name}」`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['favorites', 'university'] });
+    } catch {
+      message.error('收藏操作失败，请重试');
+    }
+  };
+
+  // ===== 对比 (2-4 所) =====
+  const [compareList, setCompareList] = useState<UniversityListItem[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const toggleCompare = (u: UniversityListItem) => {
+    setCompareList((prev) => {
+      if (prev.some((c) => c.id === u.id)) return prev.filter((c) => c.id !== u.id);
+      if (prev.length >= 4) {
+        message.warning('最多同时对比 4 所院校');
+        return prev;
+      }
+      return [...prev, u];
+    });
+  };
 
   useEffect(() => {
     setFilters((prev) => ({ ...prev, keyword: debouncedKeyword || undefined, page: 1 }));
   }, [debouncedKeyword, setFilters]);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['universities', filters, examType, studentRank],
+    queryKey: ['universities', filters, effExamType, effRank],
     queryFn: () =>
       universityService.getList({
         ...filters,
-        examType: examType as '物理' | '历史',
-        userRank: studentRank ?? undefined,
+        examType: effExamType,
+        userRank: effRank ?? undefined,
       }),
   });
 
@@ -72,11 +162,15 @@ export function UniversityListTab() {
   const page = filters.page ?? 1;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  // 985/211/双一流 横排:filter options 接口当前不返回这 3 个计数,临时用固定估算
-  // (后续可加 endpoint 或在 getFilters response 加 cumulative tags 字段)
-  const elite985 = 39;
-  const elite211 = 116;
-  const eliteDfc = 147;
+  // 985/211/双一流 横排: 走真实统计接口 (后端 1 天缓存), 加载前用历史值占位
+  const { data: statsData } = useQuery({
+    queryKey: ['university-stats'],
+    queryFn: () => universityService.getStats(),
+    staleTime: 3600_000,
+  });
+  const elite985 = statsData?.n985 ?? 39;
+  const elite211 = statsData?.n211 ?? 116;
+  const eliteDfc = statsData?.nDoubleFirstClass ?? 147;
 
   const applied = useMemo<ActiveFilter[]>(() => {
     const items: ActiveFilter[] = [];
@@ -169,6 +263,68 @@ export function UniversityListTab() {
         </div>
       </div>
 
+      {/* —— 老师工作台: 选定学生后位次/科类自动注入, 冲稳保筛选直接生效 —— */}
+      {isTeacher && (
+        <div
+          style={{
+            padding: '12px 18px',
+            marginBottom: 14,
+            background: 'var(--accent-fixed)',
+            border: '1px solid rgba(184,134,11,.25)',
+            borderRadius: 12,
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>为学生选学校</span>
+          <Select
+            showSearch
+            allowClear
+            size="small"
+            placeholder="选择学生（可按姓名搜索）"
+            style={{ minWidth: 240 }}
+            options={studentOptions}
+            value={workStudentId ?? undefined}
+            optionFilterProp="label"
+            onChange={(v) => setWorkStudentId(v ?? null)}
+          />
+          {workStudentId && workStudent ? (
+            <>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                {workLane ? `${workLane}类` : ''}
+                {workRank ? ` · 位次 ${workRank.toLocaleString()}` : ''}
+                {` · 意向院校 ${uniPool.length} 所`}
+                <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>位次/科类已按学生注入</span>
+              </span>
+              {workStudent.progress &&
+                (workStudent.progress.isRecommendable ? (
+                  <Link href={`/teacher/plans/generate/${workStudentId}`}>
+                    <Button size="small" type="primary">去生成方案 →</Button>
+                  </Link>
+                ) : (
+                  <Tooltip
+                    title={`还缺: ${(workStudent.progress.missingFieldsForRecommend ?? [])
+                      .map((f: string) => FIELD_LABELS[f] ?? f)
+                      .join('、')}`}
+                  >
+                    <Link href={`/teacher/students/${workStudentId}`}>
+                      <Button size="small" danger>
+                        资料缺 {(workStudent.progress.missingFieldsForRecommend ?? []).length} 项 · 去补全
+                      </Button>
+                    </Link>
+                  </Tooltip>
+                ))}
+            </>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              选择学生后位次/科类自动注入，院校卡片可一键加入其意向院校
+            </span>
+          )}
+        </div>
+      )}
+
       {/* —— Toolbar card —— */}
       <div
         style={{
@@ -181,7 +337,14 @@ export function UniversityListTab() {
         }}
       >
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <SubjectToggle value={examType} onChange={setExamType} />
+          <SubjectToggle
+            value={effExamType}
+            onChange={
+              workLane
+                ? () => message.info(`已按学生科类（${workLane}类）锁定，清除学生后可手动切换`)
+                : setExamType
+            }
+          />
           <div style={{ width: 1, height: 22, background: 'var(--border)', alignSelf: 'center' }} />
           <div style={{ position: 'relative', flex: '1 1 300px', minWidth: 240 }}>
             <span
@@ -229,7 +392,7 @@ export function UniversityListTab() {
           </div>
           <SortCluster filters={filters} setFilters={setFilters} />
         </div>
-        <ListFiltersPanel filters={filters} setFilters={setFilters} studentRank={studentRank ?? null} />
+        <ListFiltersPanel filters={filters} setFilters={setFilters} studentRank={effRank} />
       </div>
 
       {/* —— Applied chips + 总数 —— */}
@@ -318,8 +481,15 @@ export function UniversityListTab() {
             <ListCard
               key={uni.id}
               uni={uni}
-              userRank={studentRank ?? null}
-              examType={examType as '物理' | '历史'}
+              userRank={effRank}
+              examType={effExamType}
+              favorited={favByUniId.has(uni.id)}
+              onToggleFav={toggleFav}
+              inCompare={compareList.some((c) => c.id === uni.id)}
+              onToggleCompare={toggleCompare}
+              poolEnabled={isTeacher && !!workStudentId}
+              inPool={uniPool.includes(uni.name)}
+              onAddToPool={addUniToPool}
             />
           ))}
         </div>
@@ -369,8 +539,125 @@ export function UniversityListTab() {
           </button>
         </div>
       )}
+
+      {/* —— 对比浮条 —— */}
+      {compareList.length > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'var(--primary)',
+            color: '#fff',
+            borderRadius: 999,
+            padding: '8px 16px',
+            boxShadow: '0 8px 24px rgba(0,0,0,.25)',
+          }}
+        >
+          {compareList.map((c) => (
+            <span
+              key={c.id}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                background: 'rgba(255,255,255,.15)',
+                borderRadius: 999,
+                padding: '2px 10px',
+                fontSize: 12,
+              }}
+            >
+              {c.name}
+              <span style={{ cursor: 'pointer', fontSize: 10 }} onClick={() => toggleCompare(c)}>✕</span>
+            </span>
+          ))}
+          <button
+            type="button"
+            disabled={compareList.length < 2}
+            onClick={() => setCompareOpen(true)}
+            style={{
+              border: 0,
+              borderRadius: 999,
+              padding: '4px 12px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: compareList.length >= 2 ? 'pointer' : 'not-allowed',
+              background: compareList.length >= 2 ? 'var(--accent)' : 'rgba(255,255,255,.2)',
+              color: compareList.length >= 2 ? '#fff' : 'rgba(255,255,255,.5)',
+            }}
+          >
+            对比 ({compareList.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setCompareList([])}
+            style={{ border: 0, background: 'transparent', color: 'rgba(255,255,255,.6)', fontSize: 12, cursor: 'pointer' }}
+          >
+            清空
+          </button>
+        </div>
+      )}
+
+      {/* —— 对比抽屉: 指标做行、院校做列 —— */}
+      <Drawer
+        title={`院校对比 (${compareList.length})`}
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        width={Math.min(300 + compareList.length * 220, 1180)}
+      >
+        <Table
+          size="small"
+          bordered
+          pagination={false}
+          rowKey="metric"
+          columns={[
+            { title: '指标', dataIndex: 'metric', width: 110, fixed: 'left' as const },
+            ...compareList.map((u, i) => ({
+              title: (
+                <Link href={`/universities/${u.id}`} style={{ color: 'var(--primary)' }}>
+                  {u.name}
+                </Link>
+              ),
+              dataIndex: `v${i}`,
+              width: 200,
+              render: (v: any) => (v == null || v === '' ? <span style={{ color: 'var(--text-muted)' }}>--</span> : v),
+            })),
+          ]}
+          dataSource={buildUniCompareRows(compareList, effExamType)}
+        />
+      </Drawer>
     </div>
   );
+}
+
+// 对比行: 值取列表接口已返回的字段 (含在川物化统计), 无额外请求
+function buildUniCompareRows(list: UniversityListItem[], examType: '物理' | '历史') {
+  const rows: Array<[string, (u: UniversityListItem) => any]> = [
+    ['标签', (u) => [u.is985 && '985', u.is211 && '211', u.isDoubleFirstClass && '双一流'].filter(Boolean).join(' / ') || '—'],
+    ['类型', (u) => u.type],
+    ['省市', (u) => (u.province && u.city && u.province !== u.city ? `${u.province} · ${u.city}` : u.province ?? u.city)],
+    ['办学性质', (u) => u.runningNature],
+    ['层次', (u) => u.level],
+    ['软科排名', (u) => (u.softRanking != null ? `${u.softRankList ?? ''} #${u.softRanking}` : null)],
+    [`${examType}类最低分`, (u) => u.latestAdmission?.minScore],
+    [`${examType}类最低位次`, (u) => u.latestAdmission?.minRank?.toLocaleString()],
+    ['预测最低位次', (u) => u.predictedMinRank?.toLocaleString()],
+    ['在川计划', (u) => (u.scPlanCount != null ? `${u.scPlanCount} 人 · ${u.scGroupCount ?? '-'} 组` : null)],
+    ['招生批次', (u) => u.scBatches],
+    ['去年征集', (u) => (u.scSupplCount ? `${u.scSupplCount} 人（未录满）` : null)],
+  ];
+  return rows.map(([metric, fn]) => {
+    const row: Record<string, any> = { metric };
+    list.forEach((u, i) => {
+      row[`v${i}`] = fn(u);
+    });
+    return row;
+  });
 }
 
 function EliteCount({ value, label }: { value: number; label: string }) {

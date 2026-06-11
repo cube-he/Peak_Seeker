@@ -86,9 +86,11 @@ export class UniversityService {
 
     const where: any = {};
     if (keyword) {
+      // city 也参与搜索: "绵阳" 能搜出西南科技大学 (搜索框提示了城市搜索)
       where.OR = [
         { name: { contains: keyword } },
         { code: { contains: keyword } },
+        { city: { contains: keyword } },
       ];
     }
     if (province) where.province = province;
@@ -545,6 +547,22 @@ export class UniversityService {
       if (!seen.has(r.name)) seen.set(r.name, r);
     }
     return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+  }
+
+  async getStats() {
+    // 院校库 hero 的 985/211/双一流计数 (此前前端硬编码, 2026-06-11 改真实统计)
+    const cacheKey = 'university-stats';
+    const cached = await this.redis.getCache(cacheKey);
+    if (cached) return cached;
+    const [total, n985, n211, nDoubleFirstClass] = await Promise.all([
+      this.prisma.university.count(),
+      this.prisma.university.count({ where: { is985: true } }),
+      this.prisma.university.count({ where: { is211: true } }),
+      this.prisma.university.count({ where: { isDoubleFirstClass: true } }),
+    ]);
+    const result = { total, n985, n211, nDoubleFirstClass };
+    await this.redis.setCache(cacheKey, result, 86400);
+    return result;
   }
 
   async getFilters() {

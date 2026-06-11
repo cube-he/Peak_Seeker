@@ -27,6 +27,7 @@ import { coerceTierShape, normalize } from '@/components/student/preferred-major
 import type { PreferredMajorTier } from '@/components/student/preferred-majors/types';
 import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
 import { FIELD_LABELS } from '@/components/student/stage-fields';
+import { useWorkbench } from '@/stores/workbenchStore';
 // 意向池编辑器样式 (pm-*) scope 在 .wn-teacher-scope 下, 抽屉内包同名容器复用
 import '@/styles/willnest-teacher.css';
 
@@ -536,7 +537,14 @@ function MajorsPageInner() {
 
   // ===== 意向池工作台 (仅老师, 主管也是 TEACHER): 选学生 → 卡片一键进意向池 → 抽屉排梯队保存 =====
   const isTeacher = isLoggedIn && user?.role === 'TEACHER';
-  const [workStudentId, setWorkStudentId] = useState<string | null>(() => searchParams.get('studentId'));
+  // 学生上下文与院校库共享 (workbenchStore); URL ?studentId= 冷启动写入
+  const workStudentId = useWorkbench((s) => s.studentId);
+  const setWorkStudentId = useWorkbench((s) => s.setStudentId);
+  useEffect(() => {
+    const sid = searchParams.get('studentId');
+    if (sid) setWorkStudentId(sid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [poolTiers, setPoolTiers] = useState<PreferredMajorTier[]>([]);
   const [poolDirty, setPoolDirty] = useState(false);
   const [poolOpen, setPoolOpen] = useState(false);

@@ -1,7 +1,7 @@
 /**
  * 四川招录统计物化脚本
- * 把 enrollment_plans / admission_records 的在川聚合结果写回 majors 的 sc_* 列,
- * 供专业库列表页直接展示 (在川计划规模 + 物理/历史最低分位次带), 避免列表查询实时聚合。
+ * 把 enrollment_plans / admission_records 的在川聚合结果写回 majors 和 universities
+ * 的 sc_* 列, 供专业库/院校库列表页直接展示, 避免列表查询实时聚合。
  *
  * 用法 (服务器 apps/server 目录下执行):
  *   cd apps/server && npx ts-node scripts/materialize-major-sichuan-stats.ts
@@ -97,8 +97,9 @@ async function main() {
   console.log(`科类计划聚合: ${laneUpdated} 个专业`);
 
   // 3c. 特殊招生形式集合: recruit_type 去掉普通类两值; 中外合作走文本兜底。
-  // 计划备注里中外合作写法多样("与XX大学合作办学/合作院校为XX/中美合作/闽台合作"),
-  // 统一按 plan_notes 含"合作"匹配 (2025 数据已核: 无"校企合作"干扰, 仍排除以防未来导入误伤)
+  // 主标记在主表「专业备注」列(已回填 plan_notes 前置段), 写法多样, 用正向短语集匹配:
+  // "(中外合作办学)/与XX大学(学院/分校)合作/合作院校为XX/外方课程/闽台合作4+0" 都算;
+  // "校企合作"(订单班性质)和"可申请国外合作大学续读"(非合作办学学籍)自然不命中
   const recruitUpdated = await prisma.$executeRawUnsafe(`
     UPDATE majors m
     JOIN (
@@ -114,7 +115,10 @@ async function main() {
         WHERE province='四川' AND year=${planYear}
           AND (
             major_name LIKE '%中外合作%' OR group_name LIKE '%中外合作%'
-            OR (plan_notes LIKE '%合作%' AND plan_notes NOT LIKE '%校企合作%')
+            OR plan_notes LIKE '%中外合作%' OR plan_notes LIKE '%合作办学%'
+            OR plan_notes LIKE '%合作院校%' OR plan_notes LIKE '%大学合作%'
+            OR plan_notes LIKE '%学院合作%' OR plan_notes LIKE '%分校合作%'
+            OR plan_notes LIKE '%外方%' OR plan_notes LIKE '%闽台合作%'
           )
       ) t
       GROUP BY major_id
@@ -179,6 +183,46 @@ async function main() {
     console.log(`分带聚合 (${scoreYear}): ${scoreUpdated} 个专业`);
   } else {
     console.log('未找到四川录取分数据, 跳过分带');
+  }
+
+  // 5b. 院校维度聚合 (院校库列表卡的"机会规模")
+  const uniReset = await prisma.$executeRawUnsafe(`
+    UPDATE universities SET
+      sc_plan_count=NULL, sc_group_count=NULL, sc_batches=NULL, sc_suppl_count=NULL
+  `);
+  console.log(`院校重置: ${uniReset} 行`);
+  const uniPlanUpdated = await prisma.$executeRawUnsafe(`
+    UPDATE universities un
+    JOIN (
+      SELECT university_id,
+             SUM(COALESCE(plan_count, 0)) AS cnt,
+             COUNT(DISTINCT CONCAT(subjects, '|', batch, '|', group_code)) AS grps,
+             GROUP_CONCAT(DISTINCT batch ORDER BY batch SEPARATOR '、') AS batches
+      FROM enrollment_plans
+      WHERE province='四川' AND year=${planYear}
+      GROUP BY university_id
+    ) s ON s.university_id = un.id
+    SET un.sc_plan_count  = s.cnt,
+        un.sc_group_count = s.grps,
+        un.sc_batches     = LEFT(s.batches, 300)
+  `);
+  console.log(`院校计划聚合 (${planYear}): ${uniPlanUpdated} 所`);
+  const uniSupplYearRow: any[] = await prisma.$queryRawUnsafe(
+    `SELECT MAX(year) AS y FROM supplementary_records`,
+  );
+  const uniSupplYear = Number(uniSupplYearRow[0]?.y);
+  if (uniSupplYear) {
+    const uniSupplUpdated = await prisma.$executeRawUnsafe(`
+      UPDATE universities un
+      JOIN (
+        SELECT university_id, SUM(COALESCE(plan_count, 0)) AS cnt
+        FROM supplementary_records
+        WHERE year=${uniSupplYear}
+        GROUP BY university_id
+      ) s ON s.university_id = un.id
+      SET un.sc_suppl_count = NULLIF(s.cnt, 0)
+    `);
+    console.log(`院校征集聚合 (${uniSupplYear}): ${uniSupplUpdated} 所`);
   }
 
   // 6. 覆盖率报告 + 层次串数据 sanity check
