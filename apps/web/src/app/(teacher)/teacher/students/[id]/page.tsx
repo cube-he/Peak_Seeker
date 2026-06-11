@@ -1062,19 +1062,19 @@ function BasicFields() {
         </Form.Item>
       </div>
       <div className="field">
-        <label>手机号</label>
+        <label>手机号<span className="req">必填</span></label>
         <Form.Item name="phone" noStyle>
           <Input placeholder="手机号" />
         </Form.Item>
       </div>
       <div className="field">
-        <label>家长手机号</label>
+        <label>家长手机号<span className="req">必填</span></label>
         <Form.Item name="parentPhone" noStyle>
           <Input placeholder="家长手机号" />
         </Form.Item>
       </div>
       <div className="field">
-        <label>性别</label>
+        <label>性别<span className="req">必填</span></label>
         <Form.Item name="gender" noStyle>
           <Radio.Group>
             <Radio value="MALE">男</Radio>
@@ -1083,7 +1083,7 @@ function BasicFields() {
         </Form.Item>
       </div>
       <div className="field">
-        <label>出生日期<span className="sc-hint"> 批次年龄校验用</span></label>
+        <label>出生日期<span className="req">必填</span><span className="sc-hint"> 批次年龄校验用</span></label>
         <Form.Item name="birthDate" noStyle>
           <DatePicker
             style={{ width: '100%' }}
@@ -1094,7 +1094,7 @@ function BasicFields() {
         </Form.Item>
       </div>
       <div className="field">
-        <label>民族</label>
+        <label>民族<span className="req">必填</span></label>
         <Form.Item name="ethnicity" noStyle>
           <Select
             showSearch
@@ -1106,7 +1106,7 @@ function BasicFields() {
         </Form.Item>
       </div>
       <div className="field">
-        <label>政治面貌</label>
+        <label>政治面貌<span className="req">必填</span></label>
         <Form.Item name="politicalStatus" noStyle>
           <Radio.Group>
             <Radio value="PARTY_MEMBER">党员</Radio>
@@ -1147,7 +1147,7 @@ function HouseholdFields() {
     <div className="sd-form-grid">
       {/* 户籍所在地 — Cascader 保留 antd (业务下拉, 不改) */}
       <div className="field sd-field-full">
-        <label>户籍所在地</label>
+        <label>户籍所在地<span className="req">必填</span></label>
         <RegionCascaderField
           fieldKeys={['province', 'city', 'county']}
           options={regionOptions}
@@ -1155,14 +1155,14 @@ function HouseholdFields() {
         />
       </div>
       <div className="field">
-        <label>户口性质</label>
+        <label>户口性质<span className="req">必填</span></label>
         <Form.Item name="isRural" valuePropName="checked" noStyle>
           <Checkbox>农村户籍</Checkbox>
         </Form.Item>
       </div>
       {/* 高考报名地 — Cascader 保留 antd */}
       <div className="field sd-field-full">
-        <label>高考报名地</label>
+        <label>高考报名地<span className="req">必填</span></label>
         <RegionCascaderField
           fieldKeys={['examLocationProvince', 'examLocationCity', 'examLocationCounty']}
           options={regionOptions}
@@ -1235,7 +1235,7 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
     <div className="sd-form-grid">
       {/* —— 顶部三段: 科类(可手选, 选物理/历史首选时自动同步) / 年份 / 来源 —— */}
       <div className="field">
-        <label>科类<span className="sc-hint"> 可手选 · 选物理/历史首选时自动同步</span></label>
+        <label>科类<span className="req">必填</span><span className="sc-hint"> 可手选 · 选物理/历史首选时自动同步</span></label>
         <Form.Item name="examType" noStyle>
           <Select
             placeholder="选择科类"
@@ -1291,7 +1291,7 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
 
       {/* —— 首选: 物理/历史互斥 —— */}
       <div className="field full">
-        <label>首选科目<span className="sc-hint"> 物理 / 历史二选一</span></label>
+        <label>首选科目<span className="req">必填</span><span className="sc-hint"> 物理 / 历史二选一</span></label>
         <Form.Item
           noStyle
           shouldUpdate={(p, c) =>
@@ -1337,7 +1337,7 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
 
       {/* —— 再选: 化 / 生 / 政 / 地 — 4 选 2 —— */}
       <div className="field full">
-        <label>再选科目<span className="sc-hint"> 化 / 生 / 政 / 地 四选二</span></label>
+        <label>再选科目<span className="req">必填</span><span className="sc-hint"> 化 / 生 / 政 / 地 四选二</span></label>
         <Form.Item
           noStyle
           shouldUpdate={(p, c) =>
@@ -1372,7 +1372,7 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
 
       {/* —— 总分(自动累加) + 全省位次 —— */}
       <div className="field">
-        <label>总分<span className="sc-hint"> 自动累加</span></label>
+        <label>总分<span className="req">必填</span><span className="sc-hint"> 自动累加</span></label>
         <Form.Item
           noStyle
           shouldUpdate={(p, c) =>
@@ -1404,7 +1404,7 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
         </Form.Item>
       </div>
       <div className="field">
-        <label>全省位次<span className="sc-hint"> 6 科齐后实时估算 · 可手动校正</span></label>
+        <label>全省位次<span className="sc-hint"> 自动计算 · 6 科齐后实时估算 · 可手动校正</span></label>
         <Form.Item name="provincialRank" noStyle>
           <InputNumber min={1} style={{ width: '100%' }} placeholder="6 科齐后自动估算" />
         </Form.Item>
@@ -1585,7 +1585,7 @@ function BonusFields() {
   return (
     <div className="sd-form-grid">
       <div className="field sd-field-full">
-        <label>加分政策状态</label>
+        <label>加分政策状态<span className="req">必填</span></label>
         <Form.Item name="bonusPolicyStatus" noStyle>
           <Radio.Group>
             <Radio value="NONE">没有</Radio>
@@ -1620,27 +1620,49 @@ function HealthFields() {
   return (
     <div className="sd-form-grid">
       <div className="field">
-        <label>身高 (cm)</label>
+        <label>身高 (cm)<span className="req">必填</span></label>
         <Form.Item name="height" noStyle><InputNumber min={100} max={250} style={{ width: '100%' }} /></Form.Item>
       </div>
       <div className="field">
-        <label>体重 (kg)</label>
+        <label>体重 (kg)<span className="req">必填</span></label>
         <Form.Item name="weight" noStyle><InputNumber min={20} max={200} style={{ width: '100%' }} /></Form.Item>
       </div>
       <div className="field">
-        <label>左眼裸眼视力</label>
+        <label>左眼裸眼视力<span className="req">必填</span></label>
         <Form.Item name="visionLeft" noStyle><InputNumber min={1} max={5.3} step={0.1} style={{ width: '100%' }} /></Form.Item>
       </div>
       <div className="field">
-        <label>右眼裸眼视力</label>
+        <label>右眼裸眼视力<span className="req">必填</span></label>
         <Form.Item name="visionRight" noStyle><InputNumber min={1} max={5.3} step={0.1} style={{ width: '100%' }} /></Form.Item>
       </div>
       <div className="field">
-        <label>色觉</label>
-        <div style={{ display: 'flex', gap: 16, paddingTop: 6 }}>
-          <Form.Item name="colorBlind" valuePropName="checked" noStyle><Checkbox>色盲</Checkbox></Form.Item>
-          <Form.Item name="colorWeak" valuePropName="checked" noStyle><Checkbox>色弱</Checkbox></Form.Item>
-        </div>
+        <label>色觉<span className="req">必填</span></label>
+        {/* UI 三选一, 底层仍是 colorBlind/colorWeak 两个布尔 (后端资格引擎按布尔判定) */}
+        <Form.Item name="colorBlind" hidden valuePropName="checked"><Checkbox /></Form.Item>
+        <Form.Item name="colorWeak" hidden valuePropName="checked"><Checkbox /></Form.Item>
+        <Form.Item
+          noStyle
+          shouldUpdate={(p, c) => p.colorBlind !== c.colorBlind || p.colorWeak !== c.colorWeak}
+        >
+          {({ getFieldValue, setFieldsValue }) => {
+            const blind = getFieldValue('colorBlind');
+            const weak = getFieldValue('colorWeak');
+            const val = blind ? 'BLIND' : weak ? 'WEAK' : (blind === false && weak === false ? 'NORMAL' : undefined);
+            return (
+              <Radio.Group
+                value={val}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFieldsValue({ colorBlind: v === 'BLIND', colorWeak: v === 'WEAK' });
+                }}
+              >
+                <Radio value="NORMAL">正常</Radio>
+                <Radio value="BLIND">色盲</Radio>
+                <Radio value="WEAK">色弱</Radio>
+              </Radio.Group>
+            );
+          }}
+        </Form.Item>
       </div>
       <div className="field sd-field-full">
         <label>体检受限项</label>
@@ -1664,7 +1686,7 @@ function PreferenceFields() {
   return (
     <div className="sd-form-grid">
       <div className="field sd-field-full">
-        <label>优先模式</label>
+        <label>优先模式<span className="req">必填</span></label>
         <Form.Item name="priorityMode" noStyle>
           <Radio.Group>
             <Radio value="UNIVERSITY_FIRST">院校优先</Radio>
@@ -1688,7 +1710,7 @@ function PreferenceFields() {
         </Form.Item>
       </div>
       <div className="field sd-field-full">
-        <label>意向专业 (梯队)</label>
+        <label>意向专业 (梯队)<span className="req">必填</span></label>
         <Form.Item name="preferredMajors" noStyle>
           <PreferredMajorTierFormItem options={majorOptions ?? []} isLoading={isMajorLoading} />
         </Form.Item>

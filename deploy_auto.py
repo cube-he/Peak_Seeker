@@ -48,6 +48,9 @@ UPLOAD_MAP = {
         'local': os.path.join(LOCAL_WEB, '.next'),
         'remote': 'apps/web/.next',
         'clean_first': True,
+        # .next/cache 是 webpack 本地构建缓存 (~1GB, 每次 build 都变),
+        # next start 运行时不需要 — 上传它曾导致每次部署近 1GB 流量
+        'exclude_dirs': ['cache'],
     },
     # 前端静态资源
     'web_public': {
@@ -192,7 +195,7 @@ def _is_manifest_file(name: str) -> bool:
     return False
 
 
-def upload_directory(sftp, local_dir, remote_dir, incremental=True, stats=None):
+def upload_directory(sftp, local_dir, remote_dir, incremental=True, stats=None, exclude_dirs=None):
     """递归上传目录.
 
     incremental=True (默认): 远端已有同 size 文件就跳过. 大幅减少 .next/dist 重传量
@@ -214,6 +217,9 @@ def upload_directory(sftp, local_dir, remote_dir, incremental=True, stats=None):
 
         # 跳过不需要的文件/目录
         if item in ('node_modules', '__pycache__', '.git', '.env', '.env.local', 'venv'):
+            continue
+        # 按 UPLOAD_MAP 配置排除的目录 (仅顶层生效, 如 .next/cache)
+        if exclude_dirs and os.path.isdir(local_path) and item in exclude_dirs:
             continue
 
         if os.path.isfile(local_path):
@@ -377,7 +383,8 @@ def deploy(ssh, run_enriched_import=False, full_upload=False):
 
         print(f'  [{key}] 上传中...')
         stats = {'uploaded': 0, 'skipped': 0}
-        upload_directory(sftp, local_dir, remote_dir, incremental=not full_upload, stats=stats)
+        upload_directory(sftp, local_dir, remote_dir, incremental=not full_upload, stats=stats,
+                         exclude_dirs=conf.get('exclude_dirs'))
         print(f'  [{key}] [OK] 上传 {stats["uploaded"]} / 跳过 {stats["skipped"]}')
 
     sftp.close()

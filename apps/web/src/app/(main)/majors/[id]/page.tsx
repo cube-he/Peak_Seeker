@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Tabs, Table, Spin, Descriptions, Typography, Tag } from 'antd';
+import { DurationLabel } from '../DurationLabel';
 import { BankOutlined, HistoryOutlined, RocketOutlined, ReadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -31,6 +33,10 @@ export default function MajorDetailPage() {
   });
 
   const { examInfo } = useUserStore();
+  // 历年录取筛选: 科类 + 办学性质 (公办/民办)
+  const [subjectFilter, setSubjectFilter] = useState<'全部' | '物理' | '历史'>('全部');
+  const [natureFilter, setNatureFilter] = useState<'全部' | '公办' | '民办'>('全部');
+  const [batchFilter, setBatchFilter] = useState<string>('全部');
 
   if (isLoading) {
     return (
@@ -64,7 +70,7 @@ export default function MajorDetailPage() {
   const statItems = [
     { label: '就业率', value: employmentRate, sub: '毕业去向参考' },
     { label: '平均薪资', value: avgSalary, sub: '样本统计口径' },
-    { label: '学制', value: m.standardDuration || '4年', sub: m.degree || '授予学位待补充' },
+    { label: '学制', value: <DurationLabel value={m.standardDuration || '4年'} />, sub: m.degree || '授予学位待补充' },
     { label: '开设院校', value: m.enrollmentPlans?.length || '-', sub: '当前招生计划记录' },
   ];
 
@@ -79,6 +85,13 @@ export default function MajorDetailPage() {
       ),
     },
     { title: '年份', dataIndex: 'year', key: 'year', width: 70 },
+    {
+      title: '批次',
+      dataIndex: 'batch',
+      key: 'batch',
+      width: 130,
+      render: (v: string) => <span className="text-xs text-text-secondary">{v || '-'}</span>,
+    },
     {
       title: '最低分',
       dataIndex: 'majorMinScore',
@@ -100,7 +113,42 @@ export default function MajorDetailPage() {
       width: 90,
       render: (v: number) => v ?? '-',
     },
+    {
+      title: '征集人数',
+      dataIndex: 'supplementaryCount',
+      key: 'supplementaryCount',
+      width: 90,
+      render: (v: number | null) =>
+        v != null ? <span className="font-medium text-amber-700">{v}</span> : <span className="text-text-muted">-</span>,
+    },
   ];
+
+  // 历年录取: 科类(subjects 含物理/历史) + 办学性质 + 批次 筛选
+  const allAdmissions: any[] = m.admissionRecords || [];
+  const hasPhysics = allAdmissions.some((r) => (r.subjects || '').includes('物理'));
+  const hasHistory = allAdmissions.some((r) => (r.subjects || '').includes('历史'));
+  // 该专业实际出现过的批次, 按 2025 批次结构表投档顺序排列
+  const BATCH_ORDER = [
+    '本科提前批(国家专项)', '本科提前批A段', '本科提前批(高校专项)', '本科提前批B段',
+    '本科批A段', '本科批(高校专项)', '本科批B段', '本科批(区域教育均衡发展专项)',
+    '高职(专科)提前批', '高职(专科)批',
+  ];
+  const majorBatches = Array.from(new Set(allAdmissions.map((r) => r.batch).filter(Boolean))).sort(
+    (a, b) => {
+      const ia = BATCH_ORDER.indexOf(a), ib = BATCH_ORDER.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    },
+  );
+  const filteredAdmissions = allAdmissions.filter((r) => {
+    if (subjectFilter !== '全部' && !(r.subjects || '').includes(subjectFilter)) return false;
+    if (natureFilter !== '全部' && r.university?.runningNature !== natureFilter) return false;
+    if (batchFilter !== '全部' && r.batch !== batchFilter) return false;
+    return true;
+  });
+  const filterBtn = (active: boolean) =>
+    `rounded px-2.5 py-0.5 text-xs font-medium border ${
+      active ? 'bg-amber-700 text-white border-amber-700' : 'bg-white text-text-tertiary border-amber-300'
+    }`;
 
   const tabItems = [
     {
@@ -144,14 +192,47 @@ export default function MajorDetailPage() {
       key: 'admissions',
       label: <span><HistoryOutlined className="mr-1" />历年录取 ({m.admissionRecords?.length || 0})</span>,
       children: (
-        <Table
-          columns={admissionColumns}
-          dataSource={m.admissionRecords || []}
-          rowKey="id"
-          scroll={{ x: 600 }}
-          size="small"
-          pagination={{ pageSize: 20, showTotal: (t: number) => `共 ${t} 条` }}
-        />
+        <div>
+          <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
+            {(hasPhysics && hasHistory) && (
+              <>
+                {(['全部', '物理', '历史'] as const).map((sv) => (
+                  <button key={sv} type="button" className={filterBtn(subjectFilter === sv)} onClick={() => setSubjectFilter(sv)}>
+                    {sv === '全部' ? '全部科类' : `${sv}类`}
+                  </button>
+                ))}
+                <span className="mx-1 text-border">|</span>
+              </>
+            )}
+            {(['全部', '公办', '民办'] as const).map((nv) => (
+              <button key={nv} type="button" className={filterBtn(natureFilter === nv)} onClick={() => setNatureFilter(nv)}>
+                {nv === '全部' ? '全部院校' : nv}
+              </button>
+            ))}
+            {majorBatches.length > 1 && (
+              <>
+                <span className="mx-1 text-border">|</span>
+                <button type="button" className={filterBtn(batchFilter === '全部')} onClick={() => setBatchFilter('全部')}>
+                  全部批次
+                </button>
+                {majorBatches.map((b) => (
+                  <button key={b} type="button" className={filterBtn(batchFilter === b)} onClick={() => setBatchFilter(b)}>
+                    {b}
+                  </button>
+                ))}
+              </>
+            )}
+            <span className="ml-auto text-xs text-text-muted">{filteredAdmissions.length} 条</span>
+          </div>
+          <Table
+            columns={admissionColumns}
+            dataSource={filteredAdmissions}
+            rowKey="id"
+            scroll={{ x: 700 }}
+            size="small"
+            pagination={{ pageSize: 20, showTotal: (t: number) => `共 ${t} 条` }}
+          />
+        </div>
       ),
     },
     {
@@ -235,6 +316,23 @@ export default function MajorDetailPage() {
                 </span>
               )}
             </h1>
+            {/* 本/专科同名专业层次切换: 双目录同名(如中医学)时显示, 点击跳兄弟层次 */}
+            {m.sibling && (
+              <div className="mt-3 inline-flex overflow-hidden rounded-lg border border-white/25 text-sm">
+                {(['本科', '专科'] as const).map((lv) => {
+                  const active = m.level === lv;
+                  const targetId = active ? m.id : m.sibling.id;
+                  return active ? (
+                    <span key={lv} className="bg-accent px-4 py-1.5 font-medium text-white">{lv}</span>
+                  ) : (
+                    <Link key={lv} href={`/majors/${targetId}`} className="bg-white/10 px-4 py-1.5 text-white/75 hover:bg-white/20 hover:text-white">
+                      {lv}
+                    </Link>
+                  );
+                })}
+                <span className="bg-white/10 px-3 py-1.5 text-[11px] text-white/55">本专科均在招生</span>
+              </div>
+            )}
             <div className="mt-4 flex flex-wrap gap-2">
               {heroTags.map((tag) => (
                 <span key={String(tag)} className="rounded-full border border-white/15 bg-white/8 px-3 py-1 text-xs text-white/78">
@@ -357,7 +455,7 @@ export default function MajorDetailPage() {
                 {m.localDoctoralPoint ? <span className="rounded-full bg-elite-fixed px-3 py-0.5 text-xs font-medium text-elite">有</span> : <span className="text-text-muted">无</span>}
               </Descriptions.Item>
               {m.degree && <Descriptions.Item label="授予学位">{m.degree}</Descriptions.Item>}
-              {m.standardDuration && <Descriptions.Item label="学制">{m.standardDuration}</Descriptions.Item>}
+              {m.standardDuration && <Descriptions.Item label="学制"><DurationLabel value={m.standardDuration} /></Descriptions.Item>}
               {typeof m.setupYear === 'number' && (
                 <Descriptions.Item label="增设年份">
                   <span className={m.setupYear >= 2024 ? 'font-semibold text-accent' : ''}>

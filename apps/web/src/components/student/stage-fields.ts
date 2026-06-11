@@ -144,6 +144,15 @@ export const FIELD_LABELS: Record<string, string> = {
   highSchool: '高中学校',
   classInfo: '所在班级',
   birthDate: '出生日期',
+  // 资格判定必填 (2026-06-10 三层必填定调)
+  province: '户籍省份',
+  city: '户籍市',
+  county: '户籍县（区）',
+  isRural: '是否农村户籍',
+  bonusPolicyStatus: '加分政策',
+  examLocationProvince: '高考报名省份',
+  examLocationCity: '高考报名市',
+  examLocationCounty: '高考报名县（区）',
 };
 
 /** 把英文字段 key 翻译成中文 label；未知 key 原样返回 */

@@ -87,6 +87,18 @@ export function RankingBoardTab() {
         </div>
       </div>
 
+      {/* 排行榜目录: 点击跳转到对应榜单, 免去长页下滑 */}
+      {hasAny && (
+        <div className="card" style={{ padding: '14px 20px', marginBottom: 24 }}>
+          <BoardToc label="本科" groups={undergradGroups} />
+          {collegeGroups.length > 0 && (
+            <div style={{ marginTop: undergradGroups.length > 0 ? 10 : 0 }}>
+              <BoardToc label="专科" groups={collegeGroups} />
+            </div>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="card" style={{ padding: 80, display: 'flex', justifyContent: 'center' }}>
           <Spin size="large" />
@@ -136,6 +148,55 @@ export function RankingBoardTab() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/** 排行榜目录行: 「本科/专科」标签 + 各榜单组 chip, 点击平滑滚动到锚点 */
+function BoardToc({
+  label,
+  groups,
+}: {
+  label: '本科' | '专科';
+  groups: Array<{ groupKey: string; groupTitle: string }>;
+}) {
+  if (groups.length === 0) return null;
+  const jump = (groupKey: string) => {
+    document
+      .getElementById(`board-${label}-${groupKey}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+      <span
+        style={{
+          fontSize: 10,
+          letterSpacing: 1.4,
+          textTransform: 'uppercase',
+          color: 'var(--text-muted)',
+          flexShrink: 0,
+        }}
+      >
+        {label}榜单
+      </span>
+      {groups.map((g) => (
+        <button
+          key={g.groupKey}
+          type="button"
+          onClick={() => jump(g.groupKey)}
+          style={{
+            border: '1px solid var(--border, #e2e2dd)',
+            background: 'transparent',
+            borderRadius: 999,
+            padding: '3px 12px',
+            fontSize: 12.5,
+            color: 'var(--text-secondary, #555)',
+            cursor: 'pointer',
+          }}
+        >
+          {g.groupTitle}
+        </button>
+      ))}
     </div>
   );
 }

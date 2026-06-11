@@ -83,6 +83,7 @@ export class MajorService {
         is985: true,
         is211: true,
         isDoubleFirstClass: true,
+        runningNature: true,
       },
     };
 
@@ -115,6 +116,33 @@ export class MajorService {
       for (const ep of major.enrollmentPlans as any[]) {
         const k = [ep.universityId, ep.groupCode, ep.batch, ep.recruitType, ep.subjects].join('|');
         ep.predictedMinRank = predMap.get(k) ?? null;
+      }
+    }
+
+    if (major) {
+      // 本/专科同名兄弟专业 (双目录同名, 如中医学): 前端用于层次切换按钮
+      const siblingLevel = major.level === '本科' ? '专科' : major.level === '专科' ? '本科' : null;
+      (major as any).sibling = siblingLevel
+        ? await this.prisma.major.findFirst({
+            where: { name: major.name, level: siblingLevel },
+            select: { id: true, level: true },
+          })
+        : null;
+
+      // 专业级征集人数: 按 (year, universityId) 聚合注入历年录取行
+      const suppl = await this.prisma.supplementaryRecord.findMany({
+        where: { majorId: id },
+        select: { year: true, universityId: true, planCount: true },
+      });
+      if (suppl.length > 0 && (major as any).admissionRecords?.length > 0) {
+        const supplMap = new Map<string, number>();
+        for (const s of suppl) {
+          const k = `${s.year}|${s.universityId}`;
+          supplMap.set(k, (supplMap.get(k) ?? 0) + (s.planCount ?? 0));
+        }
+        for (const ar of (major as any).admissionRecords) {
+          ar.supplementaryCount = supplMap.get(`${ar.year}|${ar.universityId}`) ?? null;
+        }
       }
     }
 

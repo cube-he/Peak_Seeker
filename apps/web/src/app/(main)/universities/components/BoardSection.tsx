@@ -119,7 +119,12 @@ export function BoardSection({ group, level }: { group: BoardGroup; level: '本�
   const src = '软科 · ' + (group.boards[0]?.level === '本科' ? '中国大学' : '高职') + ' 榜';
 
   return (
-    <section className={`board group-${variant}`}>
+    // id: 排行榜目录锚点; scrollMarginTop 防跳转后标题被 sticky 顶栏挡住
+    <section
+      id={`board-${level}-${group.groupKey}`}
+      className={`board group-${variant}`}
+      style={{ scrollMarginTop: 80 }}
+    >
       <div className="board-head">
         <div className="title-wrap">
           <span className="group-ic">

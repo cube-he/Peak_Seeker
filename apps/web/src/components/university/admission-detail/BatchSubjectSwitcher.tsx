@@ -1,14 +1,12 @@
 'use client';
-import { BATCH_CATEGORIES } from '@/utils/batch-categorize';
 import type { BatchSubjectSwitcherProps, Subject } from './types';
 
 const SUBJECTS: Subject[] = ['物理类', '历史类'];
 
+/** 科类切换。批次维度已改为"按批次结构表逐批次展示"(AdmissionDetailTab), 不再用大类按钮过滤。 */
 export default function BatchSubjectSwitcher({
   subject,
-  batchCategory,
   onSubjectChange,
-  onBatchChange,
 }: BatchSubjectSwitcherProps) {
   const btnClass = (active: boolean) =>
     `px-2.5 py-0.5 rounded text-[10px] font-semibold border ${
@@ -28,18 +26,6 @@ export default function BatchSubjectSwitcher({
           className={btnClass(s === subject)}
         >
           {s}
-        </button>
-      ))}
-      <span className="text-border mx-1">|</span>
-      {BATCH_CATEGORIES.map(b => (
-        <button
-          key={b}
-          type="button"
-          aria-pressed={b === batchCategory}
-          onClick={() => onBatchChange(b)}
-          className={btnClass(b === batchCategory)}
-        >
-          {b}
         </button>
       ))}
     </div>

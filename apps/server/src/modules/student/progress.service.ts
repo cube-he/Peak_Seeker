@@ -6,7 +6,10 @@ import {
   STAGE_3_FIELDS,
   STUDENT_ONLY_FIELDS,
   CORE_FOR_RECOMMEND,
+  CORE_FOR_ELIGIBILITY,
+  PHYSICAL_REQUIRED,
 } from './field-policy';
+import { flattenPreferredMajors } from '../../utils/preferred-majors';
 
 export interface StageStatus {
   filled: number;
@@ -87,14 +90,20 @@ export class ProgressService {
       teacherDataCompleteness * 0.4 + studentSelfCompleteness * 0.6,
     );
 
-    // 推荐硬约束: 老师录入字段 100% + CORE_FOR_RECOMMEND 7 字段全填.
-    // 其他 stage1 字段 (民族/政治面貌/填表人/6 科分数) 缺也允许推荐, 仍在 stageProgress
-    // 里反映完整度供进度条用, 但不阻塞"生成方案"按钮.
+    // 推荐硬约束 (2026-06-10 业务定调三层全必填):
+    //   ① CORE_FOR_RECOMMEND — 推荐算法输入 (选科/分数/联系方式)
+    //   ② CORE_FOR_ELIGIBILITY — 批次资格判定 (户籍/农村/性别/出生日期/民族/加分)
+    //   ③ PHYSICAL_REQUIRED — 体检字段 (军/警/司法/航海/消防/军士硬规则)
+    // 其余字段 (政治面貌/分科分数/偏好等) 仍计入完整度但不阻塞"生成方案"按钮.
     const missingFieldsForRecommend: string[] = TEACHER_ONLY_FIELDS.filter(
       (f) => !this.isFilled(profile[f]),
     );
-    for (const f of CORE_FOR_RECOMMEND) {
-      if (!this.isFilled(profile[f])) missingFieldsForRecommend.push(f);
+    for (const f of [...CORE_FOR_RECOMMEND, ...CORE_FOR_ELIGIBILITY, ...PHYSICAL_REQUIRED]) {
+      // preferredMajors 是梯队结构: 只有意向池(tier=0)不算"已填", 池子专业不参与推荐
+      const filled = f === 'preferredMajors'
+        ? flattenPreferredMajors(profile[f]).length > 0
+        : this.isFilled(profile[f]);
+      if (!filled) missingFieldsForRecommend.push(f);
     }
     const isRecommendable = missingFieldsForRecommend.length === 0;
 

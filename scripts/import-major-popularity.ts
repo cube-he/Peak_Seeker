@@ -8,7 +8,9 @@
  *   npx ts-node scripts/import-major-popularity.ts --dry    # 干跑, 只报告命中不写库
  *
  * 幂等: 先把所有 popularityYear=2025 的旧标记清空, 再写当前 50 条。
- * 匹配: 按专业 name updateMany（Major 表存在同名多 code 记录, 全覆盖正确）。
+ * 匹配: 按专业 name + level='本科' updateMany。
+ *   ⚠️ 必须限定 level: 榜单是本科热度榜, 而 75 个专业名本/专科目录同名
+ *   (中医学/临床医学/电子商务等), 不限定会把热度错挂到专科行 (2026-06-11 修复)。
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -112,13 +114,13 @@ async function main() {
   for (const [rank, name, wan] of TOP50) {
     const heat = Math.round(wan * 10000);
     if (DRY) {
-      const cnt = await prisma.major.count({ where: { name } });
+      const cnt = await prisma.major.count({ where: { name, level: '本科' } });
       if (cnt === 0) unmatched.push(name);
       else matchedRows += cnt;
       continue;
     }
     const res = await prisma.major.updateMany({
-      where: { name },
+      where: { name, level: '本科' },
       data: { popularityRank: rank, popularityHeat: heat, popularityYear: YEAR },
     });
     if (res.count === 0) unmatched.push(name);

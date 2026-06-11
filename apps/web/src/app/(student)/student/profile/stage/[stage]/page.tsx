@@ -50,6 +50,7 @@ import {
 } from '@/components/student/workspace/StudentWorkspace';
 import { useUniversityOptions } from '@/components/student/picker/options/useUniversityOptions';
 import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
+import PreferredMajorTierFormItem from '@/components/student/preferred-majors/PreferredMajorTierFormItem';
 
 type StageKey = '1' | '2' | '3';
 
@@ -884,17 +885,9 @@ function Stage2Fields() {
         description="专业方向、升学路径和优先级会影响冲稳保排序。"
       >
         <FieldGrid columns="lg:grid-cols-2">
+          {/* 梯队编辑器: 专业逐个加入并排梯队 (与老师端/资料页一致), 替换旧平铺多选 */}
           <Form.Item name="preferredMajors" label="意向专业">
-            <Select
-              mode="multiple"
-              placeholder="选择意向专业"
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              options={majorOptions}
-              loading={isLoadingMajors}
-              notFoundContent={isLoadingMajors ? '加载中...' : '暂无匹配专业'}
-            />
+            <PreferredMajorTierFormItem options={majorOptions ?? []} isLoading={isLoadingMajors} />
           </Form.Item>
           <Form.Item name="preferredMajorCategories" label="意向专业大类">
             <Select

@@ -8,6 +8,8 @@ import {
   IsNumber,
   IsDate,
   ValidateNested,
+  Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -124,41 +126,56 @@ export class UpdateStudentProfileDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
+  @Min(0, { message: '语文成绩需在 0-150 之间' })
+  @Max(150, { message: '语文成绩需在 0-150 之间' })
   scoreChinese?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
+  @Min(0, { message: '数学成绩需在 0-150 之间' })
+  @Max(150, { message: '数学成绩需在 0-150 之间' })
   scoreMath?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
+  @Min(0, { message: '英语成绩需在 0-150 之间' })
+  @Max(150, { message: '英语成绩需在 0-150 之间' })
   scoreEnglish?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
+  @Min(0, { message: '首选科目成绩需在 0-100 之间' })
+  @Max(100, { message: '首选科目成绩需在 0-100 之间' })
   scoreFirstChoice?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
+  @Min(0, { message: '再选科目成绩需在 0-100 之间' })
+  @Max(100, { message: '再选科目成绩需在 0-100 之间' })
   scoreSub1?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
+  @Min(0, { message: '再选科目成绩需在 0-100 之间' })
+  @Max(100, { message: '再选科目成绩需在 0-100 之间' })
   scoreSub2?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
+  @Min(0, { message: '总分需在 0-750 之间' })
+  @Max(750, { message: '总分需在 0-750 之间' })
   totalScore?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
+  @Min(1, { message: '全省位次需为正整数' })
   provincialRank?: number;
 
   @ApiPropertyOptional()
@@ -171,11 +188,15 @@ export class UpdateStudentProfileDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(100, { message: '身高需在 100-250cm 之间' })
+  @Max(250, { message: '身高需在 100-250cm 之间' })
   height?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(20, { message: '体重需在 20-200kg 之间' })
+  @Max(200, { message: '体重需在 20-200kg 之间' })
   weight?: number;
 
   @ApiPropertyOptional()
@@ -377,11 +398,15 @@ export class UpdateStudentProfileDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(1, { message: '裸眼视力需在 1.0-5.3 之间（五分记录法）' })
+  @Max(5.3, { message: '裸眼视力需在 1.0-5.3 之间（五分记录法）' })
   visionLeft?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(1, { message: '裸眼视力需在 1.0-5.3 之间（五分记录法）' })
+  @Max(5.3, { message: '裸眼视力需在 1.0-5.3 之间（五分记录法）' })
   visionRight?: number;
 
   @ApiPropertyOptional()

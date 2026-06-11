@@ -295,6 +295,7 @@ export class StudentService {
               phone: true,
               gender: true,
               ethnicity: true,
+              birthDate: true,
               createdAt: true,
             },
           },
@@ -337,6 +338,7 @@ export class StudentService {
           phone: (p as any).user?.phone,
           gender: (p as any).user?.gender,
           ethnicity: (p as any).user?.ethnicity,
+          birthDate: (p as any).user?.birthDate,
         }),
         workflowStatus: deriveWorkflowStatus(p.intakeStatus, latestPlan?.status),
         planCount: p._count.volunteerPlans,
@@ -364,6 +366,7 @@ export class StudentService {
             phone: true,
             gender: true,
             ethnicity: true,
+            birthDate: true,
             createdAt: true,
           },
         },
@@ -400,6 +403,7 @@ export class StudentService {
       phone: profile.user?.phone,
       gender: profile.user?.gender,
       ethnicity: profile.user?.ethnicity,
+      birthDate: profile.user?.birthDate,
     });
 
     const rankCheck = await this.computeRankCheck(profile);
@@ -479,6 +483,7 @@ export class StudentService {
             phone: true,
             gender: true,
             ethnicity: true,
+            birthDate: true,
           },
         },
       },
@@ -593,6 +598,7 @@ export class StudentService {
               phone: true,
               gender: true,
               ethnicity: true,
+              birthDate: true,
             },
           },
         },
@@ -756,6 +762,7 @@ export class StudentService {
             phone: true,
             gender: true,
             ethnicity: true,
+            birthDate: true,
             createdAt: true,
           },
         },
@@ -773,6 +780,7 @@ export class StudentService {
       phone: profile.user.phone,
       gender: profile.user.gender,
       ethnicity: profile.user.ethnicity,
+      birthDate: profile.user.birthDate,
     });
 
     // 过滤 ① 字段（学生不可见）
@@ -812,6 +820,7 @@ export class StudentService {
             phone: true,
             gender: true,
             ethnicity: true,
+            birthDate: true,
           },
         },
       },
@@ -826,6 +835,7 @@ export class StudentService {
       phone: profile.user.phone,
       gender: profile.user.gender,
       ethnicity: profile.user.ethnicity,
+      birthDate: profile.user.birthDate,
     });
     if (!progress.stageProgress.stage1.completed) {
       throw new ConflictException('核心资料未填写完整，暂不能提交给老师确认');

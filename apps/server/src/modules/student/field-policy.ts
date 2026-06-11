@@ -82,7 +82,6 @@ export const STAGE_1_REQUIRED = [
 /**
  * 推荐算法的硬约束字段 — 生成方案的最小集合.
  * 业务定义 (2026-05-28): 只要这些字段填齐 + provincialRank 算好, 就可生成方案.
- * 其他 stage1 字段 (民族/政治面貌/分科分数/填表人) 是"完整档案", 但不阻塞推荐.
  */
 export const CORE_FOR_RECOMMEND = [
   'realName',
@@ -92,6 +91,52 @@ export const CORE_FOR_RECOMMEND = [
   'firstChoice',
   'reChoices',
   'totalScore',
+  // 2026-06-10 业务定调: 意向专业(梯队, 池子不算)与优先模式也是生成方案硬门槛
+  'preferredMajors',
+  'priorityMode',
+  // 2026-06-11 业务定调: 语数外 + 选科三科成绩必填 (totalScore 由 9 科累加)
+  'scoreChinese',
+  'scoreMath',
+  'scoreEnglish',
+  'scoreFirstChoice',
+  'scoreSub1',
+  'scoreSub2',
+] as const;
+
+/**
+ * 批次资格判定必填 (2026-06-10 业务定调: 与 CORE_FOR_RECOMMEND 同为生成方案硬门槛).
+ * 缺任一字段时, 地域专项 (国家专项/省级师范/地方优师/乡村振兴/区域均衡/少民预科)、
+ * 农村类 (地方专项/高校专项/农村医学)、年龄类 (军校/公安/军士)、民族类批次
+ * 的资格全部判不了; bonusPolicyStatus 直接影响投档有效分.
+ * gender/birthDate/ethnicity 在 User 表 (USER_LEVEL_FIELDS), 调 compute 前需 merge.
+ */
+export const CORE_FOR_ELIGIBILITY = [
+  'province',
+  'city',
+  'county',
+  'isRural',
+  'gender',
+  'birthDate',
+  'ethnicity',
+  'bonusPolicyStatus',
+  // 2026-06-11 业务定调: 政治面貌(政审类批次)与高考报名地也必填
+  'politicalStatus',
+  'examLocationProvince',
+  'examLocationCity',
+  'examLocationCounty',
+] as const;
+
+/**
+ * 体检必填 (2026-06-10 业务定调: 同为生成方案硬门槛).
+ * 军队/公安/司法/航海/消防/定向军士的体检硬规则输入.
+ */
+export const PHYSICAL_REQUIRED = [
+  'height',
+  'weight',
+  'visionLeft',
+  'visionRight',
+  'colorBlind',
+  'colorWeak',
 ] as const;
 
 /**

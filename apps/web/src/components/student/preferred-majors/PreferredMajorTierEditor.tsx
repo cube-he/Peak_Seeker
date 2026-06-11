@@ -241,9 +241,10 @@ export default function PreferredMajorTierEditor({
   );
 
   // —— actions ——
-  const addMajor = (containerId: string, major: string) => {
+  // keepOpen: 多选连续添加模式 — 选完不收起下拉, 老师可一次加多个专业 (blur 才关闭)
+  const addMajor = (containerId: string, major: string, keepOpen = false) => {
     if (!major || selectedSet.has(major)) {
-      setAdding(null);
+      if (!keepOpen) setAdding(null);
       return;
     }
     if (containerId === POOL_ID) {
@@ -258,7 +259,7 @@ export default function PreferredMajorTierEditor({
         ),
       });
     }
-    setAdding(null);
+    if (!keepOpen) setAdding(null);
   };
 
   const removeMajor = (containerId: string, major: string) => {
@@ -362,12 +363,15 @@ export default function PreferredMajorTierEditor({
         showSearch
         autoFocus
         size="small"
-        style={{ minWidth: 200 }}
-        placeholder="搜索专业"
+        mode="multiple"
+        // 受控空值: 选中即转入容器 Tag 列表, 不在 Select 内累积; 下拉保持打开可连续多选
+        value={[]}
+        style={{ minWidth: 240 }}
+        placeholder="搜索专业, 可连续选多个"
         options={options.filter((o) => !selectedSet.has(o.value))}
         optionFilterProp="label"
         loading={isLoading}
-        onSelect={(v) => addMajor(containerId, v as string)}
+        onSelect={(v) => addMajor(containerId, v as string, true)}
         onBlur={() => setAdding(null)}
       />
     );

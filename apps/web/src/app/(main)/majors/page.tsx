@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Alert, Empty, Input, Pagination, Spin } from 'antd';
+import { DurationLabel } from './DurationLabel';
 import {
   BookOutlined,
   CloseOutlined,
@@ -204,7 +205,7 @@ function MajorCard({ major }: { major: any }) {
         <div className="text-center">
           <div className="text-[10px] uppercase tracking-[1.2px] text-text-muted">学制</div>
           <div className="mt-1 font-serif text-lg font-semibold text-text">
-            {major.standardDuration || '4年'}
+            <DurationLabel value={major.standardDuration || '4年'} />
           </div>
         </div>
       </div>

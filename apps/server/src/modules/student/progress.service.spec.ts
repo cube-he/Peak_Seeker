@@ -107,10 +107,39 @@ describe('ProgressService', () => {
         examLocationProvince: '四川',
         examLocationCity: '成都',
         examLocationCounty: '武侯区',
+        // ② 资格判定必填余项 + ③ 体检必填 (2026-06-10 三层全必填)
+        birthDate: new Date('2008-01-01'),
+        ethnicity: '汉族',
+        height: 175,
+        weight: 65,
+        visionLeft: 4.8,
+        visionRight: 4.8,
+        colorBlind: false,
+        colorWeak: false,
+        // 意向专业(有效梯队) + 优先模式 (2026-06-10 追加必填)
+        preferredMajors: [{ tier: 1, majors: ['计算机科学与技术'] }],
+        priorityMode: 'MAJOR_FIRST',
+        // 政治面貌 + 高考报名地 (2026-06-11 追加必填; examLocation* 上方已有)
+        politicalStatus: 'LEAGUE_MEMBER',
       };
       const r = service.compute(profile as any);
       expect(r.teacherDataCompleteness).toBe(100);
       expect(r.isRecommendable).toBe(true);
+    });
+
+    it('缺政治面貌/报名地/语数外成绩 → missing 列出 (2026-06-11 追加)', () => {
+      const r = service.compute({} as any);
+      for (const f of ['politicalStatus', 'examLocationProvince', 'examLocationCounty', 'scoreChinese', 'scoreMath', 'scoreEnglish', 'scoreFirstChoice', 'scoreSub1', 'scoreSub2']) {
+        expect(r.missingFieldsForRecommend).toContain(f);
+      }
+    });
+
+    it('preferredMajors 只有意向池(tier=0) → 视为未填; priorityMode 缺 → 列出', () => {
+      const r = service.compute({
+        preferredMajors: [{ tier: 0, majors: ['临床医学'] }],
+      } as any);
+      expect(r.missingFieldsForRecommend).toContain('preferredMajors');
+      expect(r.missingFieldsForRecommend).toContain('priorityMode');
     });
 
     it('isRecommendable=false 时 missingFieldsForRecommend 列出缺什么', () => {
@@ -127,6 +156,39 @@ describe('ProgressService', () => {
       expect(r.isRecommendable).toBe(false);
       expect(r.missingFieldsForRecommend).toContain('provincialRank');
       expect(r.missingFieldsForRecommend).not.toContain('totalScore');
+    });
+
+    // 2026-06-10 业务定调: 资格判定字段 + 体检字段也是生成方案硬门槛
+    it('缺户籍县/农村标志/出生日期/体检字段 → isRecommendable=false 并逐一列出', () => {
+      const profile = {
+        realName: '小王',
+        phone: '13800000000',
+        parentPhone: '13900000000',
+        examType: 'PHYSICS',
+        firstChoice: '物理',
+        reChoices: ['化学', '生物'],
+        totalScore: 600,
+        provincialRank: 1000,
+        gender: 'MALE',
+        ethnicity: '汉族',
+        province: '四川',
+        city: '成都',
+        bonusPolicyStatus: 'NONE',
+        // 缺: county / isRural / birthDate / height / weight / vision*2 / color*2
+      };
+      const r = service.compute(profile as any);
+      expect(r.isRecommendable).toBe(false);
+      for (const f of ['county', 'isRural', 'birthDate', 'height', 'weight', 'visionLeft', 'visionRight', 'colorBlind', 'colorWeak']) {
+        expect(r.missingFieldsForRecommend).toContain(f);
+      }
+      expect(r.missingFieldsForRecommend).not.toContain('province');
+      expect(r.missingFieldsForRecommend).not.toContain('gender');
+    });
+
+    it('isRural=false / colorBlind=false 视为已填 (布尔 false 不是缺失)', () => {
+      const r = service.compute({ isRural: false, colorBlind: false } as any);
+      expect(r.missingFieldsForRecommend).not.toContain('isRural');
+      expect(r.missingFieldsForRecommend).not.toContain('colorBlind');
     });
 
     it('数组字段空数组算未填', () => {

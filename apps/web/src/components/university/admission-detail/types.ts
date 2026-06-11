@@ -56,7 +56,5 @@ export interface UniversityRankBannerProps {
 
 export interface BatchSubjectSwitcherProps {
   subject: Subject;
-  batchCategory: BatchCategory;
   onSubjectChange: (s: Subject) => void;
-  onBatchChange: (b: BatchCategory) => void;
 }
