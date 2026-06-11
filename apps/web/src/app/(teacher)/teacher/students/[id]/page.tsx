@@ -1677,6 +1677,8 @@ function HealthFields() {
 }
 
 function PreferenceFields() {
+  // 跳专业库工作台时带上学生 id, 在那边选完直接存回本学生的意向池
+  const prefParams = useParams<{ id: string }>();
   const { data: provinceOptions } = useProvinceOptions();
   const { data: cityOptions } = useCityOptions();
   const { data: universityOptions, isLoading: isUniversityLoading } = useUniversityOptions();
@@ -1710,7 +1712,17 @@ function PreferenceFields() {
         </Form.Item>
       </div>
       <div className="field sd-field-full">
-        <label>意向专业 (梯队)<span className="req">必填</span></label>
+        <label>
+          意向专业 (梯队)<span className="req">必填</span>
+          <a
+            href={`/majors?studentId=${prefParams.id}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{ marginLeft: 10, fontSize: 12, fontWeight: 400 }}
+          >
+            去专业库挑选（看在川计划/分数带）→
+          </a>
+        </label>
         <Form.Item name="preferredMajors" noStyle>
           <PreferredMajorTierFormItem options={majorOptions ?? []} isLoading={isMajorLoading} />
         </Form.Item>

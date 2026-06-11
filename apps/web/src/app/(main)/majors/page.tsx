@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Alert, Empty, Input, Pagination, Spin } from 'antd';
+import { Alert, Button, Drawer, Empty, Input, Pagination, Select, Spin, Table, Tooltip, message } from 'antd';
 import { DurationLabel } from './DurationLabel';
 import {
   BookOutlined,
@@ -10,11 +10,24 @@ import {
   ReadOutlined,
   RightOutlined,
   SearchOutlined,
+  StarFilled,
+  StarOutlined,
+  SwapOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import { majorService, type MajorQueryParams } from '@/services/major';
+import { favoriteService } from '@/services/favorite';
+import { useAuthStore } from '@/stores/authStore';
+import { studentApi } from '@/services/student-api';
+import PreferredMajorTierFormItem from '@/components/student/preferred-majors/PreferredMajorTierFormItem';
+import { coerceTierShape, normalize } from '@/components/student/preferred-majors/PreferredMajorTierEditor';
+import type { PreferredMajorTier } from '@/components/student/preferred-majors/types';
+import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
+// 意向池编辑器样式 (pm-*) scope 在 .wn-teacher-scope 下, 抽屉内包同名容器复用
+import '@/styles/willnest-teacher.css';
 
 // 本科学科门类（13 个，含 2026 新设的交叉学科）
 const CATEGORIES = [
@@ -149,12 +162,76 @@ function FilterChip({
   );
 }
 
-function MajorCard({ major }: { major: any }) {
+// 物理/历史类最低分带格: 该专业各院校投档最低分的跨校范围, 悬停补位次带
+function BandCell({
+  label, lo, hi, rankLo, rankHi, year, colorClass,
+}: {
+  label: string;
+  lo?: number | null;
+  hi?: number | null;
+  rankLo?: number | null;
+  rankHi?: number | null;
+  year?: number | null;
+  colorClass: string;
+}) {
+  if (lo == null) {
+    return (
+      <div className="text-center">
+        <div className="text-[10px] uppercase tracking-[1.2px] text-text-muted">{label}</div>
+        <div className="mt-1 font-serif text-lg font-semibold text-text-muted">--</div>
+        <div className="text-[10px] text-text-faint">无录取数据</div>
+      </div>
+    );
+  }
+  const band = hi != null && hi !== lo ? `${lo}~${hi}` : `${lo}`;
+  const rankBand =
+    rankLo != null
+      ? rankHi != null && rankHi !== rankLo
+        ? `${rankLo.toLocaleString()}~${rankHi.toLocaleString()}`
+        : rankLo.toLocaleString()
+      : null;
+  return (
+    <Tooltip title={`${year ?? ''} 年该专业各院校最低分跨度${rankBand ? `；对应位次 ${rankBand}` : ''}`}>
+      <div className="text-center" style={{ cursor: 'help' }}>
+        <div className="text-[10px] uppercase tracking-[1.2px] text-text-muted">{label}</div>
+        <div className={`mt-1 font-serif text-lg font-semibold tabular-nums ${colorClass}`}>{band}</div>
+        <div className="text-[10px] text-text-faint">{year} 各校最低分带</div>
+      </div>
+    </Tooltip>
+  );
+}
+
+function MajorCard({
+  major,
+  favorited,
+  onToggleFav,
+  inCompare,
+  onToggleCompare,
+  poolEnabled,
+  inPool,
+  onAddToPool,
+}: {
+  major: any;
+  favorited: boolean;
+  onToggleFav: (major: any) => void;
+  inCompare: boolean;
+  onToggleCompare: (major: any) => void;
+  /* 老师选定学生后的意向池一键加入 */
+  poolEnabled: boolean;
+  inPool: boolean;
+  onAddToPool: (major: any) => void;
+}) {
   const employmentRate = parseRate(major.employmentRate);
   const categoryColor = CATEGORY_COLORS[major.category] || '#1e3a5f';
   const tags = [major.category, major.discipline, major.degree, major.level, major.softRating]
     .filter(Boolean)
     .slice(0, 5);
+  // 卡片整体是 Link, 内部操作按钮需要拦截导航
+  const stop = (e: React.MouseEvent, fn: () => void) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fn();
+  };
 
   return (
     <Link
@@ -184,33 +261,67 @@ function MajorCard({ major }: { major: any }) {
             )}
           </div>
         </div>
-        <span className="rounded-full bg-accent-fixed px-3 py-1 text-[11px] font-medium text-accent">
-          {major.isRestricted ? '限报提示' : '可填报'}
+        <span className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => stop(e, () => onToggleFav(major))}
+            title={favorited ? '取消收藏' : '收藏专业'}
+            className="flex h-7 w-7 items-center justify-center rounded-full border-0 bg-bg text-sm transition-colors hover:bg-surface-dim"
+          >
+            {favorited
+              ? <StarFilled className="text-amber-500" />
+              : <StarOutlined className="text-text-muted" />}
+          </button>
+          <span className="rounded-full bg-accent-fixed px-3 py-1 text-[11px] font-medium text-accent">
+            {major.isRestricted ? '限报提示' : '可填报'}
+          </span>
         </span>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 border-y border-border-subtle py-4">
-        <div className="text-center">
-          <div className="text-[10px] uppercase tracking-[1.2px] text-text-muted">就业率</div>
-          <div className={`mt-1 font-serif text-lg font-semibold tabular-nums ${employmentRate ? 'text-safe' : 'text-text-muted'}`}>
-            {employmentRate ? `${employmentRate}%` : '--'}
+      {/* 在川招录事实 (物化列): 计划规模 + 物理/历史最低分带; 无计划 = 重要负信号, 灰条提示 */}
+      {major.scPlanCount != null ? (
+        <div className="grid grid-cols-3 gap-3 border-y border-border-subtle py-4">
+          <div className="text-center">
+            <div className="text-[10px] uppercase tracking-[1.2px] text-text-muted">在川计划</div>
+            <div className="mt-1 font-serif text-lg font-semibold text-text tabular-nums">
+              {major.scPlanCount}
+              <span className="text-xs font-normal text-text-muted"> 人</span>
+            </div>
+            <div className="text-[10px] text-text-faint">{major.scPlanUnis} 所院校 · {major.scPlanYear}</div>
           </div>
+          <BandCell
+            label="物理类最低分"
+            lo={major.scPhyScoreLo} hi={major.scPhyScoreHi}
+            rankLo={major.scPhyRankLo} rankHi={major.scPhyRankHi}
+            year={major.scScoreYear} colorClass="text-blue-700"
+          />
+          <BandCell
+            label="历史类最低分"
+            lo={major.scHisScoreLo} hi={major.scHisScoreHi}
+            rankLo={major.scHisRankLo} rankHi={major.scHisRankHi}
+            year={major.scScoreYear} colorClass="text-rose-700"
+          />
         </div>
-        <div className="text-center">
-          <div className="text-[10px] uppercase tracking-[1.2px] text-text-muted">起薪</div>
-          <div className="mt-1 font-serif text-lg font-semibold text-accent tabular-nums">
-            {formatSalary(major.avgSalary)}
-          </div>
+      ) : (
+        <div className="border-y border-border-subtle py-4 text-center text-xs text-text-muted">
+          近年无在川招生计划
         </div>
-        <div className="text-center">
-          <div className="text-[10px] uppercase tracking-[1.2px] text-text-muted">学制</div>
-          <div className="mt-1 font-serif text-lg font-semibold text-text">
-            <DurationLabel value={major.standardDuration || '4年'} />
-          </div>
-        </div>
-      </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
+        {/* 批次覆盖: 最多平铺 2 个, 其余收进悬停 */}
+        {(major.scBatches ? String(major.scBatches).split('、') : []).slice(0, 2).map((b: string) => (
+          <span key={b} className="rounded bg-accent-fixed px-2 py-0.5 text-[11px] font-medium text-accent">
+            {b}
+          </span>
+        ))}
+        {major.scBatches && String(major.scBatches).split('、').length > 2 && (
+          <Tooltip title={String(major.scBatches).split('、').join(' / ')}>
+            <span className="rounded bg-accent-fixed px-2 py-0.5 text-[11px] font-medium text-accent" style={{ cursor: 'help' }}>
+              +{String(major.scBatches).split('、').length - 2} 批次
+            </span>
+          </Tooltip>
+        )}
         {major.electiveAdvice && (
           <span className="rounded bg-primary-fixed px-2 py-0.5 text-[11px] font-medium text-primary">
             选考 {major.electiveAdvice}
@@ -229,12 +340,44 @@ function MajorCard({ major }: { major: any }) {
         )}
       </div>
 
+      {/* 全国静态指标降级为小字 (category 在上方 tags 已有, 不重复) */}
       <div className="mt-4 flex items-center justify-between border-t border-border-subtle pt-4 text-xs text-text-tertiary">
         <span className="inline-flex items-center gap-2">
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: categoryColor }} />
-          {major.category || '未分类'}
+          <span>
+            {employmentRate ? <>就业率 {employmentRate}% · </> : null}
+            {typeof major.avgSalary === 'number' && major.avgSalary > 0 ? <>起薪 {formatSalary(major.avgSalary)} · </> : null}
+            学制 <DurationLabel value={major.standardDuration || '4年'} />
+          </span>
         </span>
-        <span>查看详情 →</span>
+        <span className="inline-flex items-center gap-3">
+          {poolEnabled && (
+            <button
+              type="button"
+              onClick={(e) => stop(e, () => onAddToPool(major))}
+              className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] transition-colors ${
+                inPool
+                  ? 'border-safe bg-stable-fixed text-safe'
+                  : 'border-accent bg-accent text-white hover:opacity-90'
+              }`}
+            >
+              {inPool ? '已在意向 ✓' : '+ 意向池'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={(e) => stop(e, () => onToggleCompare(major))}
+            className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] transition-colors ${
+              inCompare
+                ? 'border-primary bg-primary text-white'
+                : 'border-border bg-transparent text-text-tertiary hover:border-primary hover:text-primary'
+            }`}
+          >
+            <SwapOutlined className="text-[10px]" />
+            {inCompare ? '对比中' : '对比'}
+          </button>
+          <span>查看详情 →</span>
+        </span>
       </div>
     </Link>
   );
@@ -263,6 +406,136 @@ function MajorsPageInner() {
     queryFn: () => majorService.getCategories(),
   });
 
+  // ===== 收藏: 登录后可收藏专业 (与 /favorites 页同一体系) =====
+  const { isLoggedIn, user } = useAuthStore();
+  const queryClient = useQueryClient();
+  const { data: favData } = useQuery({
+    queryKey: ['favorites', 'major'],
+    queryFn: () => favoriteService.getList('major'),
+    enabled: isLoggedIn,
+  });
+  const favByMajorId = useMemo(() => {
+    const map = new Map<number, number>();
+    const list = (favData as any)?.data ?? favData ?? [];
+    for (const f of Array.isArray(list) ? list : []) {
+      if (f.majorId) map.set(f.majorId, f.id);
+    }
+    return map;
+  }, [favData]);
+  const toggleFav = async (major: any) => {
+    if (!isLoggedIn) {
+      message.info('登录后即可收藏专业');
+      return;
+    }
+    const favId = favByMajorId.get(major.id);
+    try {
+      if (favId) {
+        await favoriteService.remove(favId);
+        message.success(`已取消收藏「${major.name}」`);
+      } else {
+        await favoriteService.add({ type: 'major', majorId: major.id });
+        message.success(`已收藏「${major.name}」，可在“我的收藏”查看`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['favorites', 'major'] });
+    } catch {
+      message.error('收藏操作失败，请重试');
+    }
+  };
+
+  // ===== 对比: 跨页勾选 2-4 个专业, 底部浮条进入对比抽屉 =====
+  const [compareList, setCompareList] = useState<any[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const toggleCompare = (major: any) => {
+    setCompareList((prev) => {
+      if (prev.some((m) => m.id === major.id)) return prev.filter((m) => m.id !== major.id);
+      if (prev.length >= 4) {
+        message.warning('最多同时对比 4 个专业');
+        return prev;
+      }
+      return [...prev, major];
+    });
+  };
+
+  // ===== 意向池工作台 (仅老师, 主管也是 TEACHER): 选学生 → 卡片一键进意向池 → 抽屉排梯队保存 =====
+  const isTeacher = isLoggedIn && user?.role === 'TEACHER';
+  const [workStudentId, setWorkStudentId] = useState<string | null>(() => searchParams.get('studentId'));
+  const [poolTiers, setPoolTiers] = useState<PreferredMajorTier[]>([]);
+  const [poolDirty, setPoolDirty] = useState(false);
+  const [poolOpen, setPoolOpen] = useState(false);
+  const [poolSaving, setPoolSaving] = useState(false);
+
+  const { data: studentListRaw } = useQuery({
+    queryKey: ['workbench-students'],
+    queryFn: () => studentApi.getList({ pageSize: 500 }),
+    enabled: isTeacher,
+  });
+  const studentOptions = useMemo(() => {
+    const list = (studentListRaw as any)?.data ?? [];
+    return (Array.isArray(list) ? list : []).map((s: any) => {
+      const name = s.user?.realName ?? s.realName ?? s.username ?? `#${s.id}`;
+      return {
+        label: s.provincialRank ? `${name} · 位次 ${Number(s.provincialRank).toLocaleString()}` : name,
+        value: String(s.id),
+      };
+    });
+  }, [studentListRaw]);
+
+  const { data: workStudentRaw, refetch: refetchWorkStudent } = useQuery({
+    queryKey: ['workbench-student', workStudentId],
+    queryFn: () => studentApi.getById(workStudentId!),
+    enabled: isTeacher && !!workStudentId,
+  });
+  const workStudent = (workStudentRaw as any)?.data ?? workStudentRaw ?? null;
+  const workStudentName =
+    workStudent?.user?.realName ?? workStudent?.realName ?? workStudent?.username ?? '';
+  // 详情加载/学生切换后同步意向数据; dirty 时不覆盖, 防止冲掉老师未保存的编辑
+  useEffect(() => {
+    if (!workStudent || poolDirty) return;
+    setPoolTiers(coerceTierShape(workStudent.preferredMajors));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workStudent]);
+
+  const poolNames = useMemo(() => new Set(poolTiers.flatMap((t) => t.majors)), [poolTiers]);
+  const { data: editorMajorOptions, isLoading: editorOptionsLoading } = useMajorOptions();
+
+  const savePool = async (tiers: PreferredMajorTier[], silent = false) => {
+    if (!workStudentId) return false;
+    setPoolSaving(true);
+    try {
+      await studentApi.update(workStudentId, { preferredMajors: normalize(tiers) } as any);
+      setPoolDirty(false);
+      if (!silent) message.success('意向专业已保存');
+      refetchWorkStudent();
+      return true;
+    } catch {
+      message.error('保存失败，请重试');
+      return false;
+    } finally {
+      setPoolSaving(false);
+    }
+  };
+
+  // 单击即落库: 老师不需要记得另外保存
+  const addToPool = async (major: any) => {
+    if (!workStudentId) {
+      message.info('先在上方选择学生');
+      return;
+    }
+    if (poolNames.has(major.name)) {
+      message.info(`「${major.name}」已在意向列表`);
+      return;
+    }
+    const next = poolTiers.map((t) => ({ tier: t.tier, majors: [...t.majors] }));
+    const pool = next.find((t) => t.tier === 0);
+    if (pool) pool.majors.push(major.name);
+    else next.unshift({ tier: 0, majors: [major.name] });
+    const prev = poolTiers;
+    setPoolTiers(next);
+    const ok = await savePool(next, true);
+    if (ok) message.success(`已把「${major.name}」加入${workStudentName ? ` ${workStudentName} 的` : ''}意向池`);
+    else setPoolTiers(prev); // 落库失败回滚, 避免卡片假性显示"已在意向"
+  };
+
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     if (Array.isArray(categoriesData)) {
@@ -281,6 +554,7 @@ function MajorsPageInner() {
     if (filters.electiveSubject) items.push({ key: 'electiveSubject', label: `选考 ${filters.electiveSubject}` });
     if (filters.sortBy === 'salary') items.push({ key: 'sortBy', label: '按薪资排序' });
     if (filters.sortBy === 'popularity') items.push({ key: 'sortBy', label: '按热度排序' });
+    if (filters.sortBy === 'plan') items.push({ key: 'sortBy', label: '按在川计划人数' });
     return items;
   }, [filters.category, filters.level, filters.emerging, filters.electiveSubject, filters.sortBy]);
 
@@ -301,6 +575,50 @@ function MajorsPageInner() {
             覆盖本科与高职专科，对齐教育部最新专业目录。可按增设年份、选考建议、薪资筛选，帮你判断专业适配度。
           </p>
         </div>
+
+        {/* 老师工作台: 选定学生后, 专业卡片出现"+ 意向池"一键加入 */}
+        {isTeacher && (
+          <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-accent/25 bg-accent-fixed p-4 shadow-card">
+            <span className="flex items-center gap-2 text-sm font-semibold text-accent">
+              <UserOutlined />
+              为学生选专业
+            </span>
+            <Select
+              showSearch
+              allowClear
+              placeholder="选择学生（可按姓名搜索）"
+              style={{ minWidth: 250 }}
+              options={studentOptions}
+              value={workStudentId ?? undefined}
+              optionFilterProp="label"
+              onChange={(v) => {
+                setWorkStudentId(v ?? null);
+                setPoolDirty(false);
+                setPoolTiers([]);
+              }}
+            />
+            {workStudentId && workStudent ? (
+              <>
+                <span className="text-xs text-text-secondary">
+                  {workStudent.firstChoice === '物理' || workStudent.examType === 'PHYSICS'
+                    ? '物理类'
+                    : workStudent.firstChoice === '历史' || workStudent.examType === 'HISTORY'
+                      ? '历史类'
+                      : ''}
+                  {workStudent.provincialRank
+                    ? ` · 位次 ${Number(workStudent.provincialRank).toLocaleString()}`
+                    : ''}
+                  {` · 意向 ${poolNames.size} 个`}
+                </span>
+                <Button size="small" onClick={() => setPoolOpen(true)}>
+                  编辑意向池 / 排序
+                </Button>
+              </>
+            ) : (
+              <span className="text-xs text-text-muted">选择学生后，专业卡片可一键加入其意向池</span>
+            )}
+          </div>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
           <div className="space-y-4">
@@ -377,6 +695,15 @@ function MajorsPageInner() {
                 <span className="mx-1 h-4 w-px bg-border" />
                 <button
                   type="button"
+                  onClick={() => setFilters({ ...filters, sortBy: filters.sortBy === 'plan' ? undefined : 'plan', page: 1 })}
+                  className={`rounded-md border-0 px-3.5 py-2 text-[13px] transition-colors ${
+                    filters.sortBy === 'plan' ? 'bg-surface-high font-medium text-text shadow-[0_1px_2px_rgba(0,0,0,0.04)]' : 'bg-bg text-text-tertiary hover:text-primary'
+                  }`}
+                >
+                  按在川计划人数
+                </button>
+                <button
+                  type="button"
                   onClick={() => setFilters({ ...filters, sortBy: filters.sortBy === 'salary' ? undefined : 'salary', page: 1 })}
                   className={`rounded-md border-0 px-3.5 py-2 text-[13px] transition-colors ${
                     filters.sortBy === 'salary' ? 'bg-surface-high font-medium text-text shadow-[0_1px_2px_rgba(0,0,0,0.04)]' : 'bg-bg text-text-tertiary hover:text-primary'
@@ -434,7 +761,17 @@ function MajorsPageInner() {
             ) : majors.length > 0 ? (
               <div className="grid gap-4 xl:grid-cols-2">
                 {majors.map((major: any) => (
-                  <MajorCard key={major.id} major={major} />
+                  <MajorCard
+                    key={major.id}
+                    major={major}
+                    favorited={favByMajorId.has(major.id)}
+                    onToggleFav={toggleFav}
+                    inCompare={compareList.some((m) => m.id === major.id)}
+                    onToggleCompare={toggleCompare}
+                    poolEnabled={isTeacher && !!workStudentId}
+                    inPool={poolNames.has(major.name)}
+                    onAddToPool={addToPool}
+                  />
                 ))}
               </div>
             ) : (
@@ -458,9 +795,135 @@ function MajorsPageInner() {
             )}
           </main>
         </div>
+
+        {/* 对比浮条: 有勾选时常驻底部 */}
+        {compareList.length > 0 && (
+          <div className="fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-4 py-2 text-white shadow-lg">
+            <SwapOutlined className="text-sm" />
+            <span className="hidden gap-1 sm:flex">
+              {compareList.map((m) => (
+                <span key={m.id} className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-xs">
+                  {m.name}
+                  <CloseOutlined className="cursor-pointer text-[9px]" onClick={() => toggleCompare(m)} />
+                </span>
+              ))}
+            </span>
+            <button
+              type="button"
+              disabled={compareList.length < 2}
+              onClick={() => setCompareOpen(true)}
+              className={`rounded-full border-0 px-3 py-1 text-xs font-medium ${
+                compareList.length >= 2 ? 'bg-accent text-white' : 'bg-white/20 text-white/50'
+              }`}
+            >
+              对比 ({compareList.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCompareList([])}
+              className="rounded-full border-0 bg-transparent px-1 text-xs text-white/60 hover:text-white"
+            >
+              清空
+            </button>
+          </div>
+        )}
+
+        <Drawer
+          title={`专业对比 (${compareList.length})`}
+          open={compareOpen}
+          onClose={() => setCompareOpen(false)}
+          width={Math.min(280 + compareList.length * 230, 1180)}
+        >
+          <Table
+            size="small"
+            bordered
+            pagination={false}
+            rowKey="metric"
+            columns={[
+              { title: '指标', dataIndex: 'metric', width: 118, fixed: 'left' as const },
+              ...compareList.map((m, i) => ({
+                title: (
+                  <Link href={`/majors/${m.id}`} className="text-primary">
+                    {m.name}
+                  </Link>
+                ),
+                dataIndex: `v${i}`,
+                width: 210,
+                render: (v: any) => (v == null || v === '' ? <span className="text-text-muted">--</span> : v),
+              })),
+            ]}
+            dataSource={buildCompareRows(compareList)}
+          />
+        </Drawer>
+
+        {/* 意向池编辑抽屉: 复用学生档案的梯队编辑器 (拖拽排序), 样式靠 wn-teacher-scope */}
+        <Drawer
+          title={workStudentName ? `${workStudentName} 的意向专业` : '意向专业'}
+          open={poolOpen}
+          onClose={() => setPoolOpen(false)}
+          width={560}
+          extra={
+            <Button
+              type="primary"
+              size="small"
+              loading={poolSaving}
+              disabled={!poolDirty}
+              onClick={() => savePool(poolTiers)}
+            >
+              保存
+            </Button>
+          }
+        >
+          <div className="wn-teacher-scope">
+            <p className="mb-3 mt-0 text-xs text-text-tertiary">
+              在专业卡片点「+ 意向池」即时加入；这里可拖动专业排梯队（梯队 1 = 最优先），调整后点右上角保存。
+            </p>
+            <PreferredMajorTierFormItem
+              value={poolTiers}
+              options={editorMajorOptions ?? []}
+              isLoading={editorOptionsLoading}
+              onChange={(next) => {
+                setPoolTiers(next);
+                setPoolDirty(true);
+              }}
+            />
+          </div>
+        </Drawer>
       </div>
     </MainLayout>
   );
+}
+
+// 对比表: 指标做行、专业做列 (值取列表接口已返回的物化字段, 无额外请求)
+function buildCompareRows(list: any[]) {
+  const band = (lo?: number | null, hi?: number | null, fmt?: (n: number) => string) => {
+    if (lo == null) return null;
+    const f = fmt ?? ((n: number) => String(n));
+    return hi != null && hi !== lo ? `${f(lo)}~${f(hi)}` : f(lo);
+  };
+  const kfmt = (n: number) => n.toLocaleString();
+  const rows: Array<[string, (m: any) => any]> = [
+    ['层次', (m) => m.level],
+    ['门类', (m) => m.category],
+    ['在川计划', (m) => (m.scPlanCount != null ? `${m.scPlanCount} 人 · ${m.scPlanUnis} 校 (${m.scPlanYear})` : '近年无在川计划')],
+    ['招生批次', (m) => m.scBatches],
+    ['物理类最低分带', (m) => band(m.scPhyScoreLo, m.scPhyScoreHi)],
+    ['物理类位次带', (m) => band(m.scPhyRankLo, m.scPhyRankHi, kfmt)],
+    ['历史类最低分带', (m) => band(m.scHisScoreLo, m.scHisScoreHi)],
+    ['历史类位次带', (m) => band(m.scHisRankLo, m.scHisRankHi, kfmt)],
+    ['选考建议', (m) => m.electiveAdvice],
+    ['学制', (m) => m.standardDuration],
+    ['起薪 (全国样本)', (m) => (typeof m.avgSalary === 'number' && m.avgSalary > 0 ? `¥${m.avgSalary.toLocaleString()}` : null)],
+    ['就业率', (m) => (parseRate(m.employmentRate) ? `${parseRate(m.employmentRate)}%` : null)],
+    ['本科热度', (m) => (m.popularityRank ? `全国第 ${m.popularityRank}` : null)],
+  ];
+  return rows.map(([metric, fn]) => {
+    const row: Record<string, any> = { metric };
+    list.forEach((m, i) => {
+      row[`v${i}`] = fn(m);
+    });
+    return row;
+  });
 }
 
 // useSearchParams 在静态预渲染页面要求 Suspense 边界 (Next 14 CSR bailout)

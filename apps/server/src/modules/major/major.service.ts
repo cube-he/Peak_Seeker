@@ -21,7 +21,7 @@ export class MajorService {
     discipline?: string;
     emerging?: boolean;        // 仅看新兴专业（2024 年起增设）
     electiveSubject?: string;  // 按选考建议筛选（如「物理」）
-    sortBy?: string;           // 'salary' = 按平均薪资降序；'popularity' = 按本科热度排名；默认按名称
+    sortBy?: string;           // 'salary' 薪资降序 / 'popularity' 热度 / 'plan' 在川计划人数降序；默认按名称
   }) {
     const {
       page: pageRaw = 1, pageSize: sizeRaw = 20, keyword, category, level, discipline,
@@ -51,7 +51,9 @@ export class MajorService {
         ? [{ avgSalary: { sort: 'desc' as const, nulls: 'last' as const } }, { name: 'asc' as const }]
         : sortBy === 'popularity'
           ? [{ popularityRank: { sort: 'asc' as const, nulls: 'last' as const } }, { name: 'asc' as const }]
-          : [{ name: 'asc' as const }];
+          : sortBy === 'plan'
+            ? [{ scPlanCount: { sort: 'desc' as const, nulls: 'last' as const } }, { name: 'asc' as const }]
+            : [{ name: 'asc' as const }];
 
     const [data, total] = await Promise.all([
       this.prisma.major.findMany({

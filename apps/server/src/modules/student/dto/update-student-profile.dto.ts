@@ -11,7 +11,7 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type, plainToInstance } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   NewExamType,
@@ -28,6 +28,21 @@ import {
   FormFiller,
 } from '@prisma/client';
 import { BonusItemDto } from './bonus-item.dto';
+
+/**
+ * 意向专业梯队项: { tier: 0=意向池 / 1..N=梯队, majors: 专业名数组 }
+ * 必须显式声明嵌套 class — 之前声明为 string[] 时, 全局 ValidationPipe 的
+ * enableImplicitConversion 会把对象元素剥成空数组, tiers 数据整体丢失 (2026-06-11 修复)
+ */
+export class PreferredMajorTierDto {
+  @IsInt()
+  @Min(0)
+  tier!: number;
+
+  @IsArray()
+  @IsString({ each: true })
+  majors!: string[];
+}
 
 export class UpdateStudentProfileDto {
   // 自动保存场景下前端不会带 dataVersion（只发改动字段），此时跳过乐观锁走 last-write-wins
@@ -268,10 +283,27 @@ export class UpdateStudentProfileDto {
   @IsArray()
   preferredCities?: string[];
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description: '意向专业梯队 [{tier, majors}]; 兼容旧扁平 string[] (自动包成意向池 tier=0)',
+    type: [PreferredMajorTierDto],
+  })
   @IsOptional()
+  // 从原始 payload (obj) 取值; 旧扁平 string[] 自动升格为意向池。
+  // @Transform 会覆盖 @Type 的元素实例化, 必须在这里自己 plainToInstance,
+  // 否则 ValidateNested + whitelist 把 plain object 的 tier/majors 当未知属性拒掉
+  @Transform(({ obj }) => {
+    const raw = obj?.preferredMajors;
+    if (!Array.isArray(raw)) return raw;
+    const tiers =
+      raw.length > 0 && raw.every((m: unknown) => typeof m === 'string')
+        ? [{ tier: 0, majors: raw }]
+        : raw;
+    return tiers.map((t: unknown) => plainToInstance(PreferredMajorTierDto, t));
+  })
   @IsArray()
-  preferredMajors?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => PreferredMajorTierDto)
+  preferredMajors?: PreferredMajorTierDto[];
 
   @ApiPropertyOptional()
   @IsOptional()
