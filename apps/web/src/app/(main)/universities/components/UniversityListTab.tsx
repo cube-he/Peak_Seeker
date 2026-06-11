@@ -390,7 +390,7 @@ export function UniversityListTab() {
               }}
             />
           </div>
-          <SortCluster filters={filters} setFilters={setFilters} />
+          <SortCluster filters={filters} setFilters={setFilters} userRank={effRank} />
         </div>
         <ListFiltersPanel filters={filters} setFilters={setFilters} studentRank={effRank} />
       </div>

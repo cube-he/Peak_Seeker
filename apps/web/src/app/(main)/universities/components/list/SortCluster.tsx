@@ -11,23 +11,26 @@ import type { UniversityQueryParams } from '@/services/university';
 type SortKey = NonNullable<UniversityQueryParams['sortBy']>;
 type SortDir = 'asc' | 'desc';
 
-const HOT: Array<{ key: SortKey; label: string; dir: SortDir }> = [
+const HOT: Array<{ key: SortKey; label: string; dir: SortDir; needsRank?: boolean }> = [
   { key: 'softRank', label: '软科排名', dir: 'asc' },
   // 后端 sortBy 同义:rank / minScore 已支持。
   { key: 'rank' as SortKey, label: '录取位次', dir: 'asc' },
   { key: 'minScore' as SortKey, label: '最低分数', dir: 'desc' },
+  // 冲稳保依赖学生位次; 学生工作台上线后是高频排序, 直出而不藏进"更多"
+  { key: 'tier' as SortKey, label: '冲稳保', dir: 'asc', needsRank: true },
 ];
 const MORE: Array<{ key: SortKey; label: string; dir: SortDir }> = [
   { key: 'name' as SortKey, label: '院校名称', dir: 'asc' },
-  { key: 'tier' as SortKey, label: '冲稳保', dir: 'asc' },
 ];
 
 interface Props {
   filters: UniversityQueryParams;
   setFilters: (next: UniversityQueryParams) => void;
+  /** 生效中的位次 (学生注入或手填); 为空时冲稳保排序禁用 */
+  userRank: number | null;
 }
 
-export function SortCluster({ filters, setFilters }: Props) {
+export function SortCluster({ filters, setFilters, userRank }: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -56,12 +59,16 @@ export function SortCluster({ filters, setFilters }: Props) {
       {HOT.map((o) => {
         const active = filters.sortBy === o.key;
         const arr = active ? (filters.sortOrder === 'asc' ? '↑' : '↓') : '⇅';
+        const disabled = !!o.needsRank && userRank == null;
         return (
           <button
             key={o.key}
             type="button"
             className={`sort-btn ${active ? 'is-active' : ''}`}
-            onClick={() => cycle(o.key, o.dir)}
+            disabled={disabled}
+            title={disabled ? '录入位次或选择学生后可用' : undefined}
+            style={disabled ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+            onClick={() => !disabled && cycle(o.key, o.dir)}
           >
             {o.label} <span className="arr">{arr}</span>
           </button>

@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { UniversityListTab } from '../UniversityListTab';
 import { universityService } from '@/services/university';
@@ -85,16 +85,17 @@ describe('UniversityListTab header', () => {
   it('enables rank/tier sorting and shows the tier filter when a rank is set', async () => {
     useStudentRank.setState({ rank: 12000, examType: '物理' });
     renderTab();
-    expect(await screen.findByRole('button', { name: /位次/ })).toBeEnabled();
-    expect(screen.getByRole('button', { name: '冲稳保' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: '冲' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /冲稳保/ })).toBeEnabled();
+    // 录取概率筛选 (冲一冲/稳一稳/保一保) 在折叠区, 展开后有位次 → 可用
+    fireEvent.click(screen.getByRole('button', { name: /展开更多筛选/ }));
+    expect(await screen.findByRole('button', { name: /冲一冲/ })).toBeEnabled();
   });
 
   it('disables tier sort when no rank is set', async () => {
     // afterEach 已把 rank 重置为 null
     renderTab();
-    expect(await screen.findByRole('button', { name: '冲稳保' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /位次/ })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: /冲稳保/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /软科排名/ })).toBeEnabled();
   });
 
   it('does not show a rank-tier badge when no student rank is set', async () => {
@@ -111,9 +112,11 @@ describe('UniversityListTab header', () => {
     });
     renderTab();
     await screen.findByText('测试大学');
-    // TopFilterBar 总是渲染 冲/稳/保 按钮，但无 rank 时是 disabled
-    const stableBtn = screen.getByRole('button', { name: '稳' });
-    expect(stableBtn).toBeDisabled();
+    // 无位次 → 卡片不渲染冲稳保 badge ('稳'); 折叠区未展开, 不会误命中 '稳一稳'
+    expect(screen.queryByText('稳')).toBeNull();
+    // 录取概率筛选展开后应是禁用态
+    fireEvent.click(screen.getByRole('button', { name: /展开更多筛选/ }));
+    expect(await screen.findByRole('button', { name: /稳一稳/ })).toBeDisabled();
   });
 
   it('shows soft ranking and category rank on the card', async () => {
@@ -129,7 +132,8 @@ describe('UniversityListTab header', () => {
       pagination: { page: 1, pageSize: 12, total: 1, totalPages: 1 },
     });
     renderTab();
-    expect(await screen.findByText(/软科2026/)).toBeInTheDocument();
+    // 卡片渲染 "软科 2026 本科#66" (年份与榜名间有空格)
+    expect(await screen.findByText(/软科 2026/)).toBeInTheDocument();
     expect(screen.getByText(/财经类 #5/)).toBeInTheDocument();
   });
 
