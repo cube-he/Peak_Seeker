@@ -21,6 +21,10 @@ export class MajorController {
     @Query('emerging') emerging?: string,
     @Query('electiveSubject') electiveSubject?: string,
     @Query('sortBy') sortBy?: string,
+    @Query('subjectLane') subjectLane?: string,
+    @Query('batch') batch?: string,
+    @Query('recruitType') recruitType?: string,
+    @Query('hasSupplementary') hasSupplementary?: string,
   ) {
     return this.majorService.findAll({
       page,
@@ -32,6 +36,10 @@ export class MajorController {
       emerging: emerging === 'true' || emerging === '1',
       electiveSubject,
       sortBy,
+      subjectLane,
+      batch,
+      recruitType,
+      hasSupplementary: hasSupplementary === 'true' || hasSupplementary === '1',
     });
   }
 

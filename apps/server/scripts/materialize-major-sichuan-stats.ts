@@ -46,7 +46,8 @@ async function main() {
       sc_plan_count=NULL, sc_plan_unis=NULL, sc_plan_year=NULL, sc_batches=NULL,
       sc_score_year=NULL,
       sc_phy_score_lo=NULL, sc_phy_score_hi=NULL, sc_phy_rank_lo=NULL, sc_phy_rank_hi=NULL,
-      sc_his_score_lo=NULL, sc_his_score_hi=NULL, sc_his_rank_lo=NULL, sc_his_rank_hi=NULL
+      sc_his_score_lo=NULL, sc_his_score_hi=NULL, sc_his_rank_lo=NULL, sc_his_rank_hi=NULL,
+      sc_phy_plan_count=NULL, sc_his_plan_count=NULL, sc_recruit_types=NULL, sc_suppl_count=NULL
   `);
   console.log(`重置: ${reset} 行`);
 
@@ -78,6 +79,70 @@ async function main() {
         m.sc_batches    = LEFT(s.batches, 300)
   `);
   console.log(`计划聚合 (${planYear}): ${planUpdated} 个专业`);
+
+  // 3b. 科类计划人数 (学生模式按首选科目过滤的依据)
+  const laneUpdated = await prisma.$executeRawUnsafe(`
+    UPDATE majors m
+    JOIN (
+      SELECT major_id,
+        SUM(CASE WHEN subjects='物理' THEN COALESCE(plan_count,0) ELSE 0 END) AS phy_cnt,
+        SUM(CASE WHEN subjects='历史' THEN COALESCE(plan_count,0) ELSE 0 END) AS his_cnt
+      FROM enrollment_plans
+      WHERE province='四川' AND year=${planYear}
+      GROUP BY major_id
+    ) s ON s.major_id = m.id
+    SET m.sc_phy_plan_count = NULLIF(s.phy_cnt, 0),
+        m.sc_his_plan_count = NULLIF(s.his_cnt, 0)
+  `);
+  console.log(`科类计划聚合: ${laneUpdated} 个专业`);
+
+  // 3c. 特殊招生形式集合: recruit_type 去掉普通类两值; 中外合作走文本兜底。
+  // 计划备注里中外合作写法多样("与XX大学合作办学/合作院校为XX/中美合作/闽台合作"),
+  // 统一按 plan_notes 含"合作"匹配 (2025 数据已核: 无"校企合作"干扰, 仍排除以防未来导入误伤)
+  const recruitUpdated = await prisma.$executeRawUnsafe(`
+    UPDATE majors m
+    JOIN (
+      SELECT major_id, GROUP_CONCAT(DISTINCT form ORDER BY form SEPARATOR '、') AS forms
+      FROM (
+        SELECT major_id, recruit_type AS form
+        FROM enrollment_plans
+        WHERE province='四川' AND year=${planYear}
+          AND recruit_type NOT IN ('普通类本科', '普通类高职(专科)', '')
+        UNION
+        SELECT major_id, '中外合作办学' AS form
+        FROM enrollment_plans
+        WHERE province='四川' AND year=${planYear}
+          AND (
+            major_name LIKE '%中外合作%' OR group_name LIKE '%中外合作%'
+            OR (plan_notes LIKE '%合作%' AND plan_notes NOT LIKE '%校企合作%')
+          )
+      ) t
+      GROUP BY major_id
+    ) s ON s.major_id = m.id
+    SET m.sc_recruit_types = LEFT(s.forms, 500)
+  `);
+  console.log(`特殊招生形式: ${recruitUpdated} 个专业`);
+
+  // 3d. 征集志愿计划 (最新征集年, 没录满的捡漏信号)
+  const supplYearRow: any[] = await prisma.$queryRawUnsafe(
+    `SELECT MAX(year) AS y FROM supplementary_records WHERE major_id IS NOT NULL`,
+  );
+  const supplYear = Number(supplYearRow[0]?.y);
+  if (supplYear) {
+    const supplUpdated = await prisma.$executeRawUnsafe(`
+      UPDATE majors m
+      JOIN (
+        SELECT major_id, SUM(COALESCE(plan_count, 0)) AS cnt
+        FROM supplementary_records
+        WHERE year=${supplYear} AND major_id IS NOT NULL
+        GROUP BY major_id
+      ) s ON s.major_id = m.id
+      SET m.sc_suppl_count = NULLIF(s.cnt, 0)
+    `);
+    console.log(`征集聚合 (${supplYear}): ${supplUpdated} 个专业`);
+  } else {
+    console.log('无征集数据, 跳过');
+  }
 
   // 4. 最新有分录取年
   const scoreYearRow: any[] = await prisma.$queryRawUnsafe(
@@ -121,10 +186,15 @@ async function main() {
     SELECT
       COUNT(*) AS total,
       SUM(sc_plan_count IS NOT NULL) AS with_plan,
-      SUM(sc_phy_score_lo IS NOT NULL OR sc_his_score_lo IS NOT NULL) AS with_band
+      SUM(sc_phy_score_lo IS NOT NULL OR sc_his_score_lo IS NOT NULL) AS with_band,
+      SUM(sc_recruit_types IS NOT NULL) AS with_special,
+      SUM(sc_suppl_count IS NOT NULL) AS with_suppl
     FROM majors
   `);
-  console.log(`覆盖率: 共 ${cov[0].total} 专业, 有在川计划 ${cov[0].with_plan}, 有分带 ${cov[0].with_band}`);
+  console.log(
+    `覆盖率: 共 ${cov[0].total} 专业, 有在川计划 ${cov[0].with_plan}, 有分带 ${cov[0].with_band}, ` +
+    `有特殊形式 ${cov[0].with_special}, 有征集 ${cov[0].with_suppl}`,
+  );
 
   const cross: any[] = await prisma.$queryRawUnsafe(`
     SELECT COUNT(DISTINCT ep.major_id) AS n

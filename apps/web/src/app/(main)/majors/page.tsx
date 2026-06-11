@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Alert, Button, Drawer, Empty, Input, Pagination, Select, Spin, Table, Tooltip, message } from 'antd';
+import { Alert, Button, Drawer, Empty, Input, Pagination, Select, Spin, Switch, Table, Tooltip, message } from 'antd';
 import { DurationLabel } from './DurationLabel';
 import {
   BookOutlined,
@@ -26,6 +26,7 @@ import PreferredMajorTierFormItem from '@/components/student/preferred-majors/Pr
 import { coerceTierShape, normalize } from '@/components/student/preferred-majors/PreferredMajorTierEditor';
 import type { PreferredMajorTier } from '@/components/student/preferred-majors/types';
 import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
+import { FIELD_LABELS } from '@/components/student/stage-fields';
 // 意向池编辑器样式 (pm-*) scope 在 .wn-teacher-scope 下, 抽屉内包同名容器复用
 import '@/styles/willnest-teacher.css';
 
@@ -48,6 +49,46 @@ const LEVELS = ['本科', '专科'];
 
 // 选考建议筛选项（新高考选考科目）
 const ELECTIVE_SUBJECTS = ['物理', '历史', '化学', '生物', '政治', '地理'];
+
+// 2025 批次结构表 10 批次 (按投档顺序, 与详情页 BATCH_ORDER 同源)
+const BATCH_OPTIONS = [
+  '本科提前批(国家专项)', '本科提前批A段', '本科提前批(高校专项)', '本科提前批B段',
+  '本科批A段', '本科批(高校专项)', '本科批B段', '本科批(区域教育均衡发展专项)',
+  '高职(专科)提前批', '高职(专科)批',
+].map((b) => ({ label: b, value: b }));
+
+// 特殊招生形式 (value 为 scRecruitTypes 的 contains 子串, 选项按 2025 在川计划 recruit_type 实际值整理)
+const RECRUIT_FORM_OPTIONS = [
+  { label: '订单定向医学生', value: '订单定向' },
+  { label: '公费师范', value: '公费师范' },
+  { label: '优师计划', value: '优师' },
+  { label: '民族班', value: '民族班' },
+  { label: '少数民族预科', value: '预科' },
+  { label: '定向培养军士', value: '军士' },
+  { label: '军事类', value: '军事类' },
+  { label: '公安/司法类', value: '公安' },
+  { label: '航海类', value: '航海类' },
+  { label: '高校综合评价', value: '综合评价' },
+  { label: '乡村振兴计划', value: '乡村振兴' },
+  { label: '中外合作办学', value: '中外合作' },
+];
+
+/** 学生位次 vs 专业位次带 (lane 科类) → 匹配信号. 位次数值越小越好 */
+type MatchSignal = 'safe' | 'fit' | 'rush' | 'out';
+function matchSignal(rank: number, lo?: number | null, hi?: number | null): MatchSignal | null {
+  if (hi == null) return null; // 该科类无位次数据, 不给信号
+  if (lo != null && rank <= lo) return 'safe'; // 优于带内最好校 → 稳
+  if (rank <= hi) return 'fit'; // 带内 → 部分院校可及
+  if (rank <= hi * 1.2) return 'rush'; // 超带 ≤20% → 冲刺区
+  return 'out';
+}
+
+const SIGNAL_UI: Record<MatchSignal, { text: string; cls: string; tip: string }> = {
+  safe: { text: '稳', cls: 'bg-stable-fixed text-safe', tip: '学生位次优于该专业去年所有院校的最低位次' },
+  fit: { text: '可选', cls: 'bg-primary-fixed text-primary', tip: '学生位次落在去年各校最低位次带内，可选带内部分院校' },
+  rush: { text: '偏冲', cls: 'bg-amber-100 text-amber-700', tip: '超出去年位次带 20% 以内，可作冲刺志愿' },
+  out: { text: '够不着', cls: 'bg-surface-dim text-text-muted', tip: '按去年位次数据，超出该专业位次带较多' },
+};
 
 const CATEGORY_COLORS: Record<string, string> = {
   哲学: '#7c3aed',
@@ -210,6 +251,7 @@ function MajorCard({
   poolEnabled,
   inPool,
   onAddToPool,
+  signal,
 }: {
   major: any;
   favorited: boolean;
@@ -220,6 +262,8 @@ function MajorCard({
   poolEnabled: boolean;
   inPool: boolean;
   onAddToPool: (major: any) => void;
+  /* 学生位次 vs 专业位次带的匹配信号 (学生模式下才有) */
+  signal: MatchSignal | null;
 }) {
   const employmentRate = parseRate(major.employmentRate);
   const categoryColor = CATEGORY_COLORS[major.category] || '#1e3a5f';
@@ -236,7 +280,9 @@ function MajorCard({
   return (
     <Link
       href={`/majors/${major.id}`}
-      className="block rounded-xl bg-surface p-5 text-text no-underline shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover"
+      className={`block rounded-xl bg-surface p-5 text-text no-underline shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover ${
+        signal === 'out' ? 'opacity-55' : ''
+      }`}
     >
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -272,9 +318,20 @@ function MajorCard({
               ? <StarFilled className="text-amber-500" />
               : <StarOutlined className="text-text-muted" />}
           </button>
-          <span className="rounded-full bg-accent-fixed px-3 py-1 text-[11px] font-medium text-accent">
-            {major.isRestricted ? '限报提示' : '可填报'}
-          </span>
+          {signal ? (
+            <Tooltip title={SIGNAL_UI[signal].tip}>
+              <span
+                className={`rounded-full px-3 py-1 text-[11px] font-medium ${SIGNAL_UI[signal].cls}`}
+                style={{ cursor: 'help' }}
+              >
+                {SIGNAL_UI[signal].text}
+              </span>
+            </Tooltip>
+          ) : (
+            <span className="rounded-full bg-accent-fixed px-3 py-1 text-[11px] font-medium text-accent">
+              {major.isRestricted ? '限报提示' : '可填报'}
+            </span>
+          )}
         </span>
       </div>
 
@@ -319,6 +376,27 @@ function MajorCard({
           <Tooltip title={String(major.scBatches).split('、').join(' / ')}>
             <span className="rounded bg-accent-fixed px-2 py-0.5 text-[11px] font-medium text-accent" style={{ cursor: 'help' }}>
               +{String(major.scBatches).split('、').length - 2} 批次
+            </span>
+          </Tooltip>
+        )}
+        {/* 特殊招生形式 (公费师范/订单定向/民族班…), 紫色系区分于批次 */}
+        {(major.scRecruitTypes ? String(major.scRecruitTypes).split('、') : []).slice(0, 2).map((f: string) => (
+          <span key={f} className="rounded bg-[#f3e8ff] px-2 py-0.5 text-[11px] font-medium text-[#7c3aed]">
+            {f}
+          </span>
+        ))}
+        {major.scRecruitTypes && String(major.scRecruitTypes).split('、').length > 2 && (
+          <Tooltip title={String(major.scRecruitTypes).split('、').join(' / ')}>
+            <span className="rounded bg-[#f3e8ff] px-2 py-0.5 text-[11px] font-medium text-[#7c3aed]" style={{ cursor: 'help' }}>
+              +{String(major.scRecruitTypes).split('、').length - 2}
+            </span>
+          </Tooltip>
+        )}
+        {/* 征集信号: 去年没录满, 保底参考 */}
+        {typeof major.scSupplCount === 'number' && major.scSupplCount > 0 && (
+          <Tooltip title={`去年征集志愿（补录）计划 ${major.scSupplCount} 人 — 第一轮未录满，报考热度不足，可作保底参考`}>
+            <span className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700" style={{ cursor: 'help' }}>
+              征集 {major.scSupplCount}
             </span>
           </Tooltip>
         )}
@@ -498,6 +576,26 @@ function MajorsPageInner() {
   const poolNames = useMemo(() => new Set(poolTiers.flatMap((t) => t.majors)), [poolTiers]);
   const { data: editorMajorOptions, isLoading: editorOptionsLoading } = useMajorOptions();
 
+  // 学生首选科目 → 列表科类视角 ('物理'|'历史'|null)
+  const studentLane: string | null =
+    workStudent?.examType === 'PHYSICS' || workStudent?.firstChoice === '物理'
+      ? '物理'
+      : workStudent?.examType === 'HISTORY' || workStudent?.firstChoice === '历史'
+        ? '历史'
+        : null;
+  const studentRank: number | null = workStudent?.provincialRank
+    ? Number(workStudent.provincialRank)
+    : null;
+  // 选定学生(或科类首次加载)后默认按其科类过滤; 老师可用工作台条开关手动关
+  useEffect(() => {
+    setFilters((prev) =>
+      prev.subjectLane === (studentLane ?? undefined)
+        ? prev
+        : { ...prev, subjectLane: studentLane ?? undefined, page: 1 },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentLane]);
+
   const savePool = async (tiers: PreferredMajorTier[], silent = false) => {
     if (!workStudentId) return false;
     setPoolSaving(true);
@@ -555,8 +653,18 @@ function MajorsPageInner() {
     if (filters.sortBy === 'salary') items.push({ key: 'sortBy', label: '按薪资排序' });
     if (filters.sortBy === 'popularity') items.push({ key: 'sortBy', label: '按热度排序' });
     if (filters.sortBy === 'plan') items.push({ key: 'sortBy', label: '按在川计划人数' });
+    if (filters.subjectLane) items.push({ key: 'subjectLane', label: `只看${filters.subjectLane}类` });
+    if (filters.batch) items.push({ key: 'batch', label: filters.batch });
+    if (filters.recruitType) {
+      items.push({
+        key: 'recruitType',
+        label: RECRUIT_FORM_OPTIONS.find((o) => o.value === filters.recruitType)?.label ?? filters.recruitType,
+      });
+    }
+    if (filters.hasSupplementary) items.push({ key: 'hasSupplementary', label: '有征集 · 可捡漏' });
     return items;
-  }, [filters.category, filters.level, filters.emerging, filters.electiveSubject, filters.sortBy]);
+  }, [filters.category, filters.level, filters.emerging, filters.electiveSubject, filters.sortBy,
+      filters.subjectLane, filters.batch, filters.recruitType, filters.hasSupplementary]);
 
   const majors = data?.data || [];
   const total = data?.pagination?.total || 0;
@@ -600,19 +708,44 @@ function MajorsPageInner() {
             {workStudentId && workStudent ? (
               <>
                 <span className="text-xs text-text-secondary">
-                  {workStudent.firstChoice === '物理' || workStudent.examType === 'PHYSICS'
-                    ? '物理类'
-                    : workStudent.firstChoice === '历史' || workStudent.examType === 'HISTORY'
-                      ? '历史类'
-                      : ''}
-                  {workStudent.provincialRank
-                    ? ` · 位次 ${Number(workStudent.provincialRank).toLocaleString()}`
-                    : ''}
+                  {studentLane ? `${studentLane}类` : ''}
+                  {studentRank ? ` · 位次 ${studentRank.toLocaleString()}` : ''}
                   {` · 意向 ${poolNames.size} 个`}
                 </span>
+                {studentLane && (
+                  <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+                    <Switch
+                      size="small"
+                      checked={filters.subjectLane === studentLane}
+                      onChange={(on) =>
+                        setFilters({ ...filters, subjectLane: on ? studentLane : undefined, page: 1 })
+                      }
+                    />
+                    只看{studentLane}类有招生
+                  </span>
+                )}
                 <Button size="small" onClick={() => setPoolOpen(true)}>
                   编辑意向池 / 排序
                 </Button>
+                {/* 完整度分流出口: 资料齐 → 生成方案; 缺 → 去补全 (选了意向不代表资料完整) */}
+                {workStudent.progress &&
+                  (workStudent.progress.isRecommendable ? (
+                    <Link href={`/teacher/plans/generate/${workStudentId}`}>
+                      <Button size="small" type="primary">去生成方案 →</Button>
+                    </Link>
+                  ) : (
+                    <Tooltip
+                      title={`还缺: ${(workStudent.progress.missingFieldsForRecommend ?? [])
+                        .map((f: string) => FIELD_LABELS[f] ?? f)
+                        .join('、')}`}
+                    >
+                      <Link href={`/teacher/students/${workStudentId}`}>
+                        <Button size="small" danger>
+                          资料缺 {(workStudent.progress.missingFieldsForRecommend ?? []).length} 项 · 去补全
+                        </Button>
+                      </Link>
+                    </Tooltip>
+                  ))}
               </>
             ) : (
               <span className="text-xs text-text-muted">选择学生后，专业卡片可一键加入其意向池</span>
@@ -721,6 +854,43 @@ function MajorsPageInner() {
                   按热度排序
                 </button>
               </div>
+
+              {/* 第三行筛选: 批次 / 特殊招生形式 / 征集捡漏 */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
+                <span className="text-[12px] text-text-muted">批次</span>
+                <Select
+                  size="small"
+                  allowClear
+                  placeholder="全部批次"
+                  style={{ minWidth: 200 }}
+                  options={BATCH_OPTIONS}
+                  value={filters.batch}
+                  onChange={(v) => setFilters({ ...filters, batch: v || undefined, page: 1 })}
+                />
+                <span className="mx-1 h-4 w-px bg-border" />
+                <span className="text-[12px] text-text-muted">特殊形式</span>
+                <Select
+                  size="small"
+                  allowClear
+                  placeholder="公费师范 / 订单定向…"
+                  style={{ minWidth: 185 }}
+                  options={RECRUIT_FORM_OPTIONS}
+                  value={filters.recruitType}
+                  onChange={(v) => setFilters({ ...filters, recruitType: v || undefined, page: 1 })}
+                />
+                <span className="mx-1 h-4 w-px bg-border" />
+                <Tooltip title="去年有征集志愿（第一轮未录满）的专业，报考热度不足，可作保底参考">
+                  <button
+                    type="button"
+                    onClick={() => setFilters({ ...filters, hasSupplementary: filters.hasSupplementary ? undefined : true, page: 1 })}
+                    className={`rounded-md border-0 px-3.5 py-2 text-[13px] transition-colors ${
+                      filters.hasSupplementary ? 'bg-amber-600 font-medium text-white' : 'bg-bg text-text-tertiary hover:text-primary'
+                    }`}
+                  >
+                    有征集 · 可捡漏
+                  </button>
+                </Tooltip>
+              </div>
             </div>
 
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -771,6 +941,15 @@ function MajorsPageInner() {
                     poolEnabled={isTeacher && !!workStudentId}
                     inPool={poolNames.has(major.name)}
                     onAddToPool={addToPool}
+                    signal={
+                      studentRank != null && studentLane
+                        ? matchSignal(
+                            studentRank,
+                            studentLane === '物理' ? major.scPhyRankLo : major.scHisRankLo,
+                            studentLane === '物理' ? major.scPhyRankHi : major.scHisRankHi,
+                          )
+                        : null
+                    }
                   />
                 ))}
               </div>

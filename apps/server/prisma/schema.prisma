@@ -540,6 +540,11 @@ model Major {
   scHisScoreHi Int?    @map("sc_his_score_hi")
   scHisRankLo  Int?    @map("sc_his_rank_lo")
   scHisRankHi  Int?    @map("sc_his_rank_hi")
+  // 学生模式科类过滤 + 特殊招生形式筛选 + 征集捡漏信号 (2026-06-11 第二批)
+  scPhyPlanCount Int?    @map("sc_phy_plan_count") // 最新计划年物理类计划人数
+  scHisPlanCount Int?    @map("sc_his_plan_count") // 最新计划年历史类计划人数
+  scRecruitTypes String? @map("sc_recruit_types") @db.VarChar(500) // 特殊招生形式集合(顿号分隔), 不含普通类; 含中外合作文本兜底
+  scSupplCount   Int?    @map("sc_suppl_count") // 最新征集年该专业征集志愿计划总人数 (没录满信号)
 
   // 关联
   enrollmentPlans  EnrollmentPlan[]

@@ -22,10 +22,14 @@ export class MajorService {
     emerging?: boolean;        // 仅看新兴专业（2024 年起增设）
     electiveSubject?: string;  // 按选考建议筛选（如「物理」）
     sortBy?: string;           // 'salary' 薪资降序 / 'popularity' 热度 / 'plan' 在川计划人数降序；默认按名称
+    subjectLane?: string;      // '物理'|'历史': 只看该科类在川有计划的专业（学生模式）
+    batch?: string;            // 在某批次有招生计划（匹配 scBatches）
+    recruitType?: string;      // 特殊招生形式（匹配 scRecruitTypes, 如「公费师范」「订单定向」）
+    hasSupplementary?: boolean; // 仅看最新年有征集志愿的专业（没录满, 捡漏信号）
   }) {
     const {
       page: pageRaw = 1, pageSize: sizeRaw = 20, keyword, category, level, discipline,
-      emerging, electiveSubject, sortBy,
+      emerging, electiveSubject, sortBy, subjectLane, batch, recruitType, hasSupplementary,
     } = query;
     // NestJS @Query 返回 string. Prisma 7 严格要求 skip/take 是 number, 显式强转
     const page = Number(pageRaw) || 1;
@@ -43,6 +47,11 @@ export class MajorService {
     if (discipline) where.discipline = discipline;
     if (emerging) where.setupYear = { gte: 2024 };
     if (electiveSubject) where.electiveAdvice = { contains: electiveSubject };
+    if (subjectLane === '物理') where.scPhyPlanCount = { gt: 0 };
+    if (subjectLane === '历史') where.scHisPlanCount = { gt: 0 };
+    if (batch) where.scBatches = { contains: batch };
+    if (recruitType) where.scRecruitTypes = { contains: recruitType };
+    if (hasSupplementary) where.scSupplCount = { gt: 0 };
 
     // 按平均薪资降序时，无薪资数据的专业排在后面
     // 按热度时，上榜专业(popularityRank 1-50)排前、按名次升序，未上榜的 nulls last
