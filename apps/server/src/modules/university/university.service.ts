@@ -116,7 +116,9 @@ export class UniversityService {
     // minRank/tier 跟随 examType 选物/史字段；softRank 是固定 softRanking 别名；
     // 其他都是 1:1 直接映射（已经是 prisma 字段名）。
     const orderByField = (() => {
-      if (sortBy === 'minRank') return minRankField;
+      // 'rank' 是 SortCluster 的录取位次键, 与 'minRank' 同义; 'minScore' 按科类最低分
+      if (sortBy === 'minRank' || sortBy === 'rank') return minRankField;
+      if (sortBy === 'minScore') return minScoreField;
       if (sortBy === 'tier') return predRankField;
       if (sortBy === 'softRank') return 'softRanking';
       return sortBy;
@@ -146,7 +148,7 @@ export class UniversityService {
     // 所有可空字段排序都走内存路径，用 sortRows 让 NULL 沉底
     // （MariaDB ASC 默认 NULL 在前，DB 路径无法 NULL-last）
     const NULLABLE_SORT_BYS = new Set([
-      'minRank', 'tier', 'softRank',
+      'minRank', 'rank', 'minScore', 'tier', 'softRank',
       'rankingAlumni', 'rankingQS', 'rankingUSNews', 'rankingTimes',
       'aClassDisciplineCount', 'firstClassDisciplineCount',
       'employmentRate', 'avgSalary', 'furtherStudyRate',

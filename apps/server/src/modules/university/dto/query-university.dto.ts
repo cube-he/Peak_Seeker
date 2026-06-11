@@ -85,6 +85,8 @@ export class QueryUniversityDto {
   @IsIn([
     'name', 'province', 'type',
     'minRank', 'tier', 'softRank',
+    // SortCluster 同义键: rank=按科类最低位次, minScore=按科类最低分
+    'rank', 'minScore',
     'rankingAlumni', 'rankingQS', 'rankingUSNews', 'rankingTimes',
     'aClassDisciplineCount', 'firstClassDisciplineCount',
     'employmentRate', 'avgSalary', 'furtherStudyRate',
