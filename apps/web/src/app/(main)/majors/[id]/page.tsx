@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Tabs, Table, Spin, Descriptions, Typography, Tag } from 'antd';
+import { Tabs, Table, Spin, Descriptions, Typography, Tag, Tooltip } from 'antd';
 import { DurationLabel } from '../DurationLabel';
 import { BankOutlined, HistoryOutlined, RocketOutlined, ReadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
@@ -37,6 +37,16 @@ export default function MajorDetailPage() {
   const [subjectFilter, setSubjectFilter] = useState<'全部' | '物理' | '历史'>('全部');
   const [natureFilter, setNatureFilter] = useState<'全部' | '公办' | '民办'>('全部');
   const [batchFilter, setBatchFilter] = useState<string>('全部');
+  // 透视表年份: 默认近 3 年, 可展开到 5 年 (15 列在 1440 容器内也需横滚)
+  const [showAllYears, setShowAllYears] = useState(false);
+
+  // 同门类同层次专业, 页尾横向推荐
+  const { data: relatedData } = useQuery({
+    queryKey: ['majors-related', major?.discipline, major?.level],
+    queryFn: () =>
+      majorService.getList({ discipline: major?.discipline, level: major?.level, pageSize: 24 }),
+    enabled: !!major?.discipline,
+  });
 
   if (isLoading) {
     return (
@@ -67,66 +77,65 @@ export default function MajorDetailPage() {
     m.softRating ? `${m.softRating} 评级` : null,
     m.isRestricted ? '限报提示' : null,
   ].filter(Boolean);
+  // 开设院校: 同校同组同批次跨年份各有一条计划记录, 展示与计数按去重口径
+  // (后端按 year desc 返回, 首遇即最新年份, 预测位次随之取最新)
+  const uniqPlans: any[] = [];
+  const seenPlanKeys = new Set<string>();
+  for (const ep of m.enrollmentPlans ?? []) {
+    const k = `${ep.universityId}|${ep.groupCode}|${ep.batch}|${ep.recruitType}|${ep.subjects}`;
+    if (!seenPlanKeys.has(k)) {
+      seenPlanKeys.add(k);
+      uniqPlans.push(ep);
+    }
+  }
+  const planUniCount = new Set(uniqPlans.map((p: any) => p.universityId)).size;
+
+  // 就业率缺失时顶替为最新年在川计划人数 (有招生计划的专业都有值, 对填报更有参考价值)
+  const latestPlanYear = (m.enrollmentPlans ?? []).reduce(
+    (mx: number, ep: any) => Math.max(mx, ep.year ?? 0), 0,
+  );
+  const latestPlanTotal = (m.enrollmentPlans ?? [])
+    .filter((ep: any) => ep.year === latestPlanYear)
+    .reduce((s: number, ep: any) => s + (ep.planCount ?? 0), 0);
+
   const statItems = [
-    { label: '就业率', value: employmentRate, sub: '毕业去向参考' },
-    { label: '平均薪资', value: avgSalary, sub: '样本统计口径' },
+    m.employmentRate
+      ? { label: '就业率', value: employmentRate, sub: '毕业去向参考' }
+      : {
+          label: '在川计划',
+          value: latestPlanTotal > 0 ? latestPlanTotal : '-',
+          sub: latestPlanYear ? `${latestPlanYear} 年计划人数` : '招生计划待公布',
+        },
+    {
+      label: '平均薪资',
+      value: m.avgSalary ? (
+        <Tooltip title="基于全国就业样本统计的平均月薪（不限毕业年限），适合专业间横向比较，不代表应届起薪">
+          <span style={{ cursor: 'help', borderBottom: '1px dashed rgba(255,255,255,0.35)' }}>{avgSalary}</span>
+        </Tooltip>
+      ) : '--',
+      sub: '样本统计口径',
+    },
     { label: '学制', value: <DurationLabel value={m.standardDuration || '4年'} />, sub: m.degree || '授予学位待补充' },
-    { label: '开设院校', value: m.enrollmentPlans?.length || '-', sub: '当前招生计划记录' },
+    { label: '开设院校', value: planUniCount || '-', sub: '近年在川招生院校数' },
   ];
 
+  // 同类专业: 同名多 code 去重, 排除自身
+  const relatedMajors = (() => {
+    const list: any[] = (relatedData as any)?.data || [];
+    const seen = new Set<string>([m.name]);
+    const out: any[] = [];
+    for (const r of list) {
+      if (r.id === m.id || seen.has(r.name)) continue;
+      seen.add(r.name);
+      out.push(r);
+    }
+    return out;
+  })();
 
-  const admissionColumns = [
-    {
-      title: '院校名称',
-      dataIndex: ['university', 'name'],
-      key: 'uniName',
-      render: (text: string, r: any) => (
-        <Link href={`/universities/${r.universityId}`} className="text-primary hover:text-primary-light">{text}</Link>
-      ),
-    },
-    { title: '年份', dataIndex: 'year', key: 'year', width: 70 },
-    {
-      title: '批次',
-      dataIndex: 'batch',
-      key: 'batch',
-      width: 130,
-      render: (v: string) => <span className="text-xs text-text-secondary">{v || '-'}</span>,
-    },
-    {
-      title: '最低分',
-      dataIndex: 'majorMinScore',
-      key: 'majorMinScore',
-      width: 80,
-      render: (v: number) => v ? <span className="font-medium text-text">{v}</span> : '-',
-    },
-    {
-      title: '最低位次',
-      dataIndex: 'majorMinRank',
-      key: 'majorMinRank',
-      width: 100,
-      render: (v: number) => v ? <span className="text-text-secondary">{v.toLocaleString()}</span> : '-',
-    },
-    {
-      title: '录取人数',
-      dataIndex: 'majorAdmissionCount',
-      key: 'majorAdmissionCount',
-      width: 90,
-      render: (v: number) => v ?? '-',
-    },
-    {
-      title: '征集人数',
-      dataIndex: 'supplementaryCount',
-      key: 'supplementaryCount',
-      width: 90,
-      render: (v: number | null) =>
-        v != null ? <span className="font-medium text-amber-700">{v}</span> : <span className="text-text-muted">-</span>,
-    },
-  ];
+
 
   // 历年录取: 科类(subjects 含物理/历史) + 办学性质 + 批次 筛选
   const allAdmissions: any[] = m.admissionRecords || [];
-  const hasPhysics = allAdmissions.some((r) => (r.subjects || '').includes('物理'));
-  const hasHistory = allAdmissions.some((r) => (r.subjects || '').includes('历史'));
   // 该专业实际出现过的批次, 按 2025 批次结构表投档顺序排列
   const BATCH_ORDER = [
     '本科提前批(国家专项)', '本科提前批A段', '本科提前批(高校专项)', '本科提前批B段',
@@ -145,24 +154,139 @@ export default function MajorDetailPage() {
     if (batchFilter !== '全部' && r.batch !== batchFilter) return false;
     return true;
   });
+  // 透视: 按 (院校, 科类, 批次) 一行, 年份横向平铺对比 (同键同年多条则: 分/位次取最低, 人数/征集求和)
+  const allPivotYears: number[] = Array.from(new Set(filteredAdmissions.map((r) => r.year))).sort((a: number, b: number) => b - a).slice(0, 5);
+  const pivotYears: number[] = showAllYears ? allPivotYears : allPivotYears.slice(0, 3);
+  const pivotMap = new Map<string, any>();
+  for (const r of filteredAdmissions) {
+    const k = `${r.universityId}|${r.subjects}|${r.batch}`;
+    if (!pivotMap.has(k)) {
+      pivotMap.set(k, { key: k, universityId: r.universityId, university: r.university, subjects: r.subjects, batch: r.batch, byYear: {} as Record<number, any> });
+    }
+    const row = pivotMap.get(k);
+    const cell = row.byYear[r.year] ?? { score: null, rank: null, count: 0, suppl: 0 };
+    if (r.majorMinScore != null && (cell.score == null || r.majorMinScore < cell.score)) cell.score = r.majorMinScore;
+    if (r.majorMinRank != null && (cell.rank == null || r.majorMinRank < cell.rank)) cell.rank = r.majorMinRank;
+    cell.count += r.majorAdmissionCount ?? 0;
+    cell.suppl += r.supplementaryCount ?? 0;
+    row.byYear[r.year] = cell;
+  }
+  const pivotRows = Array.from(pivotMap.values());
+  // 默认按最新年最低分降序 (分高的院校在前), 无分数据垫底
+  const newestYear = pivotYears[0];
+  pivotRows.sort((a, b) => {
+    const sa = newestYear != null ? a.byYear[newestYear]?.score ?? null : null;
+    const sb = newestYear != null ? b.byYear[newestYear]?.score ?? null : null;
+    if (sa == null && sb == null) return 0;
+    if (sa == null) return 1;
+    if (sb == null) return -1;
+    return sb - sa;
+  });
+  // tab 计数 = 全量透视行数 (院校×科类×批次 组合数), 与表格所见一致, 不随筛选变
+  const totalPivotCount = new Set(allAdmissions.map((r) => `${r.universityId}|${r.subjects}|${r.batch}`)).size;
+
+  // 同行内与更早一年比较的涨跌标记 (分数涨↑红 / 跌↓绿)
+  const diffArrow = (row: any, year: number, field: 'score' | 'count') => {
+    const prevYear = pivotYears.find((y) => y < year && row.byYear[y]?.[field] != null);
+    const cur = row.byYear[year]?.[field];
+    if (prevYear == null || cur == null) return null;
+    const prev = row.byYear[prevYear][field];
+    if (prev == null || cur === prev) return null;
+    return cur > prev
+      ? <span className="ml-0.5 text-[10px] text-red-500">↑</span>
+      : <span className="ml-0.5 text-[10px] text-green-600">↓</span>;
+  };
+
+  const pivotColumns: any[] = [
+    {
+      title: '院校名称',
+      key: 'uni',
+      fixed: 'left' as const,
+      width: 170,
+      render: (_: any, r: any) => (
+        <Link href={`/universities/${r.universityId}`} className="text-primary hover:text-primary-light">{r.university?.name}</Link>
+      ),
+    },
+    {
+      title: '科类', key: 'subjects', width: 64,
+      render: (_: any, r: any) => (
+        <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${(r.subjects || '').includes('物理') ? 'bg-blue-50 text-blue-700' : 'bg-rose-50 text-rose-700'}`}>{r.subjects}</span>
+      ),
+    },
+    { title: '批次', key: 'batch', width: 118, render: (_: any, r: any) => <span className="text-xs text-text-secondary">{r.batch}</span> },
+    ...pivotYears.map((y) => ({
+      title: `${y} 年`,
+      children: [
+        {
+          title: '最低分', key: `s${y}`, width: 76, align: 'center' as const,
+          sorter: (a: any, b: any) => (a.byYear[y]?.score ?? Infinity) - (b.byYear[y]?.score ?? Infinity),
+          render: (_: any, r: any) => {
+            const c = r.byYear[y];
+            return c?.score != null ? <span className="font-medium text-text">{c.score}{diffArrow(r, y, 'score')}</span> : <span className="text-text-muted">-</span>;
+          },
+        },
+        {
+          title: '最低位次', key: `r${y}`, width: 88, align: 'center' as const,
+          sorter: (a: any, b: any) => (a.byYear[y]?.rank ?? Infinity) - (b.byYear[y]?.rank ?? Infinity),
+          render: (_: any, r: any) => {
+            const c = r.byYear[y];
+            return c?.rank != null ? <span className="text-text-secondary">{c.rank.toLocaleString()}</span> : <span className="text-text-muted">-</span>;
+          },
+        },
+        {
+          title: '录取', key: `c${y}`, width: 76, align: 'center' as const,
+          render: (_: any, r: any) => {
+            const c = r.byYear[y];
+            if (!c || (!c.count && !c.suppl)) return <span className="text-text-muted">-</span>;
+            return (
+              <span>
+                {c.count || '-'}{diffArrow(r, y, 'count')}
+                {c.suppl > 0 && (
+                  <Tooltip title={`当年该批次征集志愿（补录）计划 ${c.suppl} 人 — 第一轮未录满`}>
+                    <div className="text-[10px] leading-tight text-amber-700" style={{ cursor: 'help' }}>征集 {c.suppl}</div>
+                  </Tooltip>
+                )}
+              </span>
+            );
+          },
+        },
+      ],
+    })),
+  ];
+
   const filterBtn = (active: boolean) =>
     `rounded px-2.5 py-0.5 text-xs font-medium border ${
       active ? 'bg-amber-700 text-white border-amber-700' : 'bg-white text-text-tertiary border-amber-300'
     }`;
 
+  // 空内容 tab 置灰: 与 TrainingTab/CareerTab 内部 Empty 兜底同口径, 避免点进去才发现空白
+  const filled = (v: any) =>
+    Array.isArray(v) ? v.length > 0 : typeof v === 'string' ? v.trim() !== '' : v != null;
+  const hasTraining = [
+    m.trainingObjective, m.trainingRequirements, m.disciplineReq, m.knowledgeAbility,
+    m.similarMajors, m.professionalCerts, m.famousPeople, m.internshipDesc, m.postUpgradeDirection,
+  ].some(filled);
+  const hasCareer = [
+    m.careerDirections, m.postgraduateDirections, m.coreCourses, m.avgSalary,
+    m.topRegion, m.topIndustry, m.employmentRanking, m.employmentRankingDesc,
+    m.employmentDirectionDesc, m.historicalSalary, m.salaryDistribution,
+    m.experienceDistribution, m.educationDistribution, m.regionDistribution,
+    m.industryDistribution, m.positionTop, m.yearSalaryMap,
+  ].some(filled);
+
   const tabItems = [
     {
       key: 'universities',
-      label: <span><BankOutlined className="mr-1" />开设院校 ({m.enrollmentPlans?.length || 0})</span>,
+      label: <span><BankOutlined className="mr-1" />开设院校 ({planUniCount})</span>,
       children: (
         <div className="px-4 py-2">
           <LowConfidenceBanner
-            show={(m.enrollmentPlans ?? []).some((ep: any) => ep.predictedMinRank?.confidence === 'low')}
+            show={uniqPlans.some((ep: any) => ep.predictedMinRank?.confidence === 'low')}
           />
-          {(m.enrollmentPlans ?? []).length === 0 ? (
+          {uniqPlans.length === 0 ? (
             <div className="text-center text-text-muted py-12">暂无开设院校数据</div>
           ) : (
-            m.enrollmentPlans.map((ep: any) => (
+            uniqPlans.map((ep: any) => (
               <AdmissionRow
                 key={ep.id}
                 data={{
@@ -180,6 +304,9 @@ export default function MajorDetailPage() {
                   recruitType: ep.recruitType ?? '',
                   subjects: ep.subjects ?? '',
                   predictedMinRank: ep.predictedMinRank,
+                  year: ep.year ?? null,
+                  planCount: ep.planCount ?? null,
+                  tuition: ep.tuition ?? null,
                 }}
                 userRank={examInfo.rank}
               />
@@ -190,20 +317,20 @@ export default function MajorDetailPage() {
     },
     {
       key: 'admissions',
-      label: <span><HistoryOutlined className="mr-1" />历年录取 ({m.admissionRecords?.length || 0})</span>,
+      label: <span><HistoryOutlined className="mr-1" />历年录取 ({totalPivotCount})</span>,
       children: (
         <div>
           <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
-            {(hasPhysics && hasHistory) && (
-              <>
-                {(['全部', '物理', '历史'] as const).map((sv) => (
-                  <button key={sv} type="button" className={filterBtn(subjectFilter === sv)} onClick={() => setSubjectFilter(sv)}>
-                    {sv === '全部' ? '全部科类' : `${sv}类`}
-                  </button>
-                ))}
-                <span className="mx-1 text-border">|</span>
-              </>
-            )}
+            {(['全部', '物理', '历史'] as const).map((sv) => {
+              const count = sv === '全部' ? allAdmissions.length
+                : allAdmissions.filter((r) => (r.subjects || '').includes(sv)).length;
+              return (
+                <button key={sv} type="button" className={filterBtn(subjectFilter === sv)} onClick={() => setSubjectFilter(sv)}>
+                  {sv === '全部' ? '全部科类' : `${sv}类`}{sv !== '全部' ? ` ${count}` : ''}
+                </button>
+              );
+            })}
+            <span className="mx-1 text-border">|</span>
             {(['全部', '公办', '民办'] as const).map((nv) => (
               <button key={nv} type="button" className={filterBtn(natureFilter === nv)} onClick={() => setNatureFilter(nv)}>
                 {nv === '全部' ? '全部院校' : nv}
@@ -222,22 +349,33 @@ export default function MajorDetailPage() {
                 ))}
               </>
             )}
-            <span className="ml-auto text-xs text-text-muted">{filteredAdmissions.length} 条</span>
+            {allPivotYears.length > 3 && (
+              <button type="button" className={filterBtn(showAllYears)} onClick={() => setShowAllYears(!showAllYears)}>
+                {showAllYears ? '收起早年' : `更早年份 +${allPivotYears.length - 3}`}
+              </button>
+            )}
+            <span className="ml-auto text-xs text-text-muted">{pivotRows.length} 行</span>
           </div>
           <Table
-            columns={admissionColumns}
-            dataSource={filteredAdmissions}
-            rowKey="id"
-            scroll={{ x: 700 }}
+            columns={pivotColumns}
+            dataSource={pivotRows}
+            rowKey="key"
+            scroll={{ x: 380 + pivotYears.length * 240 }}
             size="small"
-            pagination={{ pageSize: 20, showTotal: (t: number) => `共 ${t} 条` }}
+            bordered
+            pagination={{ pageSize: 20, showTotal: (t: number) => `共 ${t} 行` }}
           />
         </div>
       ),
     },
     {
       key: 'training',
-      label: <span><ReadOutlined className="mr-1" />培养方案</span>,
+      disabled: !hasTraining,
+      label: (
+        <span className={hasTraining ? undefined : 'text-text-faint'}>
+          <ReadOutlined className="mr-1" />培养方案{hasTraining ? '' : ' · 待补充'}
+        </span>
+      ),
       children: (
         <TrainingTab
           trainingObjective={m.trainingObjective ?? null}
@@ -254,7 +392,12 @@ export default function MajorDetailPage() {
     },
     {
       key: 'career',
-      label: <span><RocketOutlined className="mr-1" />就业与发展</span>,
+      disabled: !hasCareer,
+      label: (
+        <span className={hasCareer ? undefined : 'text-text-faint'}>
+          <RocketOutlined className="mr-1" />就业与发展{hasCareer ? '' : ' · 待补充'}
+        </span>
+      ),
       children: (
         <CareerTab
           careerDirections={m.careerDirections}
@@ -283,13 +426,24 @@ export default function MajorDetailPage() {
     <MainLayout noPadding>
       <section className="relative overflow-hidden bg-gradient-to-br from-primary to-[#15212e] text-white">
         <div className="absolute inset-0 bg-[radial-gradient(700px_360px_at_90%_110%,rgba(184,134,11,0.2),transparent_60%)]" />
-        <div className="relative mx-auto grid max-w-[1200px] gap-6 px-4 py-9 sm:px-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-end lg:px-12">
+        <div className="relative mx-auto grid max-w-[1440px] gap-6 px-4 py-9 sm:px-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-end lg:px-12">
           <div className="min-w-0">
             <nav className="mb-3 text-xs text-white/50">
               <Link href="/majors" className="text-white/60 no-underline hover:text-white">
                 专业库
               </Link>
               <span className="mx-2">/</span>
+              {m.category && (
+                <>
+                  <Link
+                    href={`/majors?category=${encodeURIComponent(m.category)}${m.level ? `&level=${encodeURIComponent(m.level)}` : ''}`}
+                    className="text-white/60 no-underline hover:text-white"
+                  >
+                    {m.category}
+                  </Link>
+                  <span className="mx-2">/</span>
+                </>
+              )}
               <span>{m.name}</span>
             </nav>
             <div className="mb-2 text-[11px] uppercase tracking-[1.8px] text-white/45">
@@ -356,7 +510,7 @@ export default function MajorDetailPage() {
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-[1200px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-12">
+      <div className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-12">
         <main className="min-w-0">
           <MajorSummary
             whatIs={m.whatIs ?? null}
@@ -366,6 +520,12 @@ export default function MajorDetailPage() {
             industryDistribution={m.industryDistribution ?? null}
             employmentRanking={m.employmentRanking ?? null}
           />
+
+          {/* 招录数据是本页核心诉求 (哪些学校在川招/多少分/招几人), 置于介绍类内容之前 */}
+          <section className="mb-6 rounded-2xl bg-surface p-2 shadow-card">
+            <Tabs items={tabItems} style={{ padding: '0 18px' }} />
+          </section>
+
           <section className="mb-6 rounded-2xl bg-surface p-6 shadow-card sm:p-7">
             <div className="mb-2 text-[11px] uppercase tracking-[1.5px] text-accent">Overview · 专业概览</div>
             <h2 className="m-0 font-serif text-[24px] font-semibold text-text">
@@ -477,28 +637,26 @@ export default function MajorDetailPage() {
             </Descriptions>
           </section>
 
-          <section className="rounded-2xl bg-surface p-2 shadow-card">
-            <Tabs items={tabItems} style={{ padding: '0 18px' }} />
-          </section>
+          {relatedMajors.length > 0 && (
+            <section className="rounded-2xl bg-surface p-5 shadow-card sm:p-6">
+              <div className="mb-1 text-[11px] uppercase tracking-[1.5px] text-accent">Related · 同类专业</div>
+              <h2 className="m-0 mb-4 font-serif text-lg font-semibold text-text">
+                {m.discipline} · 其他{m.level}专业
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {relatedMajors.map((r: any) => (
+                  <Link
+                    key={r.id}
+                    href={`/majors/${r.id}`}
+                    className="rounded-full border border-border bg-bg px-3.5 py-1.5 text-[13px] text-text-secondary no-underline transition-colors hover:border-primary hover:text-primary"
+                  >
+                    {r.name}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
         </main>
-
-        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-          <div className="rounded-xl bg-surface p-5 shadow-card">
-            <h3 className="m-0 font-serif text-base font-semibold text-text">填报提示</h3>
-            <p className="m-0 mt-2 text-sm leading-relaxed text-text-tertiary">
-              「就业与发展」标签页含历年薪资走势、工资段与地区行业分布；「培养方案」标签页含培养目标、相近专业与职业资格证书，可作为选科与志愿排序的参考。
-            </p>
-          </div>
-          <div className="rounded-xl bg-gradient-to-br from-primary to-primary-light p-5 text-white shadow-card">
-            <h3 className="m-0 font-serif text-base font-semibold text-white">基于你的当前位次</h3>
-            <p className="m-0 mt-2 text-sm leading-relaxed text-white/75">
-              查看哪些院校正在招收该专业，并把合适的院校专业组合加入志愿方案。
-            </p>
-            <Link href="/recommend" className="mt-4 inline-flex w-full justify-center rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white no-underline hover:bg-white/15">
-              生成完整推荐 →
-            </Link>
-          </div>
-        </aside>
       </div>
     </MainLayout>
   );

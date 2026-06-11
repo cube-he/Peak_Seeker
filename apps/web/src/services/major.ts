@@ -25,10 +25,6 @@ export const majorService = {
     return api.get('/majors/categories') as any;
   },
 
-  getHot(limit = 10): Promise<any> {
-    return api.get('/majors/hot', { params: { limit } }) as any;
-  },
-
   getUniversities(id: number, year?: number): Promise<any> {
     return api.get(`/majors/${id}/universities`, { params: { year } }) as any;
   },

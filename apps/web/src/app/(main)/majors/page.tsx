@@ -1,12 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Alert, Empty, Input, Pagination, Spin } from 'antd';
 import { DurationLabel } from './DurationLabel';
 import {
   BookOutlined,
   CloseOutlined,
-  FireOutlined,
   ReadOutlined,
   RightOutlined,
   SearchOutlined,
@@ -240,53 +240,17 @@ function MajorCard({ major }: { major: any }) {
   );
 }
 
-function HotMajorsSidebar() {
-  const { data } = useQuery({
-    queryKey: ['majors-hot'],
-    queryFn: () => majorService.getHot(10),
-  });
-
-  const list = data?.data || data || [];
-
-  return (
-    <div className="rounded-xl bg-surface p-5 shadow-card">
-      <div className="mb-4 flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-fixed">
-          <FireOutlined className="text-sm text-accent" />
-        </div>
-        <span className="font-serif text-base font-semibold text-text">热门专业</span>
-      </div>
-      <div className="space-y-2">
-        {(Array.isArray(list) ? list : []).slice(0, 10).map((major: any, idx: number) => (
-          <Link
-            key={major.id}
-            href={`/majors/${major.id}`}
-            className="group flex items-center gap-3 rounded-lg px-2 py-1.5 no-underline transition-colors hover:bg-surface-dim"
-          >
-            <span
-              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs font-semibold ${
-                idx < 3 ? 'bg-primary text-white' : 'bg-surface-dim text-text-muted'
-              }`}
-            >
-              {idx + 1}
-            </span>
-            <span className="truncate text-sm text-text-tertiary transition-colors group-hover:text-primary">
-              {major.name}
-            </span>
-          </Link>
-        ))}
-        {(!Array.isArray(list) || list.length === 0) && (
-          <div className="py-5 text-center text-xs text-text-muted">暂无数据</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default function MajorsPage() {
-  const [filters, setFilters] = useState<MajorQueryParams>({
-    page: 1,
-    pageSize: 12,
+function MajorsPageInner() {
+  // 支持从专业详情面包屑等入口带 ?category=&level= 进入并直接套用筛选
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<MajorQueryParams>(() => {
+    const level = searchParams.get('level');
+    return {
+      page: 1,
+      pageSize: 12,
+      category: searchParams.get('category') || undefined,
+      level: level === '本科' || level === '专科' ? level : undefined,
+    };
   });
 
   const { data, isLoading, isError, error } = useQuery({
@@ -494,20 +458,22 @@ export default function MajorsPage() {
             )}
           </main>
         </div>
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <div />
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
-            <div className="rounded-xl bg-surface p-5 shadow-card">
-              <div className="mb-2 font-serif text-base font-semibold text-text">适配说明</div>
-              <p className="m-0 text-sm leading-relaxed text-text-tertiary">
-                专业库已对齐教育部最新专业目录，支持关键词、学科门类、层次、增设年份（新兴专业）、选考建议筛选与薪资排序。专业卡片的就业率等指标待招生统计数据接入后展示。
-              </p>
-            </div>
-            <HotMajorsSidebar />
-          </div>
-        </div>
       </div>
     </MainLayout>
+  );
+}
+
+// useSearchParams 在静态预渲染页面要求 Suspense 边界 (Next 14 CSR bailout)
+export default function MajorsPage() {
+  return (
+    <Suspense
+      fallback={
+        <MainLayout>
+          <div className="flex justify-center py-20"><Spin size="large" /></div>
+        </MainLayout>
+      }
+    >
+      <MajorsPageInner />
+    </Suspense>
   );
 }

@@ -31,6 +31,10 @@ export interface AdmissionRowData {
   recruitType: string;
   subjects: string;
   predictedMinRank: { point: number } | null;
+  /* 以下为招生计划补充信息, 调用方可不传 (专业详情页传入) */
+  year?: number | null;
+  planCount?: number | null;
+  tuition?: number | string | null;
 }
 
 interface AdmissionRowProps {
@@ -61,6 +65,13 @@ export default function AdmissionRow({ data, userRank }: AdmissionRowProps) {
 
   const majorDisplay = data.major?.name ?? data.majorName ?? '—';
 
+  // 专项类招生 (国家专项/地方专项/优师等) 醒目标出, 普通类不标
+  const isSpecialRecruit = !!data.recruitType && !data.recruitType.includes('普通类');
+  const tuitionNum =
+    data.tuition != null && data.tuition !== '' && !Number.isNaN(Number(data.tuition))
+      ? Number(data.tuition)
+      : null;
+
   return (
     <div
       className="bg-surface rounded-lg shadow-card relative overflow-hidden mb-2"
@@ -84,9 +95,31 @@ export default function AdmissionRow({ data, userRank }: AdmissionRowProps) {
           <span className="text-xs text-text-tertiary truncate min-w-0">
             {majorDisplay} · {data.subjects} · 组{data.groupCode}
           </span>
+          {data.batch && (
+            <span className="hidden sm:inline flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-surface-dim text-text-secondary">
+              {data.batch}
+            </span>
+          )}
+          {isSpecialRecruit && (
+            <span className="hidden sm:inline flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
+              {data.recruitType}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2.5 flex-shrink-0">
+          {(data.planCount != null || tuitionNum != null) && (
+            <div className="text-right leading-tight">
+              {data.planCount != null && (
+                <div className="text-xs text-text-secondary">
+                  {data.year ? `${data.year} ` : ''}计划 <span className="font-semibold text-text">{data.planCount}</span> 人
+                </div>
+              )}
+              {tuitionNum != null && (
+                <div className="text-[11px] text-text-tertiary">学费 ¥{tuitionNum.toLocaleString()}/年</div>
+              )}
+            </div>
+          )}
           <RankDistance diff={diff} tier={tier} />
           <RankTierBadge tier={tier} />
         </div>
