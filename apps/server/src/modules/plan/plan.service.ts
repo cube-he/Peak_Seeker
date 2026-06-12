@@ -502,6 +502,26 @@ export class PlanService {
     });
   }
 
+  async withdrawReview(planId: number, userId: number, reason?: string) {
+    const plan = await this.findById(planId, userId);
+    if (plan.createdById !== userId) {
+      throw new ForbiddenException('只有出方案老师可以撤回');
+    }
+    // REVIEWING 走状态机会抛笼统的"不允许的状态转移", 这里给出可操作的指引
+    if (plan.status === 'REVIEWING') {
+      throw new ConflictException('主管已开始审核, 无法撤回; 如需修改请联系主管"退回修改"');
+    }
+    const next = this.sm.transition(plan.status, 'WITHDRAW');
+    const note = `[撤回审核] ${reason?.trim() || '老师撤回修改'}`;
+    return this.prisma.volunteerPlan.update({
+      where: { id: planId },
+      data: {
+        status: next,
+        notes: plan.notes ? `${plan.notes}\n${note}` : note,
+      },
+    });
+  }
+
   async finalize(planId: number, userId: number) {
     const plan = await this.findById(planId, userId);
     if (plan.createdById !== userId) {

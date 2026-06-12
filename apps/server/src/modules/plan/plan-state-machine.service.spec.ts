@@ -39,6 +39,14 @@ describe('PlanStateMachineService', () => {
     expect(sm.transition('PENDING_REVIEW', 'START_REVIEW')).toBe('REVIEWING');
   });
 
+  it('PENDING_REVIEW -> withdraw -> DRAFT（老师撤回, 调序/改组后可重新提交）', () => {
+    expect(sm.transition('PENDING_REVIEW', 'WITHDRAW')).toBe('DRAFT');
+  });
+
+  it('REVIEWING 不可撤回（主管已开始审核）', () => {
+    expect(() => sm.transition('REVIEWING', 'WITHDRAW')).toThrow();
+  });
+
   it('REVIEWING -> APPROVE -> APPROVED', () => {
     expect(sm.transition('REVIEWING', 'APPROVE')).toBe('APPROVED');
   });

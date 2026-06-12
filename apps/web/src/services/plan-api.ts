@@ -175,6 +175,11 @@ export const planApi = {
     return api.post(`/plans/${id}/submit-review`, underfillReason ? { underfillReason } : undefined) as any;
   },
 
+  /** 撤回审核(PENDING_REVIEW → DRAFT, 仅出方案老师; 主管认领后不可撤) */
+  withdrawReview(id: string, reason?: string): Promise<any> {
+    return api.post(`/plans/${id}/withdraw-review`, reason ? { reason } : undefined) as any;
+  },
+
   /**
    * 派生新版本(拷贝 PlanItem,状态回 DRAFT)。
    * REJECTED 方案不可编辑也不可重交,这是唯一的继续通道。

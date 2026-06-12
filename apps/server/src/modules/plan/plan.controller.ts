@@ -217,6 +217,17 @@ export class PlanController {
     return this.planService.submitReview(id, req.user.id, body?.underfillReason);
   }
 
+  @Post(':id/withdraw-review')
+  @ApiOperation({ summary: '撤回审核（PENDING_REVIEW → DRAFT, 仅出方案老师; 主管开始审核后不可撤）' })
+  @ApiParam({ name: 'id', type: Number })
+  async withdrawReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+    @Body() body?: { reason?: string },
+  ) {
+    return this.planService.withdrawReview(id, req.user.id, body?.reason);
+  }
+
   @Post(':id/favorite')
   @ApiOperation({ summary: '切换收藏状态' })
   @ApiParam({ name: 'id', type: Number })

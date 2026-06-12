@@ -1493,6 +1493,28 @@ export default function GeneratePlanPage() {
     },
   });
 
+  // 撤回审核: 主管认领前可拉回草稿调序/改组 (PENDING_REVIEW → DRAFT)
+  const withdrawMutation = useMutation({
+    mutationFn: () => planApi.withdrawReview(String(planId)),
+    onSuccess: () => {
+      void message.success('已撤回到草稿,可调整顺序后重新提交');
+      queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+      queryClient.invalidateQueries({ queryKey: ['student-plans-latest', studentId] });
+    },
+    onError: (error: any) => {
+      void message.error(error?.response?.data?.message ?? '撤回失败');
+    },
+  });
+  const handleWithdrawClick = useCallback(() => {
+    Modal.confirm({
+      title: '撤回审核?',
+      content: '方案将退回草稿,可拖动调整顺序、增删组;改完需要重新提交主管审核。',
+      okText: '撤回',
+      cancelText: '取消',
+      onOk: () => withdrawMutation.mutate(),
+    });
+  }, [withdrawMutation]);
+
   // 不足额提交: 弹窗收理由再发请求 (提前批/专项只填想去的组是专业做法)
   const handleSubmitClick = useCallback(() => {
     if (!submitReadiness.underfill) {
@@ -1864,15 +1886,21 @@ export default function GeneratePlanPage() {
               <Button onClick={() => router.push(`/teacher/plans/${planId}`)} icon={<FileTextOutlined />}>
                 查看详情
               </Button>
-              <Tooltip title={submitReadiness.ok ? '' : submitReadiness.reason}>
-                <Button
-                  disabled={!submitReadiness.ok || submitMutation.isPending}
-                  onClick={handleSubmitClick}
-                  icon={<SendOutlined />}
-                >
-                  提交审核
+              {plan?.status === 'PENDING_REVIEW' ? (
+                <Button danger loading={withdrawMutation.isPending} onClick={handleWithdrawClick}>
+                  撤回修改
                 </Button>
-              </Tooltip>
+              ) : (
+                <Tooltip title={submitReadiness.ok ? '' : submitReadiness.reason}>
+                  <Button
+                    disabled={!submitReadiness.ok || submitMutation.isPending}
+                    onClick={handleSubmitClick}
+                    icon={<SendOutlined />}
+                  >
+                    提交审核
+                  </Button>
+                </Tooltip>
+              )}
             </>
           ) : null}
           <Button onClick={() => setAlgoDrawerOpen(true)} icon={<InfoCircleOutlined />}>
@@ -2772,7 +2800,7 @@ export default function GeneratePlanPage() {
                             className="pgv2-rail-item"
                             onClick={() => setExpandedRailItemId(isOpen ? null : item.id)}
                           >
-                            <span className="rail-grip" title={canDrag ? '拖动调整顺位' : '草稿状态下可拖动'}>⋮⋮</span>
+                            <span className="rail-grip" title={canDrag ? '拖动调整顺位' : (plan?.status === 'PENDING_REVIEW' ? '审核中 — 点「撤回修改」退回草稿后可拖动调序' : '草稿状态下可拖动')}>⋮⋮</span>
                             <span className="idx">{String(idx).padStart(2, '0')}</span>
                             <span className={`pgv2-tier-tag tone-${tone}`}>{tierLabel}</span>
                             <span className="meta">
@@ -2860,18 +2888,30 @@ export default function GeneratePlanPage() {
                       ⚠ 还不能提交:{submitReadiness.reason}
                     </div>
                   ) : null}
-                  <Tooltip title={submitReadiness.ok ? '' : submitReadiness.reason}>
+                  {plan?.status === 'PENDING_REVIEW' ? (
                     <Button
-                      type="primary"
+                      danger
                       block
                       style={{ marginTop: 12 }}
-                      disabled={!submitReadiness.ok || submitMutation.isPending}
-                      onClick={handleSubmitClick}
-                      icon={<CheckOutlined />}
+                      loading={withdrawMutation.isPending}
+                      onClick={handleWithdrawClick}
                     >
-                      提交主管审核
+                      撤回修改(调序/改组)
                     </Button>
-                  </Tooltip>
+                  ) : (
+                    <Tooltip title={submitReadiness.ok ? '' : submitReadiness.reason}>
+                      <Button
+                        type="primary"
+                        block
+                        style={{ marginTop: 12 }}
+                        disabled={!submitReadiness.ok || submitMutation.isPending}
+                        onClick={handleSubmitClick}
+                        icon={<CheckOutlined />}
+                      >
+                        提交主管审核
+                      </Button>
+                    </Tooltip>
+                  )}
                 </div>
               </div>
             </aside>

@@ -370,6 +370,16 @@ export default function PlanDetailPage() {
   });
 
   // REJECTED 方案不可编辑不可重交,派生 DRAFT 新版本是唯一出路
+  // 撤回审核: 主管认领前老师可拉回草稿调序/改组 (PENDING_REVIEW → DRAFT)
+  const withdrawMutation = useMutation({
+    mutationFn: () => planApi.withdrawReview(planId),
+    onSuccess: () => {
+      void message.success('已撤回到草稿,可去生成工作台调整顺序后重新提交');
+      refresh();
+    },
+    onError: (error: any) => message.error(error?.response?.data?.message ?? '撤回失败'),
+  });
+
   const deriveMutation = useMutation({
     mutationFn: () => planApi.deriveVersion(planId),
     onSuccess: (data: any) => {
@@ -553,7 +563,7 @@ export default function PlanDetailPage() {
           </>
         );
       case 'PENDING_REVIEW':
-        // 仅主管能认领; 普通老师只看到等待态 (点了认领必 403)
+        // 仅主管能认领; 普通老师可在主管认领前撤回修改 (归属校验由后端兜底, 非本人撤回返回 403)
         return isSupervisor ? (
           <Button
             type="primary"
@@ -564,7 +574,25 @@ export default function PlanDetailPage() {
             认领审核
           </Button>
         ) : (
-          <Tag color="processing">已提交,等待主管认领审核</Tag>
+          <>
+            <Tag color="processing">已提交,等待主管认领审核</Tag>
+            <Button
+              danger
+              icon={<RollbackOutlined />}
+              loading={withdrawMutation.isPending}
+              onClick={() =>
+                Modal.confirm({
+                  title: '撤回审核?',
+                  content: '方案将退回草稿,可在生成工作台调整顺序、增删组;改完需要重新提交主管审核。',
+                  okText: '撤回',
+                  cancelText: '取消',
+                  onOk: () => withdrawMutation.mutate(),
+                })
+              }
+            >
+              撤回修改
+            </Button>
+          </>
         );
       case 'REVIEWING':
         return isSupervisor ? (

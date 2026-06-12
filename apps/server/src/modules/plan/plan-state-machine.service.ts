@@ -4,7 +4,7 @@ import { PlanStatus } from '@prisma/client';
 export type PlanAction =
   | 'SUBMIT_REVIEW' | 'START_REVIEW' | 'APPROVE' | 'REJECT'
   | 'REQUEST_CHANGE' | 'COMMENT' | 'PARENT_CONFIRM'
-  | 'PARENT_REQUEST_CHANGE' | 'FINALIZE';
+  | 'PARENT_REQUEST_CHANGE' | 'FINALIZE' | 'WITHDRAW';
 
 interface TransitionContext {
   itemCount?: number;
@@ -30,6 +30,8 @@ export class PlanStateMachineService {
       return 'PENDING_REVIEW';
     }
     if (from === 'PENDING_REVIEW' && action === 'START_REVIEW') return 'REVIEWING';
+    // 老师撤回: 主管认领(REVIEWING)前可拉回草稿调序/改组; 认领后只能走主管"退回修改"
+    if (from === 'PENDING_REVIEW' && action === 'WITHDRAW') return 'DRAFT';
     if (from === 'REVIEWING') {
       if (action === 'APPROVE') return 'APPROVED';
       if (action === 'REJECT') return 'REJECTED';
