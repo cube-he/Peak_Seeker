@@ -840,7 +840,7 @@ export default function UniversityDetailPage() {
   );
 }
 
-/** 开设专业 tab: 最新计划年的在川招生计划表, 并按 专业+科类+批次+组 关联最新录取年的最低分/位次 */
+/** 开设专业 tab: 最新计划年的在川招生计划表 + 录取分/位次关联 + 筛选排序 */
 function UniMajorsTab({
   plans,
   admissions,
@@ -856,15 +856,18 @@ function UniMajorsTab({
   userRank: number | null;
   flags: { is985: boolean; is211: boolean };
 }) {
+  // 筛选 / 排序状态
+  const [laneFilter, setLaneFilter] = useState<string>(lane ?? '全部');
+  const [batchFilter, setBatchFilter] = useState<string>('全部');
+  const [tierFilter, setTierFilter] = useState<string>('全部');
+  type SortKey = 'default' | 'score' | 'rank' | 'plan' | 'tuition';
+  const [sortKey, setSortKey] = useState<SortKey>('default');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  useEffect(() => {
+    setLaneFilter(lane ?? '全部'); // 换学生跟随其科类
+  }, [lane]);
+
   const latestYear = plans.reduce((mx, p) => Math.max(mx, p.year ?? 0), 0);
-  const rows = plans
-    .filter((p) => p.year === latestYear && (!lane || p.subjects === lane))
-    .sort(
-      (a, b) =>
-        String(a.batch ?? '').localeCompare(String(b.batch ?? ''), 'zh-CN') ||
-        String(a.groupCode ?? '').localeCompare(String(b.groupCode ?? '')) ||
-        String(a.majorName ?? '').localeCompare(String(b.majorName ?? ''), 'zh-CN'),
-    );
 
   // 录取关联: 最新有分录取年, 键逐级退化 (majorId+科类+批次+组 → +批次 → +科类)
   const admYear = admissions.reduce(
@@ -890,12 +893,92 @@ function UniMajorsTab({
     admByKey.get(`${p.majorId}|${p.subjects}`) ??
     null;
 
-  const headers = [
-    '专业', '科类', '批次', '组', '计划',
-    admYear ? `${admYear} 最低分` : '最低分',
-    admYear ? `${admYear} 最低位次` : '最低位次',
-    ...(userRank != null ? ['判定'] : []),
-    '学费/年', '学制', '选科要求',
+  // 行预构建: 计划行 + 关联录取 + 冲稳保
+  const allRows = plans
+    .filter((p) => p.year === latestYear)
+    .map((p) => {
+      const adm = admOf(p);
+      const tier: RankTier | null =
+        userRank != null && adm?.rank != null
+          ? classifyRank(
+              userRank,
+              adm.rank,
+              getTier({ is985: flags.is985, is211: flags.is211, batch: p.batch ?? '' }),
+              p.subjects === '历史',
+            )
+          : null;
+      return { p, adm, tier };
+    });
+
+  const batches = Array.from(new Set(allRows.map((r) => r.p.batch).filter(Boolean))) as string[];
+  batches.sort((a, b) => a.localeCompare(b, 'zh-CN'));
+
+  const filtered = allRows.filter((r) => {
+    if (laneFilter !== '全部' && r.p.subjects !== laneFilter) return false;
+    if (batchFilter !== '全部' && r.p.batch !== batchFilter) return false;
+    if (tierFilter !== '全部' && TIER_TEXT[(r.tier ?? 'unknown') as RankTier].label !== tierFilter) return false;
+    return true;
+  });
+
+  const sortVal = (r: (typeof allRows)[number]): number | null => {
+    if (sortKey === 'score') return r.adm?.score ?? null;
+    if (sortKey === 'rank') return r.adm?.rank ?? null;
+    if (sortKey === 'plan') return r.p.planCount ?? null;
+    if (sortKey === 'tuition') return r.p.tuition != null ? Number(r.p.tuition) : null;
+    return null;
+  };
+  const rows =
+    sortKey === 'default'
+      ? [...filtered].sort(
+          (a, b) =>
+            String(a.p.batch ?? '').localeCompare(String(b.p.batch ?? ''), 'zh-CN') ||
+            String(a.p.groupCode ?? '').localeCompare(String(b.p.groupCode ?? '')) ||
+            String(a.p.majorName ?? '').localeCompare(String(b.p.majorName ?? ''), 'zh-CN'),
+        )
+      : [...filtered].sort((a, b) => {
+          const av = sortVal(a);
+          const bv = sortVal(b);
+          if (av == null && bv == null) return 0;
+          if (av == null) return 1; // null 沉底
+          if (bv == null) return -1;
+          return sortDir === 'asc' ? av - bv : bv - av;
+        });
+
+  const clickSort = (k: SortKey, defaultDir: 'asc' | 'desc') => {
+    if (sortKey !== k) {
+      setSortKey(k);
+      setSortDir(defaultDir);
+    } else if (sortDir === defaultDir) {
+      setSortDir(defaultDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey('default'); // 第三次点击回默认 (批次+组序)
+    }
+  };
+  const arrowOf = (k: SortKey) => (sortKey === k ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ⇅');
+
+  const chipStyle = (active: boolean): React.CSSProperties => ({
+    fontSize: 12,
+    padding: '3px 10px',
+    borderRadius: 6,
+    cursor: 'pointer',
+    border: active ? '1px solid var(--primary)' : '1px solid var(--border)',
+    background: active ? 'var(--primary)' : 'var(--surface)',
+    color: active ? '#fff' : 'var(--text-tertiary)',
+  });
+
+  type Header = { label: string; key?: SortKey; dir?: 'asc' | 'desc' };
+  const headers: Header[] = [
+    { label: '专业' },
+    { label: '科类' },
+    { label: '批次' },
+    { label: '组' },
+    { label: '计划', key: 'plan', dir: 'desc' },
+    { label: admYear ? `${admYear} 最低分` : '最低分', key: 'score', dir: 'desc' },
+    { label: admYear ? `${admYear} 最低位次` : '最低位次', key: 'rank', dir: 'asc' },
+    ...(userRank != null ? [{ label: '判定' } as Header] : []),
+    { label: '学费/年', key: 'tuition', dir: 'asc' },
+    { label: '学制' },
+    { label: '选科要求' },
   ];
 
   return (
@@ -903,11 +986,42 @@ function UniMajorsTab({
       <h4>
         <span className="ic"><BankIcon /></span>
         {latestYear ? `${latestYear} 年在川招生专业 · ${rows.length} 条` : '在川招生专业'}
-        {lane ? ` · ${lane}类` : ''}
       </h4>
+
+      {/* 筛选行: 科类 / 批次 / 判定 */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, margin: '4px 0 12px' }}>
+        {['全部', '物理', '历史'].map((s) => (
+          <button key={s} type="button" style={chipStyle(laneFilter === s)} onClick={() => setLaneFilter(s)}>
+            {s === '全部' ? '全部科类' : `${s}类`}
+          </button>
+        ))}
+        {batches.length > 1 && (
+          <>
+            <span style={{ width: 1, height: 18, background: 'var(--border)' }} />
+            <Select
+              size="small"
+              style={{ minWidth: 170 }}
+              value={batchFilter}
+              options={[{ label: '全部批次', value: '全部' }, ...batches.map((b) => ({ label: b, value: b }))]}
+              onChange={(v) => setBatchFilter(v)}
+            />
+          </>
+        )}
+        {userRank != null && (
+          <>
+            <span style={{ width: 1, height: 18, background: 'var(--border)' }} />
+            {['全部', '冲', '稳', '保'].map((t) => (
+              <button key={t} type="button" style={chipStyle(tierFilter === t)} onClick={() => setTierFilter(t)}>
+                {t === '全部' ? '全部判定' : t}
+              </button>
+            ))}
+          </>
+        )}
+      </div>
+
       {rows.length === 0 ? (
         <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-          {plans.length === 0 ? '加载中或暂无在川招生计划' : '该科类暂无计划'}
+          {plans.length === 0 ? '加载中或暂无在川招生计划' : '当前筛选条件下无计划'}
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -915,71 +1029,74 @@ function UniMajorsTab({
             <thead>
               <tr style={{ color: 'var(--text-muted)', fontSize: 11, textAlign: 'left' }}>
                 {headers.map((h) => (
-                  <th key={h} style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)', fontWeight: 500 }}>{h}</th>
+                  <th
+                    key={h.label}
+                    onClick={h.key ? () => clickSort(h.key!, h.dir!) : undefined}
+                    style={{
+                      padding: '6px 10px',
+                      borderBottom: '1px solid var(--border)',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                      cursor: h.key ? 'pointer' : undefined,
+                      userSelect: 'none',
+                      color: h.key && sortKey === h.key ? 'var(--primary)' : undefined,
+                    }}
+                  >
+                    {h.label}
+                    {h.key ? arrowOf(h.key) : ''}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((p) => {
-                const adm = admOf(p);
-                const tier =
-                  userRank != null && adm?.rank != null
-                    ? classifyRank(
-                        userRank,
-                        adm.rank,
-                        getTier({ is985: flags.is985, is211: flags.is211, batch: p.batch ?? '' }),
-                        p.subjects === '历史',
-                      )
-                    : null;
-                return (
-                  <tr key={p.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              {rows.map(({ p, adm, tier }) => (
+                <tr key={p.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  <td style={{ padding: '7px 10px' }}>
+                    {p.majorId ? (
+                      <Link href={`/majors/${p.majorId}`} style={{ color: 'var(--primary)' }}>
+                        {p.majorName}
+                      </Link>
+                    ) : (
+                      p.majorName
+                    )}
+                  </td>
+                  <td style={{ padding: '7px 10px' }}>
+                    <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: p.subjects === '物理' ? 'rgba(59,130,246,.1)' : 'rgba(244,63,94,.1)', color: p.subjects === '物理' ? '#1d4ed8' : '#be123c' }}>
+                      {p.subjects}
+                    </span>
+                  </td>
+                  <td style={{ padding: '7px 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>{p.batch}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.groupCode}</td>
+                  <td style={{ padding: '7px 10px', fontWeight: 600 }}>{p.planCount ?? '—'}</td>
+                  <td style={{ padding: '7px 10px', fontWeight: 600 }}>{adm?.score ?? '—'}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 12 }}>
+                    {adm?.rank != null ? `#${adm.rank.toLocaleString()}` : '—'}
+                  </td>
+                  {userRank != null && (
                     <td style={{ padding: '7px 10px' }}>
-                      {p.majorId ? (
-                        <Link href={`/majors/${p.majorId}`} style={{ color: 'var(--primary)' }}>
-                          {p.majorName}
-                        </Link>
+                      {tier ? (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            padding: '1px 8px',
+                            borderRadius: 999,
+                            color: '#fff',
+                            background: TIER_TEXT[tier].color,
+                          }}
+                        >
+                          {TIER_TEXT[tier].label}
+                        </span>
                       ) : (
-                        p.majorName
+                        <span style={{ color: 'var(--text-muted)' }}>—</span>
                       )}
                     </td>
-                    <td style={{ padding: '7px 10px' }}>
-                      <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: p.subjects === '物理' ? 'rgba(59,130,246,.1)' : 'rgba(244,63,94,.1)', color: p.subjects === '物理' ? '#1d4ed8' : '#be123c' }}>
-                        {p.subjects}
-                      </span>
-                    </td>
-                    <td style={{ padding: '7px 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>{p.batch}</td>
-                    <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.groupCode}</td>
-                    <td style={{ padding: '7px 10px', fontWeight: 600 }}>{p.planCount ?? '—'}</td>
-                    <td style={{ padding: '7px 10px', fontWeight: 600 }}>{adm?.score ?? '—'}</td>
-                    <td style={{ padding: '7px 10px', fontSize: 12 }}>
-                      {adm?.rank != null ? `#${adm.rank.toLocaleString()}` : '—'}
-                    </td>
-                    {userRank != null && (
-                      <td style={{ padding: '7px 10px' }}>
-                        {tier ? (
-                          <span
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: '1px 8px',
-                              borderRadius: 999,
-                              color: '#fff',
-                              background: TIER_TEXT[tier].color,
-                            }}
-                          >
-                            {TIER_TEXT[tier].label}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--text-muted)' }}>—</span>
-                        )}
-                      </td>
-                    )}
-                    <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.tuition != null ? `¥${Number(p.tuition).toLocaleString()}` : '—'}</td>
-                    <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.duration ? `${p.duration} 年` : '—'}</td>
-                    <td style={{ padding: '7px 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>{p.subjectRequirements || '—'}</td>
-                  </tr>
-                );
-              })}
+                  )}
+                  <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.tuition != null ? `¥${Number(p.tuition).toLocaleString()}` : '—'}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.duration ? `${p.duration} 年` : '—'}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>{p.subjectRequirements || '—'}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
