@@ -77,3 +77,56 @@ describe('getPickerOptions', () => {
     });
   });
 });
+
+describe('getRankings', () => {
+  const buildService = () => {
+    const prisma = { major: { findMany: jest.fn().mockResolvedValue([]) } };
+    const redis = { getCache: jest.fn().mockResolvedValue(null), setCache: jest.fn() };
+    const admissionService = { getTargetYear: jest.fn() };
+    const service = new MajorService(prisma as any, redis as any, admissionService as any);
+    return { service, prisma, redis };
+  };
+
+  it('考公榜默认: 在川范围 + csJobs2026 非空 + 按 2026 岗位数降序', async () => {
+    const { service, prisma } = buildService();
+    await service.getRankings({ board: 'CIVIL_SERVICE' });
+    const args = (prisma.major.findMany as jest.Mock).mock.calls[0][0];
+    expect(args.where.scPlanCount).toEqual({ gt: 0 });
+    expect(args.where.csJobs2026).toEqual({ not: null });
+    expect(args.orderBy[0]).toEqual({ csJobs2026: { sort: 'desc', nulls: 'last' } });
+    expect(args.take).toBe(50);
+  });
+
+  it('考公榜 sub=COMPETITION: 竞争比升序 + 岗位数门槛防小样本', async () => {
+    const { service, prisma } = buildService();
+    await service.getRankings({ board: 'CIVIL_SERVICE', sub: 'COMPETITION' });
+    const args = (prisma.major.findMany as jest.Mock).mock.calls[0][0];
+    expect(args.where.csJobs2026).toEqual({ gte: 500 });
+    expect(args.orderBy[0]).toEqual({ csCompetition: { sort: 'asc', nulls: 'last' } });
+  });
+
+  it('分数榜物理科类: scPhyScoreHi 降序 + 在川院校数>=3 门槛(防单校失真)', async () => {
+    const { service, prisma } = buildService();
+    await service.getRankings({ board: 'SCORE', examType: 'PHYSICS' });
+    const args = (prisma.major.findMany as jest.Mock).mock.calls[0][0];
+    expect(args.where.scPhyScoreHi).toEqual({ not: null });
+    expect(args.where.scPlanUnis).toEqual({ gte: 3 });
+    expect(args.orderBy[0]).toEqual({ scPhyScoreHi: { sort: 'desc', nulls: 'last' } });
+  });
+
+  it('scope=ALL 不加在川过滤; 热度榜按全国名次升序', async () => {
+    const { service, prisma } = buildService();
+    await service.getRankings({ board: 'POPULARITY', scope: 'ALL' });
+    const args = (prisma.major.findMany as jest.Mock).mock.calls[0][0];
+    expect(args.where.scPlanCount).toBeUndefined();
+    expect(args.where.popularityRank).toEqual({ not: null });
+    expect(args.orderBy[0]).toEqual({ popularityRank: 'asc' });
+  });
+
+  it('命中缓存时不查库', async () => {
+    const { service, prisma, redis } = buildService();
+    (redis.getCache as jest.Mock).mockResolvedValueOnce({ board: 'PLAN', list: [] });
+    await service.getRankings({ board: 'PLAN' });
+    expect(prisma.major.findMany).not.toHaveBeenCalled();
+  });
+});

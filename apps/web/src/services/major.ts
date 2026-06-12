@@ -32,4 +32,15 @@ export const majorService = {
   getUniversities(id: number, year?: number): Promise<any> {
     return api.get(`/majors/${id}/universities`, { params: { year } }) as any;
   },
+
+  /** 专业排行榜: 考公/热度/分数/计划/征集/薪酬/就业/满意度; 默认在川有招生范围 */
+  getRankings(params: {
+    board?: string;
+    sub?: string;
+    examType?: string;
+    scope?: string;
+    limit?: number;
+  } = {}): Promise<any> {
+    return api.get('/majors/rankings', { params }) as any;
+  },
 };

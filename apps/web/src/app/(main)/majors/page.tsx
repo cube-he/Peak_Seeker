@@ -690,6 +690,14 @@ function MajorsPageInner() {
           <p className="mt-2 text-sm text-text-tertiary">
             覆盖本科与高职专科，对齐教育部最新专业目录。可按增设年份、选考建议、薪资筛选，帮你判断专业适配度。
           </p>
+          <Link
+            href="/majors/rankings"
+            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-accent/25 bg-accent-fixed px-4 py-2 text-sm font-medium text-accent transition hover:shadow-card"
+          >
+            🏆 专业排行榜
+            <span className="text-xs font-normal text-text-tertiary">考公友好 · 热度 · 录取分 · 招生计划 · 征集捡漏</span>
+            <RightOutlined className="text-xs" />
+          </Link>
         </div>
 
         {/* 老师工作台: 选定学生后, 专业卡片出现"+ 意向池"一键加入 */}

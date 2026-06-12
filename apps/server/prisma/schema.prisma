@@ -552,6 +552,24 @@ model Major {
   scRecruitTypes String? @map("sc_recruit_types") @db.VarChar(500) // 特殊招生形式集合(顿号分隔), 不含普通类; 含中外合作文本兜底
   scSupplCount   Int?    @map("sc_suppl_count") // 最新征集年该专业征集志愿计划总人数 (没录满信号)
 
+  // === 考公指标（物化列, apps/server/scripts/import-civil-service-stats.ts 导入）===
+  // 来源: 专业数据_全国_含考公_最终版.xlsx sheet 14(专业聚合) + sheet 15(岗位明细, 聚合在川口径)。
+  // 全国口径 = 国考+省考岗位表按专业(类)匹配; 仅覆盖本科专业
+  csJobs2023    Int?    @map("cs_jobs_2023") // 2023 可报岗位数(全国), 详情页四年走势用
+  csJobs2024    Int?    @map("cs_jobs_2024")
+  csJobs2025    Int?    @map("cs_jobs_2025")
+  csJobs2026    Int?    @map("cs_jobs_2026") // 2026 可报岗位数(全国)
+  csJobsTotal   Int?    @map("cs_jobs_total") // 2023-2026 四年可报岗位合计
+  csRecruitTotal Int?   @map("cs_recruit_total") // 四年招考人数合计
+  csCompetition Float?  @map("cs_competition") // 2026 平均报名竞争比(73.5 = 73.5人抢1岗, 热度逆指标)
+  csTrendDelta  Int?    @map("cs_trend_delta") // 岗位数趋势: 2026 减 2023
+  csTrendLabel  String? @map("cs_trend_label") @db.VarChar(20) // 上升/下降/平稳
+  csRegionTop3  String? @map("cs_region_top3") @db.VarChar(120) // 岗位最多地区 TOP3(顿号分隔)
+  csSystemTop3  String? @map("cs_system_top3") @db.VarChar(300) // 岗位最多系统 TOP3(中央/省直/税务等)
+  csScJobs2026  Int?    @map("cs_sc_jobs_2026") // 2026 在川可报岗位数(明细表 地区=四川 聚合)
+  csConfidence  Float?  @map("cs_confidence") // 专业匹配平均置信度(0-1, <0.8 前端打"参考"标)
+  csYear        Int?    @map("cs_year") @db.SmallInt // 数据年份(2026)
+
   // 关联
   enrollmentPlans  EnrollmentPlan[]
   admissionRecords AdmissionRecord[]

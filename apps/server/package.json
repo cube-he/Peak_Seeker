@@ -30,7 +30,8 @@
     "import:university-satisfaction": "ts-node -r dotenv/config scripts/import-university-satisfaction.ts",
     "import:university-charters": "ts-node -r dotenv/config scripts/import-university-charters.ts",
     "import:university-employment": "ts-node -r dotenv/config scripts/import-university-employment.ts",
-    "import:major-details": "ts-node -r dotenv/config scripts/import-major-details.ts"
+    "import:major-details": "ts-node -r dotenv/config scripts/import-major-details.ts",
+    "import:civil-service": "ts-node -r dotenv/config scripts/import-civil-service-stats.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.17.0",

@@ -56,6 +56,23 @@ export class MajorController {
     return this.majorService.getHotMajors(limit);
   }
 
+  @Get('rankings')
+  @ApiOperation({ summary: '专业排行榜(考公/热度/分数/计划/征集/薪酬/就业/满意度), 默认在川有招生范围' })
+  @ApiQuery({ name: 'board', required: false, description: 'CIVIL_SERVICE|POPULARITY|SCORE|PLAN|SUPPLEMENTARY|SALARY|EMPLOYMENT|SATISFACTION' })
+  @ApiQuery({ name: 'sub', required: false, description: '考公榜副口径 JOBS_2026|JOBS_TOTAL|COMPETITION' })
+  @ApiQuery({ name: 'examType', required: false, description: 'PHYSICS|HISTORY (分数/计划榜)' })
+  @ApiQuery({ name: 'scope', required: false, description: 'SC(默认)|ALL' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getRankings(
+    @Query('board') board?: string,
+    @Query('sub') sub?: string,
+    @Query('examType') examType?: string,
+    @Query('scope') scope?: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.majorService.getRankings({ board, sub, examType, scope, limit });
+  }
+
   @Get('picker-options')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: '专业 picker 选项（id/code/name 精简，可按 batches 过滤）' })

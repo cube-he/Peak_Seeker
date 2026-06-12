@@ -22,6 +22,86 @@ function formatHeat(value: unknown): string | null {
   return `${(value / 10000).toFixed(1)}万`;
 }
 
+/** 考公参考块: 给有考公意愿的学生家长的决策指标(数据=国考+省考岗位表按专业匹配, 全国口径) */
+function CivilServiceTab({ m }: { m: any }) {
+  const years = [
+    { year: 2023, jobs: m.csJobs2023 },
+    { year: 2024, jobs: m.csJobs2024 },
+    { year: 2025, jobs: m.csJobs2025 },
+    { year: 2026, jobs: m.csJobs2026 },
+  ].filter((y) => y.jobs != null);
+  const maxJobs = Math.max(1, ...years.map((y) => y.jobs ?? 0));
+  const trendUp = (m.csTrendDelta ?? 0) > 0;
+  const competitionHot = (m.csCompetition ?? 0) > 100;
+  const stats = [
+    { label: '2026 可报岗位', value: m.csJobs2026?.toLocaleString() ?? '—', accent: true },
+    { label: '四年岗位合计', value: m.csJobsTotal?.toLocaleString() ?? '—' },
+    { label: '四年招考人数', value: m.csRecruitTotal?.toLocaleString() ?? '—' },
+    {
+      label: '2026 平均竞争比',
+      value: m.csCompetition != null ? `${m.csCompetition}:1` : '—',
+      warn: competitionHot,
+      tip: '平均多少人报名抢 1 个岗位。报名热度逆指标, 越低越好上岸; >100 视为拥挤',
+    },
+    {
+      label: '2026 在川岗位',
+      value: m.csScJobs2026?.toLocaleString() ?? '—',
+      accent: true,
+      tip: '2026 届岗位表中工作地点在四川的可报岗位条目数',
+    },
+  ];
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {stats.map((s) => (
+          <Tooltip key={s.label} title={s.tip}>
+            <div className={`rounded-lg border border-black/5 bg-bg p-3 ${s.tip ? 'cursor-help' : ''}`}>
+              <div className="text-xs text-text-muted">{s.label}</div>
+              <div className={`mt-1 font-serif text-xl font-semibold tabular-nums ${s.warn ? 'text-rush' : s.accent ? 'text-accent' : 'text-text'}`}>
+                {s.value}
+              </div>
+            </div>
+          </Tooltip>
+        ))}
+      </div>
+      {years.length >= 2 ? (
+        <div>
+          <div className="mb-2 flex items-baseline gap-3 text-sm font-medium text-text">
+            可报岗位数走势
+            {m.csTrendDelta != null && m.csTrendDelta !== 0 ? (
+              <span className={`text-xs font-normal ${trendUp ? 'text-safe' : 'text-rush'}`}>
+                {trendUp ? '↑ 上升' : '↓ 下降'} {Math.abs(m.csTrendDelta).toLocaleString()}(2026 vs 2023)
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-end gap-4">
+            {years.map((y) => (
+              <div key={y.year} className="flex flex-col items-center gap-1">
+                <span className="text-xs tabular-nums text-text-secondary">{y.jobs!.toLocaleString()}</span>
+                <div
+                  className="w-12 rounded-t bg-accent/70"
+                  style={{ height: `${Math.max(8, Math.round(((y.jobs ?? 0) / maxJobs) * 72))}px` }}
+                />
+                <span className="text-xs text-text-muted">{y.year}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="space-y-1.5 text-sm text-text-secondary">
+        {m.csSystemTop3 ? <div>岗位最多的系统: {m.csSystemTop3}</div> : null}
+        {m.csRegionTop3 ? <div>岗位最多的地区: {m.csRegionTop3}</div> : null}
+      </div>
+      <p className="text-xs text-text-faint">
+        口径: 国考+省考岗位表按专业(类)匹配, 全国汇总; 竞争比为报名口径, 不代表分数线。
+        {m.csConfidence != null && m.csConfidence < 0.8
+          ? ` 该专业匹配置信度 ${m.csConfidence}(部分岗位按专业大类匹配), 数字仅供参考。`
+          : ''}
+      </p>
+    </div>
+  );
+}
+
 export default function MajorDetailPage() {
   const params = useParams();
   const id = Number(params.id);
@@ -419,6 +499,16 @@ export default function MajorDetailPage() {
           yearSalaryMap={m.yearSalaryMap ?? null}
         />
       ),
+    },
+    {
+      key: 'civil',
+      disabled: m.csJobs2026 == null,
+      label: (
+        <span className={m.csJobs2026 != null ? undefined : 'text-text-faint'}>
+          <BankOutlined className="mr-1" />考公参考{m.csJobs2026 != null ? '' : ' · 暂无数据'}
+        </span>
+      ),
+      children: <CivilServiceTab m={m} />,
     },
   ];
 

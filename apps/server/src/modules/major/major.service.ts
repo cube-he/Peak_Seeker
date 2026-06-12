@@ -85,6 +85,114 @@ export class MajorService {
     };
   }
 
+  /**
+   * 专业排行榜: 全部读物化列(cs_ / sc_ / popularity_ / 就业薪酬满意度), 纯 orderBy + 门槛过滤。
+   * 默认 scope=SC 只看在川有招生的专业(家长视角), scope=ALL 看全国。
+   * 各榜门槛是口径的一部分: 分数榜要求在川院校数>=3(防单校失真),
+   * 竞争比榜要求岗位数>=500(防小众专业小样本), 满意度榜要求评价人数>=100。
+   */
+  async getRankings(query: {
+    board?: string;   // CIVIL_SERVICE | POPULARITY | SCORE | PLAN | SUPPLEMENTARY | SALARY | EMPLOYMENT | SATISFACTION
+    sub?: string;     // 考公榜副口径: JOBS_2026(默认) | JOBS_TOTAL | COMPETITION
+    examType?: string; // PHYSICS | HISTORY (分数/计划榜)
+    scope?: string;   // SC(默认, 在川有招生) | ALL
+    limit?: number;
+  }) {
+    const board = String(query.board ?? 'CIVIL_SERVICE').toUpperCase();
+    const sub = String(query.sub ?? 'JOBS_2026').toUpperCase();
+    const examType = String(query.examType ?? '').toUpperCase();
+    const scope = String(query.scope ?? 'SC').toUpperCase();
+    const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 100);
+
+    const cacheKey = `major:rankings:${board}:${sub}:${examType}:${scope}:${limit}`;
+    const cached = await this.redis.getCache(cacheKey);
+    if (cached) return cached;
+
+    const where: any = {};
+    if (scope === 'SC') where.scPlanCount = { gt: 0 };
+    const phys = examType === 'PHYSICS';
+    let orderBy: any[];
+    switch (board) {
+      case 'CIVIL_SERVICE': {
+        if (sub === 'COMPETITION') {
+          where.csJobs2026 = { gte: 500 };
+          orderBy = [{ csCompetition: { sort: 'asc', nulls: 'last' } }];
+        } else if (sub === 'JOBS_TOTAL') {
+          where.csJobs2026 = { not: null };
+          orderBy = [{ csJobsTotal: { sort: 'desc', nulls: 'last' } }];
+        } else {
+          where.csJobs2026 = { not: null };
+          orderBy = [{ csJobs2026: { sort: 'desc', nulls: 'last' } }];
+        }
+        break;
+      }
+      case 'POPULARITY':
+        where.popularityRank = { not: null };
+        orderBy = [{ popularityRank: 'asc' }];
+        break;
+      case 'SCORE': {
+        const col = phys ? 'scPhyScoreHi' : 'scHisScoreHi';
+        where[col] = { not: null };
+        where.scPlanUnis = { gte: 3 };
+        orderBy = [{ [col]: { sort: 'desc', nulls: 'last' } }];
+        break;
+      }
+      case 'PLAN': {
+        const col = phys ? 'scPhyPlanCount' : examType === 'HISTORY' ? 'scHisPlanCount' : 'scPlanCount';
+        where[col] = { gt: 0 };
+        orderBy = [{ [col]: { sort: 'desc', nulls: 'last' } }];
+        break;
+      }
+      case 'SUPPLEMENTARY':
+        where.scSupplCount = { gt: 0 };
+        orderBy = [{ scSupplCount: { sort: 'desc', nulls: 'last' } }];
+        break;
+      case 'SALARY':
+        where.avgSalary = { not: null };
+        orderBy = [{ avgSalary: { sort: 'desc', nulls: 'last' } }];
+        break;
+      case 'EMPLOYMENT':
+        where.employmentRate = { not: null };
+        orderBy = [{ employmentRate: { sort: 'desc', nulls: 'last' } }];
+        break;
+      case 'SATISFACTION':
+        where.satisfactionScore = { not: null };
+        where.satisfactionOverallCount = { gte: 100 };
+        orderBy = [{ satisfactionScore: { sort: 'desc', nulls: 'last' } }];
+        break;
+      default:
+        throw new Error(`未知榜单: ${board}`);
+    }
+    orderBy.push({ name: 'asc' });
+
+    const list = await this.prisma.major.findMany({
+      where,
+      orderBy,
+      take: limit,
+      select: {
+        id: true, name: true, code: true, category: true, discipline: true, level: true,
+        // 考公
+        csJobs2023: true, csJobs2024: true, csJobs2025: true,
+        csJobs2026: true, csJobsTotal: true, csRecruitTotal: true, csCompetition: true,
+        csTrendDelta: true, csTrendLabel: true, csRegionTop3: true, csSystemTop3: true,
+        csScJobs2026: true, csConfidence: true, csYear: true,
+        // 热度
+        popularityRank: true, popularityHeat: true, popularityYear: true,
+        // 在川招录
+        scPlanCount: true, scPhyPlanCount: true, scHisPlanCount: true, scPlanUnis: true,
+        scPlanYear: true, scScoreYear: true,
+        scPhyScoreLo: true, scPhyScoreHi: true, scHisScoreLo: true, scHisScoreHi: true,
+        scSupplCount: true,
+        // 就业/薪酬/满意度
+        avgSalary: true, employmentRate: true, satisfactionScore: true, satisfactionOverallCount: true,
+      },
+    });
+
+    const result = { board, sub: board === 'CIVIL_SERVICE' ? sub : undefined, examType: examType || undefined, scope, limit, list };
+    await this.redis.setCache(cacheKey, result, 3600);
+    return result;
+  }
+
   async findById(id: number) {
     const universitySelect = {
       select: {
