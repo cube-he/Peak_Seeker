@@ -43,6 +43,8 @@ export type CandidateUniversitySort =
 
 export interface CandidateGroupListParams extends CandidateListParams {
   sort?: CandidateGroupSort | CandidateUniversitySort;
+  // 组名/定向县搜索 (提前批公费定向按县筛组)
+  keywordGroup?: string;
   // 意向梯队过滤 (0 / undefined = 不过滤, 1+ = 该梯队号)
   tier?: number;
   // 是否隐藏已加入当前 plan 的院校组 (默认 true)
@@ -120,6 +122,7 @@ export const planApi = {
         keyword: params?.keyword?.trim() || undefined,
         keywordUniversity: params?.keywordUniversity?.trim() || undefined,
         keywordMajor: params?.keywordMajor?.trim() || undefined,
+        keywordGroup: params?.keywordGroup?.trim() || undefined,
         includeSoftFails: params?.includeSoftFails,
         sort: params?.sort ?? 'MAJOR_MATCH',
         tier: params?.tier,

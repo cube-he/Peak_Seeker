@@ -271,6 +271,8 @@ interface CandidateGroup {
   // 后端标记: tier 模式下命中梯队但全 RISK (位次差距过大 / 软规则全失败)
   // 前端据此显示位次差预警, 并禁用 / 警告"加入"按钮
   allRisk?: boolean;
+  // 无史线组的人工判断锚点: 有线组分数带 (后端算好; UNIVERSITY=同校同类型, BATCH=全批次同类型回退)
+  siblingLineBand?: { min: number; max: number; count: number; scope?: 'UNIVERSITY' | 'BATCH' } | null;
   // 客观纯净度（GroupPurity 预计算结果）— S/A/B/C 四档
   purity?: {
     level: 'S' | 'A' | 'B' | 'C';
@@ -357,7 +359,7 @@ const GRAD_DESC: Record<DynamicGradientTier, string> = {
 };
 
 // pgv2 设计稿: 4 chip 梯度过滤
-type GradientFilterValue = 'all' | 'RUSH' | 'STABLE' | 'SAFE';
+type GradientFilterValue = 'all' | 'RUSH' | 'STABLE' | 'SAFE' | 'NO_LINE';
 const GRADIENT_FILTER_OPTIONS: Array<{
   value: GradientFilterValue;
   label: string;
@@ -367,6 +369,8 @@ const GRADIENT_FILTER_OPTIONS: Array<{
   { value: 'RUSH', label: '冲档', tones: ['JI_CHONG', 'CHONG', 'XIAO_CHONG'] },
   { value: 'STABLE', label: '稳档', tones: ['WEN', 'WEN_BAO'] },
   { value: 'SAFE', label: '保底', tones: ['BAO', 'QIANG_BAO', 'DIBAO'] },
+  // 无史线组单列: 引擎兜底 tier 是 BAO, 混进"保底"会虚高且与卡片"无史线"标签矛盾
+  { value: 'NO_LINE', label: '无史线', tones: null },
 ];
 
 const MAJOR_SECTION_LABEL: Record<MajorDisplaySection, string> = {
@@ -1011,6 +1015,28 @@ function MajorSearchAutoComplete({
   );
 }
 
+function GroupNameSearchInput({
+  value, onChange, onCommit,
+}: { value: string; onChange: (v: string) => void; onCommit: (v: string) => void }) {
+  // 提前批公费/优师的定向县在组名里("定向凉山州昭觉县"), 老师按县筛组
+  return (
+    <span className="pgv2-search" title="按专业组名/定向县搜索, 如「昭觉」「凉山」">
+      <SearchOutlined />
+      <AutoComplete
+        value={value}
+        options={[]}
+        onChange={onChange}
+        onBlur={() => onCommit(value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') onCommit(value); }}
+        placeholder="组名/定向县"
+        style={{ width: 150 }}
+        allowClear
+        notFoundContent={null}
+      />
+    </span>
+  );
+}
+
 export default function GeneratePlanPage() {
   const params = useParams<{ studentId: string }>();
   const router = useRouter();
@@ -1026,8 +1052,11 @@ export default function GeneratePlanPage() {
   const keyword = ''; // 旧参数兼容: UI 不再用单一 keyword, 此变量保留为空避免改动 API/cache key 结构
   const [keywordUniversity, setKeywordUniversity] = useState('');
   const [keywordMajor, setKeywordMajor] = useState('');
+  // 组名/定向县搜索 (提前批公费定向场景: 按"昭觉""凉山"筛定向组)
+  const [keywordGroupName, setKeywordGroupName] = useState('');
   const [searchTextUniversity, setSearchTextUniversity] = useState('');
   const [searchTextMajor, setSearchTextMajor] = useState('');
+  const [searchTextGroupName, setSearchTextGroupName] = useState('');
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
   // 视图模式: MAJOR=专业组卡(专业优先); UNIVERSITY=院校卡(院校优先).
@@ -1142,13 +1171,14 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, includeSoftFails, effectiveSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, includeSoftFails, effectiveSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
       keyword,
       keywordUniversity,
       keywordMajor,
+      keywordGroup: keywordGroupName,
       includeSoftFails,
       sort: effectiveSort as CandidateGroupSort,
       tier: appliedTier,
@@ -1168,6 +1198,9 @@ export default function GeneratePlanPage() {
     return groups.filter((group) => {
       if (!showHidden && hiddenGroupKeys.has(group.groupKey)) return false;
       if (gradientFilter !== 'all') {
+        // 无史线组与冲/稳/保互斥: 选"无史线"只看无线组, 选其他档位排除无线组
+        if (gradientFilter === 'NO_LINE') return groupHasNoHistoryLine(group);
+        if (groupHasNoHistoryLine(group)) return false;
         const tier = gradientTier(group);
         const opt = GRADIENT_FILTER_OPTIONS.find((o) => o.value === gradientFilter);
         if (opt?.tones && !opt.tones.includes(tier)) return false;
@@ -1266,6 +1299,10 @@ export default function GeneratePlanPage() {
   const studentBonusPoints = Number((candidateGroups as any)?.studentBonusPoints) || 0;
   const studentRawRank = Number((candidateGroups as any)?.studentRawRank) || null;
   const studentScoreForDecision = Number.isFinite(rawStudentScore) ? rawStudentScore : undefined;
+  // 卡片分差口径: 有效分 = 裸分 + 已确认政策加分 (省内批次投档口径, 与梯度引擎一致)
+  const studentEffectiveScore = Number.isFinite(rawStudentScore) && rawStudentScore > 0
+    ? rawStudentScore + studentBonusPoints
+    : undefined;
   const subjectCombination = formatSubjectCombination(student ?? {});
   const subjectHighlights = getSubjectHighlights(student ?? {});
   const physicalLimitTags = getPhysicalLimitTags(student);
@@ -1300,6 +1337,11 @@ export default function GeneratePlanPage() {
     ...getArrayValues(student?.excludedMajors),
     ...getArrayValues(student?.excludedMajorCategories),
   ], 3);
+  // 组卡"意向命中数"用的意向专业集合 (展平全部梯队)
+  const preferredMajorSet = useMemo(
+    () => new Set(flattenPreferredMajors(student?.preferredMajors)),
+    [student?.preferredMajors],
+  );
   const stickyStrengthSummary = subjectHighlights.strengths.length
     ? subjectHighlights.strengths.map((item) => `${item.label}${item.score}`).join('、')
     : '暂无';
@@ -1355,7 +1397,7 @@ export default function GeneratePlanPage() {
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
-  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, includeSoftFails, candidateSort, uniSort, appliedTier, excludeAdded, natureFilter]);
+  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, includeSoftFails, candidateSort, uniSort, appliedTier, excludeAdded, natureFilter]);
 
   // 视图模式默认跟随 plan/student.priorityMode (仅在无 ?view= URL 参数时, 自动定一次)
   useEffect(() => {
@@ -2159,6 +2201,11 @@ export default function GeneratePlanPage() {
                   onChange={setSearchTextMajor}
                   onCommit={setKeywordMajor}
                 />
+                <GroupNameSearchInput
+                  value={searchTextGroupName}
+                  onChange={setSearchTextGroupName}
+                  onCommit={setKeywordGroupName}
+                />
                 {viewMode === 'UNIVERSITY' ? (
                   <select
                     className="pgv2-sort"
@@ -2280,15 +2327,19 @@ export default function GeneratePlanPage() {
                   {GRADIENT_FILTER_OPTIONS.map((o) => {
                     // 优先用后端全池计数 (tierCounts); 拿不到才退回当前页计数 —— 当前页口径会让
                     // 老师误判"冲档 0"(实测全池有冲档但排序沉到后面的页)
-                    const poolCounts = (candidateGroups as any)?.tierCounts as { rush: number; stable: number; safe: number } | undefined;
+                    const poolCounts = (candidateGroups as any)?.tierCounts as { rush: number; stable: number; safe: number; noLine?: number } | undefined;
                     const baseGroups = groups.filter((g) => showHidden || !hiddenGroupKeys.has(g.groupKey));
                     const n = poolCounts
                       ? (o.value === 'all'
-                        ? poolCounts.rush + poolCounts.stable + poolCounts.safe
-                        : poolCounts[o.value === 'RUSH' ? 'rush' : o.value === 'STABLE' ? 'stable' : 'safe'])
-                      : (o.tones
-                        ? baseGroups.filter((g) => o.tones!.includes(gradientTier(g))).length
-                        : baseGroups.length);
+                        ? poolCounts.rush + poolCounts.stable + poolCounts.safe + (poolCounts.noLine ?? 0)
+                        : o.value === 'NO_LINE'
+                          ? (poolCounts.noLine ?? 0)
+                          : poolCounts[o.value === 'RUSH' ? 'rush' : o.value === 'STABLE' ? 'stable' : 'safe'])
+                      : (o.value === 'NO_LINE'
+                        ? baseGroups.filter(groupHasNoHistoryLine).length
+                        : o.tones
+                          ? baseGroups.filter((g) => !groupHasNoHistoryLine(g) && o.tones!.includes(gradientTier(g))).length
+                          : baseGroups.length);
                     return (
                       <button
                         key={o.value}
@@ -2423,10 +2474,11 @@ export default function GeneratePlanPage() {
                         </>
                       );
                     }
-                    if (keyword || keywordUniversity || keywordMajor) {
+                    if (keyword || keywordUniversity || keywordMajor || keywordGroupName) {
                       const parts: string[] = [];
                       if (keywordUniversity) parts.push(`院校「${keywordUniversity}」`);
                       if (keywordMajor) parts.push(`专业「${keywordMajor}」`);
+                      if (keywordGroupName) parts.push(`组名/定向「${keywordGroupName}」`);
                       if (!parts.length && keyword) parts.push(`「${keyword}」`);
                       // 当前选了具体梯队时, 搜索可能被 tier 排除 — 提示切到「全部」
                       const hint = appliedTier > 0
@@ -2508,6 +2560,10 @@ export default function GeneratePlanPage() {
                           isCompare={compareSet.has(group.groupKey)}
                           isAdded={added}
                           studentRankForDecision={studentRankForDecision}
+                          studentScoreForDecision={studentEffectiveScore}
+                          preferredHitCount={preferredMajorSet.size > 0
+                            ? (group.majors ?? []).filter((m: any) => preferredMajorSet.has(m.majorName)).length
+                            : undefined}
                           adjustedRank={adjustedRank}
                           expandedTab={(groupExpandTabs[group.groupKey] ?? 'majors') as 'majors' | 'evidence' | 'school'}
                           onToggleExpand={() => toggleGroup(group.groupKey)}
@@ -2541,7 +2597,22 @@ export default function GeneratePlanPage() {
                                     </div>
                                     <div style={{ color: '#595959' }}>
                                       {noLine ? (
-                                        <>学生位次 <strong>{stu?.toLocaleString() ?? '—'}</strong>;可参考同校同类型有线组的分数带与征集降分惯例人工判断</>
+                                        <>
+                                          学生位次 <strong>{stu?.toLocaleString() ?? '—'}</strong>
+                                          {group.siblingLineBand ? (
+                                            <>
+                                              ;{group.siblingLineBand.scope === 'BATCH' ? '本批次同类型' : '同校同类型'}有线组分数带{' '}
+                                              <strong>
+                                                {group.siblingLineBand.min === group.siblingLineBand.max
+                                                  ? group.siblingLineBand.min
+                                                  : `${group.siblingLineBand.min}~${group.siblingLineBand.max}`}
+                                              </strong>{' '}
+                                              分 ({group.siblingLineBand.count} 组),结合征集降分惯例人工判断
+                                            </>
+                                          ) : (
+                                            <>;可参考同校同类型有线组的分数带与征集降分惯例人工判断</>
+                                          )}
+                                        </>
                                       ) : (
                                         <>
                                           学生位次 <strong>{stu?.toLocaleString() ?? '—'}</strong>

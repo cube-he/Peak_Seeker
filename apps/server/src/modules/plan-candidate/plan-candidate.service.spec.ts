@@ -1091,6 +1091,61 @@ describe('PlanCandidateService', () => {
     expect(result.groups[0].majorSections.risk).toHaveLength(1);
   });
 
+  it('attaches sibling line band to no-history-line groups and counts them in tierCounts.noLine', async () => {
+    // 无史线组的人工判断锚点 = 同校同 recruitType 有线组的分数带;
+    // 同时 tierCounts 把无史线组从"保底"里单列出来, 避免保底数虚高
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({ id: 910, groupCode: 'G9', groupName: 'Lined group' }),
+        makeGroupEnrollmentPlan({
+          id: 911,
+          groupCode: 'G8',
+          groupName: 'New group',
+          majorId: 92,
+          majorName: 'New Major',
+          majorCode: '0002',
+          major: { id: 92, name: 'New Major', code: '0002', category: 'Science' },
+        }),
+      ],
+      records: [makeGroupAdmissionRecord()],
+    });
+    rankStrategy.evaluateCandidate.mockResolvedValue(makeRankStrategyResult('FORMAL', 120000));
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    expect(result.groups).toHaveLength(2);
+    const noLine = result.groups.find((g: any) => g.groupCode === 'G8');
+    const lined = result.groups.find((g: any) => g.groupCode === 'G9');
+    expect(noLine.siblingLineBand).toEqual({ min: 530, max: 530, count: 1, scope: 'UNIVERSITY' });
+    expect(lined.siblingLineBand ?? null).toBeNull();
+    expect(result.tierCounts.noLine).toBe(1);
+    expect(result.tierCounts.safe).toBe(0);
+  });
+
+  it('falls back to batch-wide recruitType band when the university has no lined sibling', async () => {
+    // 公费师范的现实数据形态: 整校有线(川师) vs 整校无线(西华师大/内江/成都师院),
+    // 同校口径常落空 — 回退到"全批次同 recruitType 有线组"的分数带
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({ id: 920, groupCode: 'G9', groupName: 'Lined group' }),
+        makeGroupEnrollmentPlan({
+          id: 921,
+          universityId: 8,
+          university: { id: 8, name: 'Other University', code: 'OU' },
+          groupCode: 'G7',
+          groupName: 'New group elsewhere',
+        }),
+      ],
+      records: [makeGroupAdmissionRecord()],
+    });
+    rankStrategy.evaluateCandidate.mockResolvedValue(makeRankStrategyResult('FORMAL', 120000));
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    const noLine = result.groups.find((g: any) => g.groupCode === 'G7');
+    expect(noLine.siblingLineBand).toEqual({ min: 530, max: 530, count: 1, scope: 'BATCH' });
+  });
+
   it('adds dynamic gradient details from competition and selection pool while exposing supplementary summaries', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,

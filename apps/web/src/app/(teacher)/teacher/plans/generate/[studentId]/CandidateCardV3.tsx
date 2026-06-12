@@ -55,14 +55,22 @@ function purityTitle(purity: any): string {
   return parts.join(' · ');
 }
 
-/** rank gap 文案(轻量版,候选卡显示用) */
-function rankGapText(studentRank?: number, adjustedRank?: number | null): string {
+/** rank gap 文案: 老师心算的就是"差多少位/差多少分", 系统直接给绝对值 */
+function rankGapText(
+  studentRank?: number,
+  adjustedRank?: number | null,
+  studentScore?: number,
+  groupMinScore?: number | null,
+): string {
   if (!studentRank || !adjustedRank) return '位次口径不足';
   const diff = studentRank - adjustedRank;
-  const pct = Math.round(Math.abs(diff) / adjustedRank * 100);
-  if (diff > 0) return `学生位次落后约 ${pct}%`;
-  if (diff < 0) return `学生位次领先约 ${pct}%`;
-  return '位次基本匹配';
+  // 分差: 学生有效分 vs 组 2025 线(跨年对照, 老师惯用口径)
+  const scorePart = studentScore != null && groupMinScore != null
+    ? ` · ${studentScore - groupMinScore >= 0 ? '高线' : '低线'} ${Math.abs(studentScore - groupMinScore)} 分`
+    : '';
+  if (diff > 0) return `落后 ${diff.toLocaleString()} 位${scorePart}`;
+  if (diff < 0) return `领先 ${Math.abs(diff).toLocaleString()} 位${scorePart}`;
+  return `位次基本匹配${scorePart}`;
 }
 
 // ============ 小组件 ============
@@ -134,6 +142,10 @@ export interface CandidateCardV3Props {
   isCompare: boolean;
   isAdded: boolean;
   studentRankForDecision?: number;
+  /** 学生有效分(裸分+确认加分), 用于卡片分差直读 */
+  studentScoreForDecision?: number;
+  /** 组内专业命中学生意向的数量 (父组件按意向集合算好传入); undefined = 学生无意向不显示 */
+  preferredHitCount?: number;
   /** 展开后激活的 Tab */
   expandedTab: 'majors' | 'evidence' | 'school';
   onToggleExpand: () => void;
@@ -151,7 +163,7 @@ export interface CandidateCardV3Props {
 export function CandidateCardV3(props: CandidateCardV3Props) {
   const {
     group, isExpanded, isHidden, isCompare, isAdded,
-    studentRankForDecision, expandedTab,
+    studentRankForDecision, studentScoreForDecision, preferredHitCount, expandedTab,
     onToggleExpand, onToggleCompare, onHide, onRestore, onAdd, onTabChange,
     renderExpandedContent, adjustedRank,
   } = props;
@@ -300,6 +312,24 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 {PURITY_META[group.purity.level]?.label ?? group.purity.level}
               </span>
             ) : null}
+            {/* 征集历史 = 可达性的最强信号(征集常伴随降分), 从 evidence tab 提到卡面 */}
+            {group?.supplementary?.totalPlanCount > 0 ? (
+              <span
+                className="pgv2-tag tone-safe-soft"
+                title={`去年本校本批次征集 ${group.supplementary.totalRounds ?? 1} 轮共 ${group.supplementary.totalPlanCount} 人${group.supplementary.supplementaryRate ? ` · 征集率 ${group.supplementary.supplementaryRate}%` : ''}。征集常伴随降分, 对位次边缘/无史线组是可达性的积极信号`}
+              >
+                征集 {group.supplementary.totalPlanCount} 人/{group.supplementary.totalRounds ?? 1} 轮
+              </span>
+            ) : null}
+            {/* 组内意向命中数 = 服从调剂落到非意向专业的风险参考(纯净度管"乱不乱", 这个管"是不是想读的") */}
+            {typeof preferredHitCount === 'number' && groupMajorCount ? (
+              <span
+                className={`pgv2-tag ${preferredHitCount > 0 ? 'tone-safe-soft' : 'tone-rush-soft'}`}
+                title={`组内 ${groupMajorCount} 个专业中 ${preferredHitCount} 个命中学生意向。命中越少, 服从调剂落到非意向专业的概率越高`}
+              >
+                意向 {preferredHitCount}/{groupMajorCount}
+              </span>
+            ) : null}
           </div>
           <div className="pgv2-card-sub">
             {group?.subjects ? <span>选科 {group.subjects}</span> : null}
@@ -308,6 +338,21 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
             {group?.groupMinScore != null ? (
               <span>历史最低 <strong>{group.groupMinScore}</strong> 分</span>
             ) : null}
+            {/* 无史线组的参照锚: 有线组分数带(同校同类型优先, 回退全批次同类型), 老师人工判断的对照基准 */}
+            {group?.groupMinScore == null && group?.siblingLineBand ? (
+              <>
+                {group?.subjects ? <span className="dot" /> : null}
+                <span title={`该组无历史录取线; ${group.siblingLineBand.scope === 'BATCH' ? '本批次' : '同校'}同类型(${group?.recruitType ?? '同类'})有 ${group.siblingLineBand.count} 个有线组可作参照`}>
+                  {group.siblingLineBand.scope === 'BATCH' ? '本批同类组' : '同校同类组'}{' '}
+                  <strong>
+                    {group.siblingLineBand.min === group.siblingLineBand.max
+                      ? group.siblingLineBand.min
+                      : `${group.siblingLineBand.min}~${group.siblingLineBand.max}`}
+                  </strong>{' '}
+                  分 ({group.siblingLineBand.count} 组)
+                </span>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -315,7 +360,7 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
           <div className={`pgv2-grade-badge tone-${tone}`}>
             <span className="lbl">梯度</span>
             <span className="val">{GRADIENT_LABEL_8[tier] ?? tier}</span>
-            <span className="note">{rankGapText(studentRankForDecision, adjustedRank)}</span>
+            <span className="note">{rankGapText(studentRankForDecision, adjustedRank, studentScoreForDecision, group?.groupMinScore)}</span>
           </div>
           <div className="pgv2-card-actions" onClick={(e) => e.stopPropagation()}>
             <button

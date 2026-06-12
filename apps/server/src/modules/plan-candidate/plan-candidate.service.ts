@@ -33,6 +33,7 @@ interface GetCandidatesQuery {
   keyword?: string; // 旧接口兼容: 院校/专业合并
   keywordUniversity?: string; // 仅匹配 university.name
   keywordMajor?: string; // 匹配 major.name OR majorName
+  keywordGroup?: string; // 匹配 groupName(定向县/专业组名), 提前批公费定向场景按县筛组
   // DTO 声明为 boolean | string 以绕过 ValidationPipe 隐式转换 (见 dto 注释),
   // 运行时经 @Transform 恒为 boolean; 消费端用 !== false / === false 判断。
   includeSoftFails?: boolean | string;
@@ -82,7 +83,7 @@ interface CandidateGroupFullResult {
   studentRawRank: number;
   studentBonusPoints: number;
   // 全池梯度计数(rush=极冲/冲/小冲, stable=稳/稳保, safe=保/强保/兜底) — 前端 tab 用全池口径, 不能拿当前页数
-  tierCounts: { rush: number; stable: number; safe: number };
+  tierCounts: { rush: number; stable: number; safe: number; noLine: number };
   sort: string; // 院校模式可为 university sort, 故放宽
   groups: any[];
   // 学生当前的意向梯队结构(给前端 chip 渲染); groupCount = 假设切到该 tier 能看到的候选 group 数
@@ -97,9 +98,14 @@ function uniqueValues<T extends string | number>(values: Array<T | null | undefi
 }
 
 // 与前端 gradientTier/gradientTone 同口径: dynamicGradient.tier 优先, 缺省按 suggestedGradient
-function countTiers(groups: any[]): { rush: number; stable: number; safe: number } {
-  const counts = { rush: 0, stable: 0, safe: 0 };
+function countTiers(groups: any[]): { rush: number; stable: number; safe: number; noLine: number } {
+  const counts = { rush: 0, stable: 0, safe: 0, noLine: 0 };
   for (const g of groups) {
+    // 无史线组单列: 梯度引擎对无线组兜底 BAO, 计入"保底"会虚高且与卡片"无史线"标签矛盾
+    if (g?.dynamicGradient && g.dynamicGradient.baseMinRank == null) {
+      counts.noLine += 1;
+      continue;
+    }
     const tier = g?.dynamicGradient?.tier ?? g?.suggestedGradient ?? 'WEN';
     if (tier === 'JI_CHONG' || tier === 'CHONG' || tier === 'XIAO_CHONG') counts.rush += 1;
     else if (tier === 'BAO' || tier === 'QIANG_BAO' || tier === 'DIBAO') counts.safe += 1;
@@ -538,6 +544,7 @@ export class PlanCandidateService {
       keyword: q.keyword?.trim() || '',
       keywordUniversity: q.keywordUniversity?.trim() || '',
       keywordMajor: q.keywordMajor?.trim() || '',
+      keywordGroup: q.keywordGroup?.trim() || '',
       includeSoftFails: q.includeSoftFails !== false,
       sort: q.sort ?? 'MAJOR_MATCH',
       tier: q.tier ?? 0,
@@ -1425,8 +1432,9 @@ export class PlanCandidateService {
     // 兜底: 旧 keyword 参数视为"同时匹配院校或专业" (OR 组合, 老 URL / 老前端兼容)
     const kwUniversity = q.keywordUniversity?.trim();
     const kwMajor = q.keywordMajor?.trim();
+    const kwGroup = q.keywordGroup?.trim();
     const kwLegacy = q.keyword?.trim();
-    const hasNewKeywords = Boolean(kwUniversity || kwMajor);
+    const hasNewKeywords = Boolean(kwUniversity || kwMajor || kwGroup);
     const hasAnyKeyword = hasNewKeywords || Boolean(kwLegacy);
     // 专业层"搜索匹配"chip 用的 keyword: 优先专业搜索, 兜底旧 keyword
     const matchKeyword = kwMajor || kwLegacy;
@@ -1452,6 +1460,8 @@ export class PlanCandidateService {
             { majorName: { contains: kwMajor } },
           ],
         });
+        // 组名搜索: 提前批公费/优师的定向县在 groupName("定向凉山州昭觉县"), 老师按县筛组
+        if (kwGroup) ands.push({ groupName: { contains: kwGroup } });
         if (ands.length > 0) keywordWhere.AND = ands;
       } else if (kwLegacy) {
         keywordWhere.OR = [
@@ -1488,7 +1498,7 @@ export class PlanCandidateService {
           scoreBasedRank: studentRankInfo.scoreBasedRank,
           studentRawRank: studentRankInfo.rawRank,
           studentBonusPoints: studentRankInfo.bonusPoints,
-          tierCounts: { rush: 0, stable: 0, safe: 0 },
+          tierCounts: { rush: 0, stable: 0, safe: 0, noLine: 0 },
           sort: q.sort ?? 'MAJOR_MATCH',
           groups: [],
           availableTiers: listTiers(student.preferredMajors).map((t) => ({
@@ -1954,6 +1964,41 @@ export class PlanCandidateService {
         allRisk: isAllRisk,
       };
     }))).filter((group): group is any => Boolean(group));
+
+    // 无史线组的人工判断锚点: 有线组分数带, 同校同 recruitType 优先, 没有则回退全批次同 recruitType。
+    // 公费师范的现实形态是"整校有线(川师) vs 整校无线(西华师大等)", 同校口径常落空, 批次口径才是
+    // 老师实际参照的对照("省级公费有线组 541~617")
+    const accumulateBand = (
+      map: Map<string, { min: number; max: number; count: number }>,
+      key: string,
+      score: number,
+    ) => {
+      const band = map.get(key);
+      if (!band) map.set(key, { min: score, max: score, count: 1 });
+      else {
+        band.min = Math.min(band.min, score);
+        band.max = Math.max(band.max, score);
+        band.count += 1;
+      }
+    };
+    const uniBands = new Map<string, { min: number; max: number; count: number }>();
+    const rtBands = new Map<string, { min: number; max: number; count: number }>();
+    for (const g of resultGroups as any[]) {
+      if (g.groupMinScore == null) continue;
+      accumulateBand(uniBands, `${g.universityId}|${g.recruitType ?? ''}`, g.groupMinScore);
+      accumulateBand(rtBands, g.recruitType ?? '', g.groupMinScore);
+    }
+    for (const g of resultGroups as any[]) {
+      if (g.dynamicGradient && g.dynamicGradient.baseMinRank == null) {
+        const uniBand = uniBands.get(`${g.universityId}|${g.recruitType ?? ''}`);
+        const rtBand = rtBands.get(g.recruitType ?? '');
+        g.siblingLineBand = uniBand
+          ? { ...uniBand, scope: 'UNIVERSITY' }
+          : rtBand
+            ? { ...rtBand, scope: 'BATCH' }
+            : null;
+      }
+    }
 
     // 客观纯净度过滤（#4）: q.purity 为 csv 'S,A'，空 = 不过滤
     const purityWhitelist = (q.purity ?? '')
