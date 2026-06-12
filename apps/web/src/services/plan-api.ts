@@ -165,8 +165,8 @@ export const planApi = {
     return api.post(`/plans/${planId}/items/reorder`, { itemIds }) as any;
   },
 
-  submitForReview(id: string): Promise<any> {
-    return api.post(`/plans/${id}/submit-review`) as any;
+  submitForReview(id: string, underfillReason?: string): Promise<any> {
+    return api.post(`/plans/${id}/submit-review`, underfillReason ? { underfillReason } : undefined) as any;
   },
 
   /**

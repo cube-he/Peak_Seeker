@@ -10,6 +10,7 @@ import {
   Button,
   Descriptions,
   Drawer,
+  Input,
   Modal,
   Pagination,
   Select,
@@ -1227,15 +1228,19 @@ export default function GeneratePlanPage() {
     }, 1500);
   }, [queryClient, planId]);
   const submitReadiness = useMemo(() => {
-    if (plan?.status !== 'DRAFT') return { ok: false, reason: '当前不是草稿状态' };
-    if (!planItems.length) return { ok: false, reason: '尚未加入任何志愿' };
-    if (maxGroupCount != null && planItems.length !== maxGroupCount) {
-      return { ok: false, reason: `需填满 ${maxGroupCount} 组,当前 ${planItems.length} 组` };
+    if (plan?.status !== 'DRAFT') return { ok: false, underfill: false, reason: '当前不是草稿状态' };
+    if (!planItems.length) return { ok: false, underfill: false, reason: '尚未加入任何志愿' };
+    if (maxGroupCount != null && planItems.length > maxGroupCount) {
+      return { ok: false, underfill: false, reason: `超出上限 ${maxGroupCount} 组,当前 ${planItems.length} 组` };
     }
     if (criticalUnresolved > 0) {
-      return { ok: false, reason: `有 ${criticalUnresolved} 条严重风险未处理,去方案详情逐条处理` };
+      return { ok: false, underfill: false, reason: `有 ${criticalUnresolved} 条严重风险未处理,去方案详情逐条处理` };
     }
-    return { ok: true, reason: '' };
+    // 组数不足不再挡死: 提前批/专项"只填想去的组"是专业做法, 提交时填不足额理由即可
+    if (maxGroupCount != null && planItems.length < maxGroupCount) {
+      return { ok: true, underfill: true, reason: `当前 ${planItems.length}/${maxGroupCount} 组,提交时需填写不足额理由` };
+    }
+    return { ok: true, underfill: false, reason: '' };
   }, [plan?.status, planItems.length, maxGroupCount, criticalUnresolved]);
 
   const isUsingFallbackYear = Boolean(candidateGroups?.isFallbackYear && candidateGroups.sourceYear && candidateGroups.planYear);
@@ -1435,7 +1440,7 @@ export default function GeneratePlanPage() {
   });
 
   const submitMutation = useMutation({
-    mutationFn: () => planApi.submitForReview(String(planId)),
+    mutationFn: (underfillReason?: string) => planApi.submitForReview(String(planId), underfillReason),
     onSuccess: () => {
       void message.success('已提交主管审核');
       router.push(`/teacher/plans/${planId}`);
@@ -1444,6 +1449,34 @@ export default function GeneratePlanPage() {
       void message.error(error?.response?.data?.message ?? '提交审核失败');
     },
   });
+
+  // 不足额提交: 弹窗收理由再发请求 (提前批/专项只填想去的组是专业做法)
+  const handleSubmitClick = useCallback(() => {
+    if (!submitReadiness.underfill) {
+      submitMutation.mutate(undefined);
+      return;
+    }
+    let reason = '';
+    Modal.confirm({
+      title: `不足额提交(${planItems.length}/${maxGroupCount} 组)`,
+      content: (
+        <div>
+          <p style={{ marginBottom: 8 }}>该批次未填满。公费师范/专项类批次只填可接受的组是合理做法,请说明理由(至少 10 字),主管审核时可见:</p>
+          <Input.TextArea rows={3} placeholder="例: 公费师范定向县逐组核实, 仅填报家庭可接受的 N 个定向县组" onChange={(e) => { reason = e.target.value; }} />
+        </div>
+      ),
+      okText: '确认提交',
+      cancelText: '再想想',
+      onOk: () => {
+        if (reason.trim().length < 10) {
+          void message.warning('不足额理由至少 10 字');
+          return Promise.reject(new Error('reason-too-short'));
+        }
+        submitMutation.mutate(reason.trim());
+        return undefined;
+      },
+    });
+  }, [submitReadiness.underfill, planItems.length, maxGroupCount, submitMutation]);
 
   const removeMutation = useMutation({
     mutationFn: (itemId: number) => planApi.deleteItem(String(planId), itemId),
@@ -1791,7 +1824,7 @@ export default function GeneratePlanPage() {
               <Tooltip title={submitReadiness.ok ? '' : submitReadiness.reason}>
                 <Button
                   disabled={!submitReadiness.ok || submitMutation.isPending}
-                  onClick={() => submitMutation.mutate()}
+                  onClick={handleSubmitClick}
                   icon={<SendOutlined />}
                 >
                   提交审核
@@ -2754,7 +2787,7 @@ export default function GeneratePlanPage() {
                       block
                       style={{ marginTop: 12 }}
                       disabled={!submitReadiness.ok || submitMutation.isPending}
-                      onClick={() => submitMutation.mutate()}
+                      onClick={handleSubmitClick}
                       icon={<CheckOutlined />}
                     >
                       提交主管审核

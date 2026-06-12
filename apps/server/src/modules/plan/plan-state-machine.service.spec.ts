@@ -16,6 +16,25 @@ describe('PlanStateMachineService', () => {
       .toThrow(/组数/);
   });
 
+  it('组数不足 + 不足额理由(≥10字) → 放行 (提前批/专项只填想去的组)', () => {
+    expect(sm.transition('DRAFT', 'SUBMIT_REVIEW', {
+      itemCount: 9, maxGroupCount: 30,
+      underfillReason: '公费师范定向县逐组核实, 仅填报家庭可接受的 9 个定向县组',
+    })).toBe('PENDING_REVIEW');
+  });
+
+  it('组数不足 + 理由太短 → 仍拒', () => {
+    expect(() => sm.transition('DRAFT', 'SUBMIT_REVIEW', {
+      itemCount: 9, maxGroupCount: 30, underfillReason: '不想填',
+    })).toThrow(/组数|理由/);
+  });
+
+  it('组数超出上限 → 即使有理由也拒', () => {
+    expect(() => sm.transition('DRAFT', 'SUBMIT_REVIEW', {
+      itemCount: 46, maxGroupCount: 45, underfillReason: '这是一个足够长的不足额理由说明',
+    })).toThrow(/组数|上限/);
+  });
+
   it('PENDING_REVIEW -> start-review -> REVIEWING', () => {
     expect(sm.transition('PENDING_REVIEW', 'START_REVIEW')).toBe('REVIEWING');
   });

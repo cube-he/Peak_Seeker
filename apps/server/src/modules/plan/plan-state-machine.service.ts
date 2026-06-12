@@ -9,14 +9,23 @@ export type PlanAction =
 interface TransitionContext {
   itemCount?: number;
   maxGroupCount?: number;
+  /** 不足额提交理由: 提前批/专项类批次"只填想去的组"才专业, 强制填满反而逼出凑数组 */
+  underfillReason?: string;
 }
 
 @Injectable()
 export class PlanStateMachineService {
   transition(from: PlanStatus, action: PlanAction, ctx: TransitionContext = {}): PlanStatus {
     if (from === 'DRAFT' && action === 'SUBMIT_REVIEW') {
-      if ((ctx.itemCount ?? 0) !== (ctx.maxGroupCount ?? -1)) {
-        throw new BadRequestException(`组数不足，需要 ${ctx.maxGroupCount}，当前 ${ctx.itemCount}`);
+      const itemCount = ctx.itemCount ?? 0;
+      const max = ctx.maxGroupCount ?? -1;
+      if (itemCount > max) {
+        throw new BadRequestException(`组数超出上限，上限 ${max}，当前 ${itemCount}`);
+      }
+      if (itemCount < max && (ctx.underfillReason ?? '').trim().length < 10) {
+        throw new BadRequestException(
+          `组数不足，需要 ${max}，当前 ${itemCount}。如确需不足额提交(如公费师范只填可接受的定向县组), 请填写不足额理由(至少 10 字)`,
+        );
       }
       return 'PENDING_REVIEW';
     }

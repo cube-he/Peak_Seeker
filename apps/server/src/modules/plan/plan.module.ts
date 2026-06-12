@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScoreSegmentModule } from '../score-segment/score-segment.module';
 import { PlanController } from './plan.controller';
 import { PlanService } from './plan.service';
 import { PlanStateMachineService } from './plan-state-machine.service';
@@ -9,6 +10,7 @@ import { PlanItemService } from './plan-item.service';
 import { RiskEngineService } from './risk-engine/risk-engine.service';
 
 @Module({
+  imports: [ScoreSegmentModule],
   controllers: [PlanController, StudentPlansController, PlanItemsController],
   providers: [
     PlanService,

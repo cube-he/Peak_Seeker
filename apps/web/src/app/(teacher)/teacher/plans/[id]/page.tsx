@@ -1333,7 +1333,11 @@ function RiskSummaryPanel({
   const sortedRisks = [...risks].sort(
     (a, b) => (a.resolvedAt ? 1 : 0) - (b.resolvedAt ? 1 : 0),
   );
-  const unresolvedIds = risks.filter((r) => !r.resolvedAt).map((r) => r.id);
+  // 批量只放行"分差类"(gradient): 冲段策略是老师的统一判断, 可一次接受;
+  // 选科不符/资格类必须逐条核实 —— 实测批量会把"该专业要求化学"这种必不投档的硬伤糊过去
+  const unresolved = risks.filter((r) => !r.resolvedAt);
+  const batchableIds = unresolved.filter((r) => r.category === 'gradient').map((r) => r.id);
+  const nonBatchableCount = unresolved.length - batchableIds.length;
 
   return (
     <Card
@@ -1352,10 +1356,12 @@ function RiskSummaryPanel({
         </span>
       }
       extra={
-        unresolvedIds.length > 1 ? (
-          <Button size="small" onClick={() => onBatchResolve(unresolvedIds)}>
-            批量处理 {unresolvedIds.length} 条未解决
-          </Button>
+        batchableIds.length > 1 ? (
+          <Tooltip title={nonBatchableCount > 0 ? `另有 ${nonBatchableCount} 条资格/选科类风险须逐条核实, 不参与批量` : ''}>
+            <Button size="small" onClick={() => onBatchResolve(batchableIds)}>
+              批量处理 {batchableIds.length} 条分差风险
+            </Button>
+          </Tooltip>
         ) : null
       }
       size="small"

@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlanStateMachineService } from './plan-state-machine.service';
@@ -11,6 +12,13 @@ import { AddPlanItemDto } from './dto/add-plan-item.dto';
 import { UpdatePlanItemDto } from './dto/update-plan-item.dto';
 import { calcGradient } from '../plan-candidate/gradient-calculator';
 import { RiskEngineService } from './risk-engine/risk-engine.service';
+import { ScoreSegmentService } from '../score-segment/score-segment.service';
+import { confirmedBonusPoints } from '../policy/bonus-points.util';
+
+const EXAM_TYPE_TO_SUBJECTS: Record<string, string> = {
+  PHYSICS: '物理',
+  HISTORY: '历史',
+};
 
 @Injectable()
 export class PlanItemService {
@@ -18,6 +26,7 @@ export class PlanItemService {
     private prisma: PrismaService,
     private sm: PlanStateMachineService,
     private riskEngine: RiskEngineService,
+    @Optional() private scoreSegment?: ScoreSegmentService,
   ) {}
 
   private async getEditablePlan(
@@ -124,34 +133,44 @@ export class PlanItemService {
       );
     }
 
-    const ar = await this.prisma.admissionRecord.findFirst({
-      where: {
-        universityId: ep.universityId,
-        subjects: ep.subjects,
-        batch: ep.batch,
-        recruitType: ep.recruitType,
-        groupCode: ep.groupCode,
-        majorCode: ep.majorCode,
-        majorName: ep.majorName,
-        year: 2025,
-      },
+    // 录取快照: 先按专业全键匹配; miss 时回退同组任意行的组线 —— 提前批/专项的
+    // admission_records 普遍只有组级线, 不回退会让快照(score25Group/rank25Group)落空,
+    // 方案详情页与导出表对家长展示就没有任何历史线参考
+    const arKey = {
+      universityId: ep.universityId,
+      subjects: ep.subjects,
+      batch: ep.batch,
+      recruitType: ep.recruitType,
+      groupCode: ep.groupCode,
+    };
+    const arExact = await this.prisma.admissionRecord.findFirst({
+      where: { ...arKey, majorCode: ep.majorCode, majorName: ep.majorName, year: 2025 },
+    });
+    // 组级回退行只可信组级字段; 专业级字段(score25Major)仅取精确匹配行
+    const arGroup = arExact ?? await this.prisma.admissionRecord.findFirst({
+      where: { ...arKey, year: 2025, groupMinRank: { not: null } },
     });
     const ar24 = await this.prisma.admissionRecord.findFirst({
-      where: {
-        universityId: ep.universityId,
-        subjects: ep.subjects,
-        batch: ep.batch,
-        recruitType: ep.recruitType,
-        groupCode: ep.groupCode,
-        majorCode: ep.majorCode,
-        majorName: ep.majorName,
-        year: 2024,
-      },
+      where: { ...arKey, majorCode: ep.majorCode, majorName: ep.majorName, year: 2024 },
     });
 
     const student = await this.prisma.studentProfile.findUnique({ where: { id: plan.studentId } });
-    const studentRank = student?.provincialRank ?? 999999;
-    const historyMin = ar?.groupMinRank ?? ar?.majorMinRank ?? null;
+    const rawRank = student?.provincialRank ?? 999999;
+    // 落库梯度与候选管线同口径: 已确认政策加分参与投档, 用 裸分+加分 换算有效位次
+    let studentRank = rawRank;
+    const bonus = confirmedBonusPoints(student as any);
+    const subjectsLabel = EXAM_TYPE_TO_SUBJECTS[(student as any)?.examType ?? ''];
+    if (bonus > 0 && this.scoreSegment && subjectsLabel && typeof student?.totalScore === 'number') {
+      try {
+        const adjusted = await this.scoreSegment.scoreToRank(2025, subjectsLabel as any, student.totalScore + bonus);
+        if (typeof adjusted.rank === 'number' && adjusted.rank > 0 && adjusted.rank < studentRank) {
+          studentRank = adjusted.rank;
+        }
+      } catch {
+        // 一分一段缺数据时保持裸分位次
+      }
+    }
+    const historyMin = arGroup?.groupMinRank ?? arExact?.majorMinRank ?? null;
     const gradient = dto.gradient ?? calcGradient(studentRank, historyMin);
     const groupMajorsList = (ep.groupMajors ?? '').split(/[,，、/]/).filter(Boolean);
     const selectedMajors = (dto.selectedMajors ?? []).slice(0, 6);
@@ -193,10 +212,10 @@ export class PlanItemService {
         fullMajorRanking: fullMajorRanking as any,
         subjectRequirement: ep.subjectRequirements,
         acceptAdjust: selectedMajors.length > 0 ? true : dto.acceptAdjust ?? true,
-        score25Group: ar?.groupMinScore ?? null,
-        rank25Group: ar?.groupMinRank ?? null,
-        score25Major: ar?.majorMinScore ?? null,
-        rank25Major: ar?.majorMinRank ?? null,
+        score25Group: arGroup?.groupMinScore ?? null,
+        rank25Group: arGroup?.groupMinRank ?? null,
+        score25Major: arExact?.majorMinScore ?? null,
+        rank25Major: arExact?.majorMinRank ?? null,
         score24Major: ar24?.majorMinScore ?? null,
         rank24Major: ar24?.majorMinRank ?? null,
         planCount: ep.planCount,

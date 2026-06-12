@@ -17,6 +17,7 @@ import { NatureRule } from './filters/soft-rules/nature.rule';
 import { SoftRule, SoftFailReason } from './filters/soft-rule.interface';
 import { calcDynamicGradient, calcGradient } from './gradient-calculator';
 import { confirmedBonusPoints } from '../policy/bonus-points.util';
+import { resolveBatchQueryShape } from './batch-alias';
 import type { RankStrategyResult } from '../recommend/interfaces/recommend.types';
 import { RankStrategyService } from '../recommend/services/rank-strategy.service';
 import {
@@ -841,11 +842,14 @@ export class PlanCandidateService {
   }
 
   private async resolveEnrollmentPlanSource(input: EnrollmentPlanSourceInput) {
+    // 批次名走别名解析 (配置口径 → 数据实名), 否则专项/高职/预科批次永远查到 0 行
+    const shape = resolveBatchQueryShape(input.batchName);
     const rows = await this.prisma.enrollmentPlan.groupBy({
       by: ['year'],
       where: {
         province: input.province,
-        batch: input.batchName,
+        batch: shape.batches.length === 1 ? shape.batches[0] : { in: shape.batches },
+        ...(shape.recruitTypeContains ? { recruitType: { contains: shape.recruitTypeContains } } : {}),
         subjects: input.subjects,
         year: { lte: input.planYear },
       },
@@ -1716,9 +1720,14 @@ export class PlanCandidateService {
         // 软规则: 学费/办学性质 — 不符合时进 SOFT_FAIL, 由 includeSoftFails 控制
         const failReasons = this.checkSoftFails(student, ep, softRules);
         const match = this.scoreMajorMatch(student, ep);
+        // 专业线缺失时回退组线: 四川平行志愿按专业组投档, 组线即进档线 —— 提前批/专项批
+        // 的录取数据普遍只有组级线, 不回退会让全组专业被判"数据不足"进 RISK, 整组消失
         const rankStrategy = await this.evaluateRankStrategy({
           studentRank,
-          candidateRank: currentRecord?.majorMinRank ?? null,
+          candidateRank: currentRecord?.majorMinRank
+            ?? currentRecord?.groupMinRank
+            ?? groupScore?.groupMinRank
+            ?? null,
           studentExamYear: plan.year,
           province,
           examType: student.examType,
@@ -1805,12 +1814,15 @@ export class PlanCandidateService {
         : majors;
       this.sortCandidateMajors(visibleMajors);
       const majorSections = this.splitMajorSections(visibleMajors);
-      // recommended + backup 都空时通常丢弃 (避免噪音), 但下面两种情况保留全 RISK group
-      // 让老师看到该院校的录取数据与位次差距, 知道"差多少":
+      // recommended + backup 都空时通常丢弃 (避免噪音), 但下面三种情况保留全 RISK group:
       //   1. tier 模式下命中 tier (老师明确想看该梯队意向)
       //   2. keyword 搜索 (老师主动搜某院校 / 专业, 应该看到 — 哪怕位次远不达)
+      //   3. 全组 RISK 仅因"位次明显高于学生"(REJECTED) — 这是极冲选项不是噪音;
+      //      提前批/公费师范常降分录取且新组无历史线, 灭掉会让整个批次在工作台消失
       const isAllRisk = majorSections.recommended.length === 0 && majorSections.backup.length === 0;
-      if (isAllRisk && !hitsTier && !hasAnyKeyword) return null;
+      const allRiskIsRejectedOnly = isAllRisk && visibleMajors.length > 0 &&
+        visibleMajors.every((m) => m.rankStrategy?.eligibility === 'REJECTED' && (m.failReasons ?? []).length === 0);
+      if (isAllRisk && !allRiskIsRejectedOnly && !hitsTier && !hasAnyKeyword) return null;
 
       const orderedMajors = [
         ...majorSections.recommended,

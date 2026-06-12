@@ -391,11 +391,12 @@ describe('PlanCandidateService', () => {
       groupMinRank: 10000,
       scoreSource: 'GROUP',
       majorCount: 2,
-      selectableMajorCount: 1,
+      // Automation 无专业级位次, 回退组线评估后可选 (修复前被判"数据不足"进 RISK)
+      selectableMajorCount: 2,
       recommendedAnchorEnrollmentPlanId: 100,
     }));
-    expect(result.groups[0].majorSections.recommended.map((major: any) => major.majorName)).toEqual(['Computer Science']);
-    expect(result.groups[0].majorSections.risk.map((major: any) => major.majorName)).toEqual(['Automation']);
+    expect(result.groups[0].majorSections.recommended.map((major: any) => major.majorName)).toEqual(['Computer Science', 'Automation']);
+    expect(result.groups[0].majorSections.risk).toHaveLength(0);
     expect(result.groups[0].majors[0]).toEqual(expect.objectContaining({
       enrollmentPlanId: 100,
       majorName: 'Computer Science',
@@ -939,7 +940,9 @@ describe('PlanCandidateService', () => {
     ]);
   });
 
-  it('drops a group when all acceptable majors are clearly unreachable', async () => {
+  it('keeps an all-REJECTED group as an extreme-rush option instead of dropping it', async () => {
+    // 旧行为是整组丢弃; 但"位次明显高于学生"是极冲选项不是噪音 —— 提前批/公费师范
+    // 常降分录取, 灭组会让整个批次在工作台消失 (2026-06-13 提前批组粒度=0 的根因)
     mockCandidateGroupRequest({
       plans: [
         makeGroupEnrollmentPlan({
@@ -960,8 +963,9 @@ describe('PlanCandidateService', () => {
 
     const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
 
-    expect(result.groups).toHaveLength(0);
-    expect(result.total).toBe(0);
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].allRisk).toBe(true);
+    expect(result.groups[0].majorSections.risk).toHaveLength(1);
   });
 
   it('keeps a group with a recommended major and puts the unreachable sibling into risk', async () => {

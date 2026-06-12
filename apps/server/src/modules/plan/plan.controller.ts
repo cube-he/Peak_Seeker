@@ -207,13 +207,14 @@ export class PlanController {
   }
 
   @Post(':id/submit-review')
-  @ApiOperation({ summary: '提交审核（DRAFT → PENDING_REVIEW）' })
+  @ApiOperation({ summary: '提交审核（DRAFT → PENDING_REVIEW）; 组数不足时需 body.underfillReason(≥10字)' })
   @ApiParam({ name: 'id', type: Number })
   async submitReview(
     @Param('id', ParseIntPipe) id: number,
     @Request() req: any,
+    @Body() body?: { underfillReason?: string },
   ) {
-    return this.planService.submitReview(id, req.user.id);
+    return this.planService.submitReview(id, req.user.id, body?.underfillReason);
   }
 
   @Post(':id/favorite')

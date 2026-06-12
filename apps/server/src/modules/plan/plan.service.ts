@@ -460,7 +460,7 @@ export class PlanService {
     return this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
   }
 
-  async submitReview(planId: number, userId: number) {
+  async submitReview(planId: number, userId: number, underfillReason?: string) {
     const plan = await this.findById(planId, userId);
     if (plan.createdById !== userId) {
       throw new ForbiddenException('只有出方案老师可以提交审核');
@@ -483,7 +483,11 @@ export class PlanService {
     const next = this.sm.transition(plan.status, 'SUBMIT_REVIEW', {
       itemCount,
       maxGroupCount,
+      underfillReason,
     });
+    // 不足额提交的理由进 notes, 主管审核时可见
+    const underfilled = itemCount < maxGroupCount && (underfillReason ?? '').trim().length >= 10;
+    const underfillNote = `[不足额提交 ${itemCount}/${maxGroupCount}] ${underfillReason?.trim()}`;
     return this.prisma.volunteerPlan.update({
       where: { id: planId },
       data: {
@@ -491,6 +495,9 @@ export class PlanService {
         parentConfirmedAt: null,
         parentChangeRequestedAt: null,
         parentChangeRequest: null,
+        ...(underfilled
+          ? { notes: plan.notes ? `${plan.notes}\n${underfillNote}` : underfillNote }
+          : {}),
       },
     });
   }
