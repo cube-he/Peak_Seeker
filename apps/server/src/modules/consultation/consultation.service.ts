@@ -88,6 +88,17 @@ export class ConsultationService {
     if (!appt) throw new NotFoundException('预约不存在');
     if (appt.teacherId !== teacherId) throw new ForbiddenException('无权修改该预约');
 
+    // 改期同样要做时段冲突检测 (excludeId 排除自己), 否则改期可以撞上既有预约
+    const nextStatus = dto.status ?? appt.status;
+    if ((dto.scheduledAt || dto.durationEst !== undefined) && (nextStatus === 'scheduled' || nextStatus === 'in_progress')) {
+      await this.assertNoConflict(
+        teacherId,
+        dto.scheduledAt ? new Date(dto.scheduledAt) : appt.scheduledAt,
+        dto.durationEst !== undefined ? dto.durationEst : appt.durationEst,
+        id,
+      );
+    }
+
     return this.prisma.consultationAppointment.update({
       where: { id },
       data: {

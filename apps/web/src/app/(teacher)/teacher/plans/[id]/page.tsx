@@ -227,8 +227,8 @@ export default function PlanDetailPage() {
   const [now, setNow] = useState<Date | null>(null);
   // 对比模式:选另一版本对比当前版本
   const [compareVersionId, setCompareVersionId] = useState<number | null>(null);
-  // 风险处理弹窗:记录当前要处理的 riskId
-  const [resolveRiskId, setResolveRiskId] = useState<number | null>(null);
+  // 风险处理弹窗:要处理的 riskId 列表(单条点「处理」传 1 个, 「批量处理」传全部未解决)
+  const [resolveRiskIds, setResolveRiskIds] = useState<number[] | null>(null);
 
   useEffect(() => {
     setNow(new Date());
@@ -949,7 +949,8 @@ export default function PlanDetailPage() {
       {/* C-0 · 风险摘要面板（有风险时才显示） */}
       <RiskSummaryPanel
         planId={planId}
-        onRowClick={(id) => setResolveRiskId(id)}
+        onRowClick={(id) => setResolveRiskIds([id])}
+        onBatchResolve={(ids) => setResolveRiskIds(ids)}
       />
 
       {/* C · 志愿明细 */}
@@ -1109,11 +1110,11 @@ export default function PlanDetailPage() {
       ) : null}
 
       <RiskResolveModal
-        riskId={resolveRiskId}
-        open={resolveRiskId !== null}
-        onCancel={() => setResolveRiskId(null)}
+        riskIds={resolveRiskIds}
+        open={resolveRiskIds !== null}
+        onCancel={() => setResolveRiskIds(null)}
         onSuccess={() => {
-          setResolveRiskId(null);
+          setResolveRiskIds(null);
           queryClient.invalidateQueries({ queryKey: ['plan-risks', planId] });
         }}
       />
@@ -1306,9 +1307,11 @@ const SEVERITY_TONE: Record<string, string> = {
 function RiskSummaryPanel({
   planId,
   onRowClick,
+  onBatchResolve,
 }: {
   planId: string | number;
   onRowClick: (riskId: number) => void;
+  onBatchResolve: (riskIds: number[]) => void;
 }) {
   const { data: risks = [] } = useQuery({
     queryKey: ['plan-risks', planId],
@@ -1330,6 +1333,7 @@ function RiskSummaryPanel({
   const sortedRisks = [...risks].sort(
     (a, b) => (a.resolvedAt ? 1 : 0) - (b.resolvedAt ? 1 : 0),
   );
+  const unresolvedIds = risks.filter((r) => !r.resolvedAt).map((r) => r.id);
 
   return (
     <Card
@@ -1346,6 +1350,13 @@ function RiskSummaryPanel({
             <span className="ml-2 text-text-muted">轻微 {counts.minor}</span>
           ) : null}
         </span>
+      }
+      extra={
+        unresolvedIds.length > 1 ? (
+          <Button size="small" onClick={() => onBatchResolve(unresolvedIds)}>
+            批量处理 {unresolvedIds.length} 条未解决
+          </Button>
+        ) : null
       }
       size="small"
     >
@@ -1383,23 +1394,27 @@ function RiskSummaryPanel({
 }
 
 function RiskResolveModal({
-  riskId,
+  riskIds,
   open,
   onCancel,
   onSuccess,
 }: {
-  riskId: number | null;
+  riskIds: number[] | null;
   open: boolean;
   onCancel: () => void;
   onSuccess: () => void;
 }) {
   const [resolution, setResolution] = useState<'accepted' | 'replaced' | 'ignored'>('accepted');
   const [note, setNote] = useState('');
+  const count = riskIds?.length ?? 0;
 
   const resolveMutation = useMutation({
-    mutationFn: () => planApi.resolveRisk(riskId!, resolution, note || undefined),
+    // 后端无批量端点, 逐条调用; 批量来自老师对同一冲段策略的统一判断, 共用处理方式与备注
+    mutationFn: () => Promise.all(
+      (riskIds ?? []).map((id) => planApi.resolveRisk(id, resolution, note || undefined)),
+    ),
     onSuccess: () => {
-      message.success('已处理');
+      message.success(count > 1 ? `已处理 ${count} 条风险` : '已处理');
       setNote('');
       onSuccess();
     },
@@ -1408,7 +1423,7 @@ function RiskResolveModal({
 
   return (
     <Modal
-      title="处理风险"
+      title={count > 1 ? `批量处理 ${count} 条风险` : '处理风险'}
       open={open}
       onCancel={onCancel}
       onOk={() => resolveMutation.mutate()}

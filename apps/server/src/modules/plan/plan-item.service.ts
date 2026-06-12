@@ -164,10 +164,18 @@ export class PlanItemService {
         }
       : undefined;
 
-    const created = await this.prisma.planItem.create({
+    // sequence 取 max+1 而非 count+1: 删除会留下空洞, count+1 会撞 (planId, sequence) 唯一约束
+    const maxSeq = await this.prisma.planItem.aggregate({
+      where: { planId },
+      _max: { sequence: true },
+    });
+
+    let created;
+    try {
+      created = await this.prisma.planItem.create({
       data: {
         planId,
-        sequence: dto.sequence ?? count + 1,
+        sequence: dto.sequence ?? (maxSeq._max.sequence ?? 0) + 1,
         gradient,
         universityId: ep.universityId,
         universityName: ep.university.name,
@@ -198,7 +206,13 @@ export class PlanItemService {
         softFailReasons: softFailReasons.length > 0 ? (softFailReasons as any) : undefined,
         overrideReason: dto.overrideReason ?? null,
       },
-    });
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') {
+        throw new ConflictException('志愿顺位冲突,请刷新页面后重试');
+      }
+      throw e;
+    }
     // 触发风险重算(非阻塞)
     this.riskEngine.recomputeForPlan(planId).catch(() => {});
     return created;

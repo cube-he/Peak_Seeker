@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
-import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Radio, Select, Spin, message } from 'antd';
+import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Radio, Select, Spin, message } from 'antd';
 import dayjs from 'dayjs';
 import {
   LockOutlined,
@@ -400,6 +400,9 @@ export default function StudentDetailPage() {
     onSuccess: () => {
       message.success('保存成功');
       queryClient.invalidateQueries({ queryKey: ['student-detail', studentId] });
+      // 加分自动测算依赖 户籍县/民族/申报细则, 这些字段刚保存 → 立即重算,
+      // 否则卡片吃 5 分钟 staleTime, 老师看到的是"无加分"旧结果
+      queryClient.invalidateQueries({ queryKey: ['bonus-calc', Number(studentId)] });
     },
     onError: (error: any) => {
       // 把后端真实回错原样打到 console, 便于排查 (老师 F12 截图给我).
@@ -1707,6 +1710,19 @@ function PreferenceFields() {
           </Radio.Group>
         </Form.Item>
       </div>
+      {/* 经济边界: 工作台"接受边界 民办: 未确定"读的就是这个字段, 此前只有学生小程序能填,
+          老师面谈采集到的信息没有落库入口 → 对经济困难学生这是候选过滤的第一变量 */}
+      <div className="field sd-field-full">
+        <label>是否接受民办<span className="sc-hint"> 学费通常 3-8 万/年 · 经济困难家庭重点确认</span></label>
+        <Form.Item name="acceptPrivate" noStyle>
+          <Radio.Group>
+            <Radio value="STRICT">不接受</Radio>
+            <Radio value="MODERATE">部分接受</Radio>
+            <Radio value="RELAXED">接受</Radio>
+            <Radio value="UNDECIDED">未定</Radio>
+          </Radio.Group>
+        </Form.Item>
+      </div>
       {/* 院校/专业/省市 Picker 保留 antd Select (业务搜索下拉, 不改) */}
       <div className="field">
         <label>意向省份</label>
@@ -2285,6 +2301,7 @@ const STATUS_LABEL: Record<string, string> = {
 function CommunicationTabContent({ studentId }: { studentId: string | number }) {
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Consultation | null>(null);
 
   const { data: list, isLoading } = useQuery({
     queryKey: ['consultations', studentId],
@@ -2307,6 +2324,16 @@ function CommunicationTabContent({ studentId }: { studentId: string | number }) 
       qc.invalidateQueries({ queryKey: ['consultations', studentId] });
       message.success('已结束沟通');
     },
+  });
+
+  // 取消 = update status 'cancelled', 保留记录可追溯 (不走 DELETE)
+  const cancelMutation = useMutation({
+    mutationFn: (id: number) => consultationApi.update(id, { status: 'cancelled' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consultations', studentId] });
+      message.success('预约已取消');
+    },
+    onError: (e: any) => message.error(e?.response?.data?.message ?? '取消失败'),
   });
 
   if (isLoading) {
@@ -2343,19 +2370,24 @@ function CommunicationTabContent({ studentId }: { studentId: string | number }) 
               consultation={c}
               onStart={() => startMutation.mutate(c.id)}
               onEnd={(notes) => endMutation.mutate({ id: c.id, notes })}
+              onEdit={() => setEditTarget(c)}
+              onCancelAppt={() => cancelMutation.mutate(c.id)}
             />
           ))}
         </ol>
       )}
 
       <CreateConsultationModal
-        open={createOpen}
+        open={createOpen || editTarget !== null}
         studentId={Number(studentId)}
-        onCancel={() => setCreateOpen(false)}
+        editing={editTarget}
+        onCancel={() => { setCreateOpen(false); setEditTarget(null); }}
         onSuccess={() => {
+          const wasEdit = editTarget !== null;
           setCreateOpen(false);
+          setEditTarget(null);
           qc.invalidateQueries({ queryKey: ['consultations', studentId] });
-          message.success('预约已创建');
+          message.success(wasEdit ? '预约已更新' : '预约已创建');
         }}
       />
     </div>
@@ -2366,10 +2398,14 @@ function ConsultationRow({
   consultation,
   onStart,
   onEnd,
+  onEdit,
+  onCancelAppt,
 }: {
   consultation: Consultation;
   onStart: () => void;
   onEnd: (notes?: string) => void;
+  onEdit: () => void;
+  onCancelAppt: () => void;
 }) {
   const c = consultation;
   const when = new Date(c.scheduledAt).toLocaleString('zh-CN', {
@@ -2397,9 +2433,19 @@ function ConsultationRow({
         </div>
         <div className="flex gap-1">
           {c.status === 'scheduled' ? (
-            <Button size="small" type="primary" onClick={onStart}>
-              开始
-            </Button>
+            <>
+              <Button size="small" type="primary" onClick={onStart}>
+                开始
+              </Button>
+              <Button size="small" onClick={onEdit}>
+                改期
+              </Button>
+              <Popconfirm title="确定取消这条预约?" okText="取消预约" cancelText="再想想" onConfirm={onCancelAppt}>
+                <Button size="small" danger>
+                  取消
+                </Button>
+              </Popconfirm>
+            </>
           ) : null}
           {c.status === 'in_progress' ? (
             <Button size="small" type="primary" onClick={() => onEnd()}>
@@ -2415,36 +2461,72 @@ function ConsultationRow({
   );
 }
 
+// 7:00 前 / 22:00 后联系家长属非常规时段, 多半是 DatePicker 误操作(实测约成过 00:00), 二次确认兜底
+function confirmOffHours(scheduled: dayjs.Dayjs): Promise<boolean> {
+  const h = scheduled.hour();
+  if (h >= 7 && h < 22) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    Modal.confirm({
+      title: '非常规时段提醒',
+      content: `预约时间为 ${scheduled.format('MM/DD HH:mm')},属于${h < 7 ? '凌晨/清晨' : '深夜'}时段,确定要在这个时间联系家长吗?`,
+      okText: '确认这个时间',
+      cancelText: '回去改时间',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    });
+  });
+}
+
 function CreateConsultationModal({
   open,
   studentId,
+  editing,
   onCancel,
   onSuccess,
 }: {
   open: boolean;
   studentId: number;
+  editing?: Consultation | null;
   onCancel: () => void;
   onSuccess: () => void;
 }) {
   const [form] = Form.useForm();
+  // 改期模式: 弹窗打开时回填当前预约
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      form.setFieldsValue({
+        scheduledAt: dayjs(editing.scheduledAt),
+        channel: editing.channel,
+        durationEst: editing.durationEst ?? 30,
+        purpose: editing.purpose,
+        notes: editing.notes,
+      });
+    } else {
+      form.resetFields();
+    }
+  }, [open, editing, form]);
+
   const createMutation = useMutation({
-    mutationFn: (payload: any) => consultationApi.create(payload),
+    mutationFn: (payload: any) => (editing
+      ? consultationApi.update(editing.id, payload)
+      : consultationApi.create({ studentId, ...payload })),
     onSuccess: () => {
       form.resetFields();
       onSuccess();
     },
-    onError: (e: any) => message.error(e?.response?.data?.message ?? '创建失败'),
+    onError: (e: any) => message.error(e?.response?.data?.message ?? (editing ? '更新失败' : '创建失败')),
   });
 
   return (
     <Modal
-      title="新建沟通预约"
+      title={editing ? '修改预约' : '新建沟通预约'}
       open={open}
       onCancel={onCancel}
       onOk={() =>
-        form.validateFields().then((values) => {
+        form.validateFields().then(async (values) => {
+          if (!(await confirmOffHours(values.scheduledAt))) return;
           createMutation.mutate({
-            studentId,
             scheduledAt: values.scheduledAt.toISOString(),
             durationEst: values.durationEst,
             channel: values.channel,

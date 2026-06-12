@@ -20,6 +20,7 @@ describe('PlanItemService.add', () => {
         findUnique: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
+        aggregate: jest.fn().mockResolvedValue({ _max: { sequence: null } }),
       },
       enrollmentPlan: { findUnique: jest.fn() },
       admissionRecord: { findFirst: jest.fn() },
@@ -67,10 +68,11 @@ describe('PlanItemService.add', () => {
     ).rejects.toThrow(ConflictException);
   });
 
-  it('正常加入：sequence 自动 = count + 1，gradient 自动算', async () => {
+  it('正常加入：sequence 自动 = max(sequence) + 1，gradient 自动算', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 1, status: 'DRAFT', batchConfigId: 5, year: 2026, studentId: 10 });
     prisma.batchConfig.findUnique.mockResolvedValue({ id: 5, maxGroupCount: 45 });
     prisma.planItem.count.mockResolvedValue(2);
+    prisma.planItem.aggregate.mockResolvedValue({ _max: { sequence: 2 } });
     prisma.studentProfile.findUnique.mockResolvedValue({ id: 10, provincialRank: 8000 });
     prisma.enrollmentPlan.findUnique.mockResolvedValue({
       id: 100, universityId: 11, majorId: 22, university: { name: 'U', code: 'UC' }, major: { name: 'M' },
@@ -93,6 +95,47 @@ describe('PlanItemService.add', () => {
     expect(result.gradient).toBe('BAO'); // 10000/8000=1.25
     expect(result.overrideSoftFail).toBe(true);
     expect(result.softFailReasons).toEqual([{ rule: 'tuition', note: '瀛﹁垂瓒呴绠?' }]);
+  });
+
+  it('删除产生 sequence 空洞后仍可加入：取 max(sequence)+1 而非 count+1', async () => {
+    // 复现 2026-06-12 线上 bug: 7 条删 5 条剩 seq {1,4}, count+1=3 可加,
+    // 再加 count+1=4 撞 (plan_id,sequence) 唯一约束 → 永久 500
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 1, status: 'DRAFT', batchConfigId: 5, year: 2026, studentId: 10 });
+    prisma.batchConfig.findUnique.mockResolvedValue({ id: 5, maxGroupCount: 45 });
+    prisma.planItem.count.mockResolvedValue(2); // 剩 2 条
+    prisma.planItem.aggregate.mockResolvedValue({ _max: { sequence: 4 } }); // 但最大 seq 是 4
+    prisma.studentProfile.findUnique.mockResolvedValue({ id: 10, provincialRank: 8000 });
+    prisma.enrollmentPlan.findUnique.mockResolvedValue({
+      id: 100, universityId: 11, majorId: 22, university: { name: 'U', code: 'UC' }, major: { name: 'M' },
+      groupCode: 'G', groupName: 'GN', majorCode: 'MC', majorName: 'M',
+      groupMajors: 'A,B', subjects: '历史', batch: '本科批B段', recruitType: '普通类',
+      planCount: 5, tuition: 5000, subjectRequirements: null,
+    });
+    prisma.admissionRecord.findFirst.mockResolvedValue({ groupMinScore: 500, groupMinRank: 40000 });
+    prisma.planItem.create.mockImplementation((args: any) => Promise.resolve({ id: 999, ...args.data }));
+
+    const result = await service.add(1, { enrollmentPlanId: 100 } as any);
+    expect(result.sequence).toBe(5);
+  });
+
+  it('sequence 唯一约束冲突 (P2002) 返回 409 而非 500', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 1, status: 'DRAFT', batchConfigId: 5, year: 2026, studentId: 10 });
+    prisma.batchConfig.findUnique.mockResolvedValue({ id: 5, maxGroupCount: 45 });
+    prisma.planItem.count.mockResolvedValue(2);
+    prisma.planItem.aggregate.mockResolvedValue({ _max: { sequence: 4 } });
+    prisma.studentProfile.findUnique.mockResolvedValue({ id: 10, provincialRank: 8000 });
+    prisma.enrollmentPlan.findUnique.mockResolvedValue({
+      id: 100, universityId: 11, majorId: 22, university: { name: 'U', code: 'UC' }, major: { name: 'M' },
+      groupCode: 'G', groupName: 'GN', majorCode: 'MC', majorName: 'M',
+      groupMajors: 'A,B', subjects: '历史', batch: '本科批B段', recruitType: '普通类',
+      planCount: 5, tuition: 5000, subjectRequirements: null,
+    });
+    prisma.admissionRecord.findFirst.mockResolvedValue({ groupMinScore: 500, groupMinRank: 40000 });
+    const p2002: any = new Error('Unique constraint failed on the constraint: `plan_items_plan_id_sequence_key`');
+    p2002.code = 'P2002';
+    prisma.planItem.create.mockRejectedValue(p2002);
+
+    await expect(service.add(1, { enrollmentPlanId: 100 } as any)).rejects.toThrow(ConflictException);
   });
 
   it('saves selected major order and full ranking when adding a major group', async () => {

@@ -33,6 +33,11 @@ export function BatchCard({
   const summary = summarizeBatch(batch);
   const modeLabel = VOL_MODE_LABEL[batch.volunteerMode] ?? batch.volunteerMode;
   const subsets = batch.subsetResults ?? [];
+  // 强基/高校专项要在高三当年 4 月前完成报名审核, 填报期才发现没报名 = 白勾。
+  // 资格引擎只判硬条件不管时间窗, 这里按批次名给静态提醒。
+  const registrationNote = /强基|高校专项/.test(batch.batchName)
+    ? '需在当年 4 月前完成报名并通过高校审核,未提前报名的考生不具备投档资格'
+    : null;
 
   const toggleSub = (code: string) => setOpenSubs(s => {
     const n = new Set(s);
@@ -67,6 +72,9 @@ export function BatchCard({
           <div className={`br-card-summary${summary.tone ? ` tone-${summary.tone}` : ''}`}>
             {summary.text}
           </div>
+          {registrationNote && (
+            <div className="br-card-summary tone-rush">⏰ {registrationNote}</div>
+          )}
         </div>
 
         <div className="br-card-right" onClick={(e) => e.stopPropagation()}>

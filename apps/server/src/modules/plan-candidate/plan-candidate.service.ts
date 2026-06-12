@@ -16,6 +16,7 @@ import { TuitionRule } from './filters/soft-rules/tuition.rule';
 import { NatureRule } from './filters/soft-rules/nature.rule';
 import { SoftRule, SoftFailReason } from './filters/soft-rule.interface';
 import { calcDynamicGradient, calcGradient } from './gradient-calculator';
+import { confirmedBonusPoints } from '../policy/bonus-points.util';
 import type { RankStrategyResult } from '../recommend/interfaces/recommend.types';
 import { RankStrategyService } from '../recommend/services/rank-strategy.service';
 import {
@@ -76,6 +77,11 @@ interface CandidateGroupFullResult {
   studentRankSource: StudentRankSource;
   storedRank: number | null;
   scoreBasedRank: number | null;
+  // 政策加分双轨: rawRank = 裸分位次; bonusPoints > 0 时 studentRankUsed 已按 裸分+加分 换算
+  studentRawRank: number;
+  studentBonusPoints: number;
+  // 全池梯度计数(rush=极冲/冲/小冲, stable=稳/稳保, safe=保/强保/兜底) — 前端 tab 用全池口径, 不能拿当前页数
+  tierCounts: { rush: number; stable: number; safe: number };
   sort: string; // 院校模式可为 university sort, 故放宽
   groups: any[];
   // 学生当前的意向梯队结构(给前端 chip 渲染); groupCount = 假设切到该 tier 能看到的候选 group 数
@@ -87,6 +93,18 @@ interface CandidateGroupFullResult {
 
 function uniqueValues<T extends string | number>(values: Array<T | null | undefined>): T[] {
   return Array.from(new Set(values.filter((value): value is T => value !== null && value !== undefined)));
+}
+
+// 与前端 gradientTier/gradientTone 同口径: dynamicGradient.tier 优先, 缺省按 suggestedGradient
+function countTiers(groups: any[]): { rush: number; stable: number; safe: number } {
+  const counts = { rush: 0, stable: 0, safe: 0 };
+  for (const g of groups) {
+    const tier = g?.dynamicGradient?.tier ?? g?.suggestedGradient ?? 'WEN';
+    if (tier === 'JI_CHONG' || tier === 'CHONG' || tier === 'XIAO_CHONG') counts.rush += 1;
+    else if (tier === 'BAO' || tier === 'QIANG_BAO' || tier === 'DIBAO') counts.safe += 1;
+    else counts.stable += 1;
+  }
+  return counts;
 }
 
 function addInFilter(where: Record<string, unknown>, field: string, values: Array<string | number | null | undefined>) {
@@ -1148,11 +1166,34 @@ export class PlanCandidateService {
       ? (useScoreBased || !storedRank ? 'SCORE_SEGMENT' : 'PROFILE')
       : 'MISSING';
 
+    // 已确认政策加分参与投档 → 用 裸分+加分 换算"有效位次"参与梯度/排序,
+    // 否则专项县学生(如三州彝族 +20)的整个候选池判定系统性偏严。
+    // 裸分位次保留在 rawRank 供前端双轨展示。
+    const bonusPoints = confirmedBonusPoints(student);
+    let bonusAdjustedRank: number | null = null;
+    if (bonusPoints > 0 && this.scoreSegmentService && subjects && this.isPositiveRank(student.totalScore)) {
+      try {
+        const adjusted = await this.scoreSegmentService.scoreToRank(
+          sourceYear,
+          subjects as any,
+          student.totalScore + bonusPoints,
+        );
+        bonusAdjustedRank = this.isPositiveRank(adjusted.rank) ? adjusted.rank : null;
+      } catch {
+        bonusAdjustedRank = null;
+      }
+    }
+
+    const rawRank = rank ?? 999999;
+    const effectiveRank = bonusAdjustedRank && bonusAdjustedRank < rawRank ? bonusAdjustedRank : rawRank;
+
     return {
-      rank: rank ?? 999999,
+      rank: effectiveRank,
       source,
       storedRank,
       scoreBasedRank,
+      rawRank,
+      bonusPoints: effectiveRank !== rawRank ? bonusPoints : 0,
     };
   }
 
@@ -1441,6 +1482,9 @@ export class PlanCandidateService {
           studentRankSource: studentRankInfo.source,
           storedRank: studentRankInfo.storedRank,
           scoreBasedRank: studentRankInfo.scoreBasedRank,
+          studentRawRank: studentRankInfo.rawRank,
+          studentBonusPoints: studentRankInfo.bonusPoints,
+          tierCounts: { rush: 0, stable: 0, safe: 0 },
           sort: q.sort ?? 'MAJOR_MATCH',
           groups: [],
           availableTiers: listTiers(student.preferredMajors).map((t) => ({
@@ -1956,6 +2000,9 @@ export class PlanCandidateService {
       studentRankSource: studentRankInfo.source,
       storedRank: studentRankInfo.storedRank,
       scoreBasedRank: studentRankInfo.scoreBasedRank,
+      studentRawRank: studentRankInfo.rawRank,
+      studentBonusPoints: studentRankInfo.bonusPoints,
+      tierCounts: countTiers(resultGroups),
       sort: q.sort ?? 'MAJOR_MATCH',
       groups: resultGroups,
       availableTiers,
@@ -2107,6 +2154,8 @@ export class PlanCandidateService {
       studentRankSource: studentRankInfo.source,
       storedRank: studentRankInfo.storedRank,
       scoreBasedRank: studentRankInfo.scoreBasedRank,
+      studentRawRank: studentRankInfo.rawRank,
+      studentBonusPoints: studentRankInfo.bonusPoints,
       items: visible.slice(start, start + pageSize),
     };
   }

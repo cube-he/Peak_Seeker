@@ -45,18 +45,19 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
     return data.batches.filter(b => b.verdict === 'ELIGIBLE' || b.verdict === 'CONDITIONAL');
   }, [data]);
 
-  // —— 搜索 + 三段归属 (§7.6) ——
+  // —— 搜索 + 四段归属 (§7.6): DATA_PENDING 单列「待人工判断」, 不与"符合"混在一起误导勾选 ——
   const sectioned = useMemo(() => {
-    if (!data) return { sel: [] as BatchRecommendation[], el: [] as BatchRecommendation[], ie: [] as BatchRecommendation[] };
+    if (!data) return { sel: [] as BatchRecommendation[], el: [] as BatchRecommendation[], dp: [] as BatchRecommendation[], ie: [] as BatchRecommendation[] };
     const q = kw.trim();
     const match = (b: BatchRecommendation) => !q || b.batchName.includes(q);
     const shown = data.batches.filter(match);
     const sel = shown.filter(b => selected.has(b.batchName));
     const el = shown
-      .filter(b => !selected.has(b.batchName) && ['ELIGIBLE', 'CONDITIONAL', 'DATA_PENDING'].includes(b.verdict))
+      .filter(b => !selected.has(b.batchName) && ['ELIGIBLE', 'CONDITIONAL'].includes(b.verdict))
       .sort((a, b) => (VERDICT_ORDER[a.verdict] ?? 9) - (VERDICT_ORDER[b.verdict] ?? 9));
+    const dp = shown.filter(b => !selected.has(b.batchName) && b.verdict === 'DATA_PENDING');
     const ie = shown.filter(b => !selected.has(b.batchName) && b.verdict === 'INELIGIBLE');
-    return { sel, el, ie };
+    return { sel, el, dp, ie };
   }, [data, selected, kw]);
 
   // —— actions ——
@@ -241,6 +242,16 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
           <BatchCard key={b.batchConfigId} batch={b} checked={false} locked={locked} onToggleCheck={() => toggleBatch(b.batchName)}/>
         )}
       />
+      {sectioned.dp.length > 0 && (
+        <Section seg="pending" title="待人工判断" count={sectioned.dp.length}
+          hint="资格规则待完善(如高水平运动队需运动员资质) — 确认学生具备特殊资格后再手动勾选"
+          emptyText="无"
+          batches={sectioned.dp}
+          renderCard={(b) => (
+            <BatchCard key={b.batchConfigId} batch={b} checked={false} locked={locked} onToggleCheck={() => toggleBatch(b.batchName)}/>
+          )}
+        />
+      )}
       <Section seg="ineligible" title="不符合条件" count={sectioned.ie.length}
         hint="硬性资格未满足 — 通常不建议勾选"
         emptyText="无"
@@ -381,7 +392,7 @@ function Overview({ student: s }: { student: StudentSummary }) {
 function Section({
   seg, title, count, hint, emptyText, batches, renderCard,
 }: {
-  seg: 'selected' | 'eligible' | 'ineligible';
+  seg: 'selected' | 'eligible' | 'pending' | 'ineligible';
   title: string;
   count: number;
   hint: string;

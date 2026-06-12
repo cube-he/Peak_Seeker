@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { pickerApi } from '@/services/picker';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -1193,6 +1193,15 @@ export default function GeneratePlanPage() {
     if (rushDelta > 3) issues.push(`冲档过多 ${rushDelta} 个，落榜风险高`);
     if (stableDelta < -2) issues.push(`稳档少 ${-stableDelta} 个（建议 ${expectedStable}，当前 ${tierStats.stable}）`);
     if (safeDelta < -1) issues.push(`保底少 ${-safeDelta} 个（建议 ${expectedSafe}），录取无兜底`);
+    // 同校组数集中度: 一所学校占 4 组以上多半是误操作(2026-06-12 演练实测一口气加了同校 7 组无任何提示)
+    const uniCount = new Map<string, number>();
+    planItems.forEach((it: any) => {
+      const name = it.universityName ?? String(it.universityId ?? '');
+      if (name) uniCount.set(name, (uniCount.get(name) ?? 0) + 1);
+    });
+    uniCount.forEach((n, name) => {
+      if (n >= 4) issues.push(`「${name}」已占 ${n} 组，过于集中，建议分散院校`);
+    });
     return { total, expectedRush, expectedStable, expectedSafe, rushDelta, stableDelta, safeDelta, issues };
   }, [planItems, tierStats]);
   // 提交就绪度: 后端要求"志愿数 === 批次上限 且 无未解决严重风险"才放行,
@@ -1209,6 +1218,14 @@ export default function GeneratePlanPage() {
   const criticalUnresolved = Array.isArray(riskData)
     ? riskData.filter((r) => r.severity === 'critical' && !r.resolvedAt).length
     : 0;
+  // 后端在增删/重排后异步重算风险, 立即 refetch 可能拿到旧数据 →
+  // 立即刷一次 + 1.5s 后补刷一次, 否则就绪度按 stale 数据放行, 提交时才撞后端闸门
+  const refreshRisks = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['plan-risks', planId] });
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['plan-risks', planId] });
+    }, 1500);
+  }, [queryClient, planId]);
   const submitReadiness = useMemo(() => {
     if (plan?.status !== 'DRAFT') return { ok: false, reason: '当前不是草稿状态' };
     if (!planItems.length) return { ok: false, reason: '尚未加入任何志愿' };
@@ -1231,6 +1248,9 @@ export default function GeneratePlanPage() {
   const rawStudentRank = Number(student?.provincialRank);
   const rawStudentScore = Number(student?.totalScore);
   const studentRankForDecision = candidateGroups?.studentRankUsed ?? (Number.isFinite(rawStudentRank) && rawStudentRank > 0 ? rawStudentRank : undefined);
+  // 政策加分双轨: 后端已用 裸分+加分 换算有效位次参与梯度, 这里拿到加分值与裸分位次做口径标注
+  const studentBonusPoints = Number((candidateGroups as any)?.studentBonusPoints) || 0;
+  const studentRawRank = Number((candidateGroups as any)?.studentRawRank) || null;
   const studentScoreForDecision = Number.isFinite(rawStudentScore) ? rawStudentScore : undefined;
   const subjectCombination = formatSubjectCombination(student ?? {});
   const subjectHighlights = getSubjectHighlights(student ?? {});
@@ -1407,6 +1427,7 @@ export default function GeneratePlanPage() {
     onSuccess: () => {
       void message.success('已加入当前方案');
       queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+      refreshRisks();
     },
     onError: (error: any) => {
       void message.error(error?.response?.data?.message ?? '加入失败');
@@ -1429,6 +1450,7 @@ export default function GeneratePlanPage() {
     onSuccess: () => {
       void message.success('已移出方案');
       queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+      refreshRisks();
     },
     onError: (error: any) => {
       void message.error(error?.response?.data?.message ?? '移出失败');
@@ -1482,6 +1504,7 @@ export default function GeneratePlanPage() {
     onSuccess: () => {
       void message.success('志愿顺序已保存');
       queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+      refreshRisks();
     },
     onError: (error: any) => {
       void message.error(error?.response?.data?.message ?? '志愿顺序保存失败');
@@ -1584,11 +1607,17 @@ export default function GeneratePlanPage() {
           />
           <div className="space-y-2">
             {selection.selectedMajors.map((item) => (
-              <div key={item.enrollmentPlanId} className="flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-sm">
-                <span className="min-w-0 truncate">{item.order}. {item.majorName}</span>
-                <Tag color={item.displaySection === 'RISK' ? 'warning' : item.displaySection === 'BACKUP' ? 'default' : 'success'}>
-                  {selectedMajorSectionLabel(item.displaySection)}
-                </Tag>
+              <div key={item.enrollmentPlanId} className="rounded-md bg-gray-50 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate">{item.order}. {item.majorName}</span>
+                  <Tag color={item.displaySection === 'RISK' ? 'warning' : item.displaySection === 'BACKUP' ? 'default' : 'success'}>
+                    {selectedMajorSectionLabel(item.displaySection)}
+                  </Tag>
+                </div>
+                {/* 「风险/不建议」必须给原因, 否则老师无从判断是分差还是选科/体检问题 */}
+                {item.displaySection === 'RISK' && item.displayReason ? (
+                  <div className="mt-1 text-xs text-text-tertiary">{item.displayReason}</div>
+                ) : null}
               </div>
             ))}
           </div>
@@ -2008,7 +2037,11 @@ export default function GeneratePlanPage() {
             <div className="pgv2-metric">
               <span className="k">排序位次</span>
               <span className="v">{formatRankValue(studentRankForDecision)}</span>
-              <span className="sub">{isUsingScoreBasedRank ? '一分一段估算' : '档案位次'}</span>
+              <span className="sub">
+                {studentBonusPoints > 0
+                  ? `含政策加分 +${studentBonusPoints} · 裸分位次 ${studentRawRank?.toLocaleString() ?? '—'}`
+                  : (isUsingScoreBasedRank ? '一分一段估算' : '档案位次')}
+              </span>
             </div>
             <div className="pgv2-metric">
               <span className="k">方案年份</span>
@@ -2203,10 +2236,17 @@ export default function GeneratePlanPage() {
               {viewMode === 'MAJOR' ? (
                 <div className="pgv2-tier-bar">
                   {GRADIENT_FILTER_OPTIONS.map((o) => {
+                    // 优先用后端全池计数 (tierCounts); 拿不到才退回当前页计数 —— 当前页口径会让
+                    // 老师误判"冲档 0"(实测全池有冲档但排序沉到后面的页)
+                    const poolCounts = (candidateGroups as any)?.tierCounts as { rush: number; stable: number; safe: number } | undefined;
                     const baseGroups = groups.filter((g) => showHidden || !hiddenGroupKeys.has(g.groupKey));
-                    const n = o.tones
-                      ? baseGroups.filter((g) => o.tones!.includes(gradientTier(g))).length
-                      : baseGroups.length;
+                    const n = poolCounts
+                      ? (o.value === 'all'
+                        ? poolCounts.rush + poolCounts.stable + poolCounts.safe
+                        : poolCounts[o.value === 'RUSH' ? 'rush' : o.value === 'STABLE' ? 'stable' : 'safe'])
+                      : (o.tones
+                        ? baseGroups.filter((g) => o.tones!.includes(gradientTier(g))).length
+                        : baseGroups.length);
                     return (
                       <button
                         key={o.value}
@@ -2966,6 +3006,13 @@ export default function GeneratePlanPage() {
                     <em>{student?.totalScore ?? '—'} 分 · {candidateGroups?.sourceYear ?? '当前'} 年</em>
                   </div>
                 </div>
+                {studentBonusPoints > 0 ? (
+                  <div className="rs-row is-active">
+                    <span>政策加分修正</span>
+                    <strong>{studentRankForDecision?.toLocaleString() ?? '—'}</strong>
+                    <em>裸分 +{studentBonusPoints} 分换算 · 地方性加分对部委属院校可能不适用</em>
+                  </div>
+                ) : null}
                 {isUsingScoreBasedRank ? (
                   <div className="pgv2-drawer-tip">
                     档案位次与分数明显不匹配,系统默认按 <strong>一分一段估算位次</strong> 计算候选池

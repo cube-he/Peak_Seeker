@@ -4,6 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { RiskFinding, RuleContext, RiskRule } from './risk-rule.interface';
 import { QualificationRules } from './rules/qualification.rule';
 import { GradientRules } from './rules/gradient.rule';
+import { confirmedBonusPoints } from '../../policy/bonus-points.util';
 
 @Injectable()
 export class RiskEngineService {
@@ -44,12 +45,19 @@ export class RiskEngineService {
       where: { planItemId: { in: itemIds }, resolvedAt: null },
     });
 
+    // 分差规则按"有效分"算: 已确认政策加分参与投档, 不吃加分会让专项县学生的
+    // 冲稳保判定整体偏严 20 分 (2026-06-12 演练实测)
+    const bonusPoints = confirmedBonusPoints(plan.student as any);
+    const studentForRules = bonusPoints > 0 && typeof (plan.student as any)?.totalScore === 'number'
+      ? { ...plan.student, totalScore: (plan.student as any).totalScore + bonusPoints }
+      : plan.student;
+
     let totalFindings = 0;
     for (const item of allItems) {
       const ctx: RuleContext = {
         item,
         allItems,
-        student: plan.student,
+        student: studentForRules,
         plan: { id: plan.id, status: plan.status, batchName: plan.batchName },
       };
       const findings = this.evaluate(ctx);
