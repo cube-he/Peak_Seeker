@@ -86,7 +86,9 @@ export class UniversityController {
     @Param('id', ParseIntPipe) id: number,
     @Query('subject') subject?: string,
   ) {
-    return this.universityService.findById(id, subject);
+    // subject 进 Redis 缓存键, 白名单防任意字符串撑大键空间
+    const safeSubject = subject === '物理' || subject === '历史' ? subject : undefined;
+    return this.universityService.findById(id, safeSubject);
   }
 
   @Get(':id/majors')

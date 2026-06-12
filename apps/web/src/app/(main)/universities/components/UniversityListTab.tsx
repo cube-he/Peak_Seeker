@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { favoriteService } from '@/services/favorite';
 import { studentApi } from '@/services/student-api';
 import { FIELD_LABELS } from '@/components/student/stage-fields';
+import { useUniversityCompare } from '@/stores/compareStore';
 import { SubjectToggle } from './shared/SubjectToggle';
 import { Empty } from './shared/Empty';
 import { SearchIcon } from './shared/Icon';
@@ -128,18 +129,13 @@ export function UniversityListTab() {
     }
   };
 
-  // ===== 对比 (2-4 所) =====
-  const [compareList, setCompareList] = useState<UniversityListItem[]>([]);
+  // ===== 对比 (2-4 所, 全局 store: 进详情页再回来清单仍在) =====
+  const compareList = useUniversityCompare((s) => s.list);
+  const compareToggle = useUniversityCompare((s) => s.toggle);
+  const compareClear = useUniversityCompare((s) => s.clear);
   const [compareOpen, setCompareOpen] = useState(false);
   const toggleCompare = (u: UniversityListItem) => {
-    setCompareList((prev) => {
-      if (prev.some((c) => c.id === u.id)) return prev.filter((c) => c.id !== u.id);
-      if (prev.length >= 4) {
-        message.warning('最多同时对比 4 所院校');
-        return prev;
-      }
-      return [...prev, u];
-    });
+    if (compareToggle(u) === 'full') message.warning('最多同时对比 4 所院校');
   };
 
   useEffect(() => {
@@ -595,7 +591,7 @@ export function UniversityListTab() {
           </button>
           <button
             type="button"
-            onClick={() => setCompareList([])}
+            onClick={compareClear}
             style={{ border: 0, background: 'transparent', color: 'rgba(255,255,255,.6)', fontSize: 12, cursor: 'pointer' }}
           >
             清空

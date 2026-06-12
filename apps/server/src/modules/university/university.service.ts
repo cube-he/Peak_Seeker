@@ -302,13 +302,11 @@ export class UniversityService {
     const cached = await this.redis.getCache(cacheKey);
     if (cached) return cached;
 
+    // enrollmentPlans / rankings include 已删: 前端零消费, 白白撑大响应与 Redis 缓存
+    // (开设专业走 GET /universities/:id/majors, 招录明细走 :id/admissions)
     const university = await this.prisma.university.findUnique({
       where: { id },
       include: {
-        enrollmentPlans: {
-          orderBy: { year: 'desc' },
-          take: 100,
-        },
         admissionRecords: {
           orderBy: { year: 'desc' },
           take: 100,
@@ -316,10 +314,6 @@ export class UniversityService {
         campuses: {
           where: { geoStatus: 'verified' },
           orderBy: [{ isMain: 'desc' }, { id: 'asc' }],
-        },
-        // P2: 历年排名（按年降序，前端可分榜单展示时间线）
-        rankings: {
-          orderBy: [{ year: 'desc' }, { listName: 'asc' }],
         },
       },
     });
@@ -344,12 +338,6 @@ export class UniversityService {
       latitude: decimalToNumber(c.latitude),
       longitude: decimalToNumber(c.longitude),
       nearestAirportKm: decimalToNumber(c.nearestAirportKm),
-    })) ?? [];
-
-    // P2: ranking.score 是 Decimal，前端图表需要 number
-    const rankings = (university as any).rankings?.map((r: any) => ({
-      ...r,
-      score: decimalToNumber(r.score),
     })) ?? [];
 
     // 查询强基计划录取数据，按专业名+年份降序排列
@@ -400,7 +388,7 @@ export class UniversityService {
       }
     }
 
-    const result = { ...university, campuses, rankings, qiangjiAdmissions, bestPrediction };
+    const result = { ...university, campuses, qiangjiAdmissions, bestPrediction };
     await this.redis.setCache(cacheKey, result, 3600);
     return result;
   }
@@ -419,17 +407,22 @@ export class UniversityService {
   }
 
   async findAdmissions(id: number, years?: number[]) {
+    // 详情页最重的请求: 全量记录 + 计划补充, 加 1h 缓存 (key 在 cache:university:* 运维清理范围内)
+    const cacheKey = `university:${id}:admissions:${years?.join(',') ?? 'all'}`;
+    const cached = await this.redis.getCache<any[]>(cacheKey);
+    if (cached) return cached;
+
     const where: any = { universityId: id };
     if (years?.length) {
       where.year = { in: years };
     }
 
-    const admissions: Array<Prisma.AdmissionRecordGetPayload<{ include: { major: true } }>> =
-      await this.prisma.admissionRecord.findMany({
-        where,
-        include: { major: true },
-        orderBy: [{ year: 'desc' }, { majorMinRank: 'asc' }],
-      });
+    // include major 全行已删: 前端 (group-admissions/MajorRow) 只用记录自身字段,
+    // Major 的长文本/JSON 字段曾把响应放大数倍
+    const admissions = await this.prisma.admissionRecord.findMany({
+      where,
+      orderBy: [{ year: 'desc' }, { majorMinRank: 'asc' }],
+    });
 
     // Fetch enrollment plan chip fields (majorRanking, disciplineEval, isNationalFeature)
     // for each distinct majorId. We order by year desc so the first entry per major
@@ -443,6 +436,7 @@ export class UniversityService {
           select: {
             majorId: true,
             year: true,
+            planCount: true,
             majorRanking: true,
             disciplineEval: true,
             isNationalFeature: true,
@@ -457,14 +451,18 @@ export class UniversityService {
       }
     }
 
-    return admissions.map((a) => ({
+    const result = admissions.map((a) => ({
       ...a,
+      // 最新计划年的计划人数: 前端 MajorRow "计划 N 人" (此前读不存在的字段恒不显示)
+      planCount: latestPlanByMajor.get(a.majorId)?.planCount ?? null,
       extras: {
         majorRanking: latestPlanByMajor.get(a.majorId)?.majorRanking ?? null,
         disciplineEval: latestPlanByMajor.get(a.majorId)?.disciplineEval ?? null,
         isNationalFeature: latestPlanByMajor.get(a.majorId)?.isNationalFeature ?? false,
       },
     }));
+    await this.redis.setCache(cacheKey, result, 3600);
+    return result;
   }
 
   async getHotUniversities(limit?: number) {

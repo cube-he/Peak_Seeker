@@ -64,9 +64,17 @@ export default function GroupCard({ group, multiYearGroups, tier, diffText, user
           <div className="px-3 py-2 text-[10px] font-bold text-text-tertiary tracking-wide">组内专业 · {group.majors.length} 个</div>
           {group.majors.map(m => (
             <MajorRow
-              key={m.majorCode}
+              key={`${m.majorCode}|${m.majorName}`}
               major={m}
-              multiYearData={[{ year: group.year, majorMinScore: m.majorMinScore, majorMinRank: m.majorMinRank }]}
+              // 同组跨年按专业名对齐, 老师可看组内单个专业的近三年走势 (此前只传单年)
+              multiYearData={trendYears
+                .map(g => {
+                  const hit = g.majors.find(x => x.majorName === m.majorName);
+                  return hit
+                    ? { year: g.year, majorMinScore: hit.majorMinScore, majorMinRank: hit.majorMinRank }
+                    : null;
+                })
+                .filter((x): x is { year: number; majorMinScore: number | null; majorMinRank: number | null } => x != null)}
             />
           ))}
         </div>

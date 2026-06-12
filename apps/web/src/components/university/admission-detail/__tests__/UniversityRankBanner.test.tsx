@@ -59,7 +59,7 @@ describe('UniversityRankBanner', () => {
     expect(screen.getByText(/差 21200 名/)).toBeInTheDocument();
   });
 
-  it('userRank 为 null 时显示"输入位次"提示，不显示 tier chip', () => {
+  it('userRank 为 null 时显示选学生/录位次引导，不显示 tier chip', () => {
     render(
       <UniversityRankBanner
         subject="物理类"
@@ -71,7 +71,7 @@ describe('UniversityRankBanner', () => {
       />
     );
     expect(screen.queryByText('冲')).toBeNull();
-    expect(screen.getByText(/输入位次/)).toBeInTheDocument();
+    expect(screen.getByText(/选择学生或录入位次/)).toBeInTheDocument();
   });
 
   it('数据完全为空时显示降级提示', () => {

@@ -1,12 +1,12 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { useUserStore } from '@/stores/userStore';
 import UniversityRankBanner from './UniversityRankBanner';
 import BatchSubjectSwitcher from './BatchSubjectSwitcher';
 import GroupCard from './GroupCard';
 import { categorizeBatch } from '@/utils/batch-categorize';
 import { groupAdmissions, type GroupedAdmission } from '@/utils/group-admissions';
 import { classifyRank, getTier, isHistorical } from '@/utils/classify-rank';
+import { pickScoreRank } from '@/app/(main)/universities/lib/admission';
 import type { Subject } from './types';
 
 interface Props {
@@ -21,6 +21,10 @@ interface Props {
     minScoreHistory: number | null;
     minRankHistory: number | null;
   };
+  /** 生效位次: 工作台学生 ?? 手填 (由页面统一计算注入, 不再各自读 store) */
+  userRank: number | null;
+  /** 初始科类 (跟学生/页面科类), 组件内仍可切换 */
+  defaultSubject?: Subject;
 }
 
 /** 2025 四川批次结构表的标准批次序（投档顺序）。数据里出现的新批次会追加在尾部。 */
@@ -51,11 +55,6 @@ const BATCH_HINTS: Record<string, string> = {
   '高职(专科)批': '普通类高职(专科) · 45个平行志愿',
 };
 
-function pickDefaultSubject(userSubjects?: string): Subject {
-  if (userSubjects && /历史|文/.test(userSubjects)) return '历史类';
-  return '物理类';
-}
-
 function formatDiff(diff: number, isAhead: boolean): string {
   const abs = Math.abs(diff).toLocaleString();
   return isAhead ? `高出 ${abs} 名` : `差 ${abs} 名`;
@@ -65,10 +64,10 @@ export default function AdmissionDetailTab({
   universityFlags,
   rawAdmissions,
   universityScores,
+  userRank,
+  defaultSubject,
 }: Props) {
-  const { examInfo } = useUserStore();
-  const userRank = examInfo.rank ?? null;
-  const [subject, setSubject] = useState<Subject>(() => pickDefaultSubject(examInfo.subjects[0]));
+  const [subject, setSubject] = useState<Subject>(defaultSubject ?? '物理类');
 
   // 1. 全聚合一次（按 (year, subjects, batch, groupCode)）
   const allGroups: GroupedAdmission[] = useMemo(() => groupAdmissions(rawAdmissions ?? []), [rawAdmissions]);
@@ -92,13 +91,15 @@ export default function AdmissionDetailTab({
       ((subject === '物理类' && !isHistorical(r.subjects)) || (subject === '历史类' && isHistorical(r.subjects))) &&
       categorizeBatch(r.batch) === bannerCategory
     );
+    // 每年取最低门槛: pickScoreRank 四口径兜底 (filing>university>group>major)。
+    // 此前只读恒空的 universityMinRank, banner 常年显示 '—' 且物化列 fallback 永不可达
     const byYear = new Map<number, { score: number | null; rank: number | null }>();
     for (const r of rawsInScope) {
+      const sr = pickScoreRank(r);
+      if (!sr || !r.year) continue;
       const cur = byYear.get(r.year);
-      const newRank = r.universityMinRank;
-      const newScore = r.universityMinScore;
-      if (!cur || (newRank != null && (cur.rank == null || newRank < cur.rank))) {
-        byYear.set(r.year, { score: newScore, rank: newRank });
+      if (!cur || cur.score == null || sr.score < cur.score) {
+        byYear.set(r.year, { score: sr.score, rank: sr.rank });
       }
     }
     const sorted = Array.from(byYear.entries()).sort(([a], [b]) => b - a);

@@ -71,7 +71,7 @@ export default function UniversityRankBanner({
       )}
       {userRank == null && !isEmpty && (
         <div className="mt-2.5 px-3 py-1.5 bg-white rounded text-[11px] text-text-tertiary">
-          输入位次以查看冲稳保 — 去 <a href="/profile" className="text-primary underline">个人信息</a>
+          在<a href="/universities" className="text-primary underline">院校库</a>选择学生或录入位次后，这里会显示冲稳保判定
         </div>
       )}
     </div>

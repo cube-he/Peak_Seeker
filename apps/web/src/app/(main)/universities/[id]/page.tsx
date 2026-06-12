@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
-import { Spin } from 'antd';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
+import { Spin, Tooltip, message } from 'antd';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import { universityService } from '@/services/university';
@@ -14,6 +14,13 @@ import QiangjiTable from '@/components/university/QiangjiTable';
 import AdmissionDetailTab from '@/components/university/admission-detail/AdmissionDetailTab';
 import { useUserStore } from '@/stores/userStore';
 import { useStudentRank } from '@/stores/studentRankStore';
+import { useWorkStudent } from '@/hooks/useWorkStudent';
+import { useAuthStore } from '@/stores/authStore';
+import { useUniversityCompare } from '@/stores/compareStore';
+import { favoriteService } from '@/services/favorite';
+import { studentApi } from '@/services/student-api';
+import { FIELD_LABELS } from '@/components/student/stage-fields';
+import { classifyRank, getTier, type RankTier } from '@/utils/classify-rank';
 import { LocIcon, BankIcon, TrophyIcon, ChartIcon, BookmarkIcon, ArrowIcon } from '../components/shared/Icon';
 import { tierImageFor } from '../lib/tier';
 import { getLatestYearly } from '../lib/admission';
@@ -22,6 +29,16 @@ import '../styles.css';
 
 type TabKey = 'info' | 'admission' | 'majors' | 'campus';
 
+// hero 命中率卡的冲稳保大字 (与招录详情 banner 同档位文案)
+const TIER_TEXT: Record<RankTier, { label: string; color: string }> = {
+  unreachable: { label: '难达', color: '#6b7280' },
+  rush: { label: '冲', color: '#ef4444' },
+  stable: { label: '稳', color: '#3b82f6' },
+  safe: { label: '保', color: '#22c55e' },
+  elite: { label: '远', color: '#f59e0b' },
+  unknown: { label: '—', color: '#9ca3af' },
+};
+
 export default function UniversityDetailPage() {
   const params = useParams();
   const id = Number(params.id);
@@ -29,7 +46,28 @@ export default function UniversityDetailPage() {
   const { examInfo } = useUserStore();
   const examType = useStudentRank((s) => s.examType);
   const studentRank = useStudentRank((s) => s.rank);
-  const userSubject = examInfo.subjects?.[0] ?? examType;
+
+  // ===== 工作台学生上下文 (与列表/专业库共享): 位次与科类统一注入 =====
+  const searchParams = useSearchParams();
+  const {
+    isTeacher,
+    studentId: workStudentId,
+    setStudentId: setWorkStudentId,
+    student: workStudent,
+    name: workStudentName,
+    lane: workLane,
+    rank: workRank,
+    refetch: refetchWorkStudent,
+  } = useWorkStudent();
+  useEffect(() => {
+    const sid = searchParams.get('studentId');
+    if (sid) setWorkStudentId(sid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const effRank: number | null = workRank ?? studentRank ?? null;
+  const effType = (workLane ?? examType) as '物理' | '历史';
+
+  const userSubject = workLane ?? examInfo.subjects?.[0] ?? examType;
   const [tab, setTab] = useState<TabKey>('info');
   const [descExpanded, setDescExpanded] = useState(false);
 
@@ -43,6 +81,47 @@ export default function UniversityDetailPage() {
     queryKey: ['university-admissions', id],
     queryFn: () => universityService.getAdmissions(id),
     enabled: !!id,
+  });
+
+  // 收藏 (与列表/收藏页共用 query)
+  const { isLoggedIn } = useAuthStore();
+  const queryClient = useQueryClient();
+  const { data: favData } = useQuery({
+    queryKey: ['favorites', 'university'],
+    queryFn: () => favoriteService.getList('university'),
+    enabled: isLoggedIn,
+  });
+  const favId = useMemo(() => {
+    const list = (favData as any)?.data ?? favData ?? [];
+    for (const f of Array.isArray(list) ? list : []) {
+      if (f.universityId === id) return f.id as number;
+    }
+    return null;
+  }, [favData, id]);
+
+  // 对比 (全局 store, 与列表共享清单)
+  const compareToggle = useUniversityCompare((s) => s.toggle);
+  const inCompare = useUniversityCompare((s) => s.list.some((c) => c.id === id));
+
+  // 开设专业 (切到 tab 才拉)
+  const { data: uniMajorsRaw } = useQuery({
+    queryKey: ['university-majors', id],
+    queryFn: () => universityService.getMajors(id),
+    enabled: !!id && tab === 'majors',
+  });
+
+  // 同类院校 (同类型同层次, 前端按位次近邻取前 10)
+  const { data: similarRaw } = useQuery({
+    queryKey: ['similar-unis', university?.type, university?.level, effType],
+    queryFn: () =>
+      universityService.getList({
+        type: university?.type,
+        level: university?.level,
+        pageSize: 60,
+        sortBy: 'rank',
+        examType: effType,
+      } as any),
+    enabled: !!university?.type,
   });
 
   if (isLoading) {
@@ -67,9 +146,9 @@ export default function UniversityDetailPage() {
 
   const u = university;
   // 最近最低分/位次:跟 TrendBanner 共享 lib/admission.ts 的 getLatestYearly,
-  // 按 examType 筛 + groupBy year 后取最近年最低门槛(filing > university > group > major)。
+  // 按 effType 筛 + groupBy year 后取最近年最低门槛(filing > university > group > major)。
   // 避免之前用 admissionRecords[0] 取任意一条导致跟走势图数据不一致。
-  const latestYearly = getLatestYearly(admissions ?? u.admissionRecords ?? [], examType);
+  const latestYearly = getLatestYearly(admissions ?? u.admissionRecords ?? [], effType);
 
   // 5 档梯队 → hero data-tier + bg image
   const tierImg = tierImageFor({
@@ -82,11 +161,93 @@ export default function UniversityDetailPage() {
     nature: u.runningNature,
   });
 
-  // hit-card:命中率(后端提供 bestPrediction.acceptRate)+ 用户位次
-  const acceptRate = u.bestPrediction?.acceptRate ?? null;
+  // hit-card: 预测线优先 (rankPrediction.point), 无预测退回去年实际最低位次。
+  // 此前读后端从不返回的 bestPrediction.acceptRate, 命中率恒 '— —' (2026-06-12 修复)
   const uniMinRank =
-    examType === '历史' ? u.minRankHistory ?? null : u.minRankPhysics ?? null;
-  const rankDiff = studentRank != null && uniMinRank != null ? uniMinRank - studentRank : null;
+    effType === '历史' ? u.minRankHistory ?? null : u.minRankPhysics ?? null;
+  const predRank: number | null =
+    u.bestPrediction?.point ?? (effType === '历史' ? u.predRankHistory : u.predRankPhysics) ?? null;
+  const refRank = predRank ?? uniMinRank;
+  const rankDiff = effRank != null && refRank != null ? refRank - effRank : null;
+  const heroTier: RankTier | null =
+    effRank != null && refRank != null
+      ? classifyRank(
+          effRank,
+          refRank,
+          getTier({ is985: u.is985, is211: u.is211, batch: u.level ?? '' }),
+          effType === '历史',
+        )
+      : null;
+
+  // 意向院校 (工作台学生)
+  const uniPool: string[] = Array.isArray(workStudent?.preferredUniversities)
+    ? workStudent.preferredUniversities
+    : [];
+  const inPool = uniPool.includes(u.name);
+  const addToPool = async () => {
+    if (!isTeacher || !workStudentId) {
+      message.info('先在院校库列表选择学生，再加入其意向院校');
+      return;
+    }
+    if (inPool) {
+      message.info(`「${u.name}」已在意向院校`);
+      return;
+    }
+    try {
+      await studentApi.update(workStudentId, { preferredUniversities: [...uniPool, u.name] } as any);
+      message.success(`已把「${u.name}」加入${workStudentName ? ` ${workStudentName} 的` : ''}意向院校`);
+      refetchWorkStudent();
+    } catch {
+      message.error('保存失败，请重试');
+    }
+  };
+
+  const toggleFav = async () => {
+    if (!isLoggedIn) {
+      message.info('登录后即可收藏院校');
+      return;
+    }
+    try {
+      if (favId) {
+        await favoriteService.remove(favId);
+        message.success('已取消收藏');
+      } else {
+        await favoriteService.add({ type: 'university', universityId: id });
+        message.success(`已收藏「${u.name}」`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['favorites', 'university'] });
+    } catch {
+      message.error('收藏操作失败，请重试');
+    }
+  };
+
+  const toggleCompare = () => {
+    const r = compareToggle({
+      ...u,
+      latestAdmission: latestYearly ? { minScore: latestYearly.score, minRank: latestYearly.rank } : null,
+      predictedMinRank: predRank,
+    });
+    if (r === 'full') message.warning('最多同时对比 4 所院校');
+    else if (r === 'added') message.success('已加入对比，回院校库列表查看对比清单');
+  };
+
+  // 同类院校: 排除自身, 按与本校最低位次的距离取近邻
+  const similarUnis: any[] = (() => {
+    const list: any[] = (similarRaw as any)?.data ?? [];
+    const base = latestYearly?.rank ?? uniMinRank;
+    return list
+      .filter((s) => s.id !== id)
+      .sort((a, b) => {
+        const ar = a.latestAdmission?.minRank ?? null;
+        const br = b.latestAdmission?.minRank ?? null;
+        if (ar == null && br == null) return 0;
+        if (ar == null) return 1;
+        if (br == null) return -1;
+        if (base == null) return ar - br;
+        return Math.abs(ar - base) - Math.abs(br - base);
+      })
+      .slice(0, 10);
+  })();
 
   // 描述段落拆分
   const description = (u.description as string | null | undefined) ?? null;
@@ -129,29 +290,64 @@ export default function UniversityDetailPage() {
           </div>
           <div className="hit-card">
             <div className="k">
-              基于你的位次 {studentRank != null ? ` · ${studentRank.toLocaleString()} 名` : ''}
+              基于{workStudentName ? ` ${workStudentName} ` : '你'}的位次
+              {effRank != null ? ` · ${effRank.toLocaleString()} 名 · ${effType}类` : ''}
             </div>
-            <div className="pct">
-              {acceptRate != null ? Math.round(acceptRate * 100) : '— —'}
-              {acceptRate != null && <span className="pct-tail">%</span>}
+            <div className="pct" style={heroTier ? { color: TIER_TEXT[heroTier].color } : undefined}>
+              {heroTier ? TIER_TEXT[heroTier].label : '— —'}
             </div>
-            {rankDiff != null && acceptRate != null && (
+            {rankDiff != null && (
               <div className="verdict">
-                你比录取线 {rankDiff > 0 ? '↑' : rankDiff < 0 ? '↓' : '·'}{' '}
+                你比{predRank != null ? '预测线' : '去年线'} {rankDiff > 0 ? '↑' : rankDiff < 0 ? '↓' : '·'}{' '}
                 <span className="em">{Math.abs(rankDiff).toLocaleString()}</span> 名
               </div>
             )}
             <div className="sub">
-              {acceptRate != null ? '基于最近三年录取趋势 · 仅供参考' : '录入位次后生成个性化预测'}
+              {u.bestPrediction
+                ? `预测 ${u.bestPrediction.targetYear} 最低位次 ${Number(u.bestPrediction.point).toLocaleString()}（保守 ${Number(u.bestPrediction.conservative).toLocaleString()}）· 仅供参考`
+                : refRank != null
+                  ? `参考最近一年最低位次 ${refRank.toLocaleString()} · ${effType}类`
+                  : effRank != null
+                    ? '该科类暂无录取参考线'
+                    : '选择学生或录入位次后生成判定'}
             </div>
             <div className="actions">
-              <button type="button" className="btn outline">
-                <BookmarkIcon /> 收藏
+              <button type="button" className="btn outline" onClick={toggleFav}>
+                <BookmarkIcon /> {favId ? '已收藏' : '收藏'}
               </button>
-              <button type="button" className="btn primary">
-                加入方案 <ArrowIcon />
+              <button type="button" className="btn outline" onClick={toggleCompare}>
+                {inCompare ? '已在对比' : '对比'}
+              </button>
+              <button type="button" className="btn primary" onClick={addToPool}>
+                {inPool ? '已在意向 ✓' : '加入意向'} <ArrowIcon />
               </button>
             </div>
+            {/* 资料完整度出口: 选了意向不代表资料完整 */}
+            {workStudent?.progress && (
+              <div style={{ marginTop: 8, fontSize: 11 }}>
+                {workStudent.progress.isRecommendable ? (
+                  <Link
+                    href={`/teacher/plans/generate/${workStudentId}`}
+                    style={{ color: 'var(--primary)', textDecoration: 'underline' }}
+                  >
+                    资料齐全 · 去生成方案 →
+                  </Link>
+                ) : (
+                  <Tooltip
+                    title={`还缺: ${(workStudent.progress.missingFieldsForRecommend ?? [])
+                      .map((f: string) => FIELD_LABELS[f] ?? f)
+                      .join('、')}`}
+                  >
+                    <Link
+                      href={`/teacher/students/${workStudentId}`}
+                      style={{ color: '#b45309', textDecoration: 'underline' }}
+                    >
+                      资料缺 {(workStudent.progress.missingFieldsForRecommend ?? []).length} 项 · 去补全 →
+                    </Link>
+                  </Tooltip>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -165,13 +361,13 @@ export default function UniversityDetailPage() {
             {
               k: '最近最低分',
               v: latestYearly ? <span className="em">{latestYearly.score}</span> : '—',
-              s: latestYearly ? `${latestYearly.year} · ${examType}类` : '等待录取数据',
+              s: latestYearly ? `${latestYearly.year} · ${effType}类` : '等待录取数据',
               core: true,
             },
             {
               k: '最近最低位次',
               v: latestYearly ? latestYearly.rank.toLocaleString() : '—',
-              s: latestYearly ? `${latestYearly.year} · ${examType}类参考` : `${examType}类参考`,
+              s: latestYearly ? `${latestYearly.year} · ${effType}类参考` : `${effType}类参考`,
               core: true,
             },
             {
@@ -194,9 +390,13 @@ export default function UniversityDetailPage() {
               s: u.department || '主管部门待补充',
             },
             {
-              k: '招生专业',
-              v: u.masterProgramCount != null ? String(u.masterProgramCount) : '—',
-              s: '一级学科硕士点',
+              // 此前误用硕士点数冒充招生专业数; 改读在川计划物化列
+              k: '在川计划',
+              v: u.scPlanCount != null ? <span className="em">{u.scPlanCount.toLocaleString()}</span> : '—',
+              s:
+                u.scGroupCount != null
+                  ? `${u.scGroupCount} 个专业组${u.scSupplCount ? ` · 征集 ${u.scSupplCount}` : ''}`
+                  : '在川招生计划',
             },
             {
               k: '建校时间',
@@ -220,8 +420,8 @@ export default function UniversityDetailPage() {
         <div style={{ maxWidth: 1500, margin: '0 auto', padding: '24px 32px 0' }}>
           <TrendBanner
             admissions={admissions ?? []}
-            studentRank={studentRank ?? null}
-            defaultSubject={examType}
+            studentRank={effRank}
+            defaultSubject={effType}
           />
         </div>
       )}
@@ -495,23 +695,18 @@ export default function UniversityDetailPage() {
                 minScoreHistory: u.minScoreHistory ?? null,
                 minRankHistory: u.minRankHistory ?? null,
               }}
+              userRank={effRank}
+              defaultSubject={effType === '历史' ? '历史类' : '物理类'}
             />
           </div>
         )}
 
         {tab === 'majors' && (
-          <div className="info-card">
-            <h4>
-              <span className="ic"><BankIcon /></span>热门专业方向
-            </h4>
-            <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-              详细专业库内容由专业模块提供
-              <br />
-              <Link href="/majors" style={{ color: 'var(--primary)', marginTop: 8, display: 'inline-block', fontSize: 13 }}>
-                进入专业库查看 →
-              </Link>
-            </div>
-          </div>
+          <UniMajorsTab
+            plans={((uniMajorsRaw as any)?.data ?? uniMajorsRaw ?? []) as any[]}
+            lane={workLane}
+            studentId={workStudentId}
+          />
         )}
 
         {tab === 'campus' && (
@@ -542,7 +737,119 @@ export default function UniversityDetailPage() {
             <QiangjiTable data={u.qiangjiAdmissions} />
           </div>
         )}
+
+        {/* 同类院校参考: 同类型同层次, 位次最接近的 10 所 */}
+        {similarUnis.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <div className="section-banner">
+              <h2>同类院校参考</h2>
+              <span className="sb">{u.type} · {effType}类位次相近</span>
+              <span className="line" />
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {similarUnis.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/universities/${s.id}`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 14px',
+                    borderRadius: 999,
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    fontSize: 13,
+                    color: 'var(--text-secondary)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  {s.name}
+                  {s.latestAdmission?.minRank != null && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      #{s.latestAdmission.minRank.toLocaleString()}
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </MainLayout>
+  );
+}
+
+/** 开设专业 tab: 最新计划年的在川招生计划表 (此前是只有一个跳专业库链接的死胡同) */
+function UniMajorsTab({ plans, lane, studentId }: { plans: any[]; lane: string | null; studentId: string | null }) {
+  const latestYear = plans.reduce((mx, p) => Math.max(mx, p.year ?? 0), 0);
+  const rows = plans
+    .filter((p) => p.year === latestYear && (!lane || p.subjects === lane))
+    .sort(
+      (a, b) =>
+        String(a.batch ?? '').localeCompare(String(b.batch ?? ''), 'zh-CN') ||
+        String(a.groupCode ?? '').localeCompare(String(b.groupCode ?? '')) ||
+        String(a.majorName ?? '').localeCompare(String(b.majorName ?? ''), 'zh-CN'),
+    );
+
+  return (
+    <div className="info-card">
+      <h4>
+        <span className="ic"><BankIcon /></span>
+        {latestYear ? `${latestYear} 年在川招生专业 · ${rows.length} 条` : '在川招生专业'}
+        {lane ? ` · ${lane}类` : ''}
+      </h4>
+      {rows.length === 0 ? (
+        <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          {plans.length === 0 ? '加载中或暂无在川招生计划' : '该科类暂无计划'}
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ color: 'var(--text-muted)', fontSize: 11, textAlign: 'left' }}>
+                {['专业', '科类', '批次', '组', '计划', '学费/年', '学制', '选科要求'].map((h) => (
+                  <th key={h} style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)', fontWeight: 500 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={p.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  <td style={{ padding: '7px 10px' }}>
+                    {p.majorId ? (
+                      <Link href={`/majors/${p.majorId}`} style={{ color: 'var(--primary)' }}>
+                        {p.majorName}
+                      </Link>
+                    ) : (
+                      p.majorName
+                    )}
+                  </td>
+                  <td style={{ padding: '7px 10px' }}>
+                    <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: p.subjects === '物理' ? 'rgba(59,130,246,.1)' : 'rgba(244,63,94,.1)', color: p.subjects === '物理' ? '#1d4ed8' : '#be123c' }}>
+                      {p.subjects}
+                    </span>
+                  </td>
+                  <td style={{ padding: '7px 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>{p.batch}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.groupCode}</td>
+                  <td style={{ padding: '7px 10px', fontWeight: 600 }}>{p.planCount ?? '—'}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.tuition != null ? `¥${Number(p.tuition).toLocaleString()}` : '—'}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.duration ? `${p.duration} 年` : '—'}</td>
+                  <td style={{ padding: '7px 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>{p.subjectRequirements || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div style={{ marginTop: 12, fontSize: 12 }}>
+        <Link
+          href={studentId ? `/majors?studentId=${studentId}` : '/majors'}
+          style={{ color: 'var(--primary)' }}
+        >
+          去专业库按条件细查（分带 / 特殊形式 / 意向池）→
+        </Link>
+      </div>
+    </div>
   );
 }

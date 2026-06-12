@@ -17,9 +17,6 @@ interface QiangjiTableProps {
   data: QiangjiRow[];
 }
 
-// Pivot: rows = unique majors, columns = years [2024, 2023, 2022]
-const YEARS = [2024, 2023, 2022];
-
 interface PivotRow {
   key: string;
   major: string;
@@ -44,6 +41,11 @@ export default function QiangjiTable({ data }: QiangjiTableProps) {
     };
   }
   const pivotData = Array.from(majorMap.values());
+
+  // 年份列从数据动态取最近 3 年 (此前硬编码 [2024,2023,2022], 新年份数据会被静默丢弃)
+  const YEARS = Array.from(new Set(data.map((r) => r.year)))
+    .sort((a, b) => b - a)
+    .slice(0, 3);
 
   const columns = [
     {
