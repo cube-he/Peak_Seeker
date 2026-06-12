@@ -43,12 +43,16 @@ export default function CreateStudentPage() {
         phone: values.phone || undefined,
         gender: values.gender,
       }),
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       message.success('学生创建成功');
-      router.push(`/teacher/students/${data?.data?.id || ''}`);
+      // 详情页路由要 studentProfile.id (不是 user.id); 取错字段会跳到 /teacher/students/ 落回列表
+      const sid = data?.studentProfile?.id;
+      router.push(sid ? `/teacher/students/${sid}` : '/teacher/students');
     },
-    onError: () => {
-      message.error('创建失败,请重试');
+    onError: (error: any) => {
+      // 透传后端具体原因 (用户名已存在 / 手机号已被占用), 否则老师只看到"创建失败"无从下手
+      const msg = error?.response?.data?.message;
+      message.error(Array.isArray(msg) ? msg[0] : msg ?? '创建失败,请重试');
     },
   });
 

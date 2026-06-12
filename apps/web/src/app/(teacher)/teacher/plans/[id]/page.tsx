@@ -40,6 +40,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@/stores/authStore';
 import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
 import PlanMajorSelectionEditor from '../components/PlanMajorSelectionEditor';
@@ -204,6 +205,16 @@ export default function PlanDetailPage() {
   const queryClient = useQueryClient();
   const planId = params.id;
 
+  // 审核动作(认领/驳回/退回/通过)后端只放行主管 (CASL isSupervisor 三道闸)。
+  // 普通老师看到这些按钮点了必 403,误以为系统坏了 → 按角色分流。
+  // zustand hydrate 有 race, 用 subscribe 同步 (沿用 dashboard 的模式)。
+  const [isSupervisor, setIsSupervisor] = useState(false);
+  useEffect(() => {
+    const sync = () => setIsSupervisor(useAuthStore.getState().user?.teacherProfile?.isSupervisor === true);
+    sync();
+    return useAuthStore.subscribe(sync);
+  }, []);
+
   const [reviewComment, setReviewComment] = useState('');
   // 教师对每个志愿的逐项批注：sequence -> annotation；提交审核时打包发送
   const [annotations, setAnnotations] = useState<Record<number, string>>({});
@@ -358,6 +369,21 @@ export default function PlanDetailPage() {
     onError: (error: any) => message.error(error?.response?.data?.message ?? '定稿失败'),
   });
 
+  // REJECTED 方案不可编辑不可重交,派生 DRAFT 新版本是唯一出路
+  const deriveMutation = useMutation({
+    mutationFn: () => planApi.deriveVersion(planId),
+    onSuccess: (data: any) => {
+      void message.success('已派生新版本,可继续修改');
+      const newId = data?.id;
+      if (newId) {
+        router.push(`/teacher/plans/${newId}`);
+      } else {
+        refresh();
+      }
+    },
+    onError: (error: any) => message.error(error?.response?.data?.message ?? '派生新版本失败'),
+  });
+
   const exportMutation = useMutation({
     mutationFn: () => planApi.exportExcel(planId),
     onSuccess: (blob) => {
@@ -500,7 +526,8 @@ export default function PlanDetailPage() {
 
   const status: string = plan.status;
   const studentName = plan.studentName || '学生';
-  const isReviewing = status === 'REVIEWING' || status === 'PENDING_REVIEW';
+  // 逐项批注框与"审下一份"队列只对主管开放 (普通老师没有审核权, 写了也提交不出去)
+  const isReviewing = isSupervisor && (status === 'REVIEWING' || status === 'PENDING_REVIEW');
 
   // ── 主动作按钮（按 status 只突出一组） ──
   function renderPrimaryActions() {
@@ -526,7 +553,8 @@ export default function PlanDetailPage() {
           </>
         );
       case 'PENDING_REVIEW':
-        return (
+        // 仅主管能认领; 普通老师只看到等待态 (点了认领必 403)
+        return isSupervisor ? (
           <Button
             type="primary"
             icon={<PlayCircleOutlined />}
@@ -535,9 +563,11 @@ export default function PlanDetailPage() {
           >
             认领审核
           </Button>
+        ) : (
+          <Tag color="processing">已提交,等待主管认领审核</Tag>
         );
       case 'REVIEWING':
-        return (
+        return isSupervisor ? (
           <>
             <Button danger onClick={() => confirmReview('REJECT', '驳回方案')}>
               驳回
@@ -553,6 +583,8 @@ export default function PlanDetailPage() {
               通过
             </Button>
           </>
+        ) : (
+          <Tag color="processing">主管审核中</Tag>
         );
       case 'APPROVED':
         return <Tag color="processing">等待家长确认</Tag>;
@@ -569,6 +601,20 @@ export default function PlanDetailPage() {
         );
       case 'FINALIZED':
         return <Tag color="success">已定稿</Tag>;
+      case 'REJECTED':
+        return (
+          <>
+            <Tag color="error">已驳回</Tag>
+            <Button
+              type="primary"
+              icon={<EditOutlined />}
+              loading={deriveMutation.isPending}
+              onClick={() => deriveMutation.mutate()}
+            >
+              派生新版本修改
+            </Button>
+          </>
+        );
       default:
         return null;
     }
@@ -1271,12 +1317,18 @@ function RiskSummaryPanel({
 
   if (risks.length === 0) return null;
 
+  // getRisks 返回全部风险(含已处理)。计数只算未处理 —— 否则处理完刷新仍显示
+  // "严重 2", 与后端提交闸 (只数未解决) 口径不一致, 老师以为没生效反复点。
   const counts = risks.reduce(
     (acc: Record<string, number>, r) => {
-      acc[r.severity] = (acc[r.severity] ?? 0) + 1;
+      if (!r.resolvedAt) acc[r.severity] = (acc[r.severity] ?? 0) + 1;
       return acc;
     },
     { critical: 0, moderate: 0, minor: 0 } as Record<string, number>,
+  );
+  // 未处理排前面, 已处理沉底
+  const sortedRisks = [...risks].sort(
+    (a, b) => (a.resolvedAt ? 1 : 0) - (b.resolvedAt ? 1 : 0),
   );
 
   return (
@@ -1298,24 +1350,33 @@ function RiskSummaryPanel({
       size="small"
     >
       <ol className="m-0 list-none space-y-1 p-0">
-        {risks.map((r) => (
-          <li
-            key={r.id}
-            className="flex items-center justify-between rounded-md border border-border-subtle px-3 py-2 cursor-pointer hover:border-primary"
-            onClick={() => onRowClick(r.id)}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="m-0 text-sm">
-                <span className={`mr-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${SEVERITY_TONE[r.severity]}`}>
-                  {SEVERITY_LABEL[r.severity]}
-                </span>
-                #{r.planItem.sequence} {r.planItem.universityName} · {r.planItem.majorName}
-              </p>
-              <p className="m-0 text-xs text-text-muted">{r.message}</p>
-            </div>
-            <Button size="small" type="text">处理</Button>
-          </li>
-        ))}
+        {sortedRisks.map((r) => {
+          const resolved = Boolean(r.resolvedAt);
+          return (
+            <li
+              key={r.id}
+              className={`flex items-center justify-between rounded-md border border-border-subtle px-3 py-2 ${
+                resolved ? 'opacity-55' : 'cursor-pointer hover:border-primary'
+              }`}
+              onClick={resolved ? undefined : () => onRowClick(r.id)}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="m-0 text-sm">
+                  <span className={`mr-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${SEVERITY_TONE[r.severity]}`}>
+                    {SEVERITY_LABEL[r.severity]}
+                  </span>
+                  #{r.planItem.sequence} {r.planItem.universityName} · {r.planItem.majorName}
+                </p>
+                <p className="m-0 text-xs text-text-muted">{r.message}</p>
+              </div>
+              {resolved ? (
+                <Tag color="success">已处理</Tag>
+              ) : (
+                <Button size="small" type="text">处理</Button>
+              )}
+            </li>
+          );
+        })}
       </ol>
     </Card>
   );

@@ -79,7 +79,8 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
     setSubmitError(null);
     try {
       await batchRecommendationsApi.confirm(studentId, Array.from(selected), note || undefined);
-      router.push(`/teacher/students/${studentId}`);
+      // 确认批次后老师的下一步必然是出方案, 直接进生成工作台, 省去回详情再点"生成方案"的往返
+      router.push(`/teacher/plans/generate/${studentId}`);
     } catch (e: any) {
       setSubmitError(String(e?.response?.data?.message ?? e?.message ?? e));
       setSubmitting(false);

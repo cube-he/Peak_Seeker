@@ -356,7 +356,7 @@ export default function TeacherDashboardPage() {
       <div className="db-hero fade-up">
         <div className="db-hero-l">
           <div className="db-eyebrow">
-            {dateLabel} · 距高考 {examDaysLeft} 天
+            {dateLabel} · {examDaysLeft > 0 ? `距高考 ${examDaysLeft} 天` : '高考已结束 · 填报进行中'}
           </div>
           <h1 className="db-greeting">
             {greeting}，<span className="nm">{currentUser.name}</span>

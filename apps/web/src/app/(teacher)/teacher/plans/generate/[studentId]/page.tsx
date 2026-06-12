@@ -17,6 +17,7 @@ import {
   Spin,
   Table,
   Tag,
+  Tooltip,
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -532,6 +533,15 @@ function getStudentName(student?: Record<string, any>) {
 
 function getArrayValues(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+}
+
+// preferredMajors 现在是梯队结构 [{tier, majors:[]}],老的扁平 string[] 也兼容。
+// 展平成有序专业名数组(梯队顺序),供 Profile 展示用 —— 否则 getArrayValues 只认
+// 字符串、遇到对象返回空,导致"专业意向:暂无"(算法侧另有 selection 逻辑不受影响)。
+function flattenPreferredMajors(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  if (value.length > 0 && typeof value[0] === 'string') return getArrayValues(value);
+  return (value as Array<{ majors?: unknown }>).flatMap((tier) => getArrayValues(tier?.majors));
 }
 
 function getPhysicalLimitTags(student?: Record<string, any>) {
@@ -1185,6 +1195,32 @@ export default function GeneratePlanPage() {
     if (safeDelta < -1) issues.push(`保底少 ${-safeDelta} 个（建议 ${expectedSafe}），录取无兜底`);
     return { total, expectedRush, expectedStable, expectedSafe, rushDelta, stableDelta, safeDelta, issues };
   }, [planItems, tierStats]);
+  // 提交就绪度: 后端要求"志愿数 === 批次上限 且 无未解决严重风险"才放行,
+  // 否则点了才撞 400/409。这里把门槛前置成可见信息 + 禁用按钮。
+  // 上限优先取 plan 详情的 batchConfig.maxGroupCount, 退化到批次列表里的同名字段。
+  const maxGroupCount: number | undefined =
+    (plan as any)?.batchConfig?.maxGroupCount ??
+    batches.find((b) => b.batchConfigId === batchConfigId)?.maxGroupCount;
+  const { data: riskData } = useQuery({
+    queryKey: ['plan-risks', planId],
+    queryFn: () => planApi.getRisks(planId!),
+    enabled: !!planId,
+  });
+  const criticalUnresolved = Array.isArray(riskData)
+    ? riskData.filter((r) => r.severity === 'critical' && !r.resolvedAt).length
+    : 0;
+  const submitReadiness = useMemo(() => {
+    if (plan?.status !== 'DRAFT') return { ok: false, reason: '当前不是草稿状态' };
+    if (!planItems.length) return { ok: false, reason: '尚未加入任何志愿' };
+    if (maxGroupCount != null && planItems.length !== maxGroupCount) {
+      return { ok: false, reason: `需填满 ${maxGroupCount} 组,当前 ${planItems.length} 组` };
+    }
+    if (criticalUnresolved > 0) {
+      return { ok: false, reason: `有 ${criticalUnresolved} 条严重风险未处理,去方案详情逐条处理` };
+    }
+    return { ok: true, reason: '' };
+  }, [plan?.status, planItems.length, maxGroupCount, criticalUnresolved]);
+
   const isUsingFallbackYear = Boolean(candidateGroups?.isFallbackYear && candidateGroups.sourceYear && candidateGroups.planYear);
   const isUsingScoreBasedRank = Boolean(
     candidateGroups?.studentRankSource === 'SCORE_SEGMENT' &&
@@ -1220,7 +1256,7 @@ export default function GeneratePlanPage() {
     ...getArrayValues(student?.preferredCities),
   ], 2);
   const preferredMajorSummary = summarizeTags([
-    ...getArrayValues(student?.preferredMajors),
+    ...flattenPreferredMajors(student?.preferredMajors),
     ...getArrayValues(student?.preferredMajorCategories),
   ], 2);
   const excludedSummary = summarizeTags([
@@ -1259,6 +1295,16 @@ export default function GeneratePlanPage() {
       setBatchConfigId(targetBatchId);
     }
   }, [existingPlans, planId, batches]);
+
+  // 带 ?planId= 进入(从方案详情"继续编辑")时, 上面的 auto-set effect 因 planId 已存在
+  // 而跳过 → batchConfigId 永远是 undefined → 批次显示"请选择批次...", 候选卡不渲染,
+  // "+加入"消失(老师反馈"刷新后加不进去")。这里在 plan 详情加载后用它的 batchConfigId 回填。
+  useEffect(() => {
+    if (batchConfigId != null) return;
+    if (!planId || !plan) return;
+    const fromPlan = (plan as any).batchConfigId;
+    if (fromPlan != null) setBatchConfigId(fromPlan);
+  }, [planId, plan, batchConfigId]);
 
   // batchConfigId 可能来自老 plan 的批次, 但老师改了 preferredBatches 后那个批次
   // 不再被允许 → batchOptions 里没匹配, Select 会显示 raw value (例 "23") 而非 label.
@@ -1713,13 +1759,15 @@ export default function GeneratePlanPage() {
               <Button onClick={() => router.push(`/teacher/plans/${planId}`)} icon={<FileTextOutlined />}>
                 查看详情
               </Button>
-              <Button
-                disabled={plan?.status !== 'DRAFT' || !planItems.length}
-                onClick={() => submitMutation.mutate()}
-                icon={<SendOutlined />}
-              >
-                提交审核
-              </Button>
+              <Tooltip title={submitReadiness.ok ? '' : submitReadiness.reason}>
+                <Button
+                  disabled={!submitReadiness.ok || submitMutation.isPending}
+                  onClick={() => submitMutation.mutate()}
+                  icon={<SendOutlined />}
+                >
+                  提交审核
+                </Button>
+              </Tooltip>
             </>
           ) : null}
           <Button onClick={() => setAlgoDrawerOpen(true)} icon={<InfoCircleOutlined />}>
@@ -1856,7 +1904,7 @@ export default function GeneratePlanPage() {
                 })()} />
                 <ProfLine k="地域意向" v={pgvChips([...getArrayValues(student?.preferredProvinces), ...getArrayValues(student?.preferredCities)], 'primary')} />
                 <ProfLine k="院校意向" v={pgvChips(student?.preferredUniversities, 'primary')} />
-                <ProfLine k="专业意向" v={pgvChips([...getArrayValues(student?.preferredMajors), ...getArrayValues(student?.preferredMajorCategories)], 'safe')} />
+                <ProfLine k="专业意向" v={pgvChips([...flattenPreferredMajors(student?.preferredMajors), ...getArrayValues(student?.preferredMajorCategories)], 'safe')} />
                 <ProfLine k="意向批次" v={pgvChips(student?.preferredBatches, 'accent')} />
               </div>
 
@@ -2503,7 +2551,7 @@ export default function GeneratePlanPage() {
                   </div>
                   <div className="rs total">
                     <span className="lbl">总数</span>
-                    <span className="num">{planItems.length} / 45</span>
+                    <span className="num">{planItems.length}{maxGroupCount != null ? ` / ${maxGroupCount}` : ''}</span>
                   </div>
                 </div>
 
@@ -2645,16 +2693,33 @@ export default function GeneratePlanPage() {
                     <span className="ic"><CheckOutlined /></span>
                     <span>软性风险专业先复核限制,再加入方案。</span>
                   </div>
-                  <Button
-                    type="primary"
-                    block
-                    style={{ marginTop: 12 }}
-                    disabled={plan?.status !== 'DRAFT' || !planItems.length || submitMutation.isPending}
-                    onClick={() => submitMutation.mutate()}
-                    icon={<CheckOutlined />}
-                  >
-                    提交主管审核
-                  </Button>
+                  {!submitReadiness.ok && plan?.status === 'DRAFT' && planItems.length > 0 ? (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: '6px 10px',
+                        borderRadius: 6,
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        background: 'rgba(251, 191, 36, 0.14)',
+                        border: '1px solid rgba(251, 191, 36, 0.45)',
+                      }}
+                    >
+                      ⚠ 还不能提交:{submitReadiness.reason}
+                    </div>
+                  ) : null}
+                  <Tooltip title={submitReadiness.ok ? '' : submitReadiness.reason}>
+                    <Button
+                      type="primary"
+                      block
+                      style={{ marginTop: 12 }}
+                      disabled={!submitReadiness.ok || submitMutation.isPending}
+                      onClick={() => submitMutation.mutate()}
+                      icon={<CheckOutlined />}
+                    >
+                      提交主管审核
+                    </Button>
+                  </Tooltip>
                 </div>
               </div>
             </aside>

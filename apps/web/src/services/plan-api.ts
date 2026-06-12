@@ -169,6 +169,14 @@ export const planApi = {
     return api.post(`/plans/${id}/submit-review`) as any;
   },
 
+  /**
+   * 派生新版本(拷贝 PlanItem,状态回 DRAFT)。
+   * REJECTED 方案不可编辑也不可重交,这是唯一的继续通道。
+   */
+  deriveVersion(id: string | number): Promise<any> {
+    return api.post(`/plans/${id}/derive-version`) as any;
+  },
+
   startReview(id: string): Promise<any> {
     return api.post(`/plans/${id}/start-review`) as any;
   },

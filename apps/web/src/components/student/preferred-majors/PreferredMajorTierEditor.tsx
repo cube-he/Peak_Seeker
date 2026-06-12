@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button, Select, Tag } from 'antd';
 import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import {
@@ -11,7 +12,7 @@ import {
   useDroppable,
   useSensor,
   useSensors,
-  closestCenter,
+  pointerWithin,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -380,7 +381,11 @@ export default function PreferredMajorTierEditor({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      // pointerWithin 而非 closestCenter: 教师端页面祖先 (.fade-up/.view-transition)
+      // 有 identity transform + animation-fill:both, 会建立 fixed 包含块并扰乱
+      // closestCenter 的矩形中心测算, 导致 drop 永远落到第一个 droppable(意向池),
+      // 梯队拖不进。pointerWithin 直接按指针落点判定 droppable, 免疫祖先 transform。
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
@@ -460,14 +465,23 @@ export default function PreferredMajorTierEditor({
         </Button>
       </div>
 
-      {/* 拖动时的浮层显示 */}
-      <DragOverlay>
-        {activeMajor ? (
-          <Tag color="green" className="pm-chip-overlay">
-            {activeMajor}
-          </Tag>
-        ) : null}
-      </DragOverlay>
+      {/* 拖动时的浮层显示。必须 portal 到 body: DragOverlay 用 position:fixed,
+          而教师端页面祖先 (.fade-up/.view-transition) 的入场动画 fill-mode:both
+          会残留 identity transform,劫持 fixed 的定位基准 → 碰撞矩形整体错位,
+          drop 永远命中第一个 droppable (意向池)。portal 后不受页面 CSS 影响。
+          wn-teacher-scope 跟着挂在 overlay 上,否则 .pm-chip-overlay 样式失效。 */}
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <DragOverlay className="wn-teacher-scope">
+              {activeMajor ? (
+                <Tag color="green" className="pm-chip-overlay">
+                  {activeMajor}
+                </Tag>
+              ) : null}
+            </DragOverlay>,
+            document.body,
+          )
+        : null}
     </DndContext>
   );
 }

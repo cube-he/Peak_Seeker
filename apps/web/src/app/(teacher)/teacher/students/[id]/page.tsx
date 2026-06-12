@@ -704,16 +704,25 @@ export default function StudentDetailPage() {
                   };
                   const has9 = Object.values(subj9).some((v) => v != null);
                   if (has9) {
-                    const t = from9Subjects(subj9);
-                    Object.assign(values, {
-                      totalScore: t.totalScore,
-                      examType: t.examType,
-                      firstChoice: t.firstChoice,
-                      scoreFirstChoice: t.scoreFirstChoice,
-                      reChoices: t.reChoices,
-                      scoreSub1: t.scoreSub1,
-                      scoreSub2: t.scoreSub2,
-                    });
+                    // from9Subjects 要求 6 门凑齐才能整组翻译; 不齐时强行翻译会把
+                    // examType 强翻成历史、totalScore 写成部分和、reChoices 清空
+                    // (渐进式录入场景必踩)。不齐时: 语数英是独立列照常提交,
+                    // 槽位字段(科类/首选/再选/总分)一律不发, 保留库里旧值。
+                    const incompleteMsg = validate6Subjects(subj9);
+                    if (!incompleteMsg) {
+                      const t = from9Subjects(subj9);
+                      Object.assign(values, {
+                        totalScore: t.totalScore,
+                        examType: t.examType,
+                        firstChoice: t.firstChoice,
+                        scoreFirstChoice: t.scoreFirstChoice,
+                        reChoices: t.reChoices,
+                        scoreSub1: t.scoreSub1,
+                        scoreSub2: t.scoreSub2,
+                      });
+                    } else {
+                      void message.info(`${incompleteMsg}；首选/再选成绩将在 6 门凑齐后一并保存`);
+                    }
                   }
                   // 后端 DTO 不接受 6 个具体科目字段名 (物/史/化/生/政/地)，删掉
                   for (const k of [
@@ -1018,9 +1027,9 @@ export default function StudentDetailPage() {
                       return '补完整关键字段后，"生成方案"按钮才会启用。';
                     }
                     // 把后端字段 key 翻译成中文 label, 直接列出来让老师知道缺什么
-                    const labels = (missing as string[]).map(
-                      (f: string) => CHANGE_LOG_FIELD_LABEL[f] ?? f,
-                    );
+                    // 用 stage-fields 的 fieldLabel (全覆盖), 不再用残缺的 CHANGE_LOG_FIELD_LABEL
+                    // 兜底成英文 key (老师看到 scoreFirstChoice/politicalStatus 这类原始字段名)
+                    const labels = (missing as string[]).map((f: string) => fieldLabel(f));
                     return `还缺 ${missing.length} 项关键字段: ${labels.join('、')}。补齐后"生成方案"按钮才会启用。`;
                   })()}
                 />
