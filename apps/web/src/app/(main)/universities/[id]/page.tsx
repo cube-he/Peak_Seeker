@@ -761,8 +761,11 @@ export default function UniversityDetailPage() {
         {tab === 'majors' && (
           <UniMajorsTab
             plans={((uniMajorsRaw as any)?.data ?? uniMajorsRaw ?? []) as any[]}
+            admissions={(admissions ?? []) as any[]}
             lane={workLane}
             studentId={workStudentId}
+            userRank={effRank}
+            flags={{ is985: u.is985, is211: u.is211 }}
           />
         )}
 
@@ -837,8 +840,22 @@ export default function UniversityDetailPage() {
   );
 }
 
-/** 开设专业 tab: 最新计划年的在川招生计划表 (此前是只有一个跳专业库链接的死胡同) */
-function UniMajorsTab({ plans, lane, studentId }: { plans: any[]; lane: string | null; studentId: string | null }) {
+/** 开设专业 tab: 最新计划年的在川招生计划表, 并按 专业+科类+批次+组 关联最新录取年的最低分/位次 */
+function UniMajorsTab({
+  plans,
+  admissions,
+  lane,
+  studentId,
+  userRank,
+  flags,
+}: {
+  plans: any[];
+  admissions: any[];
+  lane: string | null;
+  studentId: string | null;
+  userRank: number | null;
+  flags: { is985: boolean; is211: boolean };
+}) {
   const latestYear = plans.reduce((mx, p) => Math.max(mx, p.year ?? 0), 0);
   const rows = plans
     .filter((p) => p.year === latestYear && (!lane || p.subjects === lane))
@@ -848,6 +865,38 @@ function UniMajorsTab({ plans, lane, studentId }: { plans: any[]; lane: string |
         String(a.groupCode ?? '').localeCompare(String(b.groupCode ?? '')) ||
         String(a.majorName ?? '').localeCompare(String(b.majorName ?? ''), 'zh-CN'),
     );
+
+  // 录取关联: 最新有分录取年, 键逐级退化 (majorId+科类+批次+组 → +批次 → +科类)
+  const admYear = admissions.reduce(
+    (mx, a) => (a.majorMinScore != null || a.majorMinRank != null ? Math.max(mx, a.year ?? 0) : mx),
+    0,
+  );
+  const admByKey = new Map<string, { score: number | null; rank: number | null }>();
+  for (const a of admissions) {
+    if (a.year !== admYear || a.majorId == null) continue;
+    if (a.majorMinScore == null && a.majorMinRank == null) continue;
+    const v = { score: a.majorMinScore ?? null, rank: a.majorMinRank ?? null };
+    for (const k of [
+      `${a.majorId}|${a.subjects}|${a.batch}|${a.groupCode}`,
+      `${a.majorId}|${a.subjects}|${a.batch}`,
+      `${a.majorId}|${a.subjects}`,
+    ]) {
+      if (!admByKey.has(k)) admByKey.set(k, v);
+    }
+  }
+  const admOf = (p: any) =>
+    admByKey.get(`${p.majorId}|${p.subjects}|${p.batch}|${p.groupCode}`) ??
+    admByKey.get(`${p.majorId}|${p.subjects}|${p.batch}`) ??
+    admByKey.get(`${p.majorId}|${p.subjects}`) ??
+    null;
+
+  const headers = [
+    '专业', '科类', '批次', '组', '计划',
+    admYear ? `${admYear} 最低分` : '最低分',
+    admYear ? `${admYear} 最低位次` : '最低位次',
+    ...(userRank != null ? ['判定'] : []),
+    '学费/年', '学制', '选科要求',
+  ];
 
   return (
     <div className="info-card">
@@ -865,47 +914,88 @@ function UniMajorsTab({ plans, lane, studentId }: { plans: any[]; lane: string |
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ color: 'var(--text-muted)', fontSize: 11, textAlign: 'left' }}>
-                {['专业', '科类', '批次', '组', '计划', '学费/年', '学制', '选科要求'].map((h) => (
+                {headers.map((h) => (
                   <th key={h} style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)', fontWeight: 500 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((p) => (
-                <tr key={p.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td style={{ padding: '7px 10px' }}>
-                    {p.majorId ? (
-                      <Link href={`/majors/${p.majorId}`} style={{ color: 'var(--primary)' }}>
-                        {p.majorName}
-                      </Link>
-                    ) : (
-                      p.majorName
+              {rows.map((p) => {
+                const adm = admOf(p);
+                const tier =
+                  userRank != null && adm?.rank != null
+                    ? classifyRank(
+                        userRank,
+                        adm.rank,
+                        getTier({ is985: flags.is985, is211: flags.is211, batch: p.batch ?? '' }),
+                        p.subjects === '历史',
+                      )
+                    : null;
+                return (
+                  <tr key={p.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                    <td style={{ padding: '7px 10px' }}>
+                      {p.majorId ? (
+                        <Link href={`/majors/${p.majorId}`} style={{ color: 'var(--primary)' }}>
+                          {p.majorName}
+                        </Link>
+                      ) : (
+                        p.majorName
+                      )}
+                    </td>
+                    <td style={{ padding: '7px 10px' }}>
+                      <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: p.subjects === '物理' ? 'rgba(59,130,246,.1)' : 'rgba(244,63,94,.1)', color: p.subjects === '物理' ? '#1d4ed8' : '#be123c' }}>
+                        {p.subjects}
+                      </span>
+                    </td>
+                    <td style={{ padding: '7px 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>{p.batch}</td>
+                    <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.groupCode}</td>
+                    <td style={{ padding: '7px 10px', fontWeight: 600 }}>{p.planCount ?? '—'}</td>
+                    <td style={{ padding: '7px 10px', fontWeight: 600 }}>{adm?.score ?? '—'}</td>
+                    <td style={{ padding: '7px 10px', fontSize: 12 }}>
+                      {adm?.rank != null ? `#${adm.rank.toLocaleString()}` : '—'}
+                    </td>
+                    {userRank != null && (
+                      <td style={{ padding: '7px 10px' }}>
+                        {tier ? (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '1px 8px',
+                              borderRadius: 999,
+                              color: '#fff',
+                              background: TIER_TEXT[tier].color,
+                            }}
+                          >
+                            {TIER_TEXT[tier].label}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        )}
+                      </td>
                     )}
-                  </td>
-                  <td style={{ padding: '7px 10px' }}>
-                    <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: p.subjects === '物理' ? 'rgba(59,130,246,.1)' : 'rgba(244,63,94,.1)', color: p.subjects === '物理' ? '#1d4ed8' : '#be123c' }}>
-                      {p.subjects}
-                    </span>
-                  </td>
-                  <td style={{ padding: '7px 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>{p.batch}</td>
-                  <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.groupCode}</td>
-                  <td style={{ padding: '7px 10px', fontWeight: 600 }}>{p.planCount ?? '—'}</td>
-                  <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.tuition != null ? `¥${Number(p.tuition).toLocaleString()}` : '—'}</td>
-                  <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.duration ? `${p.duration} 年` : '—'}</td>
-                  <td style={{ padding: '7px 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>{p.subjectRequirements || '—'}</td>
-                </tr>
-              ))}
+                    <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.tuition != null ? `¥${Number(p.tuition).toLocaleString()}` : '—'}</td>
+                    <td style={{ padding: '7px 10px', fontSize: 12 }}>{p.duration ? `${p.duration} 年` : '—'}</td>
+                    <td style={{ padding: '7px 10px', fontSize: 12, color: 'var(--text-tertiary)' }}>{p.subjectRequirements || '—'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
-      <div style={{ marginTop: 12, fontSize: 12 }}>
+      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, fontSize: 12 }}>
         <Link
           href={studentId ? `/majors?studentId=${studentId}` : '/majors'}
           style={{ color: 'var(--primary)' }}
         >
           去专业库按条件细查（分带 / 特殊形式 / 意向池）→
         </Link>
+        {admYear > 0 && (
+          <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>
+            分数/位次为 {admYear} 年该专业最低录取线，按 专业+科类+批次+组 关联
+          </span>
+        )}
       </div>
     </div>
   );
