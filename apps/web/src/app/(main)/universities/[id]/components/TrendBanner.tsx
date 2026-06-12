@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { ExamType } from '@/services/score-segment';
 import { deriveYearly, type AdmissionRecordLike } from '../../lib/admission';
 
@@ -12,12 +12,13 @@ import { deriveYearly, type AdmissionRecordLike } from '../../lib/admission';
 interface TrendBannerProps {
   admissions: AdmissionRecordLike[];
   studentRank: number | null;
-  /** 初始科类(跟全局 useStudentRank.examType 同步进来),组件内部可独立切换 */
-  defaultSubject: ExamType;
+  /** 受控科类: 页级单一开关, 与招录详情/统计条联动 (此前组件内独立 state, 同页可显示两个科类) */
+  subject: ExamType;
+  onSubjectChange: (v: ExamType) => void;
 }
 
-export function TrendBanner({ admissions, studentRank, defaultSubject }: TrendBannerProps) {
-  const [subject, setSubject] = useState<ExamType>(defaultSubject);
+export function TrendBanner({ admissions, studentRank, subject, onSubjectChange }: TrendBannerProps) {
+  const setSubject = onSubjectChange;
   const years = useMemo(() => deriveYearly(admissions, subject), [admissions, subject]);
 
   // 统计两个科类各有多少年数据,空就 disable 那个 chip
@@ -85,7 +86,7 @@ export function TrendBanner({ admissions, studentRank, defaultSubject }: TrendBa
       <div className="trend-banner-head">
         <div className="lhs">
           <h3>近 {years.length} 年录取走势</h3>
-          <div className="sub">基于四川省考试院公开数据 · 含同等位次估算</div>
+          <div className="sub">基于四川省考试院公开数据 · 主批次口径 · 含同等位次估算</div>
         </div>
         <div className="rhs">
           <SubjectSwitch

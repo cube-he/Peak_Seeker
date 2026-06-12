@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/authStore';
 import BrandLogo from './BrandLogo';
 import FooterSection from './FooterSection';
 import MobileBottomNav from './MobileBottomNav';
+import CompareDock from '@/components/university/CompareDock';
 
 const navItems = [
   { href: '/', label: '首页' },
@@ -145,6 +146,9 @@ export default function MainLayout({ children, maxWidth, noPadding, hideMobileBo
       </main>
 
       <FooterSection />
+
+      {/* 院校对比浮条: 清单在全局 store, 列表/详情任何页面可见 */}
+      <CompareDock />
 
       {!hideMobileBottomNav && <MobileBottomNav />}
     </div>

@@ -23,8 +23,9 @@ interface Props {
   };
   /** 生效位次: 工作台学生 ?? 手填 (由页面统一计算注入, 不再各自读 store) */
   userRank: number | null;
-  /** 初始科类 (跟学生/页面科类), 组件内仍可切换 */
-  defaultSubject?: Subject;
+  /** 受控科类: 页级单一开关, 与走势图/统计条联动 */
+  subject: Subject;
+  onSubjectChange: (s: Subject) => void;
 }
 
 /** 2025 四川批次结构表的标准批次序（投档顺序）。数据里出现的新批次会追加在尾部。 */
@@ -65,9 +66,18 @@ export default function AdmissionDetailTab({
   rawAdmissions,
   universityScores,
   userRank,
-  defaultSubject,
+  subject,
+  onSubjectChange,
 }: Props) {
-  const [subject, setSubject] = useState<Subject>(defaultSubject ?? '物理类');
+  // 科类数据可用性: 空科类的切换按钮禁用 (与走势图同款逻辑)
+  const physicsAvailable = useMemo(
+    () => (rawAdmissions ?? []).some(r => !isHistorical(r.subjects)),
+    [rawAdmissions],
+  );
+  const historyAvailable = useMemo(
+    () => (rawAdmissions ?? []).some(r => isHistorical(r.subjects)),
+    [rawAdmissions],
+  );
 
   // 1. 全聚合一次（按 (year, subjects, batch, groupCode)）
   const allGroups: GroupedAdmission[] = useMemo(() => groupAdmissions(rawAdmissions ?? []), [rawAdmissions]);
@@ -140,11 +150,11 @@ export default function AdmissionDetailTab({
     return formatDiff(diff, diff > 0);
   }, [userRank, bannerInput]);
 
-  // 5. 同 (subjects, batch, groupCode) 跨年映射 — 给 GroupCard 用
+  // 5. 同 (subjects, batch, recruitType, groupCode) 跨年映射 — 给 GroupCard 用
   const multiYearByGroup = useMemo(() => {
     const m = new Map<string, GroupedAdmission[]>();
     for (const g of allGroups) {
-      const k = `${g.subjects}|${g.batch}|${g.groupCode}`;
+      const k = `${g.subjects}|${g.batch}|${g.recruitType}|${g.groupCode}`;
       const arr = m.get(k) ?? [];
       arr.push(g);
       m.set(k, arr);
@@ -157,7 +167,7 @@ export default function AdmissionDetailTab({
     const buckets = new Map<string, GroupedAdmission[]>();
     const seen = new Set<string>();
     for (const g of subjectGroups) {
-      const k = `${g.subjects}|${g.batch}|${g.groupCode}`;
+      const k = `${g.subjects}|${g.batch}|${g.recruitType}|${g.groupCode}`;
       if (seen.has(k)) continue;
       seen.add(k);
       const arr = buckets.get(g.batch) ?? [];
@@ -194,10 +204,70 @@ export default function AdmissionDetailTab({
     });
   };
 
+  // 组级 tier (荐组与排序共用)
+  const tierOf = (g: GroupedAdmission) =>
+    userRank == null || g.groupMinRank == null
+      ? ('unknown' as const)
+      : classifyRank(
+          userRank,
+          g.groupMinRank,
+          getTier({ is985: universityFlags.is985, is211: universityFlags.is211, batch: g.batch }),
+          isHistorical(g.subjects),
+        );
+
+  // 8.「为学生荐组」: 老师的核心问题是"报这学校报哪个组" — 系统把 22 张卡的扫描工作做掉,
+  //    冲/稳/保各取位次最接近的 2 个, 点击直达对应组卡
+  const recommendations = useMemo(() => {
+    if (userRank == null) return null;
+    const cards = batchBuckets.flatMap(b => b.cards);
+    const out: Record<'rush' | 'stable' | 'safe', Array<{ g: GroupedAdmission; diff: number }>> = {
+      rush: [], stable: [], safe: [],
+    };
+    for (const g of cards) {
+      if (g.groupMinRank == null) continue;
+      const t = tierOf(g);
+      const slot = t === 'elite' ? 'safe' : t; // 远超线归入"保"
+      if (slot === 'rush' || slot === 'stable' || slot === 'safe') {
+        out[slot].push({ g, diff: g.groupMinRank - userRank });
+      }
+    }
+    for (const k of ['rush', 'stable', 'safe'] as const) {
+      out[k].sort((a, b) => Math.abs(a.diff) - Math.abs(b.diff));
+      out[k] = out[k].slice(0, 2);
+    }
+    return out.rush.length + out.stable.length + out.safe.length > 0 ? out : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRank, batchBuckets, universityFlags]);
+
+  const groupAnchor = (g: GroupedAdmission) =>
+    `adm-group-${g.subjects}-${g.batch}-${g.recruitType}-${g.groupCode}`;
+  const jumpToGroup = (g: GroupedAdmission) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (prev.size === 0 && firstWithData) next.add(firstWithData);
+      next.add(g.batch);
+      return next;
+    });
+    setTimeout(() => {
+      document.getElementById(groupAnchor(g))?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+  };
+
+  const REC_META = {
+    rush: { title: '冲一冲', cls: 'text-red-600', border: 'border-red-200' },
+    stable: { title: '稳一稳', cls: 'text-blue-600', border: 'border-blue-200' },
+    safe: { title: '保一保', cls: 'text-green-700', border: 'border-green-200' },
+  } as const;
+
   return (
     <div className="py-4">
       <div className="mb-3">
-        <BatchSubjectSwitcher subject={subject} onSubjectChange={setSubject} />
+        <BatchSubjectSwitcher
+          subject={subject}
+          onSubjectChange={onSubjectChange}
+          physicsAvailable={physicsAvailable}
+          historyAvailable={historyAvailable}
+        />
       </div>
 
       <UniversityRankBanner
@@ -208,6 +278,42 @@ export default function AdmissionDetailTab({
         userRank={userRank}
         diffText={universityDiffText}
       />
+
+      {/* 为学生荐组: 冲/稳/保各 2 个位次最接近的组, 点击直达组卡 */}
+      {recommendations && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+          <div className="text-[10px] tracking-[1.5px] text-amber-800 font-bold mb-2">
+            为该位次荐组 · 点击直达专业组
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {(['rush', 'stable', 'safe'] as const).map(k => (
+              <div key={k} className={`rounded border ${REC_META[k].border} bg-white p-2`}>
+                <div className={`text-[11px] font-bold mb-1 ${REC_META[k].cls}`}>{REC_META[k].title}</div>
+                {recommendations[k].length === 0 ? (
+                  <div className="text-[11px] text-text-muted py-1.5">无匹配组</div>
+                ) : (
+                  recommendations[k].map(({ g, diff }) => (
+                    <button
+                      key={groupAnchor(g)}
+                      type="button"
+                      onClick={() => jumpToGroup(g)}
+                      className="w-full text-left border-0 bg-transparent cursor-pointer rounded px-1.5 py-1 hover:bg-amber-50"
+                    >
+                      <div className="text-[12px] font-semibold text-text truncate">
+                        组{g.groupCode}{g.groupName ? ` · ${g.groupName}` : ''}
+                      </div>
+                      <div className="text-[10px] text-text-tertiary">
+                        {g.batch} · {g.year} 位次 {g.groupMinRank?.toLocaleString()} ·{' '}
+                        {diff > 0 ? `余 ${diff.toLocaleString()}` : `差 ${Math.abs(diff).toLocaleString()}`} 名
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 按 2025 批次结构表逐批次展示：有数据可展开，无数据灰显 */}
       <div className="flex flex-col gap-2">
@@ -242,28 +348,33 @@ export default function AdmissionDetailTab({
 
               {open && (
                 <div className="px-3 pb-3">
-                  {cards.map(g => {
-                    const k = `${g.subjects}|${g.batch}|${g.groupCode}`;
+                  {(userRank == null
+                    ? cards
+                    : // 学生模式: 可达的组在前, 够不着的沉底
+                      [...cards].sort((a, b) => {
+                        const w: Record<string, number> = { stable: 0, safe: 1, rush: 2, elite: 3, unknown: 4, unreachable: 5 };
+                        return (w[tierOf(a)] ?? 9) - (w[tierOf(b)] ?? 9);
+                      })
+                  ).map(g => {
+                    const k = `${g.subjects}|${g.batch}|${g.recruitType}|${g.groupCode}`;
                     const multiYears = multiYearByGroup.get(k) ?? [g];
-                    const groupTier = userRank == null || g.groupMinRank == null
-                      ? 'unknown' as const
-                      : classifyRank(
-                          userRank,
-                          g.groupMinRank,
-                          getTier({ is985: universityFlags.is985, is211: universityFlags.is211, batch: g.batch }),
-                          isHistorical(g.subjects),
-                        );
+                    const groupTier = tierOf(g);
                     const diff = userRank != null && g.groupMinRank != null ? g.groupMinRank - userRank : null;
                     const diffText = diff != null ? formatDiff(diff, diff > 0) : null;
                     return (
-                      <GroupCard
+                      <div
                         key={`${g.year}-${k}`}
-                        group={g}
-                        multiYearGroups={multiYears}
-                        tier={groupTier}
-                        diffText={diffText}
-                        userRank={userRank}
-                      />
+                        id={groupAnchor(g)}
+                        style={groupTier === 'unreachable' ? { opacity: 0.55 } : undefined}
+                      >
+                        <GroupCard
+                          group={g}
+                          multiYearGroups={multiYears}
+                          tier={groupTier}
+                          diffText={diffText}
+                          userRank={userRank}
+                        />
+                      </div>
                     );
                   })}
                 </div>

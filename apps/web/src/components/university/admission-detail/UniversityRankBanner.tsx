@@ -53,13 +53,28 @@ export default function UniversityRankBanner({
             <div className="border-l border-red-100 pl-4 flex-1">
               <div className="text-[10px] text-amber-800 mb-1.5">历年趋势</div>
               <div className="grid grid-cols-3 gap-2">
-                {rankInput.trendYears.slice(0, 3).map(y => (
-                  <div key={y.year} className="bg-white border border-red-100 rounded px-2 py-1">
-                    <div className="text-[9px] text-text-tertiary">{y.year}</div>
-                    <div className="text-[14px] font-bold">{y.universityMinScore ?? '—'}</div>
-                    <div className="text-[9px] text-text-tertiary">{y.universityMinRank != null ? `#${y.universityMinRank.toLocaleString()}` : '—'}</div>
-                  </div>
-                ))}
+                {rankInput.trendYears.slice(0, 3).map((y, i, arr) => {
+                  // 与更早一年比较分数涨跌 (涨↑红 / 跌↓绿, 与透视表/走势图同款)
+                  const prev = arr[i + 1];
+                  const delta =
+                    prev?.universityMinScore != null && y.universityMinScore != null
+                      ? y.universityMinScore - prev.universityMinScore
+                      : null;
+                  return (
+                    <div key={y.year} className="bg-white border border-red-100 rounded px-2 py-1">
+                      <div className="text-[9px] text-text-tertiary">{y.year}</div>
+                      <div className="text-[14px] font-bold">
+                        {y.universityMinScore ?? '—'}
+                        {delta != null && delta !== 0 && (
+                          <span className={`ml-0.5 text-[10px] ${delta > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                            {delta > 0 ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[9px] text-text-tertiary">{y.universityMinRank != null ? `#${y.universityMinRank.toLocaleString()}` : '—'}</div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -72,6 +87,11 @@ export default function UniversityRankBanner({
       {userRank == null && !isEmpty && (
         <div className="mt-2.5 px-3 py-1.5 bg-white rounded text-[11px] text-text-tertiary">
           在<a href="/universities" className="text-primary underline">院校库</a>选择学生或录入位次后，这里会显示冲稳保判定
+        </div>
+      )}
+      {!isEmpty && (
+        <div className="mt-2 text-[10px] text-text-faint">
+          口径：各年 {subject} · {batchCategory} 的最低录取线（投档线优先，缺失时依次用院校线 / 专业组线 / 专业线兜底）
         </div>
       )}
     </div>

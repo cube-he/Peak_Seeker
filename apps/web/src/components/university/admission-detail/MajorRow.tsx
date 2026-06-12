@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { MajorRowProps } from './types';
 
 const ELIGIBLE_GRADE_RE = /(A\+|A|A-|B\+|B|B-|C\+|C|C-)/;
@@ -20,7 +21,18 @@ export default function MajorRow({ major, multiYearData }: MajorRowProps) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-medium text-text">{major.majorName}</span>
+            {/* 专业名直链专业详情, 补全 院校→组→专业 下钻 */}
+            {major.majorId != null ? (
+              <Link
+                href={`/majors/${major.majorId}`}
+                className="font-medium text-primary hover:text-primary-light"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {major.majorName}
+              </Link>
+            ) : (
+              <span className="font-medium text-text">{major.majorName}</span>
+            )}
             {hasAnyChip && (
               <span data-testid="major-chips" className="inline-flex gap-1.5 ml-0.5">
                 {rankingChip && (

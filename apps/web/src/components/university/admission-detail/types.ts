@@ -42,4 +42,7 @@ export interface UniversityRankBannerProps {
 export interface BatchSubjectSwitcherProps {
   subject: Subject;
   onSubjectChange: (s: Subject) => void;
+  /** 该科类无数据时禁用对应按钮 (默认可用) */
+  physicsAvailable?: boolean;
+  historyAvailable?: boolean;
 }

@@ -23,7 +23,15 @@ export default function GroupCard({ group, multiYearGroups, tier, diffText, user
       <div className="px-3.5 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="font-bold text-[14px] text-text">📦 {group.groupCode}{group.groupName && ` · ${group.groupName}`}</div>
+            <div className="font-bold text-[14px] text-text">
+              📦 {group.groupCode}{group.groupName && ` · ${group.groupName}`}
+              {/* 专项/预科等非普通类招生类型醒目标出 (分组键已含 recruitType, 不会与普通类合卡) */}
+              {group.recruitType && !group.recruitType.includes('普通类') && (
+                <span className="ml-1.5 align-middle text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+                  {group.recruitType}
+                </span>
+              )}
+            </div>
             <div className="text-[11px] text-text-tertiary mt-1">
               {group.subjects} · {group.batch} · 招 {group.groupAdmissionCount ?? '—'} 人
             </div>

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { Spin, Tooltip, message } from 'antd';
+import { Select, Spin, Tooltip, message } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
@@ -12,9 +12,9 @@ import CharterCard from '@/components/university/CharterCard';
 import CampusLocationTab from '@/components/university/campus-location/CampusLocationTab';
 import QiangjiTable from '@/components/university/QiangjiTable';
 import AdmissionDetailTab from '@/components/university/admission-detail/AdmissionDetailTab';
-import { useUserStore } from '@/stores/userStore';
 import { useStudentRank } from '@/stores/studentRankStore';
-import { useWorkStudent } from '@/hooks/useWorkStudent';
+import { useWorkStudent, useWorkStudentOptions } from '@/hooks/useWorkStudent';
+import { categorizeBatch } from '@/utils/batch-categorize';
 import { useAuthStore } from '@/stores/authStore';
 import { useUniversityCompare } from '@/stores/compareStore';
 import { favoriteService } from '@/services/favorite';
@@ -43,7 +43,6 @@ export default function UniversityDetailPage() {
   const params = useParams();
   const id = Number(params.id);
 
-  const { examInfo } = useUserStore();
   const examType = useStudentRank((s) => s.examType);
   const studentRank = useStudentRank((s) => s.rank);
 
@@ -65,11 +64,26 @@ export default function UniversityDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const effRank: number | null = workRank ?? studentRank ?? null;
-  const effType = (workLane ?? examType) as '物理' | '历史';
+  // 页级单一科类开关: 走势图/招录详情/统计条/预测全部联动 (此前各组件独立 state 可同页矛盾)
+  const baseLane = (workLane ?? examType) as '物理' | '历史';
+  const [laneOverride, setLaneOverride] = useState<'物理' | '历史' | null>(null);
+  useEffect(() => {
+    setLaneOverride(null); // 换学生重置为其科类
+  }, [workStudentId]);
+  const effType = laneOverride ?? baseLane;
 
-  const userSubject = workLane ?? examInfo.subjects?.[0] ?? examType;
+  const userSubject = effType;
   const [tab, setTab] = useState<TabKey>('info');
+  // 选定学生时默认直达招录详情 ("招录优先"反转的另一半); 仅首次, 不打断手动切换
+  const didDefaultTab = useRef(false);
+  useEffect(() => {
+    if (workStudentId && !didDefaultTab.current) {
+      didDefaultTab.current = true;
+      setTab('admission');
+    }
+  }, [workStudentId]);
   const [descExpanded, setDescExpanded] = useState(false);
+  const studentOptions = useWorkStudentOptions(isTeacher);
 
   const { data: university, isLoading } = useQuery({
     queryKey: ['university', id, userSubject],
@@ -414,14 +428,25 @@ export default function UniversityDetailPage() {
       </section>
 
       {/* ===========================
-           Trend banner — 录取走势主角卡
+           Trend banner — 录取走势主角卡 (主批次口径, 与调档线 banner 一致,
+           避免专科/提前批低分行把"每年最低门槛"拉到失真口径)
            =========================== */}
       {(admissions?.length ?? 0) > 0 && (
         <div style={{ maxWidth: 1500, margin: '0 auto', padding: '24px 32px 0' }}>
           <TrendBanner
-            admissions={admissions ?? []}
+            admissions={(() => {
+              const all: any[] = admissions ?? [];
+              if (all.some((r) => categorizeBatch(r.batch) === '本科批')) {
+                return all.filter((r) => categorizeBatch(r.batch) === '本科批');
+              }
+              if (all.some((r) => categorizeBatch(r.batch) === '高职专科')) {
+                return all.filter((r) => categorizeBatch(r.batch) === '高职专科');
+              }
+              return all;
+            })()}
             studentRank={effRank}
-            defaultSubject={effType}
+            subject={effType}
+            onSubjectChange={(v) => setLaneOverride(v as '物理' | '历史')}
           />
         </div>
       )}
@@ -435,7 +460,7 @@ export default function UniversityDetailPage() {
             [
               ['info', '概览'],
               ['admission', '招录详情'],
-              ['majors', '热门专业'],
+              ['majors', '在川专业'],
               ['campus', '校区与生活'],
             ] as const
           ).map(([k, l]) => (
@@ -451,6 +476,37 @@ export default function UniversityDetailPage() {
               {l}
             </button>
           ))}
+          {/* 轻量学生条: 同校换学生不用回列表, 换人后全页冲稳保信号即时刷新 */}
+          {isTeacher && (
+            <span
+              style={{
+                marginLeft: 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                paddingLeft: 16,
+              }}
+            >
+              <Select
+                size="small"
+                showSearch
+                allowClear
+                placeholder="选择学生"
+                style={{ minWidth: 190 }}
+                options={studentOptions}
+                value={workStudentId ?? undefined}
+                optionFilterProp="label"
+                onChange={(v) => setWorkStudentId(v ?? null)}
+              />
+              {workStudent && (
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                  {workLane ? `${workLane}类` : ''}
+                  {workRank ? ` · #${workRank.toLocaleString()}` : ''}
+                  {` · 意向 ${uniPool.length} 所`}
+                </span>
+              )}
+            </span>
+          )}
         </div>
       </nav>
 
@@ -696,7 +752,8 @@ export default function UniversityDetailPage() {
                 minRankHistory: u.minRankHistory ?? null,
               }}
               userRank={effRank}
-              defaultSubject={effType === '历史' ? '历史类' : '物理类'}
+              subject={effType === '历史' ? '历史类' : '物理类'}
+              onSubjectChange={(s) => setLaneOverride(s === '历史类' ? '历史' : '物理')}
             />
           </div>
         )}
