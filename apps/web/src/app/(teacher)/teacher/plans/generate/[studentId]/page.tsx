@@ -1171,7 +1171,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, includeSoftFails, effectiveSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, effectiveSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1179,6 +1179,8 @@ export default function GeneratePlanPage() {
       keywordUniversity,
       keywordMajor,
       keywordGroup: keywordGroupName,
+      // 档位过滤走服务端(全池口径+正确分页); 服务端在缓存后的分页层应用, 切档不重算
+      gradientBand: viewMode !== 'UNIVERSITY' && gradientFilter !== 'all' ? gradientFilter : undefined,
       includeSoftFails,
       sort: effectiveSort as CandidateGroupSort,
       tier: appliedTier,
@@ -1193,21 +1195,10 @@ export default function GeneratePlanPage() {
   const groups = candidateGroups?.groups ?? [];
   const candidateUniversities = candidateGroups?.universities ?? [];
 
-  // 前端筛选: pgv2 设计稿 4 chip 梯度 + 显示已隐藏 toggle
+  // 前端筛选只剩"显示已隐藏" toggle; 梯度档位过滤已上移服务端(gradientBand, 全池口径+正确分页)
   const visibleGroups = useMemo(() => {
-    return groups.filter((group) => {
-      if (!showHidden && hiddenGroupKeys.has(group.groupKey)) return false;
-      if (gradientFilter !== 'all') {
-        // 无史线组与冲/稳/保互斥: 选"无史线"只看无线组, 选其他档位排除无线组
-        if (gradientFilter === 'NO_LINE') return groupHasNoHistoryLine(group);
-        if (groupHasNoHistoryLine(group)) return false;
-        const tier = gradientTier(group);
-        const opt = GRADIENT_FILTER_OPTIONS.find((o) => o.value === gradientFilter);
-        if (opt?.tones && !opt.tones.includes(tier)) return false;
-      }
-      return true;
-    });
-  }, [groups, hiddenGroupKeys, showHidden, gradientFilter]);
+    return groups.filter((group) => showHidden || !hiddenGroupKeys.has(group.groupKey));
+  }, [groups, hiddenGroupKeys, showHidden]);
 
   // pgv2 设计稿 rail 三段统计: 把 planItem 3-tier (CHONG/WEN/BAO) 映射到 rush/stable/safe
   const tierStats = useMemo(() => {
@@ -1397,7 +1388,7 @@ export default function GeneratePlanPage() {
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
-  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, includeSoftFails, candidateSort, uniSort, appliedTier, excludeAdded, natureFilter]);
+  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, candidateSort, uniSort, appliedTier, excludeAdded, natureFilter]);
 
   // 视图模式默认跟随 plan/student.priorityMode (仅在无 ?view= URL 参数时, 自动定一次)
   useEffect(() => {
@@ -1464,7 +1455,8 @@ export default function GeneratePlanPage() {
     }) =>
       planApi.addItem(planId!, {
         enrollmentPlanId: major.enrollmentPlanId,
-        gradient: major.suggestedGradient ?? group.suggestedGradient,
+        // 无史线组落库 CHONG: 梯度引擎对无线组兜底 BAO, 写进方案会把机会组当保底误导家长
+        gradient: groupHasNoHistoryLine(group) ? 'CHONG' : (major.suggestedGradient ?? group.suggestedGradient),
         acceptAdjust: true,
         selectedMajors,
         candidateMajorRanking,

@@ -37,6 +37,8 @@ export class GetCandidatesQueryDto {
   @IsOptional() @IsString() keywordUniversity?: string; // 仅匹配 university.name
   @IsOptional() @IsString() keywordMajor?: string; // 匹配 major.name OR majorName
   @IsOptional() @IsString() keywordGroup?: string; // 匹配 groupName(定向县/专业组名)
+  // 梯度档位过滤(全池口径, 分页前生效); 不传 = 全部
+  @IsOptional() @IsIn(['RUSH', 'STABLE', 'SAFE', 'NO_LINE']) gradientBand?: string;
   @IsOptional() @Transform(onlyExplicitFalse) @IsBoolean() includeSoftFails?: boolean | string = true;
   @IsOptional() @IsIn(ACCEPTED_SORTS) sort?: string = 'MAJOR_MATCH';
   // 视图模式: GROUP=院校专业组卡(默认, 专业优先); UNIVERSITY=院校卡上卷(院校优先)

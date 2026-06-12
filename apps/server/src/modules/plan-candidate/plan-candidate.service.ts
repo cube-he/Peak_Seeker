@@ -34,6 +34,9 @@ interface GetCandidatesQuery {
   keywordUniversity?: string; // 仅匹配 university.name
   keywordMajor?: string; // 匹配 major.name OR majorName
   keywordGroup?: string; // 匹配 groupName(定向县/专业组名), 提前批公费定向场景按县筛组
+  // 梯度档位过滤(全池口径, 分页前生效): 冲/稳/保/无史线; 不传 = 全部。
+  // 在缓存后的分页层应用, 切档不触发重算
+  gradientBand?: 'RUSH' | 'STABLE' | 'SAFE' | 'NO_LINE' | string;
   // DTO 声明为 boolean | string 以绕过 ValidationPipe 隐式转换 (见 dto 注释),
   // 运行时经 @Transform 恒为 boolean; 消费端用 !== false / === false 判断。
   includeSoftFails?: boolean | string;
@@ -98,17 +101,22 @@ function uniqueValues<T extends string | number>(values: Array<T | null | undefi
 }
 
 // 与前端 gradientTier/gradientTone 同口径: dynamicGradient.tier 优先, 缺省按 suggestedGradient
+// 组的梯度档位归类: 无史线单列(梯度引擎对无线组兜底 BAO, 混进"保底"会虚高且与卡片标签矛盾)
+function gradientBandOf(g: any): 'RUSH' | 'STABLE' | 'SAFE' | 'NO_LINE' {
+  if (g?.dynamicGradient && g.dynamicGradient.baseMinRank == null) return 'NO_LINE';
+  const tier = g?.dynamicGradient?.tier ?? g?.suggestedGradient ?? 'WEN';
+  if (tier === 'JI_CHONG' || tier === 'CHONG' || tier === 'XIAO_CHONG') return 'RUSH';
+  if (tier === 'BAO' || tier === 'QIANG_BAO' || tier === 'DIBAO') return 'SAFE';
+  return 'STABLE';
+}
+
 function countTiers(groups: any[]): { rush: number; stable: number; safe: number; noLine: number } {
   const counts = { rush: 0, stable: 0, safe: 0, noLine: 0 };
   for (const g of groups) {
-    // 无史线组单列: 梯度引擎对无线组兜底 BAO, 计入"保底"会虚高且与卡片"无史线"标签矛盾
-    if (g?.dynamicGradient && g.dynamicGradient.baseMinRank == null) {
-      counts.noLine += 1;
-      continue;
-    }
-    const tier = g?.dynamicGradient?.tier ?? g?.suggestedGradient ?? 'WEN';
-    if (tier === 'JI_CHONG' || tier === 'CHONG' || tier === 'XIAO_CHONG') counts.rush += 1;
-    else if (tier === 'BAO' || tier === 'QIANG_BAO' || tier === 'DIBAO') counts.safe += 1;
+    const band = gradientBandOf(g);
+    if (band === 'NO_LINE') counts.noLine += 1;
+    else if (band === 'RUSH') counts.rush += 1;
+    else if (band === 'SAFE') counts.safe += 1;
     else counts.stable += 1;
   }
   return counts;
@@ -573,13 +581,27 @@ export class PlanCandidateService {
     });
   }
 
-  private paginateCandidateGroups(value: CandidateGroupFullResult, page: number, pageSize: number) {
+  private paginateCandidateGroups(
+    value: CandidateGroupFullResult,
+    page: number,
+    pageSize: number,
+    gradientBand?: string,
+  ) {
+    // 档位过滤在缓存后的分页层做: 切换冲/稳/保/无史线 chip 不触发全量重算,
+    // total 改为档内数量(驱动分页), tierCounts 保持全池口径(驱动 chip 计数)
+    const validBand = gradientBand && ['RUSH', 'STABLE', 'SAFE', 'NO_LINE'].includes(gradientBand)
+      ? gradientBand
+      : null;
+    const pool = validBand
+      ? value.groups.filter((g: any) => gradientBandOf(g) === validBand)
+      : value.groups;
     const start = (page - 1) * pageSize;
     return {
       ...value,
       page,
       pageSize,
-      groups: value.groups.slice(start, start + pageSize),
+      total: pool.length,
+      groups: pool.slice(start, start + pageSize),
     };
   }
 
@@ -1425,7 +1447,7 @@ export class PlanCandidateService {
       if (q.groupBy === 'UNIVERSITY') {
         return this.paginateAsUniversities(cached, q, student, page, pageSize);
       }
-      return this.paginateCandidateGroups(cached, page, pageSize);
+      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand);
     }
 
     // 拆分搜索: 院校 / 专业各自独立; 同时填则 AND 组合 (院校的特定专业)
@@ -1508,7 +1530,7 @@ export class PlanCandidateService {
           appliedTier: q.tier ?? 0,
         };
         this.setCandidateGroupCache(cacheKey, emptyResult);
-        return this.paginateCandidateGroups(emptyResult, page, pageSize);
+        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand);
       }
       (where as any).OR = matchedGroups.map((g) => ({
         universityId: g.universityId,
@@ -1967,36 +1989,54 @@ export class PlanCandidateService {
 
     // 无史线组的人工判断锚点: 有线组分数带, 同校同 recruitType 优先, 没有则回退全批次同 recruitType。
     // 公费师范的现实形态是"整校有线(川师) vs 整校无线(西华师大等)", 同校口径常落空, 批次口径才是
-    // 老师实际参照的对照("省级公费有线组 541~617")
-    const accumulateBand = (
-      map: Map<string, { min: number; max: number; count: number }>,
-      key: string,
-      score: number,
-    ) => {
-      const band = map.get(key);
-      if (!band) map.set(key, { min: score, max: score, count: 1 });
-      else {
-        band.min = Math.min(band.min, score);
-        band.max = Math.max(band.max, score);
-        band.count += 1;
+    // 老师实际参照的对照("省级公费有线组 541~617")。
+    // 锚是客观对照, 用独立的批次级查询(distinct 组), 不随关键词/学生硬过滤收窄
+    const hasNoLineGroup = (resultGroups as any[]).some(
+      (g) => g.dynamicGradient && g.dynamicGradient.baseMinRank == null,
+    );
+    if (hasNoLineGroup) {
+      const bandWhere: Record<string, unknown> = {
+        province,
+        year: source.sourceYear,
+        groupMinScore: { not: null },
+      };
+      addInFilter(bandWhere, 'subjects', eps.map((ep) => ep.subjects));
+      addInFilter(bandWhere, 'batch', eps.map((ep) => ep.batch));
+      const bandRows = await this.prisma.admissionRecord.findMany({
+        where: bandWhere,
+        select: { universityId: true, recruitType: true, groupCode: true, groupMinScore: true },
+        distinct: ['universityId', 'recruitType', 'groupCode'],
+      });
+      const accumulateBand = (
+        map: Map<string, { min: number; max: number; count: number }>,
+        key: string,
+        score: number,
+      ) => {
+        const band = map.get(key);
+        if (!band) map.set(key, { min: score, max: score, count: 1 });
+        else {
+          band.min = Math.min(band.min, score);
+          band.max = Math.max(band.max, score);
+          band.count += 1;
+        }
+      };
+      const uniBands = new Map<string, { min: number; max: number; count: number }>();
+      const rtBands = new Map<string, { min: number; max: number; count: number }>();
+      for (const row of bandRows as any[]) {
+        if (row.groupMinScore == null) continue;
+        accumulateBand(uniBands, `${row.universityId}|${row.recruitType ?? ''}`, row.groupMinScore);
+        accumulateBand(rtBands, row.recruitType ?? '', row.groupMinScore);
       }
-    };
-    const uniBands = new Map<string, { min: number; max: number; count: number }>();
-    const rtBands = new Map<string, { min: number; max: number; count: number }>();
-    for (const g of resultGroups as any[]) {
-      if (g.groupMinScore == null) continue;
-      accumulateBand(uniBands, `${g.universityId}|${g.recruitType ?? ''}`, g.groupMinScore);
-      accumulateBand(rtBands, g.recruitType ?? '', g.groupMinScore);
-    }
-    for (const g of resultGroups as any[]) {
-      if (g.dynamicGradient && g.dynamicGradient.baseMinRank == null) {
-        const uniBand = uniBands.get(`${g.universityId}|${g.recruitType ?? ''}`);
-        const rtBand = rtBands.get(g.recruitType ?? '');
-        g.siblingLineBand = uniBand
-          ? { ...uniBand, scope: 'UNIVERSITY' }
-          : rtBand
-            ? { ...rtBand, scope: 'BATCH' }
-            : null;
+      for (const g of resultGroups as any[]) {
+        if (g.dynamicGradient && g.dynamicGradient.baseMinRank == null) {
+          const uniBand = uniBands.get(`${g.universityId}|${g.recruitType ?? ''}`);
+          const rtBand = rtBands.get(g.recruitType ?? '');
+          g.siblingLineBand = uniBand
+            ? { ...uniBand, scope: 'UNIVERSITY' }
+            : rtBand
+              ? { ...rtBand, scope: 'BATCH' }
+              : null;
+        }
       }
     }
 
@@ -2072,7 +2112,7 @@ export class PlanCandidateService {
     if (q.groupBy === 'UNIVERSITY') {
       return this.paginateAsUniversities(fullResult, q, student, page, pageSize);
     }
-    return this.paginateCandidateGroups(fullResult, page, pageSize);
+    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand);
   }
 
   async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {

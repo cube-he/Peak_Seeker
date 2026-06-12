@@ -171,7 +171,9 @@ export class PlanItemService {
       }
     }
     const historyMin = arGroup?.groupMinRank ?? arExact?.majorMinRank ?? null;
-    const gradient = dto.gradient ?? calcGradient(studentRank, historyMin);
+    // 无任何历史线的组(提前批新设定向组等)落库默认 CHONG: 它是录取概率未知的机会组,
+    // calcGradient 的 BAO 兜底会让方案右栏/导出表把它当保底误导家长
+    const gradient = dto.gradient ?? (historyMin ? calcGradient(studentRank, historyMin) : 'CHONG');
     const groupMajorsList = (ep.groupMajors ?? '').split(/[,，、/]/).filter(Boolean);
     const selectedMajors = (dto.selectedMajors ?? []).slice(0, 6);
     const fullMajorRanking = selectedMajors.length > 0

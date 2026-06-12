@@ -97,6 +97,26 @@ describe('PlanItemService.add', () => {
     expect(result.softFailReasons).toEqual([{ rule: 'tuition', note: '瀛﹁垂瓒呴绠?' }]);
   });
 
+  it('无任何历史线的组落库梯度默认 CHONG(机会组), 而非 calcGradient 兜底的 BAO', async () => {
+    // 提前批新设定向组无线: "线未知"标"保"会让方案右栏/导出表误导家长
+    // (plan 33 曾因此把 10 个机会组标成保底, 靠 SQL 手工覆盖 — 这里堵住源头)
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 1, status: 'DRAFT', batchConfigId: 5, year: 2026, studentId: 10 });
+    prisma.batchConfig.findUnique.mockResolvedValue({ id: 5, maxGroupCount: 30 });
+    prisma.planItem.count.mockResolvedValue(0);
+    prisma.studentProfile.findUnique.mockResolvedValue({ id: 10, provincialRank: 32698 });
+    prisma.enrollmentPlan.findUnique.mockResolvedValue({
+      id: 100, universityId: 11, majorId: 22, university: { name: 'U', code: 'UC' }, major: { name: 'M' },
+      groupCode: '802', groupName: '定向凉山州昭觉县', majorCode: 'MC', majorName: 'M',
+      groupMajors: '', subjects: '历史', batch: '本科提前批B段', recruitType: '地方优师计划',
+      planCount: 3, tuition: 0, subjectRequirements: null,
+    });
+    prisma.admissionRecord.findFirst.mockResolvedValue(null);
+    prisma.planItem.create.mockImplementation((args: any) => Promise.resolve({ id: 999, ...args.data }));
+
+    const result = await service.add(1, { enrollmentPlanId: 100 } as any);
+    expect(result.gradient).toBe('CHONG');
+  });
+
   it('删除产生 sequence 空洞后仍可加入：取 max(sequence)+1 而非 count+1', async () => {
     // 复现 2026-06-12 线上 bug: 7 条删 5 条剩 seq {1,4}, count+1=3 可加,
     // 再加 count+1=4 撞 (plan_id,sequence) 唯一约束 → 永久 500
