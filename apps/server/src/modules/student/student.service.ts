@@ -214,30 +214,50 @@ export class StudentService {
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
-    return this.prisma.user.create({
-      data: {
-        username: dto.username,
-        passwordHash,
-        realName: dto.realName,
-        phone: dto.phone,
-        gender: dto.gender,
-        ethnicity: dto.ethnicity,
-        role: Role.STUDENT,
-        studentProfile: {
-          create: {
-            teacherId: teacherProfileId,
-            highSchool: dto.highSchool,
-            classInfo: dto.classInfo,
-            city: dto.city,
-            examYear: dto.examYear,
-            status: StudentStatus.ACTIVE,
+    try {
+      return await this.prisma.user.create({
+        data: {
+          username: dto.username,
+          passwordHash,
+          realName: dto.realName,
+          phone: dto.phone,
+          gender: dto.gender,
+          ethnicity: dto.ethnicity,
+          role: Role.STUDENT,
+          studentProfile: {
+            create: {
+              teacherId: teacherProfileId,
+              highSchool: dto.highSchool,
+              classInfo: dto.classInfo,
+              city: dto.city,
+              examYear: dto.examYear,
+              status: StudentStatus.ACTIVE,
+            },
           },
         },
-      },
-      include: {
-        studentProfile: true,
-      },
-    });
+        // select 白名单: 不回 passwordHash (默认 include 会把 bcrypt hash 带进响应);
+        // 前端跳详情页要 studentProfile.id
+        select: {
+          id: true,
+          username: true,
+          realName: true,
+          phone: true,
+          gender: true,
+          role: true,
+          createdAt: true,
+          studentProfile: { select: { id: true, teacherId: true } },
+        },
+      });
+    } catch (e) {
+      // 手机号撞 User.phone 唯一索引 → P2002, 转友好 400 而非 500
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const hint = `${(e.meta as any)?.target ?? ''} ${e.message}`.toLowerCase();
+        if (hint.includes('phone')) throw new BadRequestException('该手机号已被其他账号使用');
+        if (hint.includes('email')) throw new BadRequestException('该邮箱已被其他账号使用');
+        throw new BadRequestException('账号信息与已有记录冲突');
+      }
+      throw e;
+    }
   }
 
   /**
@@ -468,6 +488,9 @@ export class StudentService {
     dto: UpdateStudentProfileDto,
     actor: 'student' | 'teacher' = 'teacher',
     changedById?: number,
+    // 归属校验: 非 ADMIN 老师传入自己的 teacherProfileId, 只能改自己名下学生。
+    // 与 reviewIntake 同口径; undefined = 不校验 (ADMIN)。补这道闸前任意老师 token 可越权写。
+    ownerTeacherProfileId?: number,
   ) {
     const { dataVersion, ...rawUpdateData } = dto as Record<string, any>;
     const { profileUpdates: updateData, userUpdates } =
@@ -491,6 +514,9 @@ export class StudentService {
 
     if (!current) {
       throw new NotFoundException('学生不存在');
+    }
+    if (ownerTeacherProfileId != null && current.teacherId !== ownerTeacherProfileId) {
+      throw new ForbiddenException('无权修改不属于自己的学生资料');
     }
 
     // ── 计算变更日志(只追踪白名单字段)──

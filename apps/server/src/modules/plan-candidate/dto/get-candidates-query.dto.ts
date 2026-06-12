@@ -1,7 +1,17 @@
 // dto/get-candidates-query.dto.ts
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { IsOptional, IsInt, Min, IsString, IsBoolean, IsIn } from 'class-validator';
 import { CANDIDATE_UNIVERSITY_SORTS } from '../university-rollup';
+
+// axios 把布尔序列化成 query 字符串 'false'/'true'。坑有两层:
+// 1) @Type(()=>Boolean) 下 Boolean('false') === true;
+// 2) 全局 ValidationPipe 开了 enableImplicitConversion,只要字段声明类型是 boolean,
+//    它会在 @Transform 之前就把 'false' 强转成 true,@Transform 拿到的已经是 true。
+// 解法: 字段类型声明成 `boolean | string`(反射类型退化为 Object → 隐式转换不插手),
+//        再用 @Transform 手动解析。语义: 这两个开关默认 true、消费端按 `!== false` 判断,
+//        所以"只有显式 false 才关"; 缺省时 @Transform 不执行, 由 `= true` 默认值兜底。
+const onlyExplicitFalse = ({ value }: { value: unknown }) =>
+  !(value === 'false' || value === false);
 
 export const CANDIDATE_GROUP_SORTS = [
   'MAJOR_MATCH',
@@ -26,7 +36,7 @@ export class GetCandidatesQueryDto {
   @IsOptional() @IsString() keyword?: string; // 旧接口兼容: 同时匹配院校/专业 (合并语义)
   @IsOptional() @IsString() keywordUniversity?: string; // 仅匹配 university.name
   @IsOptional() @IsString() keywordMajor?: string; // 匹配 major.name OR majorName
-  @IsOptional() @Type(() => Boolean) @IsBoolean() includeSoftFails?: boolean = true;
+  @IsOptional() @Transform(onlyExplicitFalse) @IsBoolean() includeSoftFails?: boolean | string = true;
   @IsOptional() @IsIn(ACCEPTED_SORTS) sort?: string = 'MAJOR_MATCH';
   // 视图模式: GROUP=院校专业组卡(默认, 专业优先); UNIVERSITY=院校卡上卷(院校优先)
   @IsOptional() @IsIn(['GROUP', 'UNIVERSITY']) groupBy?: 'GROUP' | 'UNIVERSITY';
@@ -35,7 +45,7 @@ export class GetCandidatesQueryDto {
   // 意向梯队过滤: 0 / undefined = 不过滤 (全部); 1+ = 只显示含该梯队任一专业的院校组
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) tier?: number;
   // 是否隐藏已加入当前 plan 的院校组. 默认 true (老师只看未加入的)
-  @IsOptional() @Type(() => Boolean) @IsBoolean() excludeAdded?: boolean = true;
+  @IsOptional() @Transform(onlyExplicitFalse) @IsBoolean() excludeAdded?: boolean | string = true;
   // 客观纯净度过滤. csv 形式 'S,A,B,C'; 空或 undefined = 不过滤
   @IsOptional() @IsString() purity?: string;
 }

@@ -196,7 +196,13 @@ export class StudentController {
     @CurrentUser() user: JwtPayloadUser,
     @Body() dto: UpdateStudentProfileDto,
   ) {
-    return this.studentService.updateProfile(id, dto, 'teacher', user.id);
+    return this.studentService.updateProfile(
+      id,
+      dto,
+      'teacher',
+      user.id,
+      user.role === 'ADMIN' ? undefined : user.teacherProfileId ?? undefined,
+    );
   }
 
   @Put(':id/assign')

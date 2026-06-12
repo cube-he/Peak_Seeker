@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateConsultationDto } from './dto/create-consultation.dto';
 import { UpdateConsultationDto } from './dto/update-consultation.dto';
@@ -26,8 +26,48 @@ export class ConsultationService {
     return teacher.id;
   }
 
+  /**
+   * 同老师同时段重叠检测。新预约窗口 [start, start+est) 与该老师已有
+   * scheduled/in_progress 预约窗口相交即拒 (409)。est 缺省按 30 分钟。
+   * excludeId: 确认申请时排除自身。只在 start ±6h 范围内取记录, 控制扫描量。
+   */
+  private async assertNoConflict(
+    teacherId: number,
+    scheduledAt: Date,
+    durationEst?: number | null,
+    excludeId?: number,
+  ) {
+    const dur = durationEst ?? 30;
+    const start = scheduledAt.getTime();
+    const end = start + dur * 60000;
+    const windowMs = 6 * 60 * 60 * 1000;
+    const nearby = await this.prisma.consultationAppointment.findMany({
+      where: {
+        teacherId,
+        status: { in: ['scheduled', 'in_progress'] },
+        scheduledAt: {
+          gte: new Date(start - windowMs),
+          lte: new Date(end + windowMs),
+        },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      include: { student: { include: { user: { select: { realName: true, username: true } } } } },
+    });
+    const clash = nearby.find((a) => {
+      const s = a.scheduledAt.getTime();
+      const e = s + (a.durationEst ?? 30) * 60000;
+      return start < e && s < end; // 区间相交
+    });
+    if (clash) {
+      const name = clash.student?.user?.realName ?? clash.student?.user?.username ?? '另一名学生';
+      const t = clash.scheduledAt.toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' });
+      throw new ConflictException(`该时段已与「${name}」的预约（${t}）冲突,请另选时间`);
+    }
+  }
+
   async create(userId: number, dto: CreateConsultationDto) {
     const teacherId = await this.resolveTeacherId(userId);
+    await this.assertNoConflict(teacherId, new Date(dto.scheduledAt), dto.durationEst);
     return this.prisma.consultationAppointment.create({
       data: {
         studentId: dto.studentId,
@@ -157,6 +197,8 @@ export class ConsultationService {
     if (!appt) throw new NotFoundException('预约不存在');
     if (appt.teacherId !== teacherId) throw new ForbiddenException('无权操作');
     if (appt.status !== 'requested') throw new ForbiddenException('当前状态不可确认');
+    // 确认 = 把 requested 转成 scheduled, 占用时段, 此刻才查重叠 (排除自身)
+    await this.assertNoConflict(teacherId, appt.scheduledAt, appt.durationEst, appt.id);
 
     return this.prisma.consultationAppointment.update({
       where: { id },

@@ -31,10 +31,12 @@ interface GetCandidatesQuery {
   keyword?: string; // 旧接口兼容: 院校/专业合并
   keywordUniversity?: string; // 仅匹配 university.name
   keywordMajor?: string; // 匹配 major.name OR majorName
-  includeSoftFails?: boolean;
+  // DTO 声明为 boolean | string 以绕过 ValidationPipe 隐式转换 (见 dto 注释),
+  // 运行时经 @Transform 恒为 boolean; 消费端用 !== false / === false 判断。
+  includeSoftFails?: boolean | string;
   sort?: CandidateGroupSort | string; // 院校模式接受 university sort 值
   tier?: number;
-  excludeAdded?: boolean;
+  excludeAdded?: boolean | string;
   purity?: string; // csv 'S,A,B,C'; 空 = 不过滤
   groupBy?: 'GROUP' | 'UNIVERSITY'; // 视图模式; UNIVERSITY=院校卡上卷
   nature?: 'public' | 'private'; // 院校优先视图: 办学性质过滤
