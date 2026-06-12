@@ -1068,7 +1068,10 @@ describe('PlanCandidateService', () => {
     expect(result.groups[0].majorSections.recommended[0].majorName).toBe('Open Major');
   });
 
-  it('puts missing-rank majors into risk and does not let them support a group', async () => {
+  it('keeps a no-history-line group (all INSUFFICIENT_DATA) instead of dropping it', async () => {
+    // 与 all-REJECTED 同理: 提前批/公费师范的新设定向组没有任何历史线,
+    // 整组 INSUFFICIENT_DATA 是"待人工判断"的真实库存, 灭组会让这些组只能靠关键词搜出来
+    // (2026-06-13 提前批默认池只剩有线极冲组、无线机会组全部不可见的根因)
     mockCandidateGroupRequest({
       plans: [
         makeGroupEnrollmentPlan({
@@ -1083,7 +1086,9 @@ describe('PlanCandidateService', () => {
 
     const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
 
-    expect(result.groups).toHaveLength(0);
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].allRisk).toBe(true);
+    expect(result.groups[0].majorSections.risk).toHaveLength(1);
   });
 
   it('adds dynamic gradient details from competition and selection pool while exposing supplementary summaries', async () => {

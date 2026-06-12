@@ -17,11 +17,16 @@ const GRADIENT_LABEL_8: Record<string, string> = {
   JI_CHONG: '极冲', CHONG: '冲', XIAO_CHONG: '小冲',
   WEN: '稳', WEN_BAO: '稳保',
   BAO: '保', QIANG_BAO: '强保', DIBAO: '兜底',
+  NO_LINE: '无史线',
 };
 function tier8(group: any): string {
+  // 无任何历史线的组(提前批新设定向组等): calcGradient 兜底值是 BAO,
+  // 但"线未知"冒充"保"会误导填报决策 — 标"无史线"交老师人工判断
+  if (group?.dynamicGradient && group.dynamicGradient.baseMinRank == null) return 'NO_LINE';
   return group?.dynamicGradient?.tier ?? group?.suggestedGradient ?? 'WEN';
 }
-function tone8(tier: string): 'rush' | 'stable' | 'safe' {
+function tone8(tier: string): 'rush' | 'stable' | 'safe' | 'accent-soft' {
+  if (tier === 'NO_LINE') return 'accent-soft';
   if (['JI_CHONG', 'CHONG', 'XIAO_CHONG'].includes(tier)) return 'rush';
   if (['BAO', 'QIANG_BAO', 'DIBAO'].includes(tier)) return 'safe';
   return 'stable';

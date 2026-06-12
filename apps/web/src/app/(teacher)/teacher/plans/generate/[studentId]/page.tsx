@@ -560,6 +560,15 @@ function gradientTier(item: { suggestedGradient?: Gradient; dynamicGradient?: Dy
   return item.dynamicGradient?.tier ?? item.suggestedGradient ?? 'WEN';
 }
 
+// 无历史线的组: 梯度引擎兜底值是 BAO, 但"线未知"显示"保"会误导 — 组级标签改标"无史线"
+function groupHasNoHistoryLine(group: { dynamicGradient?: DynamicGradientDetail | null }): boolean {
+  return !!group.dynamicGradient && group.dynamicGradient.baseMinRank == null;
+}
+
+function groupGradientLabel(group: CandidateGroup): string {
+  return groupHasNoHistoryLine(group) ? '无史线' : GRADIENT_LABEL[gradientTier(group)];
+}
+
 function gradientTone(tier: DynamicGradientTier) {
   if (tier === 'JI_CHONG' || tier === 'CHONG' || tier === 'XIAO_CHONG') return 'rush';
   if (tier === 'BAO' || tier === 'QIANG_BAO' || tier === 'DIBAO') return 'safe';
@@ -2480,7 +2489,7 @@ export default function GeneratePlanPage() {
                           <HiddenCard
                             key={group.groupKey}
                             universityName={group.universityName}
-                            meta={`${GRADIENT_LABEL[gradientTier(group)]}${group.university?.softRanking ? ' · 软科 #' + group.university.softRanking : ''}${group.university?.city ? ' · ' + group.university.city : ''}`}
+                            meta={`${groupGradientLabel(group)}${group.university?.softRanking ? ' · 软科 #' + group.university.softRanking : ''}${group.university?.city ? ' · ' + group.university.city : ''}`}
                             onRestore={() => restoreGroup(group.groupKey)}
                           />
                         );
@@ -2512,6 +2521,7 @@ export default function GeneratePlanPage() {
                               // 全 RISK 组的位次差预警: 让老师一眼看到学生位次 vs 历史最低位次的差距
                               const allRiskBanner = group.allRisk ? (() => {
                                 const stu = studentRankForDecision;
+                                const noLine = groupHasNoHistoryLine(group);
                                 const tierHit = group.majors.find((m: any) => m.matchesPreferredTier) ?? group.majors[0];
                                 const histRank = tierHit?.majorMinRank;
                                 const histScore = tierHit?.majorMinScore;
@@ -2520,27 +2530,33 @@ export default function GeneratePlanPage() {
                                   <div style={{
                                     margin: '8px 0',
                                     padding: '10px 12px',
-                                    background: '#fff1f0',
-                                    border: '1px solid #ffa39e',
+                                    background: noLine ? '#fffbe6' : '#fff1f0',
+                                    border: `1px solid ${noLine ? '#ffe58f' : '#ffa39e'}`,
                                     borderRadius: 6,
                                     fontSize: 13,
                                     lineHeight: 1.6,
                                   }}>
-                                    <div style={{ fontWeight: 600, color: '#cf1322', marginBottom: 4 }}>
-                                      ⚠ 位次差距过大,该梯队意向专业本批次无可推荐候选
+                                    <div style={{ fontWeight: 600, color: noLine ? '#ad6800' : '#cf1322', marginBottom: 4 }}>
+                                      {noLine ? 'ⓘ 该组无历史录取线(新设/调整组),录取概率无法量化' : '⚠ 位次差距过大,该梯队意向专业本批次无可推荐候选'}
                                     </div>
                                     <div style={{ color: '#595959' }}>
-                                      学生位次 <strong>{stu?.toLocaleString() ?? '—'}</strong>
-                                      {tierHit ? (
+                                      {noLine ? (
+                                        <>学生位次 <strong>{stu?.toLocaleString() ?? '—'}</strong>;可参考同校同类型有线组的分数带与征集降分惯例人工判断</>
+                                      ) : (
                                         <>
-                                          {' '}vs {tierHit.majorName} 历史最低{' '}
-                                          <strong>{histScore ?? '—'}分 / 位次 {histRank?.toLocaleString() ?? '—'}</strong>
-                                          {ratio ? <span style={{ marginLeft: 6, color: '#cf1322' }}>(学生位次约为 {ratio} 倍)</span> : null}
+                                          学生位次 <strong>{stu?.toLocaleString() ?? '—'}</strong>
+                                          {tierHit ? (
+                                            <>
+                                              {' '}vs {tierHit.majorName} 历史最低{' '}
+                                              <strong>{histScore ?? '—'}分 / 位次 {histRank?.toLocaleString() ?? '—'}</strong>
+                                              {ratio ? <span style={{ marginLeft: 6, color: '#cf1322' }}>(学生位次约为 {ratio} 倍)</span> : null}
+                                            </>
+                                          ) : null}
                                         </>
-                                      ) : null}
+                                      )}
                                     </div>
                                     <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 4 }}>
-                                      下方为该专业组详细录取数据,可参考。如需加入请先与学生沟通调整意向。
+                                      {noLine ? '加入后请在风险处理中写明判断依据。' : '下方为该专业组详细录取数据,可参考。如需加入请先与学生沟通调整意向。'}
                                     </div>
                                   </div>
                                 );
@@ -2808,7 +2824,7 @@ export default function GeneratePlanPage() {
           <div>
             <div className={styles.drawerTitle}>
               <h2>{activeDetail.group.universityName}</h2>
-              <span className={tagClass(gradientTone(gradientTier(activeDetail.group)))}>{GRADIENT_LABEL[gradientTier(activeDetail.group)]}</span>
+              <span className={tagClass(groupHasNoHistoryLine(activeDetail.group) ? 'muted' : gradientTone(gradientTier(activeDetail.group)))}>{groupGradientLabel(activeDetail.group)}</span>
               {isCandidateGroupAlreadyAdded(activeDetail.group, planItems) ? <span className={tagClass('muted')}>已在方案</span> : null}
             </div>
             <div className={styles.drawerMeta}>

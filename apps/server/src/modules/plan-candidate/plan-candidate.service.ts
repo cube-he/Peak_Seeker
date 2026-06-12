@@ -1817,12 +1817,15 @@ export class PlanCandidateService {
       // recommended + backup 都空时通常丢弃 (避免噪音), 但下面三种情况保留全 RISK group:
       //   1. tier 模式下命中 tier (老师明确想看该梯队意向)
       //   2. keyword 搜索 (老师主动搜某院校 / 专业, 应该看到 — 哪怕位次远不达)
-      //   3. 全组 RISK 仅因"位次明显高于学生"(REJECTED) — 这是极冲选项不是噪音;
-      //      提前批/公费师范常降分录取且新组无历史线, 灭掉会让整个批次在工作台消失
+      //   3. 全组 RISK 仅因位次原因 — REJECTED(位次明显高于学生)是极冲选项,
+      //      INSUFFICIENT_DATA(新组无任何历史线)是"待人工判断"的真实库存;
+      //      提前批/公费师范常降分录取且新设定向组无历史线, 灭掉会让无线机会组只能靠关键词搜出来
       const isAllRisk = majorSections.recommended.length === 0 && majorSections.backup.length === 0;
-      const allRiskIsRejectedOnly = isAllRisk && visibleMajors.length > 0 &&
-        visibleMajors.every((m) => m.rankStrategy?.eligibility === 'REJECTED' && (m.failReasons ?? []).length === 0);
-      if (isAllRisk && !allRiskIsRejectedOnly && !hitsTier && !hasAnyKeyword) return null;
+      const allRiskIsRankOnly = isAllRisk && visibleMajors.length > 0 &&
+        visibleMajors.every((m) =>
+          (m.rankStrategy?.eligibility === 'REJECTED' || m.rankStrategy?.eligibility === 'INSUFFICIENT_DATA') &&
+          (m.failReasons ?? []).length === 0);
+      if (isAllRisk && !allRiskIsRankOnly && !hitsTier && !hasAnyKeyword) return null;
 
       const orderedMajors = [
         ...majorSections.recommended,
