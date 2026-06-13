@@ -1935,6 +1935,11 @@ export class PlanCandidateService {
         suggestedGradient: dynamicGradient.gradient,
         anchorMajorMinScore: recommendedAnchor?.majorMinScore ?? null,
         anchorMajorMinRank: recommendedAnchor?.majorMinRank ?? null,
+        // 锚定专业的就业/薪资/学费透出: 卡片指标条优先用专业级(院校级 employmentRate/avgSalary 常空),
+        // 学费(锚定专业 EnrollmentPlan.tuition)是家长高频问题, 直接上折叠态
+        anchorEmploymentRate: recommendedAnchor?.employmentRate ?? null,
+        anchorAvgSalary: recommendedAnchor?.avgSalary ?? null,
+        anchorTuition: recommendedAnchor?.tuition ?? null,
         majorStrengthScore,
         majorCount: rows.length,
         selectableMajorCount: majorSections.recommended.length + majorSections.backup.length,

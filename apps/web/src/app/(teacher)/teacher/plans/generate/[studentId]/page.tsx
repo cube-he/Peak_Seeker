@@ -264,6 +264,10 @@ interface CandidateGroup {
   universityRank?: number | null;
   anchorMajorMinScore?: number | null;
   anchorMajorMinRank?: number | null;
+  // 锚定专业的就业/薪资/学费(卡片指标条专业级优先)
+  anchorEmploymentRate?: number | string | null;
+  anchorAvgSalary?: number | null;
+  anchorTuition?: number | null;
   majorStrengthScore?: number | null;
   recommendedAnchorEnrollmentPlanId?: number | null;
   majors: CandidateMajor[];

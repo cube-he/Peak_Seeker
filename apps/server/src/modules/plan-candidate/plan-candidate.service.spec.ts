@@ -1146,6 +1146,27 @@ describe('PlanCandidateService', () => {
     expect(noLine.siblingLineBand).toEqual({ min: 530, max: 530, count: 1, scope: 'BATCH' });
   });
 
+  it('exposes anchor major employment/salary/tuition for the card metric strip', async () => {
+    // 卡片指标条优先用专业级就业/薪资(院校级常空), 学费上折叠态 — 透传锚定专业字段
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({
+          id: 950,
+          tuition: 6800,
+          major: { id: 91, name: 'Candidate Major', code: '0001', category: 'Science', employmentRate: 94, avgSalary: 7200 },
+        }),
+      ],
+      records: [makeGroupAdmissionRecord()],
+    });
+    rankStrategy.evaluateCandidate.mockResolvedValue(makeRankStrategyResult('FORMAL', 120000));
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    expect(result.groups[0].anchorEmploymentRate).toBe(94);
+    expect(result.groups[0].anchorAvgSalary).toBe(7200);
+    expect(result.groups[0].anchorTuition).toBe(6800);
+  });
+
   it('adds dynamic gradient details from competition and selection pool while exposing supplementary summaries', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
