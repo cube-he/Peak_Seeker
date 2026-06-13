@@ -123,12 +123,12 @@ function Sparkline({ data }: { data?: Array<{ year: number; score: number; rank:
   );
 }
 
-function MBar({ k, v, suffix = '', chg }: { k: string; v?: string | number | null; suffix?: string; chg?: number | null }) {
+function MBar({ k, v, suffix = '', chg, title }: { k: string; v?: string | number | null; suffix?: string; chg?: number | null; title?: string }) {
   // 数据源用 "/" 表示无数据, 视同空值, 否则会显示成裸 "/"
   const isEmpty = v == null || v === '' || String(v).trim() === '/';
   const show = isEmpty ? '—' : `${v}${suffix}`;
   return (
-    <div className="pgv2-mbar">
+    <div className="pgv2-mbar" title={title}>
       <span className="lbl">{k}</span>
       <span className="val">
         {show}
@@ -297,6 +297,9 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 软科{String(uni.runningNature ?? '').includes('民办') ? '民办' : ''} #{uni.softRanking}
               </span>
             ) : null}
+            {/* 征集 chip 暂时撤下: 现有 supplementary 是"院校×批次"汇总且混了物理/历史双科类+多轮累加,
+                数字虚高(招2人专业被显示成征集100人)。征集数据正用已校验版按"科目+专业组+专业"重建,
+                重建后会以"本科类·本组·累计N人/M轮"的正确口径回来。详见 supplementary-data-rebuild 任务 */}
           </div>
           {/* —— 专业组级标签 (与院校级分行) + 组内专业数 —— */}
           <div className="pgv2-card-tags" style={{ marginTop: 2 }}>
@@ -318,15 +321,7 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 {PURITY_META[group.purity.level]?.label ?? group.purity.level}
               </span>
             ) : null}
-            {/* 征集历史 = 可达性的最强信号(征集常伴随降分), 从 evidence tab 提到卡面 */}
-            {group?.supplementary?.totalPlanCount > 0 ? (
-              <span
-                className="pgv2-tag tone-safe-soft"
-                title={`去年本校本批次征集 ${group.supplementary.totalRounds ?? 1} 轮共 ${group.supplementary.totalPlanCount} 人${group.supplementary.supplementaryRate ? ` · 征集率 ${group.supplementary.supplementaryRate}%` : ''}。征集常伴随降分, 对位次边缘/无史线组是可达性的积极信号`}
-              >
-                征集 {group.supplementary.totalPlanCount} 人/{group.supplementary.totalRounds ?? 1} 轮
-              </span>
-            ) : null}
+            {/* 征集人数已移到下方指标条固定一格(每张卡同位置, 不再埋在 chip 堆里时有时无) */}
             {/* 组内意向命中数 = 服从调剂落到非意向专业的风险参考(纯净度管"乱不乱", 这个管"是不是想读的") */}
             {typeof preferredHitCount === 'number' && groupMajorCount ? (
               <span
