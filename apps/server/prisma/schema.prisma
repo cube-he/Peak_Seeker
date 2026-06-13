@@ -1724,6 +1724,12 @@ model SupplementaryRecord {
   majorId        Int?    @map("major_id")
   majorName      String? @map("major_name") @db.VarChar(200)
 
+  // 新高考维度(2025 起): 科目(物理/历史) + 专业组代码 + 专业代码
+  // 旧高考(2023/2024)无专业组概念, 这三列为 null
+  subject   String? @db.VarChar(20)
+  groupCode String? @map("group_code") @db.VarChar(50)
+  majorCode String? @map("major_code") @db.VarChar(50)
+
   // 征集信息
   planCount      Int?    @map("plan_count")
   requirements   String? @db.Text
@@ -1732,6 +1738,7 @@ model SupplementaryRecord {
 
   @@index([year, province, batch])
   @@index([universityId])
+  @@index([year, universityId, groupCode, subject])
   @@map("supplementary_records")
 }
 

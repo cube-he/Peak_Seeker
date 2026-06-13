@@ -144,6 +144,8 @@ interface CandidateMajor {
   discipline?: string | null;
   softRating?: string | null;
   majorStrengthScore?: number | null;
+  // 专业级征集数(本科类·累计各轮): 该专业去年没招满需补录多少人
+  supplementaryCount?: number | null;
   description?: string | null;
   careerDirections?: string[] | null;
   postgraduateDirections?: string[] | null;
@@ -785,6 +787,17 @@ function CandidateMajorSection({
                   </span>
                 ) : null}
                 {major.planNotes ? <NotesChip notes={major.planNotes} /> : null}
+                {major.supplementaryCount != null && major.supplementaryCount > 0 ? (
+                  <span
+                    style={{
+                      marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                      background: '#f6ffed', color: '#389e0d', border: '1px solid #b7eb8f',
+                    }}
+                    title="该专业去年(本科类)累计征集人数: 没招满需补录, 调剂/征集可达性参考"
+                  >
+                    征集 {major.supplementaryCount} 人
+                  </span>
+                ) : null}
               </div>
 
               <div className={compareStyles.majorScoreCell}>

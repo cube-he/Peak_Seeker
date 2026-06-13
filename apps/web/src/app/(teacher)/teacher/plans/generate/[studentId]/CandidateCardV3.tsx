@@ -321,7 +321,16 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 {PURITY_META[group.purity.level]?.label ?? group.purity.level}
               </span>
             ) : null}
-            {/* 征集人数已移到下方指标条固定一格(每张卡同位置, 不再埋在 chip 堆里时有时无) */}
+            {/* 征集(本组·学生科类·累计各轮): 没录满=常伴随降分, 边缘/无史线组的可达性积极信号。
+                数据已按"科目+专业组"重建, 是这个组本科类自己的征集数(非全校汇总) */}
+            {group?.supplementary?.totalPlanCount > 0 ? (
+              <span
+                className="pgv2-tag tone-safe-soft"
+                title={`${group.supplementary.sourceYear ?? ''} 本组${group.supplementary.subject ? '·' + group.supplementary.subject + '类' : ''}累计征集 ${group.supplementary.totalPlanCount} 人 / ${group.supplementary.totalRounds ?? 1} 轮。征集=该组没招满需补录, 常伴随降分; 对位次边缘/无史线组是可达性的积极信号`}
+              >
+                征集 {group.supplementary.totalPlanCount} 人/{group.supplementary.totalRounds ?? 1} 轮
+              </span>
+            ) : null}
             {/* 组内意向命中数 = 服从调剂落到非意向专业的风险参考(纯净度管"乱不乱", 这个管"是不是想读的") */}
             {typeof preferredHitCount === 'number' && groupMajorCount ? (
               <span

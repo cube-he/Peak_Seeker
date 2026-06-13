@@ -263,9 +263,9 @@ function supplementaryRateOf(group: any) {
 }
 
 function supplementaryForGroupRisk(supplementary: any) {
-  // SupplementarySummary is currently aggregated by university + batch. Treating
-  // it as group-level availability would make every group in that batch look safer.
-  return supplementary?.scope === 'GROUP' ? supplementary : null;
+  // GROUP_SUBJECT 是真正的"本组本科类"征集(2025 起按专业组代码+科目重建), 可喂给梯度引擎;
+  // 旧的院校×批次汇总(会让全批次每组都显安全)不再使用。
+  return (supplementary?.scope === 'GROUP_SUBJECT' || supplementary?.scope === 'GROUP') ? supplementary : null;
 }
 
 function universityTagScore(group: any) {
@@ -826,47 +826,59 @@ export class PlanCandidateService {
     };
   }
 
-  private async loadSupplementaryByGroup(groups: Map<string, any[]>, province: string, years: number[]) {
+  // 征集(已校验版 2025 起重建): supplementary_records 含 subject(物理/历史)+ groupCode + majorCode。
+  // 按 (院校, 批次, 专业组代码) 聚合到组级, 用学生科类过滤(物理生只看物理征集), 多轮累计。
+  // 同时给出组内各专业的征集数(byMajorCode/byMajorName), 供展开态专业行显示。
+  private async loadSupplementaryByGroup(
+    groups: Map<string, any[]>,
+    province: string,
+    year: number,
+    studentSubject?: string,
+  ) {
     const result = new Map<string, any>();
-    if (groups.size === 0 || !(this.prisma as any).supplementarySummary?.findMany) return result;
+    if (groups.size === 0 || !(this.prisma as any).supplementaryRecord?.findMany) return result;
 
     const groupRows = Array.from(groups.entries()).map(([groupKey, rows]) => ({ groupKey, row: rows[0] }));
-    const summaries = await (this.prisma as any).supplementarySummary.findMany({
+    const records = await (this.prisma as any).supplementaryRecord.findMany({
       where: {
         province: { in: this.provinceAliases(province) },
+        year,
         universityId: { in: uniqueValues(groupRows.map(({ row }) => row.universityId)) },
-        year: { in: years },
+        groupCode: { not: null },
+        ...(studentSubject ? { subject: studentSubject } : {}),
       },
       select: {
-        universityId: true,
-        batch: true,
-        year: true,
-        totalRounds: true,
-        totalPlanCount: true,
-        supplementaryRate: true,
+        universityId: true, batch: true, groupCode: true, subject: true,
+        majorCode: true, majorName: true, planCount: true, roundNumber: true,
       },
     });
 
-    const exact = new Map<string, any>();
-    for (const summary of summaries) {
-      const exactKey = `${summary.universityId}|${summary.batch}`;
-      const currentExact = exact.get(exactKey);
-      if (!currentExact || summary.year > currentExact.year) exact.set(exactKey, summary);
+    // 聚合: 院校|批次|组代码 → 累计计划数 + 轮次集合 + 组内各专业征集
+    const agg = new Map<string, { total: number; rounds: Set<number>; byCode: Map<string, number>; byName: Map<string, number> }>();
+    for (const r of records) {
+      const key = `${r.universityId}|${r.batch}|${r.groupCode}`;
+      let a = agg.get(key);
+      if (!a) { a = { total: 0, rounds: new Set(), byCode: new Map(), byName: new Map() }; agg.set(key, a); }
+      const pc = r.planCount ?? 0;
+      a.total += pc;
+      if (r.roundNumber != null) a.rounds.add(r.roundNumber);
+      if (r.majorCode) a.byCode.set(r.majorCode, (a.byCode.get(r.majorCode) ?? 0) + pc);
+      if (r.majorName) a.byName.set(r.majorName, (a.byName.get(r.majorName) ?? 0) + pc);
     }
 
     for (const { groupKey, row } of groupRows) {
-      const summary = exact.get(`${row.universityId}|${row.batch}`);
-      if (!summary) continue;
+      const a = agg.get(`${row.universityId}|${row.batch}|${row.groupCode}`);
+      if (!a || a.total <= 0) continue;
       result.set(groupKey, {
-        sourceYear: summary.year,
-        scope: 'UNIVERSITY_BATCH',
-        batch: summary.batch,
-        totalRounds: summary.totalRounds,
-        totalPlanCount: summary.totalPlanCount,
-        supplementaryRate: summary.supplementaryRate ? Number(summary.supplementaryRate) : null,
+        scope: 'GROUP_SUBJECT',
+        subject: studentSubject ?? null,
+        sourceYear: year,
+        totalPlanCount: a.total,
+        totalRounds: a.rounds.size,
+        byMajorCode: a.byCode,
+        byMajorName: a.byName,
       });
     }
-
     return result;
   }
 
@@ -1705,7 +1717,7 @@ export class PlanCandidateService {
       previousPlansPromise,
       predictionMapPromise,
       this.resolveBatchCompetition(province, subjects, plan.batchName, source.sourceYear),
-      this.loadSupplementaryByGroup(groups, province, [source.sourceYear, source.sourceYear - 1, source.sourceYear - 2]),
+      this.loadSupplementaryByGroup(groups, province, source.sourceYear, subjects),
       this.resolveStudentRank(student, source.sourceYear),
       purityMapPromise,
     ]);
@@ -1810,6 +1822,10 @@ export class PlanCandidateService {
           majorRanking: ep.majorRanking,
           majorHonor: ep.majorHonor,
           majorStrengthScore: this.majorStrengthScore(ep),
+          // 专业级征集数(本科类·累计各轮): 展开态专业行显示, 比组级更精确到"这个专业没录满多少"
+          supplementaryCount: supplementary
+            ? (supplementary.byMajorCode?.get(ep.majorCode) ?? supplementary.byMajorName?.get(ep.majorName) ?? null)
+            : null,
           planNotes: ep.planNotes,
           isSinoForeign: ep.isSinoForeign,
           majorMinScore: currentRecord?.majorMinScore ?? null,
@@ -1931,7 +1947,16 @@ export class PlanCandidateService {
         dynamicGradient,
         competition: batchCompetition,
         selectionCompetition,
-        supplementary,
+        // 组级·学生科类·多轮累计征集(byMajorCode/byMajorName 是 Map, 不外泄, 只出干净字段)
+        supplementary: supplementary
+          ? {
+              scope: supplementary.scope,
+              subject: supplementary.subject,
+              sourceYear: supplementary.sourceYear,
+              totalPlanCount: supplementary.totalPlanCount,
+              totalRounds: supplementary.totalRounds,
+            }
+          : null,
         suggestedGradient: dynamicGradient.gradient,
         anchorMajorMinScore: recommendedAnchor?.majorMinScore ?? null,
         anchorMajorMinRank: recommendedAnchor?.majorMinRank ?? null,

@@ -130,6 +130,7 @@ describe('PlanCandidateService', () => {
       batchLine: { findFirst: jest.fn().mockResolvedValue(null) },
       scoreSegment: { findFirst: jest.fn().mockResolvedValue(null) },
       supplementarySummary: { findMany: jest.fn().mockResolvedValue([]) },
+      supplementaryRecord: { findMany: jest.fn().mockResolvedValue([]) },
       healthRestriction: { findMany: jest.fn().mockResolvedValue([]) },
     };
     scoreSegment = { scoreToRank: jest.fn() };
@@ -797,27 +798,38 @@ describe('PlanCandidateService', () => {
     expect(prisma.enrollmentPlan.findMany.mock.calls[0][0]).not.toHaveProperty('take');
   });
 
-  it('ignores supplementary summaries from a different batch', async () => {
-    prisma.supplementarySummary.findMany.mockResolvedValue([
-      {
-        universityId: 7,
-        batch: 'Batch B',
-        year: 2025,
-        totalRounds: 2,
-        totalPlanCount: 8,
-        supplementaryRate: 0.18,
-      },
+  it('ignores supplementary records from a different batch/group', async () => {
+    // 征集按 (院校,批次,组代码) 匹配; 不同批次的征集不挂到本组
+    prisma.supplementaryRecord.findMany.mockResolvedValue([
+      { universityId: 7, batch: 'Batch B', groupCode: 'G7', subject: '物理', majorCode: '1', majorName: 'M', planCount: 8, roundNumber: 1 },
     ]);
 
-    const groups = new Map([
-      ['7|G7|Batch A|General|Physics', [{ universityId: 7, batch: 'Batch A' }]],
+    const groups = new Map<string, any>([
+      ['7|G7|Batch A|General|物理', [{ universityId: 7, batch: 'Batch A', groupCode: 'G7' }]],
     ]);
-    const result: Map<string, any> = await (service as any).loadSupplementaryByGroup(groups, 'Sichuan', [2025]);
+    const result: Map<string, any> = await (service as any).loadSupplementaryByGroup(groups, 'Sichuan', 2025, '物理');
 
-    expect(result.has('7|G7|Batch A|General|Physics')).toBe(false);
+    expect(result.has('7|G7|Batch A|General|物理')).toBe(false);
   });
 
-  it('does not let university-batch supplementary summaries loosen group risk', async () => {
+  it('aggregates group-level supplementary by subject + rounds', async () => {
+    // 同组同科类多轮累计: round1 物理 12 + round2 物理 22 = 34, 2 轮
+    prisma.supplementaryRecord.findMany.mockResolvedValue([
+      { universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: '化工', planCount: 12, roundNumber: 1 },
+      { universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: '化工', planCount: 22, roundNumber: 2 },
+    ]);
+    const groups = new Map<string, any>([
+      ['7|G7|Batch A|General|物理', [{ universityId: 7, batch: 'Batch A', groupCode: 'G7' }]],
+    ]);
+    const result: Map<string, any> = await (service as any).loadSupplementaryByGroup(groups, 'Sichuan', 2025, '物理');
+    const s = result.get('7|G7|Batch A|General|物理');
+    expect(s.scope).toBe('GROUP_SUBJECT');
+    expect(s.totalPlanCount).toBe(34);
+    expect(s.totalRounds).toBe(2);
+    expect(s.byMajorCode.get('0813')).toBe(34);
+  });
+
+  it('exposes group-level supplementary filtered by student subject + per-major breakdown', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
     });
@@ -835,47 +847,42 @@ describe('PlanCandidateService', () => {
           id: 800, universityId: 8, majorId: 81, university: { id: 8, name: 'Scoped University', code: 'S' },
           major: { id: 81, name: 'Scoped Major', code: '0808', category: 'Engineering' },
           recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
-          majorCode: '0808', majorName: 'Scoped Major', subjects: 'Physics', batch: 'Batch A',
+          majorCode: '0808', majorName: 'Scoped Major', subjects: '物理', batch: 'Batch A',
           groupCode: 'G8', groupName: null, groupPlanCount: 10, subjectRequirements: '',
           planCount: 10, disciplineEval: '', isNationalFeature: false,
         },
       ])
       .mockResolvedValueOnce([
         {
-          universityId: 8, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+          universityId: 8, subjects: '物理', batch: 'Batch A', recruitType: 'General',
           groupCode: 'G8', groupPlanCount: 10, planCount: 10,
         },
       ]);
     prisma.admissionRecord.findMany.mockResolvedValue([
       {
-        universityId: 8, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        universityId: 8, subjects: '物理', batch: 'Batch A', recruitType: 'General',
         groupCode: 'G8', majorCode: '0808', majorName: 'Scoped Major', year: 2025,
         groupMinRank: 10000, groupMinScore: 600, groupAdmissionCount: 10,
         majorMinRank: 10000, majorMinScore: 600, majorAdmissionCount: 10,
       },
     ]);
-    prisma.supplementarySummary.findMany.mockResolvedValue([
-      {
-        universityId: 8,
-        batch: 'Batch A',
-        year: 2025,
-        totalRounds: 3,
-        totalPlanCount: 28,
-        supplementaryRate: 933.33,
-      },
+    // 组内: 物理 0808 两轮 5+3=8; 另有历史一行(应被科类过滤掉)
+    prisma.supplementaryRecord.findMany.mockResolvedValue([
+      { universityId: 8, batch: 'Batch A', groupCode: 'G8', subject: '物理', majorCode: '0808', majorName: 'Scoped Major', planCount: 5, roundNumber: 1 },
+      { universityId: 8, batch: 'Batch A', groupCode: 'G8', subject: '物理', majorCode: '0808', majorName: 'Scoped Major', planCount: 3, roundNumber: 2 },
     ]);
 
     const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
 
     const group = result.groups[0];
-    expect(group.supplementary).toEqual(expect.objectContaining({
-      scope: 'UNIVERSITY_BATCH',
-      totalPlanCount: 28,
-    }));
-    expect(group.dynamicGradient.adjustedMinRank).toBe(10000);
-    expect(group.dynamicGradient.reasons).not.toEqual(expect.arrayContaining([
-      expect.stringContaining('supplementary'),
-    ]));
+    expect(group.supplementary).toEqual({
+      scope: 'GROUP_SUBJECT', subject: '物理', sourceYear: 2025, totalPlanCount: 8, totalRounds: 2,
+    });
+    // payload 不外泄 Map
+    expect(group.supplementary.byMajorCode).toBeUndefined();
+    // 专业级征集挂到专业行
+    const major = group.majors.find((m: any) => m.majorCode === '0808');
+    expect(major.supplementaryCount).toBe(8);
   });
 
   it('sorts candidate groups by supplementary rate when requested', () => {
@@ -1210,15 +1217,9 @@ describe('PlanCandidateService', () => {
     prisma.scoreSegment.findFirst
       .mockResolvedValueOnce({ cumulativeCount: 190000 })
       .mockResolvedValueOnce({ cumulativeCount: 210000 });
-    prisma.supplementarySummary.findMany.mockResolvedValue([
-      {
-        universityId: 7,
-        batch: 'Batch A',
-        year: 2025,
-        totalRounds: 2,
-        totalPlanCount: 8,
-        supplementaryRate: 0.18,
-      },
+    prisma.supplementaryRecord.findMany.mockResolvedValue([
+      { universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: 'Chemistry Engineering', planCount: 5, roundNumber: 1 },
+      { universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: 'Chemistry Engineering', planCount: 3, roundNumber: 2 },
     ]);
 
     const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
@@ -1226,18 +1227,17 @@ describe('PlanCandidateService', () => {
     const group = result.groups[0];
     expect(group.suggestedGradient).toBe('CHONG');
     expect(group.dynamicGradient.adjustedMinRank).toBeGreaterThan(10000);
+    // 组级·科类级征集现在可信, 纳入梯度(征集多=可达性积极信号)
     expect(group.dynamicGradient.reasons).toEqual(expect.arrayContaining([
       expect.stringContaining('plan increased'),
       expect.stringContaining('competition pool decreased'),
-    ]));
-    expect(group.dynamicGradient.reasons).not.toEqual(expect.arrayContaining([
       expect.stringContaining('supplementary'),
     ]));
     expect(group.competition.currentCount).toBe(190000);
     expect(group.competition.previousCount).toBe(210000);
     expect(group.selectionCompetition.eligibleCount).toBe(308010);
     expect(group.supplementary.totalPlanCount).toBe(8);
-    expect(group.supplementary.scope).toBe('UNIVERSITY_BATCH');
+    expect(group.supplementary.scope).toBe('GROUP_SUBJECT');
   });
 
   it('暴露 University 升学/就业/满意度字段到 group.university', async () => {
