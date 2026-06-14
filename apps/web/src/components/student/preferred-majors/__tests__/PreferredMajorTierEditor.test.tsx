@@ -1,4 +1,4 @@
-import { normalize, addMajorToContainer, displayTiers } from '../PreferredMajorTierEditor';
+import { normalize, addMajorToContainer, displayTiers, moveMajorBetweenContainers } from '../PreferredMajorTierEditor';
 import type { PreferredMajorTier } from '../types';
 
 describe('PreferredMajorTierEditor / normalize', () => {
@@ -94,5 +94,45 @@ describe('displayTiers', () => {
   it('有梯队 → 原样(同引用)', () => {
     const tiers = [{ tier: 1, majors: ['A'] }];
     expect(displayTiers({ pool: [], tiers })).toBe(tiers);
+  });
+});
+
+describe('moveMajorBetweenContainers', () => {
+  it('池子 → 已存在的梯队1', () => {
+    expect(
+      moveMajorBetweenContainers({ pool: ['X'], tiers: [{ tier: 1, majors: [] }] }, 'pool', 'tier-1', 'X'),
+    ).toEqual({ pool: [], tiers: [{ tier: 1, majors: ['X'] }] });
+  });
+  it('池子 → 占位梯队1(state 无梯队) 自动创建', () => {
+    expect(
+      moveMajorBetweenContainers({ pool: ['X'], tiers: [] }, 'pool', 'tier-1', 'X'),
+    ).toEqual({ pool: [], tiers: [{ tier: 1, majors: ['X'] }] });
+  });
+  it('梯队1 → 池子', () => {
+    expect(
+      moveMajorBetweenContainers({ pool: [], tiers: [{ tier: 1, majors: ['X'] }] }, 'tier-1', 'pool', 'X'),
+    ).toEqual({ pool: ['X'], tiers: [{ tier: 1, majors: [] }] });
+  });
+  it('梯队1 → 梯队2', () => {
+    expect(
+      moveMajorBetweenContainers(
+        { pool: [], tiers: [{ tier: 1, majors: ['X'] }, { tier: 2, majors: [] }] },
+        'tier-1',
+        'tier-2',
+        'X',
+      ),
+    ).toEqual({ pool: [], tiers: [{ tier: 1, majors: [] }, { tier: 2, majors: ['X'] }] });
+  });
+  it('src === dst → 原样同引用', () => {
+    const s = { pool: [], tiers: [{ tier: 1, majors: ['X'] }] };
+    expect(moveMajorBetweenContainers(s, 'tier-1', 'tier-1', 'X')).toBe(s);
+  });
+  it('无 major → 原样同引用', () => {
+    const s = { pool: ['X'], tiers: [] };
+    expect(moveMajorBetweenContainers(s, 'pool', 'tier-1', '')).toBe(s);
+  });
+  it('非法 dst → 不动(防数据丢失)', () => {
+    const s = { pool: ['X'], tiers: [] };
+    expect(moveMajorBetweenContainers(s, 'pool', 'bogus', 'X')).toBe(s);
   });
 });

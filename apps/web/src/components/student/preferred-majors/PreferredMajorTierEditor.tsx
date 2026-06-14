@@ -112,6 +112,34 @@ export function displayTiers(state: EditorState): EditorState['tiers'] {
   return state.tiers.length > 0 ? state.tiers : [{ tier: 1, majors: [] }];
 }
 
+/** 拖拽移动: 把 major 从 src 容器移到 dst 容器.
+ *  先从 src 删除, 再用 addMajorToContainer 加到 dst (dst 是尚未建立的梯队时自动创建).
+ *  src===dst / 无 major / dst 非法(非池子且非 tier-<num>) → 原样返回, 防数据丢失. */
+export function moveMajorBetweenContainers(
+  state: EditorState,
+  srcContainer: string,
+  dstContainer: string,
+  major: string,
+): EditorState {
+  if (!major || !srcContainer || srcContainer === dstContainer) return state;
+  if (dstContainer !== POOL_ID) {
+    if (!dstContainer.startsWith('tier-')) return state;
+    if (!Number.isFinite(Number(dstContainer.slice('tier-'.length)))) return state;
+  }
+  const removed: EditorState =
+    srcContainer === POOL_ID
+      ? { pool: state.pool.filter((m) => m !== major), tiers: state.tiers }
+      : {
+          pool: state.pool,
+          tiers: state.tiers.map((t) =>
+            tierContainerId(t.tier) === srcContainer
+              ? { ...t, majors: t.majors.filter((m) => m !== major) }
+              : t,
+          ),
+        };
+  return addMajorToContainer(removed, dstContainer, major);
+}
+
 /** PreferredMajorTier[] → EditorState. 防御 missing fields. */
 function tiersToState(tiers: PreferredMajorTier[]): EditorState {
   const pool: string[] = [];
@@ -330,6 +358,8 @@ export default function PreferredMajorTierEditor({
   };
 
   const removeTier = (tier: number) => {
+    // 占位梯队(尚未写入 state)上的"删除梯队"是 no-op, 不触发 onChange (防 spurious dirty)
+    if (!state.tiers.some((t) => t.tier === tier)) return;
     // 删除梯队时, 把该梯队的专业回收到池子, 避免数据丢失
     const target = state.tiers.find((t) => t.tier === tier);
     const recovered = target ? target.majors : [];
@@ -357,31 +387,7 @@ export default function PreferredMajorTierEditor({
     const { container: srcContainer, major } = decodeDragId(String(active.id));
     const dstContainer = String(over.id);
     if (!srcContainer || !major || srcContainer === dstContainer) return;
-
-    // 先从 src 删, 再加到 dst (避免拖到不存在的容器导致数据丢失)
-    let newPool = [...state.pool];
-    let newTiers = state.tiers.map((t) => ({ ...t, majors: [...t.majors] }));
-
-    if (srcContainer === POOL_ID) {
-      newPool = newPool.filter((m) => m !== major);
-    } else {
-      const ti = newTiers.findIndex((t) => tierContainerId(t.tier) === srcContainer);
-      if (ti >= 0) newTiers[ti].majors = newTiers[ti].majors.filter((m) => m !== major);
-    }
-
-    if (dstContainer === POOL_ID) {
-      if (!newPool.includes(major)) newPool.push(major);
-    } else {
-      const ti = newTiers.findIndex((t) => tierContainerId(t.tier) === dstContainer);
-      if (ti >= 0 && !newTiers[ti].majors.includes(major)) {
-        newTiers[ti].majors.push(major);
-      } else {
-        // 目标容器不存在 (用户拖到空白处不在任一容器上方) → 数据回退, 不动
-        return;
-      }
-    }
-
-    emit({ pool: newPool, tiers: newTiers });
+    emit(moveMajorBetweenContainers(state, srcContainer, dstContainer, major));
   };
 
   const activeMajor = activeDragId ? decodeDragId(activeDragId).major : null;
