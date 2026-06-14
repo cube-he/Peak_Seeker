@@ -12,6 +12,7 @@ import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
 import { Role, StudentStatus, Prisma } from '@prisma/client';
 import { ProgressService } from './progress.service';
+import { eligibleLevelFromScore } from './eligible-level';
 import { validateIntakeForBatchSelection } from '../batch-config/batch-config.service';
 import {
   TEACHER_ONLY_FIELDS,
@@ -428,18 +429,48 @@ export class StudentService {
 
     const rankCheck = await this.computeRankCheck(profile);
 
+    const eligibleLevel = await this.computeEligibleLevel(profile);
+
     const latestPlan = profile.volunteerPlans[0];
 
     return {
       ...profile,
       progress,
       rankCheck,
+      eligibleLevel,
       workflowStatus: deriveWorkflowStatus(profile.intakeStatus, latestPlan?.status),
       planCount: profile._count.volunteerPlans,
       latestPlanStatus: latestPlan?.status ?? null,
       latestPlanId: latestPlan?.id ?? null,
       latestPlanVersionNo: latestPlan?.versionNo ?? null,
     };
+  }
+
+  /** 查该生本科批控制线并判定 eligibleLevel。仅支持物理/历史；其余科类/缺分→null。 */
+  private async computeEligibleLevel(profile: {
+    totalScore: number | null;
+    examType: string | null;
+    examYear: number | null;
+    province: string | null;
+  }): Promise<'本科' | '专科' | null> {
+    if (profile.totalScore == null) return null;
+    const examTypeAliases =
+      profile.examType === 'PHYSICS' ? ['物理', '物理类']
+      : profile.examType === 'HISTORY' ? ['历史', '历史类']
+      : null;
+    if (!examTypeAliases) return null;
+    const province = profile.province ?? '四川';
+    const examYear = profile.examYear ?? 2026;
+    const batchAliases = ['本科批次', '本科批', '本科'];
+    const findLine = async (year: number) => {
+      const row = await this.prisma.batchLine.findFirst({
+        where: { year, province, batch: { in: batchAliases }, examType: { in: examTypeAliases } },
+        select: { score: true },
+      });
+      return row?.score ?? null;
+    };
+    const line = (await findLine(examYear)) ?? (await findLine(examYear - 1));
+    return eligibleLevelFromScore(profile.totalScore, line);
   }
 
   /**
