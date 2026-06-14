@@ -16,12 +16,14 @@ import type { PreferredMajorTier } from './types';
 interface Props {
   value?: PreferredMajorTier[] | string[] | null;
   onChange?: (next: PreferredMajorTier[]) => void;
-  options: Array<{ label: string; value: string }>;
+  options: Array<{ label: string; value: string; levels?: import('@/lib/level-mismatch').OptionLevels | null }>;
   isLoading?: boolean;
+  eligibleLevel?: import('@/lib/level-mismatch').EligibleLevel;
+  examType?: string | null;
 }
 
 const PreferredMajorTierFormItem = forwardRef<HTMLDivElement, Props>(
-  function PreferredMajorTierFormItem({ value, onChange, options, isLoading }, _ref) {
+  function PreferredMajorTierFormItem({ value, onChange, options, isLoading, eligibleLevel, examType }, _ref) {
     const tiers = useMemo(() => coerceTierShape(value), [JSON.stringify(value)]);
     return (
       <PreferredMajorTierEditor
@@ -29,6 +31,8 @@ const PreferredMajorTierFormItem = forwardRef<HTMLDivElement, Props>(
         options={options}
         onChange={(next) => onChange?.(next)}
         isLoading={isLoading}
+        eligibleLevel={eligibleLevel}
+        examType={examType}
       />
     );
   },

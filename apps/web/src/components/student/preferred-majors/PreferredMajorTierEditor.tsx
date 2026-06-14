@@ -17,6 +17,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import { tagForLevels, type EligibleLevel, type OptionLevels } from '@/lib/level-mismatch';
 import type { PreferredMajorTier } from './types';
 
 /**
@@ -30,9 +31,11 @@ interface EditorState {
 
 interface Props {
   value: PreferredMajorTier[];
-  options: Array<{ label: string; value: string }>;
+  options: Array<{ label: string; value: string; levels?: OptionLevels | null }>;
   onChange: (next: PreferredMajorTier[]) => void;
   isLoading?: boolean;
+  eligibleLevel?: EligibleLevel;
+  examType?: string | null;
 }
 
 const POOL_ID = 'pool';
@@ -145,10 +148,12 @@ function MajorChip({
   dragId,
   major,
   onRemove,
+  tag,
 }: {
   dragId: string;
   major: string;
   onRemove: () => void;
+  tag?: string | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: dragId,
@@ -166,7 +171,10 @@ function MajorChip({
       {...listeners}
       {...attributes}
     >
-      <span className="pm-chip-handle">{major}</span>
+      <span className="pm-chip-handle">
+        {major}
+        {tag ? <span className="pm-chip-level">{`（${tag}）`}</span> : null}
+      </span>
       <button
         type="button"
         className="pm-chip-close"
@@ -210,6 +218,8 @@ export default function PreferredMajorTierEditor({
   options,
   onChange,
   isLoading,
+  eligibleLevel = null,
+  examType = null,
 }: Props) {
   // 把外部 value (PreferredMajorTier[]) → 内部 EditorState
   const [state, setState] = useState<EditorState>(() => tiersToState(value ?? []));
@@ -240,6 +250,13 @@ export default function PreferredMajorTierEditor({
     () => new Set([...state.pool, ...state.tiers.flatMap((t) => t.majors)]),
     [state],
   );
+
+  // 名字 → 层次不匹配标记 (本/专科对不上时显示, 给 chip 和下拉用)
+  const tagOf = useMemo(() => {
+    const map = new Map<string, '本科' | '专科' | null>();
+    for (const o of options) map.set(o.value, tagForLevels(o.levels, examType, eligibleLevel));
+    return (name: string) => map.get(name) ?? null;
+  }, [options, examType, eligibleLevel]);
 
   // —— actions ——
   // keepOpen: 多选连续添加模式 — 选完不收起下拉, 老师可一次加多个专业 (blur 才关闭)
@@ -369,7 +386,12 @@ export default function PreferredMajorTierEditor({
         value={[]}
         style={{ minWidth: 240 }}
         placeholder="搜索专业, 可连续选多个"
-        options={options.filter((o) => !selectedSet.has(o.value))}
+        options={options
+          .filter((o) => !selectedSet.has(o.value))
+          .map((o) => {
+            const t = tagOf(o.value);
+            return t ? { ...o, label: `${o.label}（${t}）` } : o;
+          })}
         optionFilterProp="label"
         loading={isLoading}
         onSelect={(v) => addMajor(containerId, v as string, true)}
@@ -408,6 +430,7 @@ export default function PreferredMajorTierEditor({
                   key={m}
                   dragId={encodeDragId(POOL_ID, m)}
                   major={m}
+                  tag={tagOf(m)}
                   onRemove={() => removeMajor(POOL_ID, m)}
                 />
               ))
@@ -445,6 +468,7 @@ export default function PreferredMajorTierEditor({
                       key={m}
                       dragId={encodeDragId(cid, m)}
                       major={m}
+                      tag={tagOf(m)}
                       onRemove={() => removeMajor(cid, m)}
                     />
                   ))
