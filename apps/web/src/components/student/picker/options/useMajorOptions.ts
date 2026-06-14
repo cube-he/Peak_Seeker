@@ -11,6 +11,7 @@ export function useMajorOptions() {
   const options: PickerOption[] = (data ?? []).map((m) => ({
     label: m.name,
     value: m.name,
+    levels: m.levels ?? null,
   }));
   return { data: options, isLoading };
 }

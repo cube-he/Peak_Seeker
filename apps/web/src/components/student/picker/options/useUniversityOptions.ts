@@ -12,6 +12,7 @@ export function useUniversityOptions() {
   const options: PickerOption[] = (data ?? []).map((u) => ({
     label: u.name,
     value: u.name,
+    levels: u.levels ?? null,
   }));
   return { data: options, isLoading };
 }

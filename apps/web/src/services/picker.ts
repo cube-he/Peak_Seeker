@@ -1,7 +1,8 @@
 import api from './api';
+import type { OptionLevels } from '@/lib/level-mismatch';
 
-export interface UniversityPickerOption { id: number; code: string | null; name: string; renameHistory?: string | null; }
-export interface MajorPickerOption { id: number; code: string | null; name: string; }
+export interface UniversityPickerOption { id: number; code: string | null; name: string; renameHistory?: string | null; levels?: OptionLevels | null; }
+export interface MajorPickerOption { id: number; code: string | null; name: string; levels?: OptionLevels | null; }
 export interface BatchPickerOption { code: string; name: string; order: number; }
 
 export const pickerApi = {

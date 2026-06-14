@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import { Select } from 'antd';
 import { useAutoSave } from '../auto-save/useAutoSave';
+import type { OptionLevels } from '@/lib/level-mismatch';
 
 export interface PickerOption {
   label: string;
   value: string;
+  levels?: OptionLevels | null;
 }
 
 interface Props {
