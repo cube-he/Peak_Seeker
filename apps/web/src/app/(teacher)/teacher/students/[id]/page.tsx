@@ -25,6 +25,7 @@ import PreferredMajorTierFormItem from '@/components/student/preferred-majors/Pr
 import { tagForLevels, type EligibleLevel } from '@/lib/level-mismatch';
 import { getRegionCascaderOptions, type CascaderOption } from '@/data/student-options';
 import { fieldLabel } from '@/components/student/stage-fields';
+import { CHECK_TO_SECTION, firstMissingSectionKey } from './missing-field-locate';
 import {
   type Subject9Form,
   to9Subjects,
@@ -533,6 +534,19 @@ export default function StudentDetailPage() {
   const initialTab = (searchParams.get('tab') as DetailTab) || 'profile';
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
 
+  // Collapse 受控: 初值与原 defaultActiveKey 一致; 缺字段定位时按需展开对应分区
+  const [activeKeys, setActiveKeys] = useState<string[]>(['basic', 'exam', 'preference']);
+  const jumpToSection = (sectionKey: string | null) => {
+    if (!sectionKey) return;
+    setActiveTab('profile');
+    setActiveKeys((prev) => (prev.includes(sectionKey) ? prev : [...prev, sectionKey]));
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`sd-sec-${sectionKey}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
+
   const handleTabChange = (key: string) => {
     const next = key as DetailTab;
     setActiveTab(next);
@@ -797,7 +811,6 @@ export default function StudentDetailPage() {
             <button
               type="button"
               className="btn primary"
-              disabled={!canGenerate}
               title={
                 intakeStatus !== 'VERIFIED'
                   ? '需先确认学生资料'
@@ -805,7 +818,25 @@ export default function StudentDetailPage() {
                   ? '档案未达到可推荐阈值,请先补全关键字段'
                   : ''
               }
-              onClick={() => setShowPrereqModal(true)}
+              onClick={() => {
+                if (canGenerate) {
+                  setShowPrereqModal(true);
+                  return;
+                }
+                if (intakeStatus !== 'VERIFIED') {
+                  void message.warning('需先确认学生资料后再生成');
+                  return;
+                }
+                const fieldChecks = getFieldChecks(student);
+                const sec = firstMissingSectionKey(fieldChecks);
+                const firstMissing = fieldChecks.find((c) => !c.passed);
+                if (sec) {
+                  void message.warning(`还缺关键资料:${firstMissing!.label}，已为你定位`);
+                  jumpToSection(sec);
+                } else {
+                  void message.warning('档案未达到可推荐阈值,请补全上方"缺失项"提示的字段');
+                }
+              }}
             >
               <TIcon.sparkles /> 生成方案
             </button>
@@ -919,7 +950,15 @@ export default function StudentDetailPage() {
         {missingFieldsList.length > 0 ? (
           <div className="chips">
             {missingFieldsList.map((c) => (
-              <span className="mchip" key={c.key}>
+              <span
+                className="mchip"
+                key={c.key}
+                role="button"
+                tabIndex={0}
+                style={{ cursor: 'pointer' }}
+                title="点击跳到该字段所在分区"
+                onClick={() => jumpToSection(CHECK_TO_SECTION[c.key] ?? null)}
+              >
                 {c.label}
               </span>
             ))}
@@ -980,9 +1019,12 @@ export default function StudentDetailPage() {
                   }}
                 >
                   <Collapse
-                    defaultActiveKey={['basic', 'exam', 'preference']}
+                    activeKey={activeKeys}
+                    onChange={(keys) =>
+                      setActiveKeys(Array.isArray(keys) ? (keys as string[]) : [keys as string])
+                    }
                     items={[
-                      { key: 'basic', label: '基础信息', children: <BasicFields /> },
+                      { key: 'basic', label: '基础信息', children: <div id="sd-sec-basic"><BasicFields /></div> },
                       {
                         key: 'household',
                         label: (
@@ -990,12 +1032,12 @@ export default function StudentDetailPage() {
                             <LockOutlined /> 户籍与高考所在地
                           </span>
                         ),
-                        children: <HouseholdFields />,
+                        children: <div id="sd-sec-household"><HouseholdFields /></div>,
                       },
                       {
                         key: 'exam',
                         label: '考试成绩',
-                        children: <ExamFields rankCheck={student.rankCheck} />,
+                        children: <div id="sd-sec-exam"><ExamFields rankCheck={student.rankCheck} /></div>,
                       },
                       {
                         key: 'bonus',
@@ -1005,14 +1047,14 @@ export default function StudentDetailPage() {
                           </span>
                         ),
                         children: (
-                          <div className="space-y-4">
+                          <div id="sd-sec-bonus" className="space-y-4">
                             <BonusFields />
                             <BonusCalcCard studentProfileId={Number(studentId)} />
                           </div>
                         ),
                       },
-                      { key: 'health', label: '健康条件', children: <HealthFields /> },
-                      { key: 'preference', label: '偏好与规划', children: <PreferenceFields eligibleLevel={student?.eligibleLevel ?? null} examType={student?.examType ?? null} /> },
+                      { key: 'health', label: '健康条件', children: <div id="sd-sec-health"><HealthFields /></div> },
+                      { key: 'preference', label: '偏好与规划', children: <div id="sd-sec-preference"><PreferenceFields eligibleLevel={student?.eligibleLevel ?? null} examType={student?.examType ?? null} /></div> },
                     ]}
                   />
                 </Form>
