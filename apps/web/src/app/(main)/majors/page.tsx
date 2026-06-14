@@ -244,7 +244,10 @@ function BandCell({
   );
 }
 
-export function MajorCard({
+// NOTE: 不能 export —— Next App Router 的 page.tsx 只允许导出 default/metadata 等固定符号,
+// 导出任意组件会让 next build 的页面类型校验失败 (jest/tsc --noEmit 查不到)。
+// 卡片层次标记的逻辑由 @/lib/level-mismatch 的单测覆盖; 整组件抽到独立文件做集成测试是后续项。
+function MajorCard({
   major,
   favorited,
   onToggleFav,
