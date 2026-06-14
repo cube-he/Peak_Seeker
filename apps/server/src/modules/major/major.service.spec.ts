@@ -22,6 +22,9 @@ describe('MajorService.getPickerOptions levels', () => {
     expect(out.find((o) => o.name === '计算机科学与技术')!.levels).toEqual({ phy: '本科', his: '本科' });
     expect(out.find((o) => o.name === '护理')!.levels).toEqual({ phy: '兼有', his: '专科' });
   });
+
+  // 本块用 jest.spyOn 打桩了模块级 getMajorLevelMap; 自复原, 不泄漏到后续 describe
+  afterEach(() => jest.restoreAllMocks());
 });
 
 describe('getPickerOptions', () => {

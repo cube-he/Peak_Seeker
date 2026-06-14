@@ -22,6 +22,9 @@ describe('UniversityService.getPickerOptions levels', () => {
     expect(out.find((o) => o.id === 10)!.levels).toEqual({ phy: '本科', his: '本科' });
     expect(out.find((o) => o.id === 20)!.levels).toEqual({ phy: '专科', his: '专科' });
   });
+
+  // 本块用 jest.spyOn 打桩了模块级 getUniversityLevelMap; 自复原, 不泄漏到后续 describe
+  afterEach(() => jest.restoreAllMocks());
 });
 
 describe('UniversityService.findById campuses', () => {
