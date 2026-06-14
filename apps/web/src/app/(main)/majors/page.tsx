@@ -28,6 +28,7 @@ import type { PreferredMajorTier } from '@/components/student/preferred-majors/t
 import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
 import { FIELD_LABELS } from '@/components/student/stage-fields';
 import { useWorkbench } from '@/stores/workbenchStore';
+import { levelMismatchTag, type EligibleLevel } from '@/lib/level-mismatch';
 // 意向池编辑器样式 (pm-*) scope 在 .wn-teacher-scope 下, 抽屉内包同名容器复用
 import '@/styles/willnest-teacher.css';
 
@@ -243,7 +244,7 @@ function BandCell({
   );
 }
 
-function MajorCard({
+export function MajorCard({
   major,
   favorited,
   onToggleFav,
@@ -253,6 +254,7 @@ function MajorCard({
   inPool,
   onAddToPool,
   signal,
+  eligibleLevel = null,
 }: {
   major: any;
   favorited: boolean;
@@ -265,6 +267,8 @@ function MajorCard({
   onAddToPool: (major: any) => void;
   /* 学生位次 vs 专业位次带的匹配信号 (学生模式下才有) */
   signal: MatchSignal | null;
+  /* 学生可上层次, 用于标记专业层次与之不符 (如本科生看到专科专业) */
+  eligibleLevel?: EligibleLevel;
 }) {
   const employmentRate = parseRate(major.employmentRate);
   const categoryColor = CATEGORY_COLORS[major.category] || '#1e3a5f';
@@ -290,6 +294,12 @@ function MajorCard({
           <h3 className="m-0 truncate font-serif text-[20px] font-semibold leading-tight text-text">
             {major.name}
           </h3>
+          {(() => {
+            const flag = levelMismatchTag(major.level, eligibleLevel);
+            return flag ? (
+              <span className="major-level-flag ml-2 align-middle text-[12px] text-text-muted">{`（${flag}）`}</span>
+            ) : null;
+          })()}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="inline-flex rounded bg-bg px-2 py-0.5 font-mono text-[11px] text-text-muted">
               {major.code || '暂无代码'}
@@ -957,6 +967,7 @@ function MajorsPageInner() {
                     poolEnabled={isTeacher && !!workStudentId}
                     inPool={poolNames.has(major.name)}
                     onAddToPool={addToPool}
+                    eligibleLevel={workStudent?.eligibleLevel ?? null}
                     signal={
                       studentRank != null && studentLane
                         ? matchSignal(
