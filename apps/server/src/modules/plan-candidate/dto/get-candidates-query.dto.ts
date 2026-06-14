@@ -1,6 +1,6 @@
 // dto/get-candidates-query.dto.ts
 import { Type, Transform } from 'class-transformer';
-import { IsOptional, IsInt, Min, IsString, IsBoolean, IsIn } from 'class-validator';
+import { IsOptional, IsInt, Min, Max, IsString, IsBoolean, IsIn } from 'class-validator';
 import { CANDIDATE_UNIVERSITY_SORTS } from '../university-rollup';
 
 // axios 把布尔序列化成 query 字符串 'false'/'true'。坑有两层:
@@ -53,4 +53,7 @@ export class GetCandidatesQueryDto {
   @IsOptional() @IsString() purity?: string;
   // 中外合作办学过滤: only=只看含中外合作的, exclude=排除含中外合作的, 空=全部. 两视图均生效
   @IsOptional() @IsIn(['only', 'exclude']) sinoForeign?: 'only' | 'exclude';
+  // 分数条: 今年预估分区间过滤 (两端都给才生效). 0..750
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(750) minScore?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(750) maxScore?: number;
 }

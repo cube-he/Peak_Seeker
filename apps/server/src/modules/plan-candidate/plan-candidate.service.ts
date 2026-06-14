@@ -15,6 +15,12 @@ import { EthnicityRule } from './filters/soft-rules/ethnicity.rule';
 import { TuitionRule } from './filters/soft-rules/tuition.rule';
 import { NatureRule } from './filters/soft-rules/nature.rule';
 import { filterGroupsBySinoForeign, filterUniversitiesBySinoForeign } from './sino-foreign-filter';
+import {
+  filterGroupsByRankWindow,
+  filterUniversitiesByRankWindow,
+  poolRankBounds,
+  type RankWindow,
+} from './rank-window-filter';
 import { SoftRule, SoftFailReason } from './filters/soft-rule.interface';
 import { calcDynamicGradient, calcGradient } from './gradient-calculator';
 import { confirmedBonusPoints } from '../policy/bonus-points.util';
@@ -48,6 +54,8 @@ interface GetCandidatesQuery {
   groupBy?: 'GROUP' | 'UNIVERSITY'; // 视图模式; UNIVERSITY=院校卡上卷
   nature?: 'public' | 'private'; // 院校优先视图: 办学性质过滤
   sinoForeign?: 'only' | 'exclude'; // 中外合作过滤: only/exclude/空; 两视图均生效
+  minScore?: number; // 分数条下界(今年预估分)
+  maxScore?: number; // 分数条上界
 }
 
 type CandidateGroupSort =
@@ -96,6 +104,7 @@ interface CandidateGroupFullResult {
   availableTiers: Array<{ tier: number; majors: string[]; groupCount: number }>;
   // 当前应用的 tier (echo 回去, 便于前端 URL 同步)
   appliedTier: number;
+  predictedScoreRange?: { min: number; max: number } | null; // 滑块定义域: 全池预测分范围
 }
 
 function uniqueValues<T extends string | number>(values: Array<T | null | undefined>): T[] {
@@ -589,6 +598,7 @@ export class PlanCandidateService {
     pageSize: number,
     gradientBand?: string,
     sinoForeign?: 'only' | 'exclude',
+    rankWindow?: RankWindow | null,
   ) {
     // 档位过滤在缓存后的分页层做: 切换冲/稳/保/无史线 chip 不触发全量重算,
     // total 改为档内数量(驱动分页), tierCounts 保持全池口径(驱动 chip 计数)
@@ -598,7 +608,8 @@ export class PlanCandidateService {
     const banded = validBand
       ? value.groups.filter((g: any) => gradientBandOf(g) === validBand)
       : value.groups;
-    const pool = filterGroupsBySinoForeign(banded, sinoForeign);
+    const afterSino = filterGroupsBySinoForeign(banded, sinoForeign);
+    const pool = filterGroupsByRankWindow(afterSino, rankWindow ?? null);
     const start = (page - 1) * pageSize;
     return {
       ...value,
@@ -649,6 +660,7 @@ export class PlanCandidateService {
     student: any,
     page: number,
     pageSize: number,
+    rankWindow?: RankWindow | null,
   ) {
     const ctx = this.buildRollupContext(student);
     let universities = rollupByUniversity(value.groups, ctx);
@@ -662,6 +674,8 @@ export class PlanCandidateService {
     }
     // 中外合作过滤 (校内任一组含中外), 在排序+分页前
     universities = filterUniversitiesBySinoForeign(universities, q.sinoForeign);
+    // 分数条过滤 (校内任一组命中位次窗口), 在排序+分页前
+    universities = filterUniversitiesByRankWindow(universities, rankWindow ?? null);
     sortCandidateUniversities(universities, q.sort ?? 'UNIVERSITY_OVERALL', value.studentRankUsed);
     const start = (page - 1) * pageSize;
     const { groups: _groups, ...meta } = value;
@@ -673,6 +687,42 @@ export class PlanCandidateService {
       pageSize,
       universities: universities.slice(start, start + pageSize),
     };
+  }
+
+  // 分数条: 把分数区间换成位次窗口(高分→小位次, 低分→大位次). 缺服务/缺数据/输入不全 → null(不过滤).
+  private async resolveRankWindow(
+    minScore: number | undefined,
+    maxScore: number | undefined,
+    year: number,
+    subjects: string,
+  ): Promise<RankWindow | null> {
+    if (typeof minScore !== 'number' || typeof maxScore !== 'number') return null;
+    if (!this.scoreSegmentService) return null;
+    try {
+      const hi = await this.scoreSegmentService.scoreToRank(year, subjects as any, Math.max(minScore, maxScore));
+      const lo = await this.scoreSegmentService.scoreToRank(year, subjects as any, Math.min(minScore, maxScore));
+      return { minRank: hi.rank, maxRank: lo.rank };
+    } catch {
+      return null;
+    }
+  }
+
+  // 滑块定义域: 全池预测位次的最小/最大换成分数(最小位次→最高分, 最大位次→最低分). 缺服务/数据 → null.
+  private async computePredictedScoreRange(
+    groups: any[],
+    year: number,
+    subjects: string,
+  ): Promise<{ min: number; max: number } | null> {
+    if (!this.scoreSegmentService) return null;
+    const bounds = poolRankBounds(groups);
+    if (!bounds) return null;
+    try {
+      const best = await this.scoreSegmentService.rankToScore(year, subjects as any, bounds.minPoint);
+      const worst = await this.scoreSegmentService.rankToScore(year, subjects as any, bounds.maxPoint);
+      return { min: worst.score, max: best.score };
+    } catch {
+      return null;
+    }
   }
 
   private provinceAliases(province: string) {
@@ -1459,13 +1509,14 @@ export class PlanCandidateService {
     });
     const page = q.page ?? 1;
     const pageSize = q.pageSize ?? 20;
+    const rankWindow = await this.resolveRankWindow(q.minScore, q.maxScore, source.sourceYear, subjects);
     const cacheKey = this.candidateGroupCacheKey(plan, q);
     const cached = this.getCandidateGroupCache(cacheKey);
     if (cached) {
       if (q.groupBy === 'UNIVERSITY') {
-        return this.paginateAsUniversities(cached, q, student, page, pageSize);
+        return this.paginateAsUniversities(cached, q, student, page, pageSize, rankWindow);
       }
-      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign);
+      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow);
     }
 
     // 拆分搜索: 院校 / 专业各自独立; 同时填则 AND 组合 (院校的特定专业)
@@ -1546,9 +1597,10 @@ export class PlanCandidateService {
             groupCount: 0,
           })),
           appliedTier: q.tier ?? 0,
+          predictedScoreRange: null,
         };
         this.setCandidateGroupCache(cacheKey, emptyResult);
-        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign);
+        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow);
       }
       (where as any).OR = matchedGroups.map((g) => ({
         universityId: g.universityId,
@@ -2143,12 +2195,13 @@ export class PlanCandidateService {
       groups: resultGroups,
       availableTiers,
       appliedTier: q.tier ?? 0,
+      predictedScoreRange: await this.computePredictedScoreRange(resultGroups, source.sourceYear, subjects),
     };
     this.setCandidateGroupCache(cacheKey, fullResult);
     if (q.groupBy === 'UNIVERSITY') {
-      return this.paginateAsUniversities(fullResult, q, student, page, pageSize);
+      return this.paginateAsUniversities(fullResult, q, student, page, pageSize, rankWindow);
     }
-    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign);
+    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow);
   }
 
   async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {
