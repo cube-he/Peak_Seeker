@@ -14,6 +14,7 @@ import { HouseholdRule } from './filters/soft-rules/household.rule';
 import { EthnicityRule } from './filters/soft-rules/ethnicity.rule';
 import { TuitionRule } from './filters/soft-rules/tuition.rule';
 import { NatureRule } from './filters/soft-rules/nature.rule';
+import { filterGroupsBySinoForeign, filterUniversitiesBySinoForeign } from './sino-foreign-filter';
 import { SoftRule, SoftFailReason } from './filters/soft-rule.interface';
 import { calcDynamicGradient, calcGradient } from './gradient-calculator';
 import { confirmedBonusPoints } from '../policy/bonus-points.util';
@@ -46,6 +47,7 @@ interface GetCandidatesQuery {
   purity?: string; // csv 'S,A,B,C'; 空 = 不过滤
   groupBy?: 'GROUP' | 'UNIVERSITY'; // 视图模式; UNIVERSITY=院校卡上卷
   nature?: 'public' | 'private'; // 院校优先视图: 办学性质过滤
+  sinoForeign?: 'only' | 'exclude'; // 中外合作过滤: only/exclude/空; 两视图均生效
 }
 
 type CandidateGroupSort =
@@ -586,15 +588,17 @@ export class PlanCandidateService {
     page: number,
     pageSize: number,
     gradientBand?: string,
+    sinoForeign?: 'only' | 'exclude',
   ) {
     // 档位过滤在缓存后的分页层做: 切换冲/稳/保/无史线 chip 不触发全量重算,
     // total 改为档内数量(驱动分页), tierCounts 保持全池口径(驱动 chip 计数)
     const validBand = gradientBand && ['RUSH', 'STABLE', 'SAFE', 'NO_LINE'].includes(gradientBand)
       ? gradientBand
       : null;
-    const pool = validBand
+    const banded = validBand
       ? value.groups.filter((g: any) => gradientBandOf(g) === validBand)
       : value.groups;
+    const pool = filterGroupsBySinoForeign(banded, sinoForeign);
     const start = (page - 1) * pageSize;
     return {
       ...value,
@@ -656,6 +660,8 @@ export class PlanCandidateService {
         return q.nature === 'public' ? isPub : !isPub;
       });
     }
+    // 中外合作过滤 (校内任一组含中外), 在排序+分页前
+    universities = filterUniversitiesBySinoForeign(universities, q.sinoForeign);
     sortCandidateUniversities(universities, q.sort ?? 'UNIVERSITY_OVERALL', value.studentRankUsed);
     const start = (page - 1) * pageSize;
     const { groups: _groups, ...meta } = value;
@@ -1459,7 +1465,7 @@ export class PlanCandidateService {
       if (q.groupBy === 'UNIVERSITY') {
         return this.paginateAsUniversities(cached, q, student, page, pageSize);
       }
-      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand);
+      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign);
     }
 
     // 拆分搜索: 院校 / 专业各自独立; 同时填则 AND 组合 (院校的特定专业)
@@ -1542,7 +1548,7 @@ export class PlanCandidateService {
           appliedTier: q.tier ?? 0,
         };
         this.setCandidateGroupCache(cacheKey, emptyResult);
-        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand);
+        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign);
       }
       (where as any).OR = matchedGroups.map((g) => ({
         universityId: g.universityId,
@@ -2142,7 +2148,7 @@ export class PlanCandidateService {
     if (q.groupBy === 'UNIVERSITY') {
       return this.paginateAsUniversities(fullResult, q, student, page, pageSize);
     }
-    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand);
+    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign);
   }
 
   async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {

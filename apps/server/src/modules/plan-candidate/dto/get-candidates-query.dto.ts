@@ -51,4 +51,6 @@ export class GetCandidatesQueryDto {
   @IsOptional() @Transform(onlyExplicitFalse) @IsBoolean() excludeAdded?: boolean | string = true;
   // 客观纯净度过滤. csv 形式 'S,A,B,C'; 空或 undefined = 不过滤
   @IsOptional() @IsString() purity?: string;
+  // 中外合作办学过滤: only=只看含中外合作的, exclude=排除含中外合作的, 空=全部. 两视图均生效
+  @IsOptional() @IsIn(['only', 'exclude']) sinoForeign?: 'only' | 'exclude';
 }
