@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
-import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Radio, Select, Spin, message } from 'antd';
+import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Radio, Select, Spin, Switch, message } from 'antd';
 import dayjs from 'dayjs';
 import {
   LockOutlined,
@@ -1820,6 +1820,15 @@ function PreferenceFields({
             <Radio value="RELAXED">接受</Radio>
             <Radio value="UNDECIDED">未定</Radio>
           </Radio.Group>
+        </Form.Item>
+      </div>
+      <div className="field sd-field-full">
+        <label>
+          是否接受中外合作办学
+          <span className="sc-hint"> 学费通常较高 · 多为合作办学 / 双校园培养</span>
+        </label>
+        <Form.Item name="acceptSinoForeign" valuePropName="checked" noStyle>
+          <Switch checkedChildren="接受" unCheckedChildren="不接受" />
         </Form.Item>
       </div>
       {/* 院校/专业/省市 Picker 保留 antd Select (业务搜索下拉, 不改) */}
