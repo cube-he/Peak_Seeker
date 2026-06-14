@@ -1085,6 +1085,8 @@ export default function GeneratePlanPage() {
   const [uniSort, setUniSort] = useState<UniversitySortValue>('UNIVERSITY_OVERALL');
   // 院校优先视图: 办学性质过滤 (null=全部, 'public'=公办, 'private'=民办)
   const [natureFilter, setNatureFilter] = useState<'public' | 'private' | null>(null);
+  // 中外合作过滤 (两视图通用): null=全部, 'only'=只看, 'exclude'=排除
+  const [sinoForeignFilter, setSinoForeignFilter] = useState<'only' | 'exclude' | null>(null);
   // 意向梯队过滤 (0 = 全部, 1+ = 该梯队). 默认 1 (学生没填意向时自动落到 0)
   const [appliedTier, setAppliedTier] = useState<number>(() => {
     const t = Number(searchParams.get('tier'));
@@ -1188,7 +1190,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, effectiveSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, effectiveSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1205,6 +1207,7 @@ export default function GeneratePlanPage() {
       purity: purityFilter,
       groupBy: viewMode === 'UNIVERSITY' ? 'UNIVERSITY' : undefined,
       nature: viewMode === 'UNIVERSITY' ? (natureFilter ?? undefined) : undefined,
+      sinoForeign: sinoForeignFilter ?? undefined,
     }),
     enabled: !!planId,
   });
@@ -2291,6 +2294,28 @@ export default function GeneratePlanPage() {
                   />
                   显示已填报院校专业组
                 </label>
+              </div>
+
+              {/* —— 中外合作过滤 chip (三态; 两视图通用) —— */}
+              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
+                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>中外合作</span>
+                {([
+                  { v: null, label: '全部' },
+                  { v: 'only' as const, label: '只看中外合作' },
+                  { v: 'exclude' as const, label: '排除中外合作' },
+                ]).map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    className={`pgv2-tier-chip ${sinoForeignFilter === opt.v ? 'is-active' : ''}`}
+                    onClick={() => {
+                      setSinoForeignFilter(opt.v);
+                      setCandidatePage(1);
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
 
               {/* —— 纯净度过滤 chip (多选;空 = 全部) (#4) —— */}

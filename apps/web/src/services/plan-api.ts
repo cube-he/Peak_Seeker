@@ -57,6 +57,8 @@ export interface CandidateGroupListParams extends CandidateListParams {
   groupBy?: 'GROUP' | 'UNIVERSITY';
   // 院校优先视图: 办学性质过滤 (public=公办, private=民办, 不传=全部)
   nature?: 'public' | 'private';
+  // 中外合作办学过滤 (only=只看, exclude=排除, 不传=全部)
+  sinoForeign?: 'only' | 'exclude';
 }
 
 export interface TeacherPlanListParams {
@@ -135,6 +137,7 @@ export const planApi = {
           : undefined,
         groupBy: params?.groupBy,
         nature: params?.nature,
+        sinoForeign: params?.sinoForeign,
       },
     }) as any;
   },
