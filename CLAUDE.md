@@ -23,7 +23,7 @@ python deploy_auto.py --skip-build --skip-tests
 
 **部署后常见补充动作**：
 - 改了 university 字段/导入数据 → 清 Redis `cache:university:*`
-- 改了/重导招生计划（enrollment_plans）→ 清 Redis `enroll-level:major:四川` 和 `enroll-level:university:四川`，否则 picker 的本/专科标记用旧层次
+- 改了/重导招生计划（enrollment_plans）→ 清 Redis `cache:enroll-level:*`（RedisService 自动加 `cache:` 前缀），否则 picker 的本/专科标记用旧层次
 - 改了批次资格种子 → 服务器跑 `cd apps/server && pnpm seed:eligibility`（幂等）
 - `data/seed/batch-region-counties.json` 不随 deploy 上传，改了要手动 SFTP 到远端同路径
 
