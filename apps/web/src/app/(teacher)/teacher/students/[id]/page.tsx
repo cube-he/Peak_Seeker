@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import PrerequisiteCheckModal from '@/components/plan/PrerequisiteCheckModal';
+import PrerequisiteCheckModal, { hasRankedPreferredMajors } from '@/components/plan/PrerequisiteCheckModal';
 import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Radio, Select, Spin, Switch, message } from 'antd';
 import dayjs from 'dayjs';
 import {
@@ -2059,7 +2059,7 @@ function getFieldChecks(student: any): FieldCheckInfo[] {
       key: 'majors',
       label: '意向专业',
       passed:
-        (Array.isArray(student?.preferredMajors) && student.preferredMajors.length > 0) ||
+        hasRankedPreferredMajors(student?.preferredMajors) ||
         (Array.isArray(student?.preferredMajorCategories) &&
           student.preferredMajorCategories.length > 0),
     },
