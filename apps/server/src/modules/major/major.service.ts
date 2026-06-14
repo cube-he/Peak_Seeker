@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { AdmissionService } from '../admission/admission.service';
+import { getMajorLevelMap, OptionLevels } from '../enrollment-level/enrollment-levels';
 
 @Injectable()
 export class MajorService {
@@ -301,7 +302,7 @@ export class MajorService {
     return result;
   }
 
-  async getPickerOptions(batches?: string[]): Promise<{ id: number; code: string | null; name: string }[]> {
+  async getPickerOptions(batches?: string[]): Promise<{ id: number; code: string | null; name: string; levels: OptionLevels | null }[]> {
     // 仅返回在川招生计划中出现过的专业（避免学生在 picker 里选到四川没人招的专业）
     // batches: 当学生已选定批次,只返回在这些批次有招生计划的专业 (商业化流程硬过滤)
     const epWhere: Prisma.EnrollmentPlanWhereInput = { province: '四川' };
@@ -320,8 +321,11 @@ export class MajorService {
     for (const r of rows) {
       if (!seen.has(r.name)) seen.set(r.name, r);
     }
-    // alphabetical for picker display
-    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+    // alphabetical for picker display + 附在川层次
+    const levelMap = await getMajorLevelMap(this.prisma, this.redis);
+    return Array.from(seen.values())
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+      .map((r) => ({ ...r, levels: levelMap[r.name] ?? null }));
   }
 
   async getHotMajors(limit?: number) {

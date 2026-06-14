@@ -1,6 +1,36 @@
 import { MajorService } from './major.service';
+import * as levels from '../enrollment-level/enrollment-levels';
+
+describe('MajorService.getPickerOptions levels', () => {
+  it('给每个专业名附上在川层次', async () => {
+    const prisma = {
+      major: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 1, code: '0809', name: '计算机科学与技术' },
+          { id: 2, code: '6301', name: '护理' },
+        ]),
+      },
+    } as any;
+    const redis = { getCache: jest.fn(), setCache: jest.fn() } as any;
+    jest.spyOn(levels, 'getMajorLevelMap').mockResolvedValue({
+      计算机科学与技术: { phy: '本科', his: '本科' },
+      护理: { phy: '兼有', his: '专科' },
+    });
+    // constructor: (prisma, redis, admissionService) — 第三参本用例用不到, 传 {} as any
+    const svc = new MajorService(prisma, redis, {} as any);
+    const out = await svc.getPickerOptions();
+    expect(out.find((o) => o.name === '计算机科学与技术')!.levels).toEqual({ phy: '本科', his: '本科' });
+    expect(out.find((o) => o.name === '护理')!.levels).toEqual({ phy: '兼有', his: '专科' });
+  });
+});
 
 describe('getPickerOptions', () => {
+  // getPickerOptions 现会调用 getMajorLevelMap(查 enrollment_plans 聚合);
+  // 这些用例只关心 picker 查询/去重/排序, 故把层次查询打桩成空 map。
+  beforeEach(() => {
+    jest.spyOn(levels, 'getMajorLevelMap').mockResolvedValue({});
+  });
+
   const buildService = () => {
     const prisma = {
       major: {

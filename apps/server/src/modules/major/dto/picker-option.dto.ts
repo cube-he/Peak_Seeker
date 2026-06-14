@@ -9,4 +9,7 @@ export class MajorPickerOptionDto {
 
   @ApiProperty({ description: '专业名称' })
   name!: string;
+
+  @ApiProperty({ description: '在川各科类层次 {phy,his}: 本科|专科|兼有|null', required: false, nullable: true })
+  levels?: { phy: '本科' | '专科' | '兼有' | null; his: '本科' | '专科' | '兼有' | null } | null;
 }
