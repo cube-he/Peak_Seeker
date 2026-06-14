@@ -540,11 +540,19 @@ export default function StudentDetailPage() {
     if (!sectionKey) return;
     setActiveTab('profile');
     setActiveKeys((prev) => (prev.includes(sectionKey) ? prev : [...prev, sectionKey]));
-    requestAnimationFrame(() => {
-      document
-        .getElementById(`sd-sec-${sectionKey}`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
+    // antd Collapse 懒挂载: 折叠面板的子节点要展开后第二次提交才进 DOM,
+    // 切 Tab 也会重挂载 → 用有限次 rAF 轮询, 等锚点出现再滚动 (取不到就放弃, 不报错).
+    let tries = 0;
+    const tryScroll = () => {
+      const el = document.getElementById(`sd-sec-${sectionKey}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (tries < 15) {
+        tries += 1;
+        requestAnimationFrame(tryScroll);
+      }
+    };
+    requestAnimationFrame(tryScroll);
   };
 
   const handleTabChange = (key: string) => {
@@ -958,6 +966,12 @@ export default function StudentDetailPage() {
                 style={{ cursor: 'pointer' }}
                 title="点击跳到该字段所在分区"
                 onClick={() => jumpToSection(CHECK_TO_SECTION[c.key] ?? null)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    jumpToSection(CHECK_TO_SECTION[c.key] ?? null);
+                  }
+                }}
               >
                 {c.label}
               </span>
