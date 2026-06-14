@@ -1,4 +1,4 @@
-import { normalize } from '../PreferredMajorTierEditor';
+import { normalize, addMajorToContainer, displayTiers } from '../PreferredMajorTierEditor';
 import type { PreferredMajorTier } from '../types';
 
 describe('PreferredMajorTierEditor / normalize', () => {
@@ -46,5 +46,45 @@ describe('PreferredMajorTierEditor / normalize', () => {
       { tier: 2, majors: ['B', 'C'] },
     ];
     expect(normalize(input)).toEqual(input);
+  });
+});
+
+describe('addMajorToContainer', () => {
+  it('空 state 加入梯队1 → 自动建梯队1', () => {
+    expect(addMajorToContainer({ pool: [], tiers: [] }, 'tier-1', '计算机')).toEqual({
+      pool: [],
+      tiers: [{ tier: 1, majors: ['计算机'] }],
+    });
+  });
+  it('梯队1已存在 → 追加', () => {
+    expect(
+      addMajorToContainer({ pool: [], tiers: [{ tier: 1, majors: ['A'] }] }, 'tier-1', 'B'),
+    ).toEqual({ pool: [], tiers: [{ tier: 1, majors: ['A', 'B'] }] });
+  });
+  it('加入意向池', () => {
+    expect(addMajorToContainer({ pool: [], tiers: [] }, 'pool', 'X')).toEqual({
+      pool: ['X'],
+      tiers: [],
+    });
+  });
+  it('已存在(任意容器) → 原样返回(同引用)', () => {
+    const s = { pool: ['X'], tiers: [{ tier: 1, majors: ['A'] }] };
+    expect(addMajorToContainer(s, 'tier-1', 'X')).toBe(s);
+    expect(addMajorToContainer(s, 'tier-1', 'A')).toBe(s);
+  });
+  it('加入更高梯队 → 按 tier 升序插入', () => {
+    expect(
+      addMajorToContainer({ pool: [], tiers: [{ tier: 1, majors: ['A'] }] }, 'tier-2', 'B'),
+    ).toEqual({ pool: [], tiers: [{ tier: 1, majors: ['A'] }, { tier: 2, majors: ['B'] }] });
+  });
+});
+
+describe('displayTiers', () => {
+  it('无梯队 → 注入空梯队1', () => {
+    expect(displayTiers({ pool: ['X'], tiers: [] })).toEqual([{ tier: 1, majors: [] }]);
+  });
+  it('有梯队 → 原样(同引用)', () => {
+    const tiers = [{ tier: 1, majors: ['A'] }];
+    expect(displayTiers({ pool: [], tiers })).toBe(tiers);
   });
 });

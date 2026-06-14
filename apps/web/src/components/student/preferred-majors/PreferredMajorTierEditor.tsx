@@ -77,6 +77,41 @@ function stateToTiers(state: EditorState): PreferredMajorTier[] {
     : sorted;
 }
 
+/** 把 major 加进指定容器; 容器是梯队但 state 里还没有该梯队 → 自动创建并按 tier 升序插入.
+ *  major 已存在(池子或任意梯队)则原样返回同引用. 纯函数, 供编辑器与测试复用. */
+export function addMajorToContainer(
+  state: EditorState,
+  containerId: string,
+  major: string,
+): EditorState {
+  if (!major) return state;
+  const exists =
+    state.pool.includes(major) || state.tiers.some((t) => t.majors.includes(major));
+  if (exists) return state;
+  if (containerId === POOL_ID) {
+    return { ...state, pool: [...state.pool, major] };
+  }
+  const tierNum = Number(containerId.slice('tier-'.length));
+  if (!Number.isFinite(tierNum)) return state;
+  if (state.tiers.some((t) => t.tier === tierNum)) {
+    return {
+      ...state,
+      tiers: state.tiers.map((t) =>
+        t.tier === tierNum ? { ...t, majors: [...t.majors, major] } : t,
+      ),
+    };
+  }
+  return {
+    ...state,
+    tiers: [...state.tiers, { tier: tierNum, majors: [major] }].sort((a, b) => a.tier - b.tier),
+  };
+}
+
+/** 渲染用梯队: state 无梯队时注入一个空梯队1(仅用于展示, 不写回 state / 不触发 onChange). */
+export function displayTiers(state: EditorState): EditorState['tiers'] {
+  return state.tiers.length > 0 ? state.tiers : [{ tier: 1, majors: [] }];
+}
+
 /** PreferredMajorTier[] → EditorState. 防御 missing fields. */
 function tiersToState(tiers: PreferredMajorTier[]): EditorState {
   const pool: string[] = [];
