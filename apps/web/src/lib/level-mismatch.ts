@@ -1,5 +1,7 @@
 export type ItemLevel = '本科' | '专科' | '兼有';
 export type EligibleLevel = '本科' | '专科' | null;
+// 与后端 apps/server/src/modules/enrollment-level/enrollment-levels.ts 的 OptionLevels 同形;
+// 无共享 types 包, 改层次取值 (如新增"中职") 需两端同步。
 export type OptionLevels = { phy: ItemLevel | null; his: ItemLevel | null };
 
 /** 科类枚举 → 层次 lane。仅物理/历史可标。 */
