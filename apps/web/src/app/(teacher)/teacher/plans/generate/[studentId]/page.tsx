@@ -1090,6 +1090,8 @@ export default function GeneratePlanPage() {
   const [sinoForeignFilter, setSinoForeignFilter] = useState<'only' | 'exclude' | null>(null);
   // 分数条: null=未筛; [lo,hi]=已选区间(今年预估分)
   const [scoreRange, setScoreRange] = useState<[number, number] | null>(null);
+  // 拖动中的临时值(只驱动滑块显示, 不进 queryKey, 避免拖动时狂发请求)
+  const [scoreSlider, setScoreSlider] = useState<[number, number] | null>(null);
   // 意向梯队过滤 (0 = 全部, 1+ = 该梯队). 默认 1 (学生没填意向时自动落到 0)
   const [appliedTier, setAppliedTier] = useState<number>(() => {
     const t = Number(searchParams.get('tier'));
@@ -2324,23 +2326,27 @@ export default function GeneratePlanPage() {
                 ))}
               </div>
 
-              {/* —— 分数条: 今年预估分区间 (两视图通用) —— */}
+              {/* —— 分数条: 今年预估分区间 (两视图通用; 拖动只更显示, 松手才筛) —— */}
               {predictedScoreRange && predictedScoreRange.max > predictedScoreRange.min ? (
                 <div className="pgv2-tier-bar" style={{ marginTop: 4, alignItems: 'center', gap: 12 }}>
                   <span style={{ color: '#666', fontSize: 12 }}>
-                    今年预估分 {scoreRange ? `${scoreRange[0]}–${scoreRange[1]}` : '全部'}
+                    今年预估分{' '}
+                    {(scoreSlider ?? scoreRange)
+                      ? `${(scoreSlider ?? scoreRange)![0]}–${(scoreSlider ?? scoreRange)![1]}`
+                      : '全部'}
                   </span>
                   <div style={{ flex: 1, maxWidth: 420, padding: '0 8px' }}>
                     <Slider
                       range
                       min={predictedScoreRange.min}
                       max={predictedScoreRange.max}
-                      value={scoreRange ?? [predictedScoreRange.min, predictedScoreRange.max]}
-                      onChange={(v) => setScoreRange(v as [number, number])}
+                      value={scoreSlider ?? scoreRange ?? [predictedScoreRange.min, predictedScoreRange.max]}
+                      onChange={(v) => setScoreSlider(v as [number, number])}
                       onChangeComplete={(v) => {
                         const [lo, hi] = v as [number, number];
                         const isFull = lo <= predictedScoreRange.min && hi >= predictedScoreRange.max;
                         setScoreRange(isFull ? null : [lo, hi]);
+                        setScoreSlider(null);
                         setCandidatePage(1);
                       }}
                     />
@@ -2350,7 +2356,7 @@ export default function GeneratePlanPage() {
                       type="button"
                       className="pgv2-tier-chip"
                       style={{ opacity: 0.7 }}
-                      onClick={() => { setScoreRange(null); setCandidatePage(1); }}
+                      onClick={() => { setScoreRange(null); setScoreSlider(null); setCandidatePage(1); }}
                     >
                       清除
                     </button>
