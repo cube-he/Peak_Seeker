@@ -300,18 +300,7 @@ export default function PreferredMajorTierEditor({
       if (!keepOpen) setAdding(null);
       return;
     }
-    if (containerId === POOL_ID) {
-      emit({ ...state, pool: [...state.pool, major] });
-    } else {
-      emit({
-        ...state,
-        tiers: state.tiers.map((t) =>
-          tierContainerId(t.tier) === containerId
-            ? { ...t, majors: [...t.majors, major] }
-            : t,
-        ),
-      });
-    }
+    emit(addMajorToContainer(state, containerId, major));
     if (!keepOpen) setAdding(null);
   };
 
@@ -447,18 +436,17 @@ export default function PreferredMajorTierEditor({
       onDragEnd={handleDragEnd}
     >
       <div className="pm-editor">
-        {/* —— 意向池 (tier=0) —— */}
+        {/* —— 意向池 (tier=0): 拖拽暂存区, 不再是默认落点 —— */}
         <DropContainer id={POOL_ID} className="pm-pool">
           <div className="pm-section-head">
             <div>
-              <span className="pm-section-title">意向池</span>
-              <span className="pm-section-hint">尚未排梯队 · 不参与方案推荐</span>
+              <span className="pm-section-title">意向池（暂存）</span>
+              <span className="pm-section-hint">从梯队拖到这里暂存 · 不参与方案推荐</span>
             </div>
-            {renderAddSelector(POOL_ID)}
           </div>
           <div className="pm-chips">
             {state.pool.length === 0 ? (
-              <span className="pm-empty">先把可能想读的专业加进来, 之后再拖到梯队排顺序</span>
+              <span className="pm-empty">直接在下方梯队「加专业」即可；不确定的可拖到这里暂存</span>
             ) : (
               state.pool.map((m) => (
                 <MajorChip
@@ -473,8 +461,8 @@ export default function PreferredMajorTierEditor({
           </div>
         </DropContainer>
 
-        {/* —— 梯队 (tier>=1) —— */}
-        {state.tiers.map((t) => {
+        {/* —— 梯队 (tier>=1): 默认落点; 无梯队时自动显示空梯队1 —— */}
+        {displayTiers(state).map((t) => {
           const cid = tierContainerId(t.tier);
           return (
             <DropContainer key={t.tier} id={cid} className="pm-tier">
@@ -485,18 +473,21 @@ export default function PreferredMajorTierEditor({
                     {t.tier === 1 ? '最想去 / 冲一冲' : `第 ${t.tier} 优先`}
                   </span>
                 </div>
-                <Button
-                  size="small"
-                  type="text"
-                  danger
-                  onClick={() => removeTier(t.tier)}
-                >
-                  删除梯队
-                </Button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {renderAddSelector(cid)}
+                  <Button
+                    size="small"
+                    type="text"
+                    danger
+                    onClick={() => removeTier(t.tier)}
+                  >
+                    删除梯队
+                  </Button>
+                </div>
               </div>
               <div className="pm-chips">
                 {t.majors.length === 0 ? (
-                  <span className="pm-empty">拖动池子里的专业到这里</span>
+                  <span className="pm-empty">点「加专业」选择, 或从意向池拖入</span>
                 ) : (
                   t.majors.map((m) => (
                     <MajorChip
