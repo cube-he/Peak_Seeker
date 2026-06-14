@@ -511,6 +511,62 @@ export default function StudentDetailPage() {
     }
   };
 
+  const handleSave = () => {
+    form.validateFields().then((values) => {
+      // 9 科 → 后端 6 槽位字段翻译。
+      // 老师可能只动了一两个字段，但只要 9 科里任一有值就走翻译。
+      const subj9: Subject9Form = {
+        scoreChinese: values.scoreChinese,
+        scoreMath: values.scoreMath,
+        scoreEnglish: values.scoreEnglish,
+        scorePhysics: values.scorePhysics,
+        scoreHistory: values.scoreHistory,
+        scoreChemistry: values.scoreChemistry,
+        scoreBiology: values.scoreBiology,
+        scorePolitics: values.scorePolitics,
+        scoreGeography: values.scoreGeography,
+      };
+      const has9 = Object.values(subj9).some((v) => v != null);
+      if (has9) {
+        // from9Subjects 要求 6 门凑齐才能整组翻译; 不齐时强行翻译会把
+        // examType 强翻成历史、totalScore 写成部分和、reChoices 清空
+        // (渐进式录入场景必踩)。不齐时: 语数英是独立列照常提交,
+        // 槽位字段(科类/首选/再选/总分)一律不发, 保留库里旧值。
+        const incompleteMsg = validate6Subjects(subj9);
+        if (!incompleteMsg) {
+          const t = from9Subjects(subj9);
+          Object.assign(values, {
+            totalScore: t.totalScore,
+            examType: t.examType,
+            firstChoice: t.firstChoice,
+            scoreFirstChoice: t.scoreFirstChoice,
+            reChoices: t.reChoices,
+            scoreSub1: t.scoreSub1,
+            scoreSub2: t.scoreSub2,
+          });
+        } else {
+          void message.info(`${incompleteMsg}；首选/再选成绩将在 6 门凑齐后一并保存`);
+        }
+      }
+      // 后端 DTO 不接受 6 个具体科目字段名 (物/史/化/生/政/地)，删掉
+      for (const k of [
+        'scorePhysics', 'scoreHistory',
+        'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
+      ]) {
+        delete (values as Record<string, unknown>)[k];
+      }
+      // DatePicker 给出 dayjs 对象 (或 null), 后端 DTO 期望 ISO 字符串.
+      // dayjs.isDayjs 安全检测后转 ISO; null/undefined 不发送.
+      const bd = (values as any).birthDate;
+      if (bd && typeof bd === 'object' && typeof bd.toISOString === 'function') {
+        (values as any).birthDate = bd.toISOString();
+      } else if (bd == null) {
+        delete (values as Record<string, unknown>).birthDate;
+      }
+      saveMutation.mutate(values);
+    });
+  };
+
   const plansSummary = useMemo(() => {
     const plans = student?.volunteerPlans;
     if (!Array.isArray(plans) || plans.length === 0) {
@@ -713,61 +769,7 @@ export default function StudentDetailPage() {
             <button
               type="button"
               className="btn"
-              onClick={() =>
-                form.validateFields().then((values) => {
-                  // 9 科 → 后端 6 槽位字段翻译。
-                  // 老师可能只动了一两个字段，但只要 9 科里任一有值就走翻译。
-                  const subj9: Subject9Form = {
-                    scoreChinese: values.scoreChinese,
-                    scoreMath: values.scoreMath,
-                    scoreEnglish: values.scoreEnglish,
-                    scorePhysics: values.scorePhysics,
-                    scoreHistory: values.scoreHistory,
-                    scoreChemistry: values.scoreChemistry,
-                    scoreBiology: values.scoreBiology,
-                    scorePolitics: values.scorePolitics,
-                    scoreGeography: values.scoreGeography,
-                  };
-                  const has9 = Object.values(subj9).some((v) => v != null);
-                  if (has9) {
-                    // from9Subjects 要求 6 门凑齐才能整组翻译; 不齐时强行翻译会把
-                    // examType 强翻成历史、totalScore 写成部分和、reChoices 清空
-                    // (渐进式录入场景必踩)。不齐时: 语数英是独立列照常提交,
-                    // 槽位字段(科类/首选/再选/总分)一律不发, 保留库里旧值。
-                    const incompleteMsg = validate6Subjects(subj9);
-                    if (!incompleteMsg) {
-                      const t = from9Subjects(subj9);
-                      Object.assign(values, {
-                        totalScore: t.totalScore,
-                        examType: t.examType,
-                        firstChoice: t.firstChoice,
-                        scoreFirstChoice: t.scoreFirstChoice,
-                        reChoices: t.reChoices,
-                        scoreSub1: t.scoreSub1,
-                        scoreSub2: t.scoreSub2,
-                      });
-                    } else {
-                      void message.info(`${incompleteMsg}；首选/再选成绩将在 6 门凑齐后一并保存`);
-                    }
-                  }
-                  // 后端 DTO 不接受 6 个具体科目字段名 (物/史/化/生/政/地)，删掉
-                  for (const k of [
-                    'scorePhysics', 'scoreHistory',
-                    'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
-                  ]) {
-                    delete (values as Record<string, unknown>)[k];
-                  }
-                  // DatePicker 给出 dayjs 对象 (或 null), 后端 DTO 期望 ISO 字符串.
-                  // dayjs.isDayjs 安全检测后转 ISO; null/undefined 不发送.
-                  const bd = (values as any).birthDate;
-                  if (bd && typeof bd === 'object' && typeof bd.toISOString === 'function') {
-                    (values as any).birthDate = bd.toISOString();
-                  } else if (bd == null) {
-                    delete (values as Record<string, unknown>).birthDate;
-                  }
-                  saveMutation.mutate(values);
-                })
-              }
+              onClick={handleSave}
               disabled={saveMutation.isPending}
             >
               <TIcon.save /> {saveMutation.isPending ? '保存中...' : '保存'}
@@ -1094,6 +1096,29 @@ export default function StudentDetailPage() {
                   })()}
                 />
               ) : null}
+              <div
+                style={{
+                  position: 'sticky',
+                  bottom: 0,
+                  zIndex: 20,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: 8,
+                  padding: '10px 12px',
+                  marginTop: 12,
+                  background: 'var(--surface, #fff)',
+                  borderTop: '1px solid var(--border-subtle, #eee)',
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={handleSave}
+                  disabled={saveMutation.isPending}
+                >
+                  <TIcon.save /> {saveMutation.isPending ? '保存中...' : '保存资料'}
+                </button>
+              </div>
             </div>
             <div className="space-y-4">
               <ContactPanel student={student} />
