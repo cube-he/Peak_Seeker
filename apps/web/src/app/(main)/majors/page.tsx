@@ -1087,6 +1087,8 @@ function MajorsPageInner() {
               value={poolTiers}
               options={editorMajorOptions ?? []}
               isLoading={editorOptionsLoading}
+              eligibleLevel={workStudent?.eligibleLevel ?? null}
+              examType={workStudent?.examType ?? null}
               onChange={(next) => {
                 setPoolTiers(next);
                 setPoolDirty(true);

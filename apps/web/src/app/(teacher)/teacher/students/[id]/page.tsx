@@ -22,6 +22,7 @@ import { useUniversityOptions } from '@/components/student/picker/options/useUni
 import { useMajorOptions } from '@/components/student/picker/options/useMajorOptions';
 import { useMajorCategoryOptions } from '@/components/student/picker/options/useMajorCategoryOptions';
 import PreferredMajorTierFormItem from '@/components/student/preferred-majors/PreferredMajorTierFormItem';
+import { tagForLevels, type EligibleLevel } from '@/lib/level-mismatch';
 import { getRegionCascaderOptions, type CascaderOption } from '@/data/student-options';
 import { fieldLabel } from '@/components/student/stage-fields';
 import {
@@ -1011,7 +1012,7 @@ export default function StudentDetailPage() {
                         ),
                       },
                       { key: 'health', label: '健康条件', children: <HealthFields /> },
-                      { key: 'preference', label: '偏好与规划', children: <PreferenceFields /> },
+                      { key: 'preference', label: '偏好与规划', children: <PreferenceFields eligibleLevel={student?.eligibleLevel ?? null} examType={student?.examType ?? null} /> },
                     ]}
                   />
                 </Form>
@@ -1688,7 +1689,13 @@ function HealthFields() {
   );
 }
 
-function PreferenceFields() {
+function PreferenceFields({
+  eligibleLevel = null,
+  examType = null,
+}: {
+  eligibleLevel?: EligibleLevel;
+  examType?: string | null;
+}) {
   // 跳专业库工作台时带上学生 id, 在那边选完直接存回本学生的意向池
   const prefParams = useParams<{ id: string }>();
   const { data: provinceOptions } = useProvinceOptions();
@@ -1696,6 +1703,17 @@ function PreferenceFields() {
   const { data: universityOptions, isLoading: isUniversityLoading } = useUniversityOptions();
   const { data: majorOptions, isLoading: isMajorLoading } = useMajorOptions();
   const { data: majorCategoryOptions, isLoading: isMajorCategoryLoading } = useMajorCategoryOptions();
+
+  // 给意向院校选项加层次标记 (与学生可上层次对不上时括号提示), 仅意向院校,
+  // 排除院校不标 (那是主动排除, 层次提示无意义)
+  const markedUniversityOptions = useMemo(
+    () =>
+      (universityOptions ?? []).map((o: any) => {
+        const t = tagForLevels(o.levels, examType, eligibleLevel);
+        return t ? { ...o, label: `${o.label}（${t}）` } : o;
+      }),
+    [universityOptions, examType, eligibleLevel],
+  );
 
   return (
     <div className="sd-form-grid">
@@ -1749,7 +1767,12 @@ function PreferenceFields() {
           </a>
         </label>
         <Form.Item name="preferredMajors" noStyle>
-          <PreferredMajorTierFormItem options={majorOptions ?? []} isLoading={isMajorLoading} />
+          <PreferredMajorTierFormItem
+            options={majorOptions ?? []}
+            isLoading={isMajorLoading}
+            eligibleLevel={eligibleLevel}
+            examType={examType}
+          />
         </Form.Item>
       </div>
       <div className="field">
@@ -1765,7 +1788,7 @@ function PreferenceFields() {
           </a>
         </label>
         <Form.Item name="preferredUniversities" noStyle>
-          <Select {...pickerSelectProps(universityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
+          <Select {...pickerSelectProps(markedUniversityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
         </Form.Item>
       </div>
       <div className="field">
