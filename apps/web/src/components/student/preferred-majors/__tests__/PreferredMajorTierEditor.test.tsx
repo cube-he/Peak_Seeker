@@ -77,6 +77,14 @@ describe('addMajorToContainer', () => {
       addMajorToContainer({ pool: [], tiers: [{ tier: 1, majors: ['A'] }] }, 'tier-2', 'B'),
     ).toEqual({ pool: [], tiers: [{ tier: 1, majors: ['A'] }, { tier: 2, majors: ['B'] }] });
   });
+  it('空字符串 major → 原样返回同引用', () => {
+    const s = { pool: [], tiers: [] };
+    expect(addMajorToContainer(s, 'tier-1', '')).toBe(s);
+  });
+  it('未识别的 containerId → 原样返回同引用(静默 no-op)', () => {
+    const s = { pool: [], tiers: [{ tier: 1, majors: ['A'] }] };
+    expect(addMajorToContainer(s, 'unknown-container', 'X')).toBe(s);
+  });
 });
 
 describe('displayTiers', () => {
