@@ -1,4 +1,28 @@
 import { UniversityService } from './university.service';
+import * as levels from '../enrollment-level/enrollment-levels';
+
+describe('UniversityService.getPickerOptions levels', () => {
+  it('按 university_id 附在川层次', async () => {
+    const prisma = {
+      university: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 10, code: '4101', name: '四川大学', renameHistory: null },
+          { id: 20, code: '5199', name: '成都职业技术学院', renameHistory: null },
+        ]),
+      },
+    } as any;
+    const redis = { getCache: jest.fn(), setCache: jest.fn() } as any;
+    jest.spyOn(levels, 'getUniversityLevelMap').mockResolvedValue({
+      10: { phy: '本科', his: '本科' },
+      20: { phy: '专科', his: '专科' },
+    });
+    // constructor: (prisma, redis, admissionService) — 第三参本用例用不到, 传 {} as any
+    const svc = new UniversityService(prisma, redis, {} as any);
+    const out = await svc.getPickerOptions();
+    expect(out.find((o) => o.id === 10)!.levels).toEqual({ phy: '本科', his: '本科' });
+    expect(out.find((o) => o.id === 20)!.levels).toEqual({ phy: '专科', his: '专科' });
+  });
+});
 
 describe('UniversityService.findById campuses', () => {
   const setup = (universityRow: any, qiangji: any[] = [], predictions: any[] = []) => {
@@ -156,6 +180,12 @@ describe('UniversityService.getCampusPois', () => {
 });
 
 describe('getPickerOptions', () => {
+  // getPickerOptions 现会调用 getUniversityLevelMap(查 enrollment_plans 聚合);
+  // 这些用例只关心 picker 查询/去重/排序, 故把层次查询打桩成空 map。
+  beforeEach(() => {
+    jest.spyOn(levels, 'getUniversityLevelMap').mockResolvedValue({});
+  });
+
   const buildService = () => {
     const prisma = {
       university: {

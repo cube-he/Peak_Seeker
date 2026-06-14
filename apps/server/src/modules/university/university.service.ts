@@ -6,6 +6,7 @@ import { QueryUniversityDto } from './dto/query-university.dto';
 import { MapQueryDto } from './dto/map-query.dto';
 import { AdmissionService } from '../admission/admission.service';
 import { getTier, classifyRank } from './rank-tier';
+import { getUniversityLevelMap, OptionLevels } from '../enrollment-level/enrollment-levels';
 
 /**
  * 地图视图返回的"校区"载荷 — 一个 verified 校区一行,2026-06-02 改造前是
@@ -526,7 +527,7 @@ export class UniversityService {
     }));
   }
 
-  async getPickerOptions(batches?: string[]): Promise<{ id: number; code: string | null; name: string; renameHistory: string | null }[]> {
+  async getPickerOptions(batches?: string[]): Promise<{ id: number; code: string | null; name: string; renameHistory: string | null; levels: OptionLevels | null }[]> {
     // 仅返回在川招生的院校（四川单省数据约 2,237 所），过滤掉全国其他未招四川学生的院校
     // renameHistory 用于前端联想时也能搜旧名 / 合并前名称
     // batches: 当学生已选定批次,只返回在这些批次有招生计划的院校 (商业化流程硬过滤)
@@ -546,7 +547,10 @@ export class UniversityService {
     for (const r of rows) {
       if (!seen.has(r.name)) seen.set(r.name, r);
     }
-    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+    const levelMap = await getUniversityLevelMap(this.prisma, this.redis);
+    return Array.from(seen.values())
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+      .map((r) => ({ ...r, levels: levelMap[r.id] ?? null }));
   }
 
   async getStats() {
