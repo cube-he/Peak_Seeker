@@ -11,6 +11,21 @@ export interface FieldCheck {
   passed: boolean;
 }
 
+/** 意向专业是否"已排进梯队"(tier>=1). 池子(tier=0)与旧扁平 string[] 都算"待排梯队",
+ *  与后端推荐口径一致(池子不参与推荐), 避免"选了却没生效"。 */
+export function hasRankedPreferredMajors(preferredMajors: unknown): boolean {
+  if (!Array.isArray(preferredMajors)) return false;
+  return preferredMajors.some(
+    (t: any) =>
+      t &&
+      typeof t === 'object' &&
+      typeof t.tier === 'number' &&
+      t.tier >= 1 &&
+      Array.isArray(t.majors) &&
+      t.majors.length > 0,
+  );
+}
+
 export function checkPrerequisites(student: any): FieldCheck[] {
   const checks: FieldCheck[] = [];
 
@@ -43,10 +58,11 @@ export function checkPrerequisites(student: any): FieldCheck[] {
     !!student?.stayPreference;
   checks.push({ key: 'cities', label: '意向城市', passed: hasCities });
 
-  // 意向专业方向
+  // 意向专业方向(任意一项: 已排进梯队的意向专业 / 意向专业类)
   const hasMajors =
-    (Array.isArray(student?.preferredMajors) && student.preferredMajors.length > 0) ||
-    (Array.isArray(student?.preferredMajorCategories) && student.preferredMajorCategories.length > 0);
+    hasRankedPreferredMajors(student?.preferredMajors) ||
+    (Array.isArray(student?.preferredMajorCategories) &&
+      student.preferredMajorCategories.length > 0);
   checks.push({ key: 'majors', label: '意向专业方向', passed: hasMajors });
 
   // 加分政策状态
