@@ -281,6 +281,8 @@ export function MajorCard({
     e.stopPropagation();
     fn();
   };
+  // 学生分数层次与本专业层次对不上时, 名字后括号备注 (如本科生看到专科专业标"（专科）")
+  const levelFlag = levelMismatchTag(major.level, eligibleLevel);
 
   return (
     <Link
@@ -294,12 +296,9 @@ export function MajorCard({
           <h3 className="m-0 truncate font-serif text-[20px] font-semibold leading-tight text-text">
             {major.name}
           </h3>
-          {(() => {
-            const flag = levelMismatchTag(major.level, eligibleLevel);
-            return flag ? (
-              <span className="major-level-flag ml-2 align-middle text-[12px] text-text-muted">{`（${flag}）`}</span>
-            ) : null;
-          })()}
+          {levelFlag && (
+            <span className="major-level-flag ml-2 align-middle text-[12px] text-text-muted">{`（${levelFlag}）`}</span>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="inline-flex rounded bg-bg px-2 py-0.5 font-mono text-[11px] text-text-muted">
               {major.code || '暂无代码'}
