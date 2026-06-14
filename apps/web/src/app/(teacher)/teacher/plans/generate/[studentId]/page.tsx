@@ -14,6 +14,7 @@ import {
   Modal,
   Pagination,
   Select,
+  Slider,
   Space,
   Spin,
   Table,
@@ -1087,6 +1088,8 @@ export default function GeneratePlanPage() {
   const [natureFilter, setNatureFilter] = useState<'public' | 'private' | null>(null);
   // 中外合作过滤 (两视图通用): null=全部, 'only'=只看, 'exclude'=排除
   const [sinoForeignFilter, setSinoForeignFilter] = useState<'only' | 'exclude' | null>(null);
+  // 分数条: null=未筛; [lo,hi]=已选区间(今年预估分)
+  const [scoreRange, setScoreRange] = useState<[number, number] | null>(null);
   // 意向梯队过滤 (0 = 全部, 1+ = 该梯队). 默认 1 (学生没填意向时自动落到 0)
   const [appliedTier, setAppliedTier] = useState<number>(() => {
     const t = Number(searchParams.get('tier'));
@@ -1190,7 +1193,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, effectiveSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, effectiveSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1208,10 +1211,13 @@ export default function GeneratePlanPage() {
       groupBy: viewMode === 'UNIVERSITY' ? 'UNIVERSITY' : undefined,
       nature: viewMode === 'UNIVERSITY' ? (natureFilter ?? undefined) : undefined,
       sinoForeign: sinoForeignFilter ?? undefined,
+      minScore: scoreRange ? scoreRange[0] : undefined,
+      maxScore: scoreRange ? scoreRange[1] : undefined,
     }),
     enabled: !!planId,
   });
   const candidateGroups = unwrap<CandidateGroupListResult>(groupData);
+  const predictedScoreRange = (candidateGroups as any)?.predictedScoreRange as { min: number; max: number } | null | undefined;
   const groups = candidateGroups?.groups ?? [];
   const candidateUniversities = candidateGroups?.universities ?? [];
 
@@ -2317,6 +2323,40 @@ export default function GeneratePlanPage() {
                   </button>
                 ))}
               </div>
+
+              {/* —— 分数条: 今年预估分区间 (两视图通用) —— */}
+              {predictedScoreRange && predictedScoreRange.max > predictedScoreRange.min ? (
+                <div className="pgv2-tier-bar" style={{ marginTop: 4, alignItems: 'center', gap: 12 }}>
+                  <span style={{ color: '#666', fontSize: 12 }}>
+                    今年预估分 {scoreRange ? `${scoreRange[0]}–${scoreRange[1]}` : '全部'}
+                  </span>
+                  <div style={{ flex: 1, maxWidth: 420, padding: '0 8px' }}>
+                    <Slider
+                      range
+                      min={predictedScoreRange.min}
+                      max={predictedScoreRange.max}
+                      value={scoreRange ?? [predictedScoreRange.min, predictedScoreRange.max]}
+                      onChange={(v) => setScoreRange(v as [number, number])}
+                      onChangeComplete={(v) => {
+                        const [lo, hi] = v as [number, number];
+                        const isFull = lo <= predictedScoreRange.min && hi >= predictedScoreRange.max;
+                        setScoreRange(isFull ? null : [lo, hi]);
+                        setCandidatePage(1);
+                      }}
+                    />
+                  </div>
+                  {scoreRange ? (
+                    <button
+                      type="button"
+                      className="pgv2-tier-chip"
+                      style={{ opacity: 0.7 }}
+                      onClick={() => { setScoreRange(null); setCandidatePage(1); }}
+                    >
+                      清除
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
 
               {/* —— 纯净度过滤 chip (多选;空 = 全部) (#4) —— */}
               <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
