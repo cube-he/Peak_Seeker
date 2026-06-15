@@ -28,6 +28,7 @@ export function BatchCard({
 }) {
   const [open, setOpen] = useState(false);
   const [openSubs, setOpenSubs] = useState<Set<string>>(new Set());
+  const [showScore, setShowScore] = useState(false);
 
   const v = VERDICT_INFO[batch.verdict] ?? { txt: batch.verdict, tone: 'pending' as const };
   const summary = summarizeBatch(batch);
@@ -88,8 +89,6 @@ export function BatchCard({
       {open && (
         <div className="br-card-body">
           <div className="br-card-body-pad">
-            {batch.scoreInfo && <ScoreRow si={batch.scoreInfo} />}
-
             <div className="br-subset-title">子类别 / 资格判定</div>
             {subsets.length === 0 ? (
               <div className="br-no-subset">无子类别信息</div>
@@ -103,6 +102,18 @@ export function BatchCard({
                     onToggle={() => toggleSub(sub.code)}
                   />
                 ))}
+              </div>
+            )}
+
+            {batch.scoreInfo && (
+              <div style={{ marginTop: 10, borderTop: '1px dashed #e2e2dd', paddingTop: 8 }}>
+                <span
+                  onClick={() => setShowScore((s) => !s)}
+                  style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: '#888' }}
+                >
+                  分数参考 {showScore ? '▲' : '▼'}
+                </span>
+                {showScore && <ScoreRow si={batch.scoreInfo} />}
               </div>
             )}
           </div>
