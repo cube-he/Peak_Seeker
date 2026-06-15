@@ -26,6 +26,8 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [kw, setKw] = useState('');
+  const [showNote, setShowNote] = useState(false);
+  const [showGap, setShowGap] = useState(false);
 
   useEffect(() => {
     batchRecommendationsApi
@@ -184,9 +186,20 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
       </div>
       <div className="br-note">
         <span className="ic"><TIcon.info/></span>
-        <div>
-          勾选某批次 = 让方案生成可用该批次下<strong>所有「资格通过」</strong>的子类别 (例如本科批会包含普通类等)。
-          点批次卡片可展开看子类别 + 相关政策文件。<strong>本页只判定「资格」, 不计算录取概率</strong>, 分数仅作过线参考。
+        <div style={{ flex: 1 }}>
+          勾选批次后, 方案生成页即可用该批次。
+          <span
+            onClick={() => setShowNote((s) => !s)}
+            style={{ cursor: 'pointer', marginLeft: 6, color: '#1f4e78', fontWeight: 600 }}
+          >
+            {showNote ? '收起说明 ▲' : '展开说明 ▼'}
+          </span>
+          {showNote && (
+            <div style={{ marginTop: 6 }}>
+              勾选某批次 = 让方案生成可用该批次下<strong>所有「资格通过」</strong>的子类别 (例如本科批会包含普通类等)。
+              点批次卡片可展开看子类别 + 相关政策文件。<strong>本页只判定「资格」, 不计算录取概率</strong>, 分数仅作过线参考。
+            </div>
+          )}
         </div>
       </div>
 
@@ -195,14 +208,26 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
         <div className="br-gapwarn">
           <span className="ic"><TIcon.alert/></span>
           <div className="body">
-            <div className="ttl">学生关键资料未完成 — 当前判定可能不准</div>
-            <div className="miss">
-              <span>缺失字段:</span>
-              {(data.intakeGap.missing ?? []).map(m => (
-                <span className="mchip" key={m.field}>{m.label}</span>
-              ))}
+            <div className="ttl">
+              学生关键资料未完成 — 缺 {(data.intakeGap.missing ?? []).length} 项, 当前判定可能不准
+              <span
+                onClick={() => setShowGap((s) => !s)}
+                style={{ cursor: 'pointer', marginLeft: 8, color: '#1f4e78', fontWeight: 600 }}
+              >
+                {showGap ? '收起 ▲' : '展开查看 ▼'}
+              </span>
             </div>
-            <div className="go" onClick={goBack}>→ 跳学生详情页催补资料</div>
+            {showGap && (
+              <>
+                <div className="miss">
+                  <span>缺失字段:</span>
+                  {(data.intakeGap.missing ?? []).map((m) => (
+                    <span className="mchip" key={m.field}>{m.label}</span>
+                  ))}
+                </div>
+                <div className="go" onClick={goBack}>→ 跳学生详情页催补资料</div>
+              </>
+            )}
           </div>
         </div>
       )}
