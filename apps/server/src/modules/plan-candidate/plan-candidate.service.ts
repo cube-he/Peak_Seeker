@@ -49,6 +49,7 @@ interface GetCandidatesQuery {
   // 运行时经 @Transform 恒为 boolean; 消费端用 !== false / === false 判断。
   includeSoftFails?: boolean | string;
   sort?: CandidateGroupSort | string; // 院校模式接受 university sort 值
+  sortDir?: SortDir; // 排序方向 (GROUP 视图可比较轴): DESC=轴默认, ASC=翻转
   tier?: number;
   excludeAdded?: boolean | string;
   purity?: string; // csv 'S,A,B,C'; 空 = 不过滤
@@ -61,14 +62,11 @@ interface GetCandidatesQuery {
 
 type CandidateGroupSort =
   | 'MAJOR_MATCH'
-  | 'RANK_FIT'
-  | 'MAJOR_MIN_SCORE_DESC'
+  | 'SAFETY'
+  | 'MAJOR_MIN_SCORE'
   | 'UNIVERSITY_RANK'
-  | 'MAJOR_STRENGTH'
-  | 'PLAN_COUNT_DESC'
-  | 'SUPPLEMENTARY_RATE_DESC'
-  | 'SAFETY_DESC'
-  | 'PURITY_BEST';
+  | 'MAJOR_STRENGTH';
+type SortDir = 'ASC' | 'DESC';
 type CandidateGroupScoreSource = 'GROUP' | 'FILING' | 'MAJOR' | 'NONE';
 type StudentRankSource = 'PROFILE' | 'SCORE_SEGMENT' | 'MISSING';
 type FirstChoice = 'PHYSICS' | 'HISTORY';
@@ -267,11 +265,6 @@ function rankingNumber(value: unknown) {
 
 function compareRankingAsc(a: unknown, b: unknown) {
   return rankingNumber(a) - rankingNumber(b);
-}
-
-function supplementaryRateOf(group: any) {
-  const rate = metricNumber(group.supplementary?.supplementaryRate, 0);
-  return rate > 1 ? rate / 100 : rate;
 }
 
 function supplementaryForGroupRisk(supplementary: any) {
@@ -1100,64 +1093,47 @@ export class PlanCandidateService {
     return (b.currentPlanCount ?? 0) - (a.currentPlanCount ?? 0);
   }
 
-  private sortCandidateGroups(groups: any[], sort: string = 'MAJOR_MATCH', studentRank: number) {
-    const PURITY_ORDER: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 };
-    const purityScore = (g: any): number => PURITY_ORDER[g?.purity?.level] ?? 99;
+  private sortCandidateGroups(groups: any[], sort: string = 'MAJOR_MATCH', studentRank: number, sortDir: SortDir = 'DESC') {
+    // 方向: DESC = 该轴默认(好的/分高/最稳在前), ASC = 翻转。
+    // sign 只翻转「轴主比较」; softFailCount(合规)永远第一、永不翻; MAJOR_MATCH(综合推荐)无方向。
+    const sign = sortDir === 'ASC' ? -1 : 1;
 
     groups.sort((a, b) => {
       const soft = (a.softFailCount ?? 0) - (b.softFailCount ?? 0);
       if (soft !== 0) return soft;
 
-      if (sort === 'PURITY_BEST') {
-        const p = purityScore(a) - purityScore(b);
-        if (p !== 0) return p;
+      if (sort === 'SAFETY') {
+        // 录取概率轴: 默认偏保(兜底→保→稳→冲), rankGapRatio 作同档内细分; 翻转 = 偏冲。
+        const prim = (tierSafetyPriority(a.dynamicGradient?.tier, a.suggestedGradient) -
+          tierSafetyPriority(b.dynamicGradient?.tier, b.suggestedGradient)) ||
+          compareDesc(a.dynamicGradient?.rankGapRatio, b.dynamicGradient?.rankGapRatio);
+        if (prim !== 0) return prim * sign;
         return this.compareCandidateGroupFallback(a, b, studentRank, false);
       }
 
-      if (sort === 'SAFETY_DESC') {
-        const safety = tierSafetyPriority(a.dynamicGradient?.tier, a.suggestedGradient) -
-          tierSafetyPriority(b.dynamicGradient?.tier, b.suggestedGradient);
-        if (safety !== 0) return safety;
-        return compareDesc(a.dynamicGradient?.rankGapRatio, b.dynamicGradient?.rankGapRatio) ||
-          this.compareCandidateGroupFallback(a, b, studentRank, false);
-      }
-
-      if (sort === 'SUPPLEMENTARY_RATE_DESC') {
-        const rate = supplementaryRateOf(b) - supplementaryRateOf(a);
-        if (rate !== 0) return rate;
-        return compareDesc(a.supplementary?.totalPlanCount, b.supplementary?.totalPlanCount) ||
-          compareDesc(a.supplementary?.totalRounds, b.supplementary?.totalRounds) ||
-          this.compareCandidateGroupFallback(a, b, studentRank, false);
-      }
-
-      if (sort === 'PLAN_COUNT_DESC') {
-        return compareDesc(a.currentPlanCount, b.currentPlanCount) ||
-          this.compareCandidateGroupFallback(a, b, studentRank, false);
-      }
-
-      if (sort === 'MAJOR_MIN_SCORE_DESC') {
-        return compareDesc(a.anchorMajorMinScore ?? a.groupMinScore, b.anchorMajorMinScore ?? b.groupMinScore) ||
-          this.compareCandidateGroupFallback(a, b, studentRank, false);
+      if (sort === 'MAJOR_MIN_SCORE') {
+        // 专业最低分轴: 默认分高在前; 翻转 = 分低(捡漏)。
+        const prim = compareDesc(a.anchorMajorMinScore ?? a.groupMinScore, b.anchorMajorMinScore ?? b.groupMinScore);
+        if (prim !== 0) return prim * sign;
+        return this.compareCandidateGroupFallback(a, b, studentRank, false);
       }
 
       if (sort === 'UNIVERSITY_RANK') {
-        return compareRankingAsc(a.universityRank ?? a.university?.softRanking, b.universityRank ?? b.university?.softRanking) ||
-          compareDesc(universityTagScore(a), universityTagScore(b)) ||
-          this.compareCandidateGroupFallback(a, b, studentRank, false);
-      }
-
-      if (sort === 'MAJOR_STRENGTH') {
-        return compareDesc(a.majorStrengthScore, b.majorStrengthScore) ||
-          this.compareCandidateGroupFallback(a, b, studentRank, false);
-      }
-
-      if (sort === 'RANK_FIT') {
-        const ar = rankFitDistance(studentRank, a.dynamicGradient?.adjustedMinRank ?? a.groupMinRank);
-        const br = rankFitDistance(studentRank, b.dynamicGradient?.adjustedMinRank ?? b.groupMinRank);
-        if (ar !== br) return ar - br;
+        // 院校层次轴: 默认好校在前(软科排名升序; 同名次按 985/211 标签分); 翻转 = 普通校在前。
+        const prim = compareRankingAsc(a.universityRank ?? a.university?.softRanking, b.universityRank ?? b.university?.softRanking) ||
+          compareDesc(universityTagScore(a), universityTagScore(b));
+        if (prim !== 0) return prim * sign;
         return this.compareCandidateGroupFallback(a, b, studentRank, false);
       }
 
+      if (sort === 'MAJOR_STRENGTH') {
+        // 专业实力轴: 默认强在前; 翻转 = 弱在前。
+        const prim = compareDesc(a.majorStrengthScore, b.majorStrengthScore);
+        if (prim !== 0) return prim * sign;
+        return this.compareCandidateGroupFallback(a, b, studentRank, false);
+      }
+
+      // MAJOR_MATCH 综合推荐(默认): 梯度默认序 + 专业匹配度, 无方向。
       return this.compareCandidateGroupFallback(a, b, studentRank, true);
     });
   }
@@ -2146,7 +2122,7 @@ export class PlanCandidateService {
       }
     }
 
-    this.sortCandidateGroups(resultGroups, q.sort ?? 'MAJOR_MATCH', studentRank);
+    this.sortCandidateGroups(resultGroups, q.sort ?? 'MAJOR_MATCH', studentRank, q.sortDir ?? 'DESC');
 
     // matchScore 归一化：原 scoreMajorMatch 算法理论 0-196，实际多数 0-30。
     // 前端 MatchHeader 按 0-100 制着色（≥85 绿/70-84 蓝/<70 橙），导致几乎所有候选

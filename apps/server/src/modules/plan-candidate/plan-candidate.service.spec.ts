@@ -885,34 +885,62 @@ describe('PlanCandidateService', () => {
     expect(major.supplementaryCount).toBe(8);
   });
 
-  it('sorts candidate groups by supplementary rate when requested', () => {
+  it('sorts by SAFETY axis: 默认(DESC)最稳在前, 方向翻转(ASC)最冲在前', () => {
     const groups = [
       {
-        universityName: 'Low Supplementary',
+        universityName: 'Reach',
         softFailCount: 0,
-        suggestedGradient: 'WEN',
-        dynamicGradient: { tier: 'WEN', adjustedMinRank: 10000, rankGapRatio: 0 },
-        matchScore: 80,
-        currentPlanCount: 50,
-        supplementary: { supplementaryRate: 0.02, totalPlanCount: 2, totalRounds: 1 },
+        suggestedGradient: 'CHONG',
+        dynamicGradient: { tier: 'CHONG', adjustedMinRank: 5000, rankGapRatio: -0.5 },
+        matchScore: 50,
+        currentPlanCount: 10,
       },
       {
-        universityName: 'High Supplementary',
+        universityName: 'Safe',
         softFailCount: 0,
-        suggestedGradient: 'WEN',
-        dynamicGradient: { tier: 'WEN', adjustedMinRank: 10000, rankGapRatio: 0 },
-        matchScore: 10,
-        currentPlanCount: 5,
-        supplementary: { supplementaryRate: 0.18, totalPlanCount: 8, totalRounds: 2 },
+        suggestedGradient: 'BAO',
+        dynamicGradient: { tier: 'BAO', adjustedMinRank: 20000, rankGapRatio: 0.5 },
+        matchScore: 50,
+        currentPlanCount: 10,
       },
     ];
 
-    (service as any).sortCandidateGroups(groups, 'SUPPLEMENTARY_RATE_DESC', 10000);
+    // 默认方向 = 偏保: 最稳的 (兜底→保→稳→冲) 排前
+    (service as any).sortCandidateGroups(groups, 'SAFETY', 10000);
+    expect(groups.map((group) => group.universityName)).toEqual(['Safe', 'Reach']);
 
-    expect(groups.map((group) => group.universityName)).toEqual([
-      'High Supplementary',
-      'Low Supplementary',
-    ]);
+    // 翻转 = 偏冲: 最冲的排前
+    (service as any).sortCandidateGroups(groups, 'SAFETY', 10000, 'ASC');
+    expect(groups.map((group) => group.universityName)).toEqual(['Reach', 'Safe']);
+  });
+
+  it('sorts by MAJOR_MIN_SCORE axis: 默认(DESC)分高在前, 方向翻转(ASC)分低在前', () => {
+    const groups = [
+      {
+        universityName: 'LowScore',
+        softFailCount: 0,
+        suggestedGradient: 'WEN',
+        dynamicGradient: { tier: 'WEN', adjustedMinRank: 10000, rankGapRatio: 0 },
+        anchorMajorMinScore: 540,
+        matchScore: 50,
+        currentPlanCount: 10,
+      },
+      {
+        universityName: 'HighScore',
+        softFailCount: 0,
+        suggestedGradient: 'WEN',
+        dynamicGradient: { tier: 'WEN', adjustedMinRank: 10000, rankGapRatio: 0 },
+        anchorMajorMinScore: 620,
+        matchScore: 50,
+        currentPlanCount: 10,
+      },
+    ];
+
+    (service as any).sortCandidateGroups(groups, 'MAJOR_MIN_SCORE', 10000);
+    expect(groups.map((group) => group.universityName)).toEqual(['HighScore', 'LowScore']);
+
+    (service as any).sortCandidateGroups(groups, 'MAJOR_MIN_SCORE', 10000, 'ASC');
+    expect(groups.map((group) => group.universityName)).toEqual(['LowScore', 'HighScore']);
   });
 
   it('treats zero school ranking as missing when sorting by university rank', () => {

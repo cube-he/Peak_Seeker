@@ -13,16 +13,16 @@ import { CANDIDATE_UNIVERSITY_SORTS } from '../university-rollup';
 const onlyExplicitFalse = ({ value }: { value: unknown }) =>
   !(value === 'false' || value === false);
 
+// 排序「轴」(GROUP 视图). 方向由 sortDir 单独控制, 不再把方向编进枚举值。
+// MAJOR_MATCH 是智能默认(无方向); 其余 4 轴可双向。
+// 旧的 RANK_FIT/PLAN_COUNT_DESC/SUPPLEMENTARY_RATE_DESC/PURITY_BEST 已下线:
+// 位次贴近并入综合推荐; 招生人数/征集/纯净度改为卡片信息或筛选(纯净度 = purity 过滤)。
 export const CANDIDATE_GROUP_SORTS = [
-  'MAJOR_MATCH',
-  'RANK_FIT',
-  'MAJOR_MIN_SCORE_DESC',
-  'UNIVERSITY_RANK',
-  'MAJOR_STRENGTH',
-  'PLAN_COUNT_DESC',
-  'SUPPLEMENTARY_RATE_DESC',
-  'SAFETY_DESC',
-  'PURITY_BEST', // 客观纯净度优先 (S<A<B<C)
+  'MAJOR_MATCH', // 综合推荐 (默认, 无方向)
+  'SAFETY', // 录取概率: 偏保(DESC) / 偏冲(ASC)
+  'MAJOR_MIN_SCORE', // 专业最低分: 分高(DESC) / 分低(ASC)
+  'UNIVERSITY_RANK', // 院校层次: 好校(DESC) / 普通(ASC)
+  'MAJOR_STRENGTH', // 专业实力: 强(DESC) / 弱(ASC)
 ] as const;
 
 export type CandidateGroupSort = typeof CANDIDATE_GROUP_SORTS[number];
@@ -41,6 +41,9 @@ export class GetCandidatesQueryDto {
   @IsOptional() @IsIn(['RUSH', 'STABLE', 'SAFE', 'NO_LINE']) gradientBand?: string;
   @IsOptional() @Transform(onlyExplicitFalse) @IsBoolean() includeSoftFails?: boolean | string = true;
   @IsOptional() @IsIn(ACCEPTED_SORTS) sort?: string = 'MAJOR_MATCH';
+  // 排序方向 (仅 GROUP 视图可比较轴生效): DESC = 该轴默认(好的/分高/最稳在前), ASC = 翻转。
+  // 缺省按轴默认 (DESC); MAJOR_MATCH 综合推荐忽略此参数。
+  @IsOptional() @IsIn(['ASC', 'DESC']) sortDir?: 'ASC' | 'DESC';
   // 视图模式: GROUP=院校专业组卡(默认, 专业优先); UNIVERSITY=院校卡上卷(院校优先)
   @IsOptional() @IsIn(['GROUP', 'UNIVERSITY']) groupBy?: 'GROUP' | 'UNIVERSITY';
   // 办学性质过滤 (仅院校优先视图): public=只看公办, private=只看民办, 空=全部

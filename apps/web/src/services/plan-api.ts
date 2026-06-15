@@ -23,16 +23,16 @@ export interface CandidateListParams {
   includeSoftFails?: boolean;
 }
 
+// 排序「轴」(GROUP 视图); 方向由 sortDir 单独控制。MAJOR_MATCH 综合推荐无方向。
 export type CandidateGroupSort =
   | 'MAJOR_MATCH'
-  | 'RANK_FIT'
-  | 'MAJOR_MIN_SCORE_DESC'
+  | 'SAFETY'
+  | 'MAJOR_MIN_SCORE'
   | 'UNIVERSITY_RANK'
-  | 'MAJOR_STRENGTH'
-  | 'PLAN_COUNT_DESC'
-  | 'SUPPLEMENTARY_RATE_DESC'
-  | 'SAFETY_DESC'
-  | 'PURITY_BEST';
+  | 'MAJOR_STRENGTH';
+
+// 排序方向: DESC = 该轴默认(好的/分高/最稳在前), ASC = 翻转
+export type CandidateSortDir = 'ASC' | 'DESC';
 
 // 院校优先视图 (groupBy=UNIVERSITY) 的排序
 export type CandidateUniversitySort =
@@ -43,6 +43,8 @@ export type CandidateUniversitySort =
 
 export interface CandidateGroupListParams extends CandidateListParams {
   sort?: CandidateGroupSort | CandidateUniversitySort;
+  // GROUP 视图排序方向: DESC=轴默认, ASC=翻转 (院校视图不传)
+  sortDir?: CandidateSortDir;
   // 组名/定向县搜索 (提前批公费定向按县筛组)
   keywordGroup?: string;
   // 梯度档位过滤 (全池口径, 服务端分页前生效); 不传 = 全部
@@ -132,6 +134,7 @@ export const planApi = {
         gradientBand: params?.gradientBand,
         includeSoftFails: params?.includeSoftFails,
         sort: params?.sort ?? 'MAJOR_MATCH',
+        sortDir: params?.sortDir,
         tier: params?.tier,
         excludeAdded: params?.excludeAdded,
         purity: params?.purity && params.purity.length > 0 && params.purity.length < 4

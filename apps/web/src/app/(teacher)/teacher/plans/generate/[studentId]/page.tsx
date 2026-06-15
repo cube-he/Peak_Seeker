@@ -39,7 +39,7 @@ import {
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type EligibleBatch } from '@/services/student-api';
-import { planApi, type CandidateGroupSort } from '@/services/plan-api';
+import { planApi, type CandidateGroupSort, type CandidateSortDir } from '@/services/plan-api';
 import { CandidateCardV3 } from './CandidateCardV3';
 import UniversityCandidateCard from './UniversityCandidateCard';
 import PlanMajorSelectionEditor from '../../components/PlanMajorSelectionEditor';
@@ -386,16 +386,18 @@ const MAJOR_SECTION_LABEL: Record<MajorDisplaySection, string> = {
   RISK: '风险/不建议',
 };
 
-const CANDIDATE_SORT_OPTIONS: Array<{ label: string; value: CandidateGroupSort }> = [
+// 排序「轴」: 下拉只选轴, 方向由旁边的 dir 切换控制 (desc 为该轴默认)。
+// 综合推荐无方向(智能默认); 旧的位次更接近并入综合推荐, 招生人数/征集/纯净度改为卡片信息/筛选。
+const CANDIDATE_SORT_OPTIONS: Array<{
+  label: string;
+  value: CandidateGroupSort;
+  dir?: { desc: string; asc: string }; // 有 dir = 该轴可双向; desc 是默认方向
+}> = [
   { label: '综合推荐', value: 'MAJOR_MATCH' },
-  { label: '位次更接近', value: 'RANK_FIT' },
-  { label: '专业最低分高', value: 'MAJOR_MIN_SCORE_DESC' },
-  { label: '学校排名优先', value: 'UNIVERSITY_RANK' },
-  { label: '专业实力优先', value: 'MAJOR_STRENGTH' },
-  { label: '招生人数多', value: 'PLAN_COUNT_DESC' },
-  { label: '征集比例高', value: 'SUPPLEMENTARY_RATE_DESC' },
-  { label: '纯净度优先（干净→较纯→较乱→混乱）', value: 'PURITY_BEST' },
-  { label: '安全程度高', value: 'SAFETY_DESC' },
+  { label: '录取概率', value: 'SAFETY', dir: { desc: '偏保', asc: '偏冲' } },
+  { label: '专业最低分', value: 'MAJOR_MIN_SCORE', dir: { desc: '分高', asc: '分低' } },
+  { label: '院校层次', value: 'UNIVERSITY_RANK', dir: { desc: '排名高', asc: '排名低' } },
+  { label: '专业实力', value: 'MAJOR_STRENGTH', dir: { desc: '强', asc: '弱' } },
 ];
 
 // 院校优先视图的排序 (groupBy=UNIVERSITY)
@@ -1077,6 +1079,8 @@ export default function GeneratePlanPage() {
   const [searchTextGroupName, setSearchTextGroupName] = useState('');
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
+  // 排序方向 (GROUP 视图): DESC=轴默认, ASC=翻转; 切轴时重置回 DESC
+  const [candidateSortDir, setCandidateSortDir] = useState<CandidateSortDir>('DESC');
   // 视图模式: MAJOR=专业组卡(专业优先); UNIVERSITY=院校卡(院校优先).
   // 默认读 URL ?view=, 否则后续 effect 跟随 plan/student.priorityMode 自动定一次.
   const [viewMode, setViewMode] = useState<'MAJOR' | 'UNIVERSITY'>(
@@ -1195,7 +1199,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, effectiveSort, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1207,6 +1211,8 @@ export default function GeneratePlanPage() {
       gradientBand: viewMode !== 'UNIVERSITY' && gradientFilter !== 'all' ? gradientFilter : undefined,
       includeSoftFails,
       sort: effectiveSort as CandidateGroupSort,
+      // 方向仅 GROUP 视图生效; 院校视图沿用其自身排序, 不传 sortDir
+      sortDir: viewMode === 'UNIVERSITY' ? undefined : candidateSortDir,
       tier: appliedTier,
       excludeAdded,
       purity: purityFilter,
@@ -1416,7 +1422,7 @@ export default function GeneratePlanPage() {
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
-  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, candidateSort, uniSort, appliedTier, excludeAdded, natureFilter]);
+  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, natureFilter]);
 
   // 视图模式默认跟随 plan/student.priorityMode (仅在无 ?view= URL 参数时, 自动定一次)
   useEffect(() => {
@@ -1847,7 +1853,12 @@ export default function GeneratePlanPage() {
   }
 
   // pgv2 设计稿: 顶部 eyebrow / facts / pool / toolbar / tier-bar / source-note / rail / compare-bar / drawer
-  const currentSortLabel = CANDIDATE_SORT_OPTIONS.find((item) => item.value === candidateSort)?.label ?? '综合推荐';
+  const currentSortOption = CANDIDATE_SORT_OPTIONS.find((item) => item.value === candidateSort);
+  const currentSortLabel = currentSortOption
+    ? currentSortOption.dir
+      ? `${currentSortOption.label}·${candidateSortDir === 'ASC' ? currentSortOption.dir.asc : currentSortOption.dir.desc}`
+      : currentSortOption.label
+    : '综合推荐';
   const intakeReady = student?.intakeStatus === 'VERIFIED';
   return (
     <div className="view-transition pgv2-page">
@@ -2265,15 +2276,55 @@ export default function GeneratePlanPage() {
                     ))}
                   </select>
                 ) : (
-                  <select
-                    className="pgv2-sort"
-                    value={candidateSort}
-                    onChange={(event) => setCandidateSort(event.target.value as CandidateGroupSort)}
-                  >
-                    {CANDIDATE_SORT_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>排序:{o.label}</option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      className="pgv2-sort"
+                      value={candidateSort}
+                      onChange={(event) => {
+                        setCandidateSort(event.target.value as CandidateGroupSort);
+                        setCandidateSortDir('DESC'); // 切轴回到该轴默认方向
+                      }}
+                    >
+                      {CANDIDATE_SORT_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>排序:{o.label}</option>
+                      ))}
+                    </select>
+                    {(() => {
+                      // 仅可双向的轴显示方向切换; 综合推荐无方向
+                      const dir = CANDIDATE_SORT_OPTIONS.find((o) => o.value === candidateSort)?.dir;
+                      if (!dir) return null;
+                      return (
+                        <div
+                          className="pgv2-sortdir"
+                          role="group"
+                          aria-label="排序方向"
+                          style={{ display: 'inline-flex', border: '1px solid #d9d9d9', borderRadius: 6, overflow: 'hidden' }}
+                        >
+                          {([['DESC', dir.desc], ['ASC', dir.asc]] as const).map(([d, txt]) => {
+                            const active = candidateSortDir === d;
+                            return (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => setCandidateSortDir(d)}
+                                style={{
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: '4px 10px',
+                                  fontSize: 12,
+                                  lineHeight: 1.5,
+                                  background: active ? '#1677ff' : '#fff',
+                                  color: active ? '#fff' : '#595959',
+                                }}
+                              >
+                                {txt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </>
                 )}
                 <label className="pgv2-toggle">
                   <input
