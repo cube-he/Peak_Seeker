@@ -2326,6 +2326,18 @@ export default function GeneratePlanPage() {
                 ))}
               </div>
 
+              {/* 学生未接受中外合作时, "只看中外合作"会近乎为空(后端软规则默认隐藏中外合作组) — 给出说明 */}
+              {sinoForeignFilter === 'only' && student?.acceptSinoForeign !== true ? (
+                <div className="pgv2-source-note" style={{ marginTop: 4 }}>
+                  <InfoCircleOutlined />
+                  该生资料「接受中外合作办学」为否，中外合作专业组默认不进候选，所以这里几乎为空。如要查看 / 推荐中外合作，请到{' '}
+                  <a href={`/teacher/students/${studentId}`} target="_blank" rel="noreferrer" style={{ color: 'var(--primary, #1677ff)' }}>
+                    学生资料页
+                  </a>
+                  {' '}开启「接受中外合作」后再筛。
+                </div>
+              ) : null}
+
               {/* —— 分数条: 今年预估分区间 (两视图通用; 拖动只更显示, 松手才筛) —— */}
               {predictedScoreRange && predictedScoreRange.max > predictedScoreRange.min ? (
                 <div className="pgv2-tier-bar" style={{ marginTop: 4, alignItems: 'center', gap: 12 }}>
