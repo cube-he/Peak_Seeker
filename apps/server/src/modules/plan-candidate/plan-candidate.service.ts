@@ -21,6 +21,7 @@ import {
   poolRankBounds,
   type RankWindow,
 } from './rank-window-filter';
+import { filterEpsBySubjectRequirement } from './subject-requirement-filter';
 import { SoftRule, SoftFailReason } from './filters/soft-rule.interface';
 import { calcDynamicGradient, calcGradient } from './gradient-calculator';
 import { confirmedBonusPoints } from '../policy/bonus-points.util';
@@ -1611,13 +1612,16 @@ export class PlanCandidateService {
       }));
     }
 
-    const [eps, restrictions] = await Promise.all([
+    const [epsRaw, restrictions] = await Promise.all([
       this.prisma.enrollmentPlan.findMany({
         where,
         select: CANDIDATE_ENROLLMENT_PLAN_SELECT,
       }),
       this.prisma.healthRestriction.findMany(),
     ]);
+    // 再选科目硬过滤: 剔除学生选科不满足"再选科目要求"的专业(投档资格不符, 不进候选).
+    // reChoices 空 → filterEps 原样返回(不过滤), 交生成前置校验催补.
+    const eps = filterEpsBySubjectRequirement(epsRaw, student.reChoices);
     const hardRules = this.buildHardRules(restrictions);
     const softRules = this.buildSoftRules();
     // 3 年历史：sourceYear / -1 / -2（前端 TrendChart 需要 3 点）
