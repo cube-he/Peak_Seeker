@@ -1250,8 +1250,11 @@ function HouseholdFields() {
       </div>
       <div className="field">
         <label>户口性质<span className="req">必填</span></label>
-        <Form.Item name="isRural" valuePropName="checked" noStyle>
-          <Checkbox>农村户籍</Checkbox>
+        <Form.Item name="isRural" noStyle>
+          <Radio.Group>
+            <Radio value={true}>农村户籍</Radio>
+            <Radio value={false}>城镇户籍</Radio>
+          </Radio.Group>
         </Form.Item>
       </div>
       {/* 高考报名地 — Cascader 保留 antd */}
