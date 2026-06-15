@@ -23,7 +23,7 @@ python deploy_auto.py --skip-build --skip-tests
 
 **部署后常见补充动作**：
 - 改了 university 字段/导入数据 → 清 Redis `cache:university:*`
-- 改了/重导招生计划（enrollment_plans）→ 清 Redis `cache:enroll-level:*`（RedisService 自动加 `cache:` 前缀），否则 picker 的本/专科标记用旧层次
+- 改了/重导招生计划（enrollment_plans）→ ①清 Redis `cache:enroll-level:*`（RedisService 自动加 `cache:` 前缀），否则 picker 的本/专科标记用旧层次；②重跑 `mysql … < apps/server/scripts/backfill-sino-foreign.sql`（据专业备注回填中外合作标记 `is_sino_foreign`，否则导入后该列全为 0、生成页"中外合作"筛选/资料页开关/卡片"中外"标签全失效）后重启 vh-server 刷新候选进程内缓存
 - 改了批次资格种子 → 服务器跑 `cd apps/server && pnpm seed:eligibility`（幂等）
 - `data/seed/batch-region-counties.json` 不随 deploy 上传，改了要手动 SFTP 到远端同路径
 
