@@ -352,13 +352,14 @@ describe('PlanCandidateService', () => {
         },
       ])
       .mockResolvedValueOnce([
+        // 去年同组: group_plan_count=24 (组级整组计划), 年度对比用它而非逐行求和
         {
           universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
-          groupCode: 'G1', groupPlanCount: null, planCount: 9,
+          groupCode: 'G1', groupPlanCount: 24, planCount: 9,
         },
         {
           universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
-          groupCode: 'G1', groupPlanCount: null, planCount: 15,
+          groupCode: 'G1', groupPlanCount: 24, planCount: 15,
         },
       ]);
     prisma.admissionRecord.findMany.mockResolvedValue([
@@ -404,6 +405,64 @@ describe('PlanCandidateService', () => {
       isRecommendedAnchor: true,
       majorMinScore: 615,
       majorMinRank: 9500,
+    }));
+  });
+
+  it('去年缺 group_plan_count 时不逐行求和, previousPlanCount/planCountChange 置空', async () => {
+    // 复现生产数据形态: 当前年 group_plan_count 齐全(每行=组总数 245);
+    // 去年 group_plan_count 全 NULL 且 plan_count 存的是组级数(187/228)复制到每行。
+    // 旧逻辑会把去年逐行求和(187+228=415)当组总数 → 卡片显示假"计划变动",
+    // 还误导 calcDynamicGradient 把整组判为"计划腰斩"下调风险。
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: [], preferredMajorCategories: [], excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 2 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 100, universityId: 1, majorId: 11, university: { id: 1, name: 'Alpha University', code: 'A01' },
+          major: { id: 11, name: 'Computer Science', code: '080901', category: 'Engineering' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '080901', majorName: 'Computer Science', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: 'Physics group', groupPlanCount: 245, subjectRequirements: 'Physics required',
+          planCount: 21,
+        },
+        {
+          id: 101, universityId: 1, majorId: 12, university: { id: 1, name: 'Alpha University', code: 'A01' },
+          major: { id: 12, name: 'Software Engineering', code: '080902', category: 'Engineering' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '080902', majorName: 'Software Engineering', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: 'Physics group', groupPlanCount: 245, subjectRequirements: 'Physics required',
+          planCount: 2,
+        },
+      ])
+      .mockResolvedValueOnce([
+        { universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General', groupCode: 'G1', groupPlanCount: null, planCount: 187 },
+        { universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General', groupCode: 'G1', groupPlanCount: null, planCount: 228 },
+      ]);
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      {
+        universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G1', majorCode: '080901', majorName: 'Computer Science', year: 2025,
+        groupMinRank: 10000, groupMinScore: 610, groupAdmissionCount: 28,
+        majorMinRank: 9500, majorMinScore: 615, majorAdmissionCount: 21,
+      },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]).toEqual(expect.objectContaining({
+      currentPlanCount: 245,
+      previousPlanCount: null,
+      planCountChange: null,
     }));
   });
 

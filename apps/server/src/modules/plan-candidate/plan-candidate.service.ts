@@ -1808,7 +1808,13 @@ export class PlanCandidateService {
       const groupHistory = this.pickGroupHistory(groupRecords, source.sourceYear);
       const first = rows[0];
       const currentPlanCount = this.planCountForGroup(rows);
-      const previousPlanCount = this.planCountForGroup(previousByGroup.get(groupKey) ?? []);
+      // 年度对比只信 group_plan_count(组级整组计划)。2024/2023 导入未填该字段、且把组级计划数
+      // 复制进了 plan_count 每行 → 逐行求和会把组总数放大约「专业数」倍(实查 245→5769),
+      // 既污染卡片"招生计划变动",又误导 calcDynamicGradient 把整组判为"计划腰斩"下调风险。
+      // 故缺 group_plan_count 即视为去年计划不可比 → null(不走 planCountForGroup 的求和兜底)。
+      const previousPlanCount =
+        (previousByGroup.get(groupKey) ?? []).find((r: any) => typeof r.groupPlanCount === 'number')
+          ?.groupPlanCount ?? null;
       const selectionCompetition = this.estimateSelectionCompetition(rows, first.subjects ?? subjects);
       const supplementary = supplementaryByGroup.get(groupKey) ?? null;
       const riskSupplementary = supplementaryForGroupRisk(supplementary);
