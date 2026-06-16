@@ -1010,7 +1010,7 @@ export default function StudentDetailPage() {
       {/* —— Tab content (antd Form / Card / 子组件保留 ) —— */}
       <div className="fade-up d4">
         {activeTab === 'profile' && (
-          <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
+          <div>
             <div className="space-y-4">
               <DataCompletenessHeader student={student} />
               <Card className="rounded-2xl shadow-card">
@@ -1119,10 +1119,6 @@ export default function StudentDetailPage() {
                   <TIcon.save /> {saveMutation.isPending ? '保存中...' : '保存资料'}
                 </button>
               </div>
-            </div>
-            <div className="space-y-4">
-              <ContactPanel student={student} />
-              <KeyDataPanel student={student} />
             </div>
           </div>
         )}
@@ -1922,59 +1918,6 @@ function PreferenceFields({
 /* StudentSummaryBar + SopTimeline 旧子组件已被主入口 inline 替换为设计稿
    .sd-header / .sop 结构, 删除以避免 unused 报错. */
 
-function ContactPanel({ student }: { student: any }) {
-  const studentPhone = student?.user?.phone ?? null;
-  const parentPhone = student?.parentPhone ?? null;
-
-  const callPhone = (phone: string) => {
-    window.location.href = `tel:${phone}`;
-  };
-
-  const copyToClipboard = async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      message.success(`${label}已复制`);
-    } catch {
-      message.error('复制失败');
-    }
-  };
-
-  return (
-    <Card title="联系方式" size="small">
-      <div className="space-y-3">
-        <div>
-          <p className="m-0 text-xs font-medium text-text-muted">学生</p>
-          {studentPhone ? (
-            <div className="mt-1 flex items-center justify-between gap-2">
-              <span className="font-mono text-sm">{studentPhone}</span>
-              <div className="flex gap-1">
-                <Button size="small" onClick={() => callPhone(studentPhone)}>拨号</Button>
-                <Button size="small" onClick={() => copyToClipboard(studentPhone, '学生电话')}>复制</Button>
-              </div>
-            </div>
-          ) : (
-            <p className="m-0 text-sm text-text-muted">--</p>
-          )}
-        </div>
-        <div>
-          <p className="m-0 text-xs font-medium text-text-muted">家长</p>
-          {parentPhone ? (
-            <div className="mt-1 flex items-center justify-between gap-2">
-              <span className="font-mono text-sm">{parentPhone}</span>
-              <div className="flex gap-1">
-                <Button size="small" onClick={() => callPhone(parentPhone)}>拨号</Button>
-                <Button size="small" onClick={() => copyToClipboard(parentPhone, '家长电话')}>复制</Button>
-              </div>
-            </div>
-          ) : (
-            <p className="m-0 text-sm text-text-muted">--</p>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 // MVP 实装 (Plan 10 版本对比按需后做): 列出该学生所有方案版本, 点击跳转到方案详情页
 function PlanListTabContent({ student }: { student: any }) {
   const plans: any[] = student?.volunteerPlans ?? [];
@@ -2198,124 +2141,6 @@ function ChangeLogTabContent({ studentId }: { studentId: string | number }) {
         })}
       </ol>
     </div>
-  );
-}
-
-function KeyDataPanel({ student }: { student: any }) {
-  // 第一组:分数·位次
-  const examType = student?.examType
-    ? EXAM_TYPE_LABEL[student.examType] ?? student.examType
-    : '--';
-  const firstChoice = student?.firstChoice ?? '--';
-  const reChoices = Array.isArray(student?.reChoices) ? student.reChoices.join('/') : '--';
-  // examType 跟 firstChoice 语义经常重叠 (examType=PHYSICS, firstChoice='物理'),
-  // 重叠时只显示一份避免"物理·物理·化学/生物"那种冗余
-  const subjectStr = student?.examType
-    ? examType === firstChoice
-      ? `${examType}·${reChoices}`
-      : `${examType}·${firstChoice}·${reChoices}`
-    : '--';
-  const totalScore = student?.totalScore ?? null;
-  const provincialRank = student?.provincialRank ?? null;
-
-  // 第二组:资格条件
-  const bonusList = Array.isArray(student?.bonusItems) ? student.bonusItems : [];
-  const bonusValue = bonusList.reduce(
-    (sum: number, b: any) => sum + (b?.value ?? 0),
-    0,
-  );
-  const bonusLabel = bonusList.length === 0 ? '无' : `+${bonusValue} (${bonusList.length} 项)`;
-  const ethnicity = student?.user?.ethnicity ?? '--';
-  const sourceLoc =
-    [student?.province, student?.city, student?.county].filter(Boolean).join('·') || '--';
-
-  // 第三组:意向
-  const prefCities = Array.isArray(student?.preferredCities) ? student.preferredCities : [];
-  const prefMajors = Array.isArray(student?.preferredMajors) ? student.preferredMajors : [];
-  const prefCitiesStr =
-    prefCities.length === 0
-      ? '未填'
-      : prefCities.slice(0, 3).join('/') + (prefCities.length > 3 ? '...' : '');
-  const prefMajorsStr =
-    prefMajors.length === 0
-      ? '未填'
-      : prefMajors.slice(0, 3).join('/') + (prefMajors.length > 3 ? '...' : '');
-
-  return (
-    <Card title="关键数据" size="small">
-      <div className="space-y-4 text-sm">
-        <div>
-          <p className="m-0 mb-1 text-xs font-medium text-text-muted">分数·位次</p>
-          <p className="m-0 leading-relaxed">
-            <span>选科 {subjectStr}</span>
-            <br />
-            <span>最近模考 {totalScore ?? '--'}</span>
-            <br />
-            <span>预测位次 {provincialRank != null ? provincialRank.toLocaleString('zh-CN') : '--'}</span>
-          </p>
-        </div>
-        <div className="border-t border-border-subtle pt-3">
-          <p className="m-0 mb-1 text-xs font-medium text-text-muted">资格条件</p>
-          <p className="m-0 leading-relaxed">
-            <span>加分 {bonusLabel}</span>
-            <br />
-            <span>民族 {ethnicity}</span>
-            <br />
-            <span>生源地 {sourceLoc}</span>
-          </p>
-        </div>
-        <div className="border-t border-border-subtle pt-3">
-          <p className="m-0 mb-1 text-xs font-medium text-text-muted">意向</p>
-          <p className="m-0 leading-relaxed">
-            <span>意向城市 {prefCitiesStr}</span>
-            <br />
-            <span>目标专业 {prefMajorsStr}</span>
-          </p>
-        </div>
-        {/* 老师在批次推荐页确认过的批次, 方案制作只在这些批次里出方案. */}
-        <div className="border-t border-border-subtle pt-3">
-          <p className="m-0 mb-1 text-xs font-medium text-text-muted">已确认批次</p>
-          {Array.isArray(student?.preferredBatches) && student.preferredBatches.length > 0 ? (
-            <p className="m-0 leading-relaxed">
-              {student.preferredBatches.map((b: string) => (
-                <span
-                  key={b}
-                  className="inline-block mr-1 mb-1 rounded-full bg-accent-fixed px-2 py-0.5 text-xs text-accent"
-                >
-                  {b}
-                </span>
-              ))}
-              {student?.batchesConfirmedAt ? (
-                <span className="text-text-faint text-xs ml-1">
-                  确认于 {new Date(student.batchesConfirmedAt).toLocaleDateString('zh-CN')}
-                </span>
-              ) : null}
-            </p>
-          ) : (
-            <p className="m-0 text-xs text-text-muted">
-              未确认 ·{' '}
-              <Link
-                href={`/teacher/students/${student?.id}/batch-recommendations`}
-                className="text-primary no-underline hover:underline"
-              >
-                去推荐页选批次 →
-              </Link>
-            </p>
-          )}
-        </div>
-        {/* 历史案例参考 (需要 examType + totalScore 才能算 ±20 分范围). */}
-        {student?.examType && totalScore != null ? (
-          <div className="border-t border-border-subtle pt-3">
-            <Link
-              href={`/teacher/historical-cases?examType=${student.examType}&scoreFrom=${totalScore - 20}&scoreTo=${totalScore + 20}`}
-              className="text-xs text-primary no-underline hover:underline"
-            >
-              📚 查看 ±20 分相似历史案例 →
-            </Link>
-          </div>
-        ) : null}
-      </div>
-    </Card>
   );
 }
 
