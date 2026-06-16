@@ -497,6 +497,113 @@ describe('PlanCandidateService', () => {
     expect(result.total).toBe(0);
   });
 
+  // 验证: 院校优先(groupBy=UNIVERSITY)视图同样应用硬规则(剔除)+软规则(includeSoftFails 控显隐)。
+  // 硬/软过滤都在"建组层"(上卷之前)执行, 院校卡复用同一份 value.groups → 两条规则自动透传到院校视图。
+  // 此前 groupBy=UNIVERSITY 路径无集成测试, 这里补特征测试, 既证明院校优先规则确实生效, 也防回归。
+  describe('groupBy=UNIVERSITY 视图应用硬规则与软规则', () => {
+    // 同一所院校(id 9)同一个组(G9)放三个专业:
+    //   计算机科学 = PASS (学费 5000, 在 LOW 预算内)
+    //   护理学     = 硬规则失败 (planNotes 仅限女生, 男生 → 直接剔除, 不进任何分区)
+    //   临床医学   = 软规则失败 (学费 30000 超 LOW 预算 → TuitionRule SOFT_FAIL, 由 includeSoftFails 控显隐)
+    const uniGroupPlans = [
+      makeGroupEnrollmentPlan({
+        id: 901, majorId: 91, majorCode: 'CS01', majorName: '计算机科学', tuition: 5000,
+        major: { id: 91, name: '计算机科学', code: 'CS01', category: '工学', notes: '' },
+      }),
+      makeGroupEnrollmentPlan({
+        id: 902, majorId: 92, majorCode: 'NUR1', majorName: '护理学', tuition: 5000,
+        major: { id: 92, name: '护理学', code: 'NUR1', category: '医学', notes: '' },
+        planNotes: '本专业仅限女生',
+      }),
+      makeGroupEnrollmentPlan({
+        id: 903, majorId: 93, majorCode: 'MED1', majorName: '临床医学', tuition: 30000,
+        major: { id: 93, name: '临床医学', code: 'MED1', category: '医学', notes: '' },
+      }),
+    ];
+    const uniGroupRecords = [
+      makeGroupAdmissionRecord({
+        majorCode: 'CS01', majorName: '计算机科学',
+        groupMinRank: 10000, majorMinRank: 9500, groupMinScore: 610, majorMinScore: 615,
+      }),
+    ];
+    // tuitionBudget LOW (< 6000): 5000 OK, 30000 超预算 → SOFT_FAIL
+    const maleStudentLowBudget = {
+      provincialRank: 9800,
+      tuitionBudget: 'LOW',
+      user: { gender: '男', ethnicity: '汉族' },
+    };
+
+    const majorNamesOf = (result: any): string[] =>
+      result.universities[0].groups[0].majors.map((m: any) => m.majorName);
+
+    it('includeSoftFails=true: 硬规则专业被剔除, 软规则专业进风险区(可见)', async () => {
+      mockCandidateGroupRequest({ student: maleStudentLowBudget, plans: uniGroupPlans, records: uniGroupRecords });
+
+      const result: any = await service.getCandidateGroups(1, {
+        page: 1, pageSize: 10, includeSoftFails: true, groupBy: 'UNIVERSITY',
+      });
+
+      expect(result.groupBy).toBe('UNIVERSITY');
+      expect(result.universities).toHaveLength(1);
+      const names = majorNamesOf(result);
+      expect(names).toContain('计算机科学'); // PASS
+      expect(names).toContain('临床医学'); // 软规则失败但 includeSoftFails=true → 仍展示
+      expect(names).not.toContain('护理学'); // 硬规则(限女生)失败 → 永远剔除
+      expect(result.universities[0].groups[0].softFailCount).toBe(1);
+    });
+
+    it('includeSoftFails=false: 软规则专业被隐藏, 硬规则专业仍被剔除, 只留 PASS', async () => {
+      mockCandidateGroupRequest({ student: maleStudentLowBudget, plans: uniGroupPlans, records: uniGroupRecords });
+
+      const result: any = await service.getCandidateGroups(1, {
+        page: 1, pageSize: 10, includeSoftFails: false, groupBy: 'UNIVERSITY',
+      });
+
+      expect(result.universities).toHaveLength(1);
+      const names = majorNamesOf(result);
+      expect(names).toEqual(['计算机科学']); // 软规则专业隐藏 + 硬规则专业剔除
+      expect(names).not.toContain('临床医学');
+      expect(names).not.toContain('护理学');
+      expect(result.universities[0].groups[0].softFailCount).toBe(0);
+    });
+  });
+
+  // 验证: 院校优先(groupBy=UNIVERSITY)也支持"非意向地区折叠"——整所院校省市都不在学生意向地区时
+  // 默认折叠隐藏(院校卡视角下比组视角更自然), includeRegionMismatch=true 展开, 并回 regionMismatchCount。
+  it('groupBy=UNIVERSITY: 默认折叠非意向地区院校, includeRegionMismatch=true 展开并回 count', async () => {
+    // 学生意向四川: 四川大学(四川)命中, 北京大学(北京)属非意向地区 → 默认折叠
+    const plans = [
+      makeGroupEnrollmentPlan({
+        id: 911, universityId: 9, majorId: 91, majorCode: 'SC01', majorName: '川大计科', groupCode: 'G9',
+        university: { id: 9, name: '四川大学', code: 'SCU', province: '四川', city: '成都' },
+        major: { id: 91, name: '川大计科', code: 'SC01', category: '工学', notes: '' },
+      }),
+      makeGroupEnrollmentPlan({
+        id: 912, universityId: 8, majorId: 81, majorCode: 'BJ01', majorName: '北大计科', groupCode: 'G8',
+        university: { id: 8, name: '北京大学', code: 'PKU', province: '北京', city: '北京' },
+        major: { id: 81, name: '北大计科', code: 'BJ01', category: '工学', notes: '' },
+      }),
+    ];
+    const records = [
+      makeGroupAdmissionRecord({ universityId: 9, groupCode: 'G9', majorCode: 'SC01', majorName: '川大计科', groupMinRank: 10000, majorMinRank: 9500 }),
+      makeGroupAdmissionRecord({ universityId: 8, groupCode: 'G8', majorCode: 'BJ01', majorName: '北大计科', groupMinRank: 11000, majorMinRank: 10500 }),
+    ];
+    mockCandidateGroupRequest({
+      student: { provincialRank: 9800, preferredProvinces: ['四川'], preferredCities: [] },
+      plans, records,
+    });
+
+    // 默认(折叠): 只剩意向地区院校, 但 count 仍报告被折叠的数量
+    const folded: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, groupBy: 'UNIVERSITY' });
+    expect(folded.regionMismatchCount).toBe(1);
+    expect(folded.universities.map((u: any) => u.universityId)).toEqual([9]);
+
+    // 展开: includeRegionMismatch=true (命中同一缓存, 仅分页层重新折叠) → 两校都在
+    const expanded: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, groupBy: 'UNIVERSITY', includeRegionMismatch: true });
+    expect(expanded.regionMismatchCount).toBe(1);
+    expect(expanded.universities.map((u: any) => u.universityId).sort((a: number, b: number) => a - b)).toEqual([8, 9]);
+  });
+
   // 回归: keyword 命中专业时, 同一专业组里其余专业也要展示, 不能只回命中行
   // (旧实现把 keyword OR 加到 EnrollmentPlan 行级 where, 导致同组非命中专业被丢)
   it('keyword 命中专业时, 同一专业组里的其余专业一同返回', async () => {

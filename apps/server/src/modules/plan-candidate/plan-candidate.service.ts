@@ -690,6 +690,15 @@ export class PlanCandidateService {
     universities = filterUniversitiesBySinoForeign(universities, q.sinoForeign);
     // 分数条过滤 (校内任一组命中位次窗口), 在排序+分页前
     universities = filterUniversitiesByRankWindow(universities, rankWindow ?? null);
+    // 非意向地区折叠: 整所院校省市都不在学生意向地区时默认折叠隐藏 (院校卡=一所院校, 此处比组视角更自然),
+    // includeRegionMismatch=true 才展开。regionMismatch 是院校级属性 (同校所有组一致), 取任一组即可。
+    // 与 GROUP 视图同口径: count 在其他过滤之后取, 驱动前端"显示非意向地区 (N)"开关。
+    const isRegionMismatchUni = (u: any) =>
+      Array.isArray(u.groups) && u.groups.some((g: any) => g?.regionMismatch);
+    const regionMismatchCount = universities.filter(isRegionMismatchUni).length;
+    if (q.includeRegionMismatch !== true) {
+      universities = universities.filter((u) => !isRegionMismatchUni(u));
+    }
     sortCandidateUniversities(universities, q.sort ?? 'UNIVERSITY_OVERALL', value.studentRankUsed);
     const start = (page - 1) * pageSize;
     const { groups: _groups, ...meta } = value;
@@ -697,6 +706,7 @@ export class PlanCandidateService {
       ...meta,
       groupBy: 'UNIVERSITY' as const,
       total: universities.length,
+      regionMismatchCount,
       page,
       pageSize,
       universities: universities.slice(start, start + pageSize),
