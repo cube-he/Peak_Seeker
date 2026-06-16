@@ -22,6 +22,7 @@ import {
   type RankWindow,
 } from './rank-window-filter';
 import { filterEpsBySubjectRequirement } from './subject-requirement-filter';
+import { isRegionMismatch, normalizeRegion } from './region-match';
 import { SoftRule, SoftFailReason } from './filters/soft-rule.interface';
 import { calcDynamicGradient, calcGradient } from './gradient-calculator';
 import { confirmedBonusPoints } from '../policy/bonus-points.util';
@@ -56,6 +57,7 @@ interface GetCandidatesQuery {
   groupBy?: 'GROUP' | 'UNIVERSITY'; // 视图模式; UNIVERSITY=院校卡上卷
   nature?: 'public' | 'private'; // 院校优先视图: 办学性质过滤
   sinoForeign?: 'only' | 'exclude'; // 中外合作过滤: only/exclude/空; 两视图均生效
+  includeRegionMismatch?: boolean | string; // 是否展开"非意向地区"院校组(默认 false=折叠); 仅 GROUP 视图
   minScore?: number; // 分数条下界(今年预估分)
   maxScore?: number; // 分数条上界
 }
@@ -593,6 +595,7 @@ export class PlanCandidateService {
     gradientBand?: string,
     sinoForeign?: 'only' | 'exclude',
     rankWindow?: RankWindow | null,
+    includeRegionMismatch = false,
   ) {
     // 档位过滤在缓存后的分页层做: 切换冲/稳/保/无史线 chip 不触发全量重算,
     // total 改为档内数量(驱动分页), tierCounts 保持全池口径(驱动 chip 计数)
@@ -603,13 +606,25 @@ export class PlanCandidateService {
       ? value.groups.filter((g: any) => gradientBandOf(g) === validBand)
       : value.groups;
     const afterSino = filterGroupsBySinoForeign(banded, sinoForeign);
-    const pool = filterGroupsByRankWindow(afterSino, rankWindow ?? null);
+    const afterRank = filterGroupsByRankWindow(afterSino, rankWindow ?? null);
+    // 非意向地区(整所院校都不在学生意向省/市): 默认折叠隐藏, "显示非意向地区"开关展开。
+    // 同档位过滤一样在分页层做(切开关不重算池)。count 取当前其他过滤后的口径, 驱动开关 (N)。
+    const regionMismatchCount = afterRank.filter((g: any) => g?.regionMismatch).length;
+    const pool = includeRegionMismatch ? afterRank : afterRank.filter((g: any) => !g?.regionMismatch);
     const start = (page - 1) * pageSize;
+    // tierCounts 驱动冲/稳/保/无史线 chip 计数, 仍保持"不随 band/sino/rank 过滤变"的全池口径,
+    // 但折叠态(includeRegionMismatch=false)下必须扣掉被隐藏的非意向地区组, 否则 chip 数 > 列表 total,
+    // 且'全部'chip(=rush+stable+safe+noLine) 也比 total 大, 与老师实际能看到的候选数对不上。
+    const tierCounts = includeRegionMismatch
+      ? value.tierCounts
+      : countTiers(value.groups.filter((g: any) => !g?.regionMismatch));
     return {
       ...value,
       page,
       pageSize,
       total: pool.length,
+      regionMismatchCount,
+      tierCounts,
       groups: pool.slice(start, start + pageSize),
     };
   }
@@ -636,7 +651,12 @@ export class PlanCandidateService {
     const regions = new Set<string>();
     for (const field of ['preferredProvinces', 'preferredCities']) {
       const arr = Array.isArray(student?.[field]) ? student[field] : [];
-      for (const r of arr) if (typeof r === 'string') regions.add(r);
+      // 去"省/市"后缀归一: 学生意向城市存"成都市", 院校库存"成都", 不归一则地域优先排序/匹配永远对不上
+      for (const r of arr) {
+        if (typeof r !== 'string') continue;
+        const n = normalizeRegion(r);
+        if (n) regions.add(n);
+      }
     }
     return {
       preferredUniversityNames: names,
@@ -985,6 +1005,7 @@ export class PlanCandidateService {
   }
 
   // 软规则: 学生/家长可权衡的偏好 (学费 / 办学性质), 不符合时进风险区, 由 includeSoftFails 控制是否显示
+  // 注: 地域不在此 —— 它是院校级整组属性, 走独立的 regionMismatch 标记 + "显示非意向地区"开关折叠, 见 region-match.ts
   private buildSoftRules(): SoftRule[] {
     return [
       new TuitionRule(),
@@ -1493,7 +1514,7 @@ export class PlanCandidateService {
       if (q.groupBy === 'UNIVERSITY') {
         return this.paginateAsUniversities(cached, q, student, page, pageSize, rankWindow);
       }
-      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow);
+      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true);
     }
 
     // 拆分搜索: 院校 / 专业各自独立; 同时填则 AND 组合 (院校的特定专业)
@@ -1577,7 +1598,7 @@ export class PlanCandidateService {
           predictedScoreRange: null,
         };
         this.setCandidateGroupCache(cacheKey, emptyResult);
-        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow);
+        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true);
       }
       (where as any).OR = matchedGroups.map((g) => ({
         universityId: g.universityId,
@@ -1941,6 +1962,13 @@ export class PlanCandidateService {
         universityName: first.university?.name ?? '',
         universityCode: first.university?.code ?? null,
         universityRank: first.university?.softRanking ?? null,
+        // 非意向地区标记(院校级): 学生填了意向省/市 且 本校省市都不命中 → 前端默认折叠进"显示非意向地区"开关
+        regionMismatch: isRegionMismatch(
+          first.university?.province ?? null,
+          first.university?.city ?? null,
+          student.preferredProvinces,
+          student.preferredCities,
+        ),
         university: {
           id: first.universityId,
           name: first.university?.name ?? '',
@@ -2181,7 +2209,7 @@ export class PlanCandidateService {
     if (q.groupBy === 'UNIVERSITY') {
       return this.paginateAsUniversities(fullResult, q, student, page, pageSize, rankWindow);
     }
-    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow);
+    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true);
   }
 
   async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {

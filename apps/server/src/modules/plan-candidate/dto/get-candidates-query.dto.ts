@@ -12,6 +12,9 @@ import { CANDIDATE_UNIVERSITY_SORTS } from '../university-rollup';
 //        所以"只有显式 false 才关"; 缺省时 @Transform 不执行, 由 `= true` 默认值兜底。
 const onlyExplicitFalse = ({ value }: { value: unknown }) =>
   !(value === 'false' || value === false);
+// 反向: 默认关, 只有显式 true 才开 (用于默认折叠的开关, 如"显示非意向地区")
+const onlyExplicitTrue = ({ value }: { value: unknown }) =>
+  value === 'true' || value === true;
 
 // 排序「轴」(GROUP 视图). 方向由 sortDir 单独控制, 不再把方向编进枚举值。
 // MAJOR_MATCH 是智能默认(无方向); 其余 4 轴可双向。
@@ -56,6 +59,9 @@ export class GetCandidatesQueryDto {
   @IsOptional() @IsString() purity?: string;
   // 中外合作办学过滤: only=只看含中外合作的, exclude=排除含中外合作的, 空=全部. 两视图均生效
   @IsOptional() @IsIn(['only', 'exclude']) sinoForeign?: 'only' | 'exclude';
+  // 是否展开"非意向地区"院校组(整所院校省市都不在学生意向地区内). 默认 false=折叠隐藏; 仅 GROUP 视图。
+  // 类型声明 boolean|string 绕过 ValidationPipe 隐式转换(见上方注释), 经 @Transform 后恒为 boolean。
+  @IsOptional() @Transform(onlyExplicitTrue) @IsBoolean() includeRegionMismatch?: boolean | string = false;
   // 分数条: 今年预估分区间过滤 (两端都给才生效). 0..750
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(750) minScore?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(750) maxScore?: number;

@@ -61,6 +61,8 @@ export interface CandidateGroupListParams extends CandidateListParams {
   nature?: 'public' | 'private';
   // 中外合作办学过滤 (only=只看, exclude=排除, 不传=全部)
   sinoForeign?: 'only' | 'exclude';
+  // 是否展开"非意向地区"院校组 (默认 false=折叠隐藏); 仅 GROUP 视图
+  includeRegionMismatch?: boolean;
   minScore?: number;
   maxScore?: number;
 }
@@ -143,6 +145,7 @@ export const planApi = {
         groupBy: params?.groupBy,
         nature: params?.nature,
         sinoForeign: params?.sinoForeign,
+        includeRegionMismatch: params?.includeRegionMismatch,
         minScore: params?.minScore,
         maxScore: params?.maxScore,
       },

@@ -3,6 +3,8 @@
 // 纯函数, 不依赖 Prisma / service 内部状态, 便于单测。
 // 输入的 group 即 plan-candidate.service 已构建好的 CandidateGroup(含归一化 matchScore)。
 
+import { normalizeRegion } from './region-match';
+
 export interface CandidateUniversitySummary {
   groupCount: number;
   // 该校够得着的组按梯度统计 (冲/稳/保)
@@ -106,8 +108,8 @@ export function rollupByUniversity(groups: any[], ctx: RollupContext): Candidate
     const prov = first.university?.province;
     const city = first.university?.city;
     const regionMatch =
-      (typeof prov === 'string' && ctx.preferredRegions.has(prov)) ||
-      (typeof city === 'string' && ctx.preferredRegions.has(city));
+      (typeof prov === 'string' && ctx.preferredRegions.has(normalizeRegion(prov))) ||
+      (typeof city === 'string' && ctx.preferredRegions.has(normalizeRegion(city)));
 
     result.push({
       universityId,

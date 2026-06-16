@@ -318,6 +318,8 @@ interface CandidateGroupListResult {
   universities?: CandidateUniversity[]; // 仅 groupBy=UNIVERSITY 时返回
   groupBy?: 'GROUP' | 'UNIVERSITY';
   total: number;
+  // "非意向地区"院校组数量(当前其他过滤后口径); 驱动"显示非意向地区 (N)"开关
+  regionMismatchCount?: number;
   planYear?: number;
   sourceYear?: number;
   previousYear?: number;
@@ -1078,6 +1080,8 @@ export default function GeneratePlanPage() {
   const [searchTextMajor, setSearchTextMajor] = useState('');
   const [searchTextGroupName, setSearchTextGroupName] = useState('');
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
+  // 非意向地区(整所院校省市都不在学生意向地区): 默认折叠隐藏, 开关展开
+  const [includeRegionMismatch, setIncludeRegionMismatch] = useState(false);
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
   // 排序方向 (GROUP 视图): DESC=轴默认, ASC=翻转; 切轴时重置回 DESC
   const [candidateSortDir, setCandidateSortDir] = useState<CandidateSortDir>('DESC');
@@ -1199,7 +1203,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, viewMode === 'UNIVERSITY' ? null : includeRegionMismatch, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1210,6 +1214,8 @@ export default function GeneratePlanPage() {
       // 档位过滤走服务端(全池口径+正确分页); 服务端在缓存后的分页层应用, 切档不重算
       gradientBand: viewMode !== 'UNIVERSITY' && gradientFilter !== 'all' ? gradientFilter : undefined,
       includeSoftFails,
+      // 仅 GROUP 视图: 展开/折叠非意向地区院校组
+      includeRegionMismatch: viewMode === 'UNIVERSITY' ? undefined : includeRegionMismatch,
       sort: effectiveSort as CandidateGroupSort,
       // 方向仅 GROUP 视图生效; 院校视图沿用其自身排序, 不传 sortDir
       sortDir: viewMode === 'UNIVERSITY' ? undefined : candidateSortDir,
@@ -1225,6 +1231,7 @@ export default function GeneratePlanPage() {
     enabled: !!planId,
   });
   const candidateGroups = unwrap<CandidateGroupListResult>(groupData);
+  const regionMismatchCount = candidateGroups?.regionMismatchCount ?? 0;
   const predictedScoreRange = (candidateGroups as any)?.predictedScoreRange as { min: number; max: number } | null | undefined;
   const groups = candidateGroups?.groups ?? [];
   const candidateUniversities = candidateGroups?.universities ?? [];
@@ -1422,7 +1429,7 @@ export default function GeneratePlanPage() {
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
-  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, natureFilter]);
+  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, includeRegionMismatch, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, natureFilter]);
 
   // 视图模式默认跟随 plan/student.priorityMode (仅在无 ?view= URL 参数时, 自动定一次)
   useEffect(() => {
@@ -2345,6 +2352,19 @@ export default function GeneratePlanPage() {
                   />
                   显示学费/办学性质不符
                 </label>
+                {viewMode !== 'UNIVERSITY' && regionMismatchCount > 0 ? (
+                  <label
+                    className="pgv2-toggle"
+                    title="勾选: 显示整所院校都不在学生意向省/市的院校组(默认折叠隐藏)。学生意向地区在档案里设置。"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={includeRegionMismatch}
+                      onChange={(event) => setIncludeRegionMismatch(event.target.checked)}
+                    />
+                    显示非意向地区 ({regionMismatchCount})
+                  </label>
+                ) : null}
                 <label className="pgv2-toggle">
                   <input
                     type="checkbox"

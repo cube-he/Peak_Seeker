@@ -943,6 +943,42 @@ describe('PlanCandidateService', () => {
     expect(groups.map((group) => group.universityName)).toEqual(['LowScore', 'HighScore']);
   });
 
+  it('paginateCandidateGroups: 默认折叠非意向地区组, 开关展开; count 始终为全口径', () => {
+    const mk = (name: string, regionMismatch: boolean) => ({ groupKey: name, universityName: name, regionMismatch });
+    const value: any = {
+      total: 3,
+      groups: [mk('In-A', false), mk('Out-B', true), mk('Out-C', true)],
+      tierCounts: { rush: 0, stable: 3, safe: 0, noLine: 0 },
+    };
+    const sumTiers = (tc: any) => tc.rush + tc.stable + tc.safe + tc.noLine;
+
+    // 默认(includeRegionMismatch=false): 折叠掉非意向地区组, 只剩 In-A; count 仍报全口径 2
+    const hidden = (service as any).paginateCandidateGroups(value, 1, 20, undefined, undefined, null, false);
+    expect(hidden.groups.map((g: any) => g.universityName)).toEqual(['In-A']);
+    expect(hidden.total).toBe(1);
+    expect(hidden.regionMismatchCount).toBe(2);
+    // 折叠态: 梯度 chip 计数须扣掉被隐藏的非意向地区组, 与 total 对齐(否则 chip 数 > 可见候选)
+    expect(sumTiers(hidden.tierCounts)).toBe(hidden.total);
+
+    // 展开(includeRegionMismatch=true): 全部显示; count 不变; tierCounts 回到全池口径
+    const shown = (service as any).paginateCandidateGroups(value, 1, 20, undefined, undefined, null, true);
+    expect(shown.groups.map((g: any) => g.universityName)).toEqual(['In-A', 'Out-B', 'Out-C']);
+    expect(shown.total).toBe(3);
+    expect(shown.regionMismatchCount).toBe(2);
+    expect(sumTiers(shown.tierCounts)).toBe(shown.total);
+  });
+
+  it('buildRollupContext: 意向省/市归一去后缀(修"成都市"对不上库里"成都")', () => {
+    const ctx = (service as any).buildRollupContext({
+      preferredProvinces: ['四川省'],
+      preferredCities: ['成都市', '绵阳市'],
+    });
+    expect(ctx.preferredRegions.has('四川')).toBe(true);
+    expect(ctx.preferredRegions.has('成都')).toBe(true);
+    expect(ctx.preferredRegions.has('绵阳')).toBe(true);
+    expect(ctx.preferredRegions.has('成都市')).toBe(false);
+  });
+
   it('treats zero school ranking as missing when sorting by university rank', () => {
     const groups = [
       {
