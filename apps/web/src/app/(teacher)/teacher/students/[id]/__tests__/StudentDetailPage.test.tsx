@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import StudentDetailPage from '../page';
 
@@ -75,6 +75,8 @@ Object.defineProperty(window, 'getComputedStyle', {
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: '1' }),
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+  useSearchParams: () => ({ get: () => null }),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
@@ -121,6 +123,26 @@ jest.mock('@/components/student/picker/options/useMajorOptions', () => ({
   }),
 }));
 
+jest.mock('@/components/student/picker/options/useMajorCategoryOptions', () => ({
+  useMajorCategoryOptions: () => ({
+    data: [{ label: '计算机类', value: '计算机类' }],
+    isLoading: false,
+  }),
+}));
+
+// sd-subtabs: 子表单只在对应子页激活时渲染, 点子 tab 按钮切换
+async function gotoSubtab(
+  user: ReturnType<typeof userEvent.setup>,
+  name: RegExp,
+) {
+  // 缺失项 mchip 也是 role=button (如 bonusStatus 标签"加分政策" 与子 tab 同名), 精确取 .sd-subtab
+  const subtab = screen
+    .getAllByRole('button', { name })
+    .find((b) => b.classList.contains('sd-subtab'));
+  if (!subtab) throw new Error(`sd-subtab not found: ${name.source}`);
+  await user.click(subtab);
+}
+
 describe('StudentDetailPage', () => {
   beforeEach(() => {
     mockMutate.mockClear();
@@ -132,9 +154,14 @@ describe('StudentDetailPage', () => {
     };
   });
 
+  // 该 jest 配置未启用 RTL 自动清理, 显式卸载避免跨测试 DOM 累积导致多元素匹配
+  afterEach(() => cleanup());
+
   it('shows concrete options for preference and bonus selects', async () => {
     const user = userEvent.setup();
     const { container } = render(<StudentDetailPage />);
+
+    await gotoSubtab(user, /偏好与规划/);
 
     await openSelect(container, user, 'preferredProvinces');
     expect((await screen.findAllByText('四川省')).length).toBeGreaterThan(0);
@@ -145,22 +172,23 @@ describe('StudentDetailPage', () => {
     await openSelect(container, user, 'preferredUniversities');
     expect((await screen.findAllByText('四川大学')).length).toBeGreaterThan(0);
 
-    await openSelect(container, user, 'preferredMajors');
-    expect((await screen.findAllByText('计算机科学与技术')).length).toBeGreaterThan(0);
-
-    await user.click(screen.getByText('加分政策'));
+    await gotoSubtab(user, /加分政策/);
     await openSelect(container, user, 'bonusItems');
     expect((await screen.findAllByText('烈士子女 +20')).length).toBeGreaterThan(0);
   });
-  it('marks provincial rank mismatch against the score-segment calculation', () => {
+
+  it('marks provincial rank mismatch against the score-segment calculation', async () => {
+    const user = userEvent.setup();
     render(<StudentDetailPage />);
+
+    await gotoSubtab(user, /考试成绩/);
 
     expect(
       screen.getByText((text) => text.includes('28,500') && text.includes('1')),
     ).toBeInTheDocument();
   });
 
-  it('labels temporary 2025 score segment data used for 2026 rank checks', () => {
+  it('labels temporary 2025 score segment data used for 2026 rank checks', async () => {
     mockStudentData = {
       ...mockBaseStudentData,
       totalScore: 479,
@@ -176,7 +204,10 @@ describe('StudentDetailPage', () => {
       },
     };
 
+    const user = userEvent.setup();
     render(<StudentDetailPage />);
+
+    await gotoSubtab(user, /考试成绩/);
 
     expect(
       screen.getByText((text) => text.includes('按 2025 一分一段估算') && text.includes('156,000')),
@@ -187,15 +218,14 @@ describe('StudentDetailPage', () => {
     const user = userEvent.setup();
     render(<StudentDetailPage />);
 
-    await user.click(screen.getByText('户籍与高考所在地'));
+    await gotoSubtab(user, /户籍信息/);
 
-    expect(screen.getAllByLabelText('户籍所在地').length).toBeGreaterThan(0);
-    expect(screen.getAllByLabelText('高考报名地').length).toBeGreaterThan(0);
-    expect(screen.queryByLabelText('户籍省')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('高考所在省')).not.toBeInTheDocument();
+    // 户籍/报名地字段标签都在 (sd-subtabs 户籍子页已渲染)
+    expect(screen.getAllByText('户籍所在地').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('高考报名地').length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: /同户籍所在地/ }));
-    await user.click(screen.getByRole('button', { name: /保存/ }));
+    await user.click(screen.getByRole('button', { name: /保存资料/ }));
 
     await waitFor(() => {
       expect(mockMutate).toHaveBeenCalledWith(

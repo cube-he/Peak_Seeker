@@ -130,6 +130,122 @@
 }
 .br-titlerow .back-link:hover { color: var(--primary); }
 .br-titlerow .back-link svg { width: 13px; height: 13px; }
+.br-titlerow-l { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.br-help-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  background: var(--surface-dim); border: 1px solid transparent; font-size: 12.5px; color: var(--text-tertiary);
+  cursor: pointer; transition: all var(--dur) var(--ease); }
+.br-help-toggle:hover { border-color: var(--primary); color: var(--primary); }
+.br-help-toggle svg { width: 13px; height: 13px; }
+.br-help-toggle .chev { display: inline-flex; transition: transform var(--dur) var(--ease); }
+.br-help-toggle .chev.up { transform: rotate(180deg); }
+
+/* —— 卡片交互简化: 点卡选择, 显式按钮看要求/原因 —— */
+.br-card-head { cursor: pointer; }
+.br-card-head:hover { background: var(--bg); }
+.br-card.is-checked .br-card-head:hover { background: transparent; }
+.br-card-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.br-detail-btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 13px; border-radius: 8px;
+  background: var(--surface-dim); border: 1px solid transparent; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary);
+  cursor: pointer; white-space: nowrap; transition: all var(--dur) var(--ease); flex: 0 0 auto; align-self: center; }
+.br-detail-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--surface); }
+.br-detail-btn .chev { display: inline-flex; transition: transform var(--dur) var(--ease); }
+.br-detail-btn .chev svg { width: 13px; height: 13px; }
+.br-detail-btn .chev.up { transform: rotate(180deg); }
+.br-card-mode { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-subtle); }
+/* checkbox 更大更醒目, 让"选择"动作一眼可见 */
+.br-card-head .br-check { width: 24px; height: 24px; border-radius: 7px; }
+.br-card-head .br-check svg { width: 15px; height: 15px; }
+
+/* —— 紧凑卡片: 一屏展示, 详情点开看 —— */
+.br-section { margin-bottom: 14px; }
+.br-section-head { margin-bottom: 8px; }
+.br-section-cards { display: flex; flex-direction: column; gap: 7px; }
+.br-card-head { padding: 9px 14px; gap: 12px; align-items: center; }
+.br-card-mid { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; flex: 1; }
+.br-card-title { flex: 0 0 auto; }
+.br-card-title .name { font-size: 14px; }
+.br-card-summary { margin-top: 0; font-size: 11.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-verdict { padding: 1px 9px; font-size: 11px; }
+.br-detail-btn { padding: 5px 11px; font-size: 12px; }
+.br-card-head .br-check { width: 20px; height: 20px; border-radius: 6px; }
+.br-card-head .br-check svg { width: 13px; height: 13px; }
+/* 单行卡片 + 更紧凑的概览/工具条, 力争一屏 */
+.br-card-mid { flex-wrap: nowrap; }
+.br-card-head { padding: 8px 14px; }
+.br-overview { padding: 14px 18px; margin-bottom: 14px; }
+.br-toolbar { margin: 12px 0; }
+.br-section-empty { padding: 9px 14px; font-size: 12px; }
+
+/* —— 单一列表 + 一屏紧凑版面 —— */
+.br-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; align-items: start; }
+.br-card.is-open { grid-column: 1 / -1; }
+.br-list .br-card-head { padding: 9px 12px; gap: 10px; min-height: 48px; }
+.br-list .br-row-name { font-size: 13.5px; }
+.br-list-empty { padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px; grid-column: 1 / -1; }
+.br-list-div { display: flex; align-items: center; gap: 12px; margin: 6px 2px 2px; font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-muted); grid-column: 1 / -1; }
+.br-list-div .ln { flex: 1; height: 1px; background: var(--border-subtle); }
+/* 概览条压成一行 */
+.br-overview { padding: 10px 16px; margin-bottom: 12px; align-items: center; gap: 14px; }
+.br-ov-avatar { width: 34px; height: 34px; font-size: 15px; }
+.br-ov-name { font-size: 16px; }
+.br-ov-subj { margin-top: 1px; font-size: 12px; }
+.br-ov-stats { gap: 16px; }
+.br-ov-stat .k { font-size: 10px; }
+.br-ov-stat .v { font-size: 17px; }
+/* 标题行 / 工具条 / 面包屑 收紧 */
+.br-crumb { margin-bottom: 12px; }
+.br-titlerow { padding-bottom: 10px; margin-bottom: 10px; }
+.br-titlerow h1 { font-size: 26px; }
+.br-toolbar { margin: 10px 0; }
+
+/* —— 极简操作行 + 清爽 checklist 行 —— */
+.br-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 10px; font-size: 12.5px; }
+.br-actions-count { color: var(--text-tertiary); }
+.br-actions-count strong { color: var(--text); font-weight: 600; }
+.br-actions-links { display: inline-flex; align-items: center; gap: 8px; }
+.br-actions-links button { background: transparent; border: 0; color: var(--primary); font-size: 12.5px; cursor: pointer; padding: 2px 4px; }
+.br-actions-links button:hover { text-decoration: underline; }
+.br-actions-links button:disabled { color: var(--text-faint); cursor: not-allowed; text-decoration: none; }
+.br-actions-links .sep { color: var(--text-faint); }
+/* 单行: 勾选 + 批次名 + 状态词 + 详情 */
+.br-row-name { flex: 1; font-size: 14px; font-weight: 500; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; flex: 0 0 auto; }
+.br-status .dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
+.br-status.tone-safe { color: var(--safe); }
+.br-status.tone-accent { color: var(--accent); }
+.br-status.tone-rush { color: var(--rush); }
+.br-status.tone-pending { color: var(--text-muted); }
+.br-status.tone-info { color: var(--stable); }
+.br-row-detail { display: inline-flex; align-items: center; gap: 3px; padding: 5px 9px; border-radius: 7px; background: transparent;
+  border: 0; font-size: 12px; color: var(--text-muted); cursor: pointer; flex: 0 0 auto; transition: all var(--dur) var(--ease); }
+.br-row-detail:hover { background: var(--surface-dim); color: var(--primary); }
+.br-row-detail .chev { display: inline-flex; transition: transform var(--dur) var(--ease); }
+.br-row-detail .chev svg { width: 13px; height: 13px; }
+.br-row-detail .chev.up { transform: rotate(180deg); }
+/* 不符合: 默认淡化, hover 还原 */
+.br-card.v-INELIGIBLE { opacity: .6; }
+.br-card.v-INELIGIBLE:hover, .br-card.v-INELIGIBLE.is-open { opacity: 1; }
+
+/* —— 优化: 待核实徽标/不符原因前置 + 选中强反馈 + 备注折叠 —— */
+.br-row-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.br-row-mid .br-row-name { flex: none; }
+.br-row-hint { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.br-row-hint.tone-rush { color: var(--rush); }
+.br-row-hint.tone-accent { color: var(--accent); }
+/* 选中态强反馈: 浅 navy 底 + 名字变色(左侧色条由 .br-card.is-checked 既有样式负责) */
+.br-card.is-checked { background: var(--primary-fixed); }
+.br-card.is-checked .br-row-name { color: var(--primary); }
+.br-actions-count .sel { color: var(--primary); }
+/* 备注折叠 */
+.br-addnote { align-self: flex-start; background: transparent; border: 1px dashed var(--ring); border-radius: 7px;
+  padding: 8px 13px; font-size: 12.5px; color: var(--text-tertiary); cursor: pointer; transition: all var(--dur) var(--ease); }
+.br-addnote:hover { border-color: var(--primary); color: var(--primary); }
+
+/* —— 视觉: 瓦片统一单行等高 + 待核实小药丸 —— */
+.br-list .br-card-head { min-height: 48px; }
+.br-status .vneed { font-style: normal; margin-left: 5px; padding: 1px 7px; border-radius: 999px;
+  background: var(--accent-fixed); color: var(--accent); font-size: 10.5px; font-weight: 600; line-height: 1.6; }
+.br-status { gap: 6px; }
 .br-note {
   display: flex; align-items: flex-start; gap: 10px;
   background: var(--surface); border-radius: 10px; box-shadow: var(--shadow-card);
@@ -257,11 +373,11 @@
 
 /* 折叠 header */
 .br-card-head {
-  display: flex; align-items: flex-start; gap: 14px;
-  padding: 16px 18px 16px 20px; cursor: pointer;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px; cursor: pointer;
 }
 .br-check {
-  flex: 0 0 auto; margin-top: 2px;
+  flex: 0 0 auto; margin-top: 0;
   width: 20px; height: 20px; border-radius: 6px;
   border: 1.5px solid var(--border); background: var(--surface-dim);
   display: inline-flex; align-items: center; justify-content: center;

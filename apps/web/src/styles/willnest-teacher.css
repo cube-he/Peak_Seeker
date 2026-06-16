@@ -7357,3 +7357,250 @@
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ==========================================================================
+   学生详情 · 资料 tab 编辑器 (设计稿 student-detail 复刻 — 加 .wn-teacher-scope 前缀)
+   ========================================================================== */
+/* ==========================================================================
+   考试成绩 重做 — 选科组合(复选框) + 各科成绩 + 总分/位次(置底自动求和)
+   ========================================================================== */
+.wn-teacher-scope .exam-redo { display: flex; flex-direction: column; gap: 16px; }
+.wn-teacher-scope .exam-block { background: var(--bg); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 16px 18px; }
+.wn-teacher-scope .exam-block-h { font-family: var(--font-heading); font-weight: 600; font-size: 14.5px; color: var(--text);
+  margin-bottom: 14px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.wn-teacher-scope .exam-block-h span { font-family: var(--font-body); font-size: 11.5px; font-weight: 400; color: var(--text-muted); }
+.wn-teacher-scope .choice-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+@media (max-width: 760px) { .wn-teacher-scope .choice-cols { grid-template-columns: 1fr; } }
+.wn-teacher-scope .choice-label { font-size: 12.5px; color: var(--text-secondary); font-weight: 500; margin-bottom: 10px;
+  display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.wn-teacher-scope .choice-label .req { color: var(--rush); font-style: normal; }
+.wn-teacher-scope .choice-label em { font-style: normal; font-size: 11px; color: var(--text-muted); }
+.wn-teacher-scope .ec-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.wn-teacher-scope .ec-chip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border-radius: 8px;
+  background: var(--surface-dim); border: 1px solid transparent; font-size: 13px; color: var(--text-secondary);
+  cursor: pointer; transition: all var(--dur) var(--ease); }
+.wn-teacher-scope .ec-chip:hover:not(:disabled) { color: var(--primary); }
+.wn-teacher-scope .ec-chip.on { background: var(--primary-fixed); border-color: var(--primary); color: var(--primary); font-weight: 500; }
+.wn-teacher-scope .ec-chip:disabled { opacity: .4; cursor: not-allowed; }
+.wn-teacher-scope .ec-box { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--ring); flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center; color: #fff; transition: all var(--dur) var(--ease); }
+.wn-teacher-scope .ec-chip.radio .ec-box { border-radius: 999px; }
+.wn-teacher-scope .ec-chip.on .ec-box { background: var(--primary); border-color: var(--primary); }
+.wn-teacher-scope .ec-box svg { width: 11px; height: 11px; }
+.wn-teacher-scope .ec-derived { margin-top: 11px; font-size: 12px; color: var(--text-muted); }
+.wn-teacher-scope .ec-derived b { color: var(--primary); font-family: var(--font-heading); font-weight: 700; }
+
+.wn-teacher-scope .sc-sub { font-size: 11.5px; color: var(--text-muted); font-weight: 500; margin: 4px 0 9px; }
+.wn-teacher-scope .sc-sub:not(:first-child) { margin-top: 16px; }
+.wn-teacher-scope .sc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 600px) { .wn-teacher-scope .sc-grid { grid-template-columns: repeat(2, 1fr); } }
+.wn-teacher-scope .sc-cell { background: var(--surface-dim); border-radius: 10px; padding: 11px 13px 13px; border: 1px solid transparent;
+  transition: all var(--dur) var(--ease); }
+.wn-teacher-scope .sc-cell.has { background: #fff; border-color: var(--border); box-shadow: var(--shadow-card); }
+.wn-teacher-scope .sc-cell.err { border-color: var(--rush); box-shadow: 0 0 0 3px rgba(197,48,48,.08); }
+.wn-teacher-scope .sc-cell.empty { display: flex; align-items: center; justify-content: center; min-height: 66px;
+  border: 1px dashed var(--ring); background: transparent; font-size: 12px; color: var(--text-faint); }
+.wn-teacher-scope .sc-cell-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 7px; }
+.wn-teacher-scope .sc-cell-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.wn-teacher-scope .sc-cell-max { font-size: 10.5px; color: var(--text-muted); }
+.wn-teacher-scope .sc-cell input { width: 100%; border: 0; background: transparent; font-family: var(--font-heading); font-weight: 700;
+  font-size: 22px; color: var(--text); padding: 0; font-variant-numeric: tabular-nums; outline: none; }
+.wn-teacher-scope .sc-cell input::placeholder { font-family: var(--font-body); font-weight: 400; font-size: 13px; color: var(--text-faint); }
+.wn-teacher-scope .sc-cell.err input { color: var(--rush); }
+.wn-teacher-scope .sc-cell-err { font-size: 11px; color: var(--rush); font-weight: 500; margin-top: 4px; }
+
+.wn-teacher-scope .exam-foot { display: grid; grid-template-columns: minmax(180px, 1fr) 1.4fr; gap: 22px; align-items: end; }
+@media (max-width: 600px) { .wn-teacher-scope .exam-foot { grid-template-columns: 1fr; } }
+.wn-teacher-scope .exam-total { background: linear-gradient(135deg, var(--primary), var(--primary-light)); border-radius: 12px;
+  padding: 14px 18px; color: #fff; }
+.wn-teacher-scope .exam-total .k { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: .82; }
+.wn-teacher-scope .exam-total .v { font-family: var(--font-heading); font-weight: 700; font-size: 38px; line-height: 1; margin-top: 4px;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.wn-teacher-scope .exam-total .v small { font-size: 14px; opacity: .82; font-weight: 500; margin-left: 4px; }
+.wn-teacher-scope .exam-rank label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-tertiary);
+  font-weight: 500; margin-bottom: 6px; }
+.wn-teacher-scope .exam-rank input { width: 100%; padding: 9px 12px; border-radius: 8px; background: var(--surface-dim);
+  border: 1px solid transparent; font-family: var(--font-body); font-size: 13.5px; color: var(--text);
+  font-variant-numeric: tabular-nums; transition: all var(--dur) var(--ease); }
+.wn-teacher-scope .exam-rank input:focus { outline: none; background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,58,95,.08); }
+.wn-teacher-scope .lock-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--accent);
+  background: var(--accent-fixed); padding: 2px 8px; border-radius: 999px; }
+.wn-teacher-scope .lock-chip svg { width: 10px; height: 10px; }
+
+/* —— 资料表单通用控件 (户籍 / 加分 / 偏好) —— */
+.wn-teacher-scope .pf-form { display: flex; flex-direction: column; gap: 18px; }
+.wn-teacher-scope .pf-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+@media (max-width: 760px) { .wn-teacher-scope .pf-row2 { grid-template-columns: 1fr; } }
+.wn-teacher-scope .pf-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.wn-teacher-scope .pf-field > label { font-size: 12.5px; color: var(--text-secondary); font-weight: 500; display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.wn-teacher-scope .pf-field > label .req { color: var(--rush); font-style: normal; }
+.wn-teacher-scope .pf-field > label em { font-style: normal; font-size: 11px; color: var(--text-muted); }
+.wn-teacher-scope .pf-link { margin-left: auto; font-size: 11.5px; color: var(--primary); font-weight: 500; text-decoration: none; transition: color var(--dur) var(--ease); }
+.wn-teacher-scope .pf-link:hover { color: var(--accent); }
+.wn-teacher-scope .pf-shared { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--text-tertiary);
+  background: var(--surface-dim); border-radius: 8px; padding: 10px 13px; line-height: 1.6; }
+.wn-teacher-scope .pf-shared svg { width: 13px; height: 13px; flex: 0 0 auto; margin-top: 2px; color: var(--text-muted); }
+.wn-teacher-scope .pf-cascade { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+@media (max-width: 600px) { .wn-teacher-scope .pf-cascade { grid-template-columns: 1fr; } }
+.wn-teacher-scope .pf-cascade select, .wn-teacher-scope .pf-cascade input { padding: 9px 12px; border-radius: 8px; background: var(--surface-dim);
+  border: 1px solid transparent; font-family: var(--font-body); font-size: 13.5px; color: var(--text); }
+.wn-teacher-scope .pf-cascade select:focus, .wn-teacher-scope .pf-cascade input:focus { outline: none; background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,58,95,.08); }
+.wn-teacher-scope .pf-gbtn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 14px; border-radius: 8px;
+  background: var(--surface-high); border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary); font-weight: 500;
+  transition: all var(--dur) var(--ease); }
+.wn-teacher-scope .pf-gbtn:hover { border-color: var(--primary); color: var(--primary); }
+.wn-teacher-scope .pf-gbtn svg { width: 13px; height: 13px; }
+.wn-teacher-scope .pf-seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.wn-teacher-scope .pf-seg-opt { padding: 9px 15px; border-radius: 8px; background: var(--surface-dim); border: 1px solid transparent;
+  font-size: 13px; color: var(--text-secondary); transition: all var(--dur) var(--ease); }
+.wn-teacher-scope .pf-seg-opt:hover { color: var(--primary); }
+.wn-teacher-scope .pf-seg-opt.on { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 500; box-shadow: 0 1px 3px rgba(30,58,95,.18); }
+.wn-teacher-scope .pf-sw { display: inline-flex; align-items: center; gap: 10px; }
+.wn-teacher-scope .pf-sw-track { width: 46px; height: 26px; border-radius: 999px; background: var(--ring); position: relative; border: 0; padding: 0; cursor: pointer; transition: background var(--dur) var(--ease); flex: 0 0 auto; }
+.wn-teacher-scope .pf-sw-track.on { background: var(--primary); }
+.wn-teacher-scope .pf-sw-knob { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 999px; background: #fff; transition: left var(--dur) var(--ease); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.wn-teacher-scope .pf-sw-track.on .pf-sw-knob { left: 23px; }
+.wn-teacher-scope .pf-sw-label { font-size: 13px; color: var(--text-secondary); }
+.wn-teacher-scope .pf-sw-label b { color: var(--primary); font-weight: 500; }
+.wn-teacher-scope .pf-chipms { display: flex; flex-wrap: wrap; gap: 8px; }
+.wn-teacher-scope .pf-tag { padding: 7px 13px; border-radius: 999px; background: var(--surface-dim); border: 1px solid transparent;
+  font-size: 12.5px; color: var(--text-secondary); transition: all var(--dur) var(--ease); }
+.wn-teacher-scope .pf-tag:hover { color: var(--primary); }
+.wn-teacher-scope .pf-tag.on { background: var(--primary-fixed); border-color: var(--primary); color: var(--primary); font-weight: 500; }
+
+/* —— 意向专业 梯队控件 —— */
+.wn-teacher-scope .pf-tiers { display: flex; flex-direction: column; gap: 10px; }
+.wn-teacher-scope .pf-tier { background: var(--surface-dim); border-radius: 10px; padding: 12px 14px; }
+.wn-teacher-scope .pf-tier.pool { background: var(--accent-fixed); }
+.wn-teacher-scope .pf-tier-head { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.wn-teacher-scope .pf-tier-tag { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--primary); color: #fff; font-variant-numeric: tabular-nums; }
+.wn-teacher-scope .pf-tier.pool .pf-tier-tag { background: var(--accent); }
+.wn-teacher-scope .pf-tier-name { font-size: 12px; color: var(--text-tertiary); }
+.wn-teacher-scope .pf-tier-count { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.wn-teacher-scope .pf-tier-del { border: 0; background: transparent; color: var(--text-faint); display: inline-flex; padding: 3px; border-radius: 6px; cursor: pointer; }
+.wn-teacher-scope .pf-tier-del:hover { color: var(--rush); background: var(--rush-fixed); }
+.wn-teacher-scope .pf-tier-del svg { width: 13px; height: 13px; }
+.wn-teacher-scope .pf-tier-majors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.wn-teacher-scope .pf-tier-major { display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px 4px 11px; border-radius: 7px;
+  background: var(--surface-high); border: 1px solid var(--border); font-size: 12.5px; color: var(--text); }
+.wn-teacher-scope .pf-tier-major button { border: 0; background: transparent; color: var(--text-faint); display: inline-flex; padding: 1px; border-radius: 999px; cursor: pointer; }
+.wn-teacher-scope .pf-tier-major button:hover { color: var(--rush); }
+.wn-teacher-scope .pf-tier-major button svg { width: 11px; height: 11px; }
+.wn-teacher-scope .pf-tier-add { padding: 6px 10px; border-radius: 7px; border: 1px dashed var(--ring); background: transparent;
+  font-family: var(--font-body); font-size: 12.5px; color: var(--text-tertiary); cursor: pointer; }
+.wn-teacher-scope .pf-tier-add:focus { outline: none; border-color: var(--primary); color: var(--primary); }
+.wn-teacher-scope .pf-tier-addbtn { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 7px;
+  border: 1px dashed var(--ring); background: transparent; font-size: 12.5px; color: var(--text-tertiary); cursor: pointer; transition: all var(--dur) var(--ease); }
+.wn-teacher-scope .pf-tier-addbtn:hover { border-color: var(--primary); color: var(--primary); }
+.wn-teacher-scope .pf-tier-addbtn svg { width: 12px; height: 12px; }
+
+/* —— 健康条件: 带单位输入 + 文本域 —— */
+.wn-teacher-scope .pf-unit { position: relative; display: flex; align-items: center; }
+.wn-teacher-scope .pf-unit input { width: 100%; padding: 9px 12px; border-radius: 8px; background: var(--surface-dim); border: 1px solid transparent;
+  font-family: var(--font-body); font-size: 13.5px; color: var(--text); font-variant-numeric: tabular-nums; }
+.wn-teacher-scope .pf-unit input:focus { outline: none; background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,58,95,.08); }
+.wn-teacher-scope .pf-unit span { position: absolute; right: 12px; font-size: 12px; color: var(--text-muted); pointer-events: none; }
+.wn-teacher-scope .pf-ta { width: 100%; padding: 10px 13px; border-radius: 8px; background: var(--surface-dim); border: 1px solid transparent;
+  font-family: var(--font-body); font-size: 13.5px; color: var(--text); resize: vertical; min-height: 60px; line-height: 1.55; }
+.wn-teacher-scope .pf-ta:focus { outline: none; background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,58,95,.08); }
+
+/* —— 资料页 底部 sticky 保存条 —— */
+.wn-teacher-scope .sd-savebar { position: sticky; bottom: 0; z-index: 30; margin: 22px -40px -64px; padding: 14px 40px;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+  background: rgba(250,249,245,.94); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 -1px 0 var(--border), 0 -10px 24px rgba(26,26,25,.05); }
+@media (max-width: 600px) { .wn-teacher-scope .sd-savebar { margin: 22px -18px -40px; padding: 12px 18px; } }
+.wn-teacher-scope .sd-savebar-info { display: flex; align-items: center; gap: 13px; flex-wrap: wrap; font-size: 13px; }
+.wn-teacher-scope .sd-savebar-pct { color: var(--text-secondary); }
+.wn-teacher-scope .sd-savebar-pct b { font-family: var(--font-heading); font-weight: 700; font-size: 16px; color: var(--text); font-variant-numeric: tabular-nums; }
+.wn-teacher-scope .sd-savebar-dot { width: 3px; height: 3px; border-radius: 999px; background: var(--text-faint); }
+.wn-teacher-scope .sd-savebar-miss { color: var(--rush); font-weight: 500; }
+.wn-teacher-scope .sd-savebar-ok { color: var(--safe); font-weight: 500; }
+.wn-teacher-scope .sd-savebar-note { color: var(--text-muted); font-size: 12px; }
+.wn-teacher-scope .sd-savebar-actions { display: flex; gap: 10px; }
+.wn-teacher-scope .sd-savebar-ghost { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 8px; background: transparent;
+  border: 1px solid var(--border); font-size: 13px; font-weight: 500; color: var(--text-secondary); transition: all var(--dur) var(--ease); }
+.wn-teacher-scope .sd-savebar-ghost:hover { border-color: var(--primary); color: var(--primary); }
+.wn-teacher-scope .sd-savebar-ghost svg { width: 14px; height: 14px; }
+.wn-teacher-scope .sd-savebar-save { display: inline-flex; align-items: center; gap: 7px; padding: 10px 24px; border-radius: 8px; border: 0;
+  font-size: 13.5px; font-weight: 600; color: #fff; background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  box-shadow: var(--shadow-glow-primary); transition: all var(--dur) var(--ease); }
+.wn-teacher-scope .sd-savebar-save:hover { transform: translateY(-1px); box-shadow: var(--shadow-glow-primary-lg); }
+.wn-teacher-scope .sd-savebar-save svg { width: 15px; height: 15px; }
+
+/* —— 资料页 美化 —— */
+.wn-teacher-scope .sd-subtab-body { padding: 26px 28px 30px; }
+/* section header (eyebrow + serif title + desc) */
+.wn-teacher-scope .pf-sechead { margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--border-subtle); }
+.wn-teacher-scope .pf-sechead-eyebrow { font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); font-weight: 500; margin-bottom: 8px; }
+.wn-teacher-scope .pf-sechead h3 { margin: 0; font-family: var(--font-heading); font-weight: 600; font-size: 21px; letter-spacing: -.01em; color: var(--text); line-height: 1.2; }
+.wn-teacher-scope .pf-sechead p { margin: 6px 0 0; font-size: 13px; color: var(--text-tertiary); line-height: 1.55; }
+/* refined sub-tabs: active gets a soft pill + the bar */
+.wn-teacher-scope .sd-subtabs { gap: 2px; padding: 4px 6px 0; }
+.wn-teacher-scope .sd-subtab { border-radius: 8px 8px 0 0; padding: 12px 16px; transition: color var(--dur) var(--ease), background var(--dur) var(--ease); }
+.wn-teacher-scope .sd-subtab:hover { background: var(--bg); }
+.wn-teacher-scope .sd-subtab.is-active { background: var(--surface); }
+/* form fields: a touch more rhythm + label weight */
+.wn-teacher-scope .sd-subtab-body .field > label { font-size: 12.5px; color: var(--text-secondary); font-weight: 500; }
+.wn-teacher-scope .sd-subtab-body .field input, .wn-teacher-scope .sd-subtab-body .field select, .wn-teacher-scope .sd-subtab-body .field textarea { padding: 10px 13px; border-radius: 8px; }
+.wn-teacher-scope .sd-form-grid { gap: 20px 24px; }
+/* exam blocks: subtle lift to match editorial cards */
+.wn-teacher-scope .exam-block { box-shadow: 0 1px 2px rgba(26,26,25,.03); }
+/* gentle entrance for the form body */
+.wn-teacher-scope .sd-subtab-body > * { animation: pfIn .35s var(--ease) both; }
+@media (prefers-reduced-motion: reduce) { .wn-teacher-scope .sd-subtab-body > * { animation: none; } }
+@keyframes pfIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* —— 美化 v2: 更轻盈的输入 + 通透的标签 —— */
+/* 输入框: 由实心奶油底改为白底 + 细描边, 更清爽有层次 */
+.wn-teacher-scope .sd-subtab-body .field input, .wn-teacher-scope .sd-subtab-body .field select, .wn-teacher-scope .sd-subtab-body .field textarea,
+.wn-teacher-scope .pf-cascade select, .wn-teacher-scope .pf-cascade input, .wn-teacher-scope .pf-unit input, .wn-teacher-scope .pf-ta, .wn-teacher-scope .pf-tier-add {
+  background: var(--surface-high);
+  border: 1px solid var(--border);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.wn-teacher-scope .sd-subtab-body .field input:hover, .wn-teacher-scope .sd-subtab-body .field select:hover, .wn-teacher-scope .sd-subtab-body .field textarea:hover,
+.wn-teacher-scope .pf-cascade select:hover, .wn-teacher-scope .pf-cascade input:hover, .wn-teacher-scope .pf-unit input:hover, .wn-teacher-scope .pf-ta:hover { border-color: var(--ring); }
+.wn-teacher-scope .sd-subtab-body .field input:focus, .wn-teacher-scope .sd-subtab-body .field select:focus, .wn-teacher-scope .sd-subtab-body .field textarea:focus,
+.wn-teacher-scope .pf-cascade select:focus, .wn-teacher-scope .pf-cascade input:focus, .wn-teacher-scope .pf-unit input:focus, .wn-teacher-scope .pf-ta:focus {
+  background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,58,95,.10);
+}
+/* 标签多选: 未选 = 通透描边, 选中 = navy 填充, 对比更分明 */
+.wn-teacher-scope .pf-tag { background: transparent; border: 1px solid var(--border); color: var(--text-tertiary); }
+.wn-teacher-scope .pf-tag:hover { border-color: var(--primary); color: var(--primary); background: var(--surface); }
+.wn-teacher-scope .pf-tag.on { background: var(--primary-fixed); border-color: var(--primary); color: var(--primary); font-weight: 500; }
+/* 梯队 chip 白底, 与奶油分区拉开层次 */
+.wn-teacher-scope .pf-tier-major { background: #fff; }
+.wn-teacher-scope .pf-tier-add { background: transparent; }
+/* 节奏 */
+.wn-teacher-scope .pf-form { gap: 20px; }
+.wn-teacher-scope .pf-field { gap: 9px; }
+/* 分数卡未填时也给极淡描边, 不至于太空 */
+.wn-teacher-scope .sc-cell:not(.has):not(.empty) { border-color: var(--border-subtle); }
+
+/* —— 资料页 视觉精修 v3 —— */
+/* 分数卡: 悬停微浮 + 聚焦高亮, 录入感更细腻 */
+.wn-teacher-scope .sc-cell { transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.wn-teacher-scope .sc-cell.has:hover { transform: translateY(-1px); box-shadow: var(--shadow-card-hover); }
+.wn-teacher-scope .sc-cell:focus-within { background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30,58,95,.10); }
+.wn-teacher-scope .sc-cell.empty { border-style: dashed; }
+/* 选科组合 / 各科成绩 分块标题: 金色左饰条, 编辑刊物感 */
+.wn-teacher-scope .exam-block-h { position: relative; padding-left: 12px; }
+.wn-teacher-scope .exam-block-h::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 3px; border-radius: 999px; background: var(--accent); }
+/* 全省位次 与总分卡配平: 衬线大字 */
+.wn-teacher-scope .exam-rank input { font-size: 17px; font-family: var(--font-heading); font-weight: 700; padding: 12px 14px; letter-spacing: -.005em; }
+/* 区头标题更精致 */
+.wn-teacher-scope .pf-sechead h3 { font-size: 20px; }
+/* 选科 chips / 分段 / 标签 悬停微浮 */
+.wn-teacher-scope .ec-chip, .wn-teacher-scope .pf-seg-opt, .wn-teacher-scope .pf-tag { transition: transform var(--dur) var(--ease), background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease); }
+.wn-teacher-scope .ec-chip:hover:not(:disabled), .wn-teacher-scope .pf-seg-opt:hover:not(.on), .wn-teacher-scope .pf-tag:hover { transform: translateY(-1px); }
+
+/* —— 沟通 / 方案 / 对外 / 日志 四个 Tab 美化 —— */
+.wn-teacher-scope .tbl { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow-card); overflow: hidden; }
+.wn-teacher-scope .tbl-row { transition: background var(--dur) var(--ease); }
+.wn-teacher-scope .tbl-row:hover { background: var(--bg); }
+.wn-teacher-scope .plan-row { transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.wn-teacher-scope .plan-row:hover { transform: translateY(-1px); box-shadow: var(--shadow-card-hover); border-color: var(--border); }
+.wn-teacher-scope .cl-row { transition: background var(--dur) var(--ease); border-radius: 8px; }
+.wn-teacher-scope .cl-row:hover { background: var(--bg); }
+.wn-teacher-scope .collapse { border-radius: 14px; }

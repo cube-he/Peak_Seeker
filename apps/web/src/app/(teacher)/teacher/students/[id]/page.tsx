@@ -4,17 +4,22 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import PrerequisiteCheckModal, { hasRankedPreferredMajors } from '@/components/plan/PrerequisiteCheckModal';
-import { Alert, Button, Card, Cascader, Checkbox, Collapse, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Radio, Select, Spin, Switch, message } from 'antd';
+import { Alert, Cascader, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Spin, message } from 'antd';
 import dayjs from 'dayjs';
-import {
-  LockOutlined,
-  SwapOutlined,
-} from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type BonusItem, type UpdateStudentDto } from '@/services/student-api';
 import { planApi } from '@/services/plan-api';
 import { consultationApi, type Consultation } from '@/services/consultation-api';
-import { Avatar as WnAvatar, TIcon } from '@/components/willnest';
+import {
+  Avatar as WnAvatar,
+  ChannelIcon,
+  Empty as WnEmpty,
+  PlanStatusChip,
+  StatusChip,
+  SubjectChip,
+  TIcon,
+  fmtMins,
+} from '@/components/willnest';
 import BonusCalcCard from '@/components/policy/BonusCalcCard';
 import { useProvinceOptions } from '@/components/student/picker/options/useProvinceOptions';
 import { useCityOptions } from '@/components/student/picker/options/useCityOptions';
@@ -120,6 +125,28 @@ const CHANGE_LOG_FIELD_LABEL: Record<string, string> = {
   careerPlan: '升学规划',
   priorityMode: '优先模式',
   tuitionBudget: '学费预算',
+};
+
+// 方案版本状态 → 中文 / 语义色 (PlanStatusChip 用)
+const PLAN_STATUS_LABEL: Record<string, string> = {
+  DRAFT: '草稿',
+  PENDING_REVIEW: '待审核',
+  REVIEWING: '审核中',
+  REJECTED: '已退回',
+  APPROVED: '已通过',
+  PARENT_CONFIRMED: '家长已确认',
+  FINALIZED: '终稿',
+  PUBLISHED: '已提交',
+};
+const PLAN_STATUS_TONE: Record<string, string> = {
+  DRAFT: 'gray',
+  PENDING_REVIEW: 'accent',
+  REVIEWING: 'accent',
+  REJECTED: 'rush',
+  APPROVED: 'primary',
+  PARENT_CONFIRMED: 'primary',
+  FINALIZED: 'safe',
+  PUBLISHED: 'safe',
 };
 
 function formatFieldValue(value: string | null): string {
@@ -590,14 +617,13 @@ export default function StudentDetailPage() {
   const initialTab = (searchParams.get('tab') as DetailTab) || 'profile';
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
 
-  // Collapse 受控: 初值与原 defaultActiveKey 一致; 缺字段定位时按需展开对应分区
-  const [activeKeys, setActiveKeys] = useState<string[]>(['basic', 'exam', 'preference']);
+  // sd-subtabs 单选: 初值 basic; 缺字段定位时切到对应子页 (key 与 CHECK_TO_SECTION 对齐)
+  const [subTab, setSubTab] = useState<string>('basic');
   const jumpToSection = (sectionKey: string | null) => {
     if (!sectionKey) return;
     setActiveTab('profile');
-    setActiveKeys((prev) => (prev.includes(sectionKey) ? prev : [...prev, sectionKey]));
-    // antd Collapse 懒挂载: 折叠面板的子节点要展开后第二次提交才进 DOM,
-    // 切 Tab 也会重挂载 → 用有限次 rAF 轮询, 等锚点出现再滚动 (取不到就放弃, 不报错).
+    setSubTab(sectionKey);
+    // 切到子页后滚到该子页表单体 (子页挂载有延迟 → 有限次 rAF 轮询, 取不到就放弃, 不报错).
     let tries = 0;
     const tryScroll = () => {
       const el = document.getElementById(`sd-sec-${sectionKey}`);
@@ -690,7 +716,7 @@ export default function StudentDetailPage() {
           <span style={{ width: 12, height: 12, display: 'inline-flex' }}>
             <TIcon.chevLeft />
           </span>{' '}
-          返回
+          返回学生列表
         </button>
         <span style={{ color: 'var(--text-faint)' }}>/</span>
         <span>学生详情</span>
@@ -714,7 +740,24 @@ export default function StudentDetailPage() {
               {student?.id ? <span className="id-chip">#{student.id}</span> : null}
             </h1>
             <div className="info-meta">
-              <span>{examType}</span>
+              {student?.examType === 'PHYSICS' || student?.examType === 'HISTORY' ? (
+                <>
+                  <SubjectChip exam={student.examType} />
+                  {student?.firstChoice ||
+                  (Array.isArray(student?.reChoices) && student.reChoices.length > 0) ? (
+                    <span>
+                      {[
+                        student?.firstChoice,
+                        ...(Array.isArray(student?.reChoices) ? student.reChoices : []),
+                      ]
+                        .filter(Boolean)
+                        .join(' / ')}
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <span>{examType}</span>
+              )}
               {totalScore != null ? (
                 <>
                   <span className="sep" />
@@ -1009,119 +1052,151 @@ export default function StudentDetailPage() {
 
       {/* —— Tab content (antd Form / Card / 子组件保留 ) —— */}
       <div className="fade-up d4">
-        {activeTab === 'profile' && (
-          <div>
-            <div className="space-y-4">
-              <DataCompletenessHeader student={student} />
-              <Card className="rounded-2xl shadow-card">
-                <Form
-                  form={form}
-                  layout="vertical"
-                  initialValues={{
-                    ...student,
-                    ...student.user,
-                    // 9 科分数字段：把后端 firstChoice/scoreFirstChoice/reChoices/scoreSub1/2
-                    // 解开为具体科目分数（scorePhysics / scoreHistory / scoreChemistry...）
-                    ...to9Subjects(student),
-                    // birthDate 在 user 表 (ISO 字符串), DatePicker 期望 dayjs 对象
-                    birthDate: (() => {
-                      const raw = student.user?.birthDate ?? student.birthDate;
-                      return raw ? dayjs(raw) : undefined;
-                    })(),
-                    provincialRank:
-                      student.provincialRank ??
-                      student.rankCheck?.calculatedRank ??
-                      undefined,
-                  }}
-                >
-                  <Collapse
-                    activeKey={activeKeys}
-                    onChange={(keys) =>
-                      setActiveKeys(Array.isArray(keys) ? (keys as string[]) : [keys as string])
-                    }
-                    items={[
-                      { key: 'basic', label: '基础信息', children: <div id="sd-sec-basic"><BasicFields /></div> },
-                      {
-                        key: 'household',
-                        label: (
-                          <span className="flex items-center gap-1">
-                            <LockOutlined /> 户籍与高考所在地
-                          </span>
-                        ),
-                        children: <div id="sd-sec-household"><HouseholdFields /></div>,
-                      },
-                      {
-                        key: 'exam',
-                        label: '考试成绩',
-                        children: <div id="sd-sec-exam"><ExamFields rankCheck={student.rankCheck} /></div>,
-                      },
-                      {
-                        key: 'bonus',
-                        label: (
-                          <span className="flex items-center gap-1">
-                            <LockOutlined /> 加分政策
-                          </span>
-                        ),
-                        children: (
-                          <div id="sd-sec-bonus" className="space-y-4">
-                            <BonusFields />
-                            <BonusCalcCard studentProfileId={Number(studentId)} />
-                          </div>
-                        ),
-                      },
-                      { key: 'health', label: '健康条件', children: <div id="sd-sec-health"><HealthFields /></div> },
-                      { key: 'preference', label: '偏好与规划', children: <div id="sd-sec-preference"><PreferenceFields eligibleLevel={student?.eligibleLevel ?? null} examType={student?.examType ?? null} /></div> },
-                    ]}
-                  />
-                </Form>
-              </Card>
+        {activeTab === 'profile' && (() => {
+          // —— 资料 tab: 6 子页 sd-subtabs + pf-sechead + sd-savebar (复刻 student-detail.jsx) ——
+          const SUBTABS = [
+            { key: 'basic', label: '基础信息' },
+            { key: 'household', label: '户籍信息' },
+            { key: 'exam', label: '考试成绩' },
+            { key: 'bonus', label: '加分政策' },
+            { key: 'health', label: '健康条件' },
+            { key: 'preference', label: '偏好与规划' },
+          ] as const;
+          const SECHEAD: Record<string, [string, string]> = {
+            basic: ['基础信息', '学生身份与联系方式 · 仅姓名为强校验项'],
+            household: ['户籍与高考报名地', '决定一分一段与三州十七县两区加分适用 · 学生可共填'],
+            exam: ['考试成绩', '先定选科组合，再录各科分数，总分自动累加'],
+            bonus: ['加分政策', '关系投档有效分 · 老师核验材料后维护'],
+            health: ['健康条件', '军警 / 航海 / 消防等特殊类专业的体检硬门槛'],
+            preference: ['偏好与规划', 'AI 推荐强约束 · 意向专业按梯队，城市与院校偏好'],
+          };
+          // 每个子页未通过核对项数 → rush 角标; 考试页位次偏差 → accent ! 角标
+          const missBySec: Record<string, number> = {};
+          for (const c of checks) {
+            if (!c.passed) {
+              const sec = CHECK_TO_SECTION[c.key];
+              if (sec) missBySec[sec] = (missBySec[sec] ?? 0) + 1;
+            }
+          }
+          const examWarn = !!student.rankCheck?.isMismatch;
+          const head = SECHEAD[subTab] ?? ['', ''];
+          return (
+            <Form
+              form={form}
+              layout="vertical"
+              initialValues={{
+                ...student,
+                ...student.user,
+                // 9 科分数字段：把后端 firstChoice/scoreFirstChoice/reChoices/scoreSub1/2
+                // 解开为具体科目分数（scorePhysics / scoreHistory / scoreChemistry...）
+                ...to9Subjects(student),
+                // birthDate 在 user 表 (ISO 字符串), DatePicker 期望 dayjs 对象
+                birthDate: (() => {
+                  const raw = student.user?.birthDate ?? student.birthDate;
+                  return raw ? dayjs(raw) : undefined;
+                })(),
+                provincialRank:
+                  student.provincialRank ??
+                  student.rankCheck?.calculatedRank ??
+                  undefined,
+              }}
+            >
+              <div className="form-body">
+                <div className="sd-subtabs">
+                  {SUBTABS.map((st) => (
+                    <button
+                      type="button"
+                      key={st.key}
+                      className={`sd-subtab ${subTab === st.key ? 'is-active' : ''}`}
+                      onClick={() => setSubTab(st.key)}
+                    >
+                      {st.label}
+                      {(missBySec[st.key] ?? 0) > 0 ? (
+                        <span className="sd-subtab-badge rush">{missBySec[st.key]}</span>
+                      ) : null}
+                      {st.key === 'exam' && examWarn ? (
+                        <span className="sd-subtab-badge accent">!</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
 
-              {progress && !progress.isRecommendable ? (
-                <Alert
-                  type="info"
-                  showIcon
-                  message={'档案未达到"可推荐"阈值'}
-                  description={(() => {
-                    const missing = Array.isArray(progress.missingFieldsForRecommend)
-                      ? progress.missingFieldsForRecommend
-                      : [];
-                    if (missing.length === 0) {
-                      return '补完整关键字段后，"生成方案"按钮才会启用。';
-                    }
-                    // 把后端字段 key 翻译成中文 label, 直接列出来让老师知道缺什么
-                    // 用 stage-fields 的 fieldLabel (全覆盖), 不再用残缺的 CHANGE_LOG_FIELD_LABEL
-                    // 兜底成英文 key (老师看到 scoreFirstChoice/politicalStatus 这类原始字段名)
-                    const labels = (missing as string[]).map((f: string) => fieldLabel(f));
-                    return `还缺 ${missing.length} 项关键字段: ${labels.join('、')}。补齐后"生成方案"按钮才会启用。`;
-                  })()}
-                />
-              ) : null}
-              <div
-                style={{
-                  position: 'sticky',
-                  bottom: 0,
-                  zIndex: 20,
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  gap: 8,
-                  padding: '10px 12px',
-                  marginTop: 12,
-                  background: 'var(--surface, #fff)',
-                  borderTop: '1px solid var(--border-subtle, #eee)',
-                }}
-              >
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={handleSave}
-                  disabled={saveMutation.isPending}
-                >
-                  <TIcon.save /> {saveMutation.isPending ? '保存中...' : '保存资料'}
-                </button>
+                <div className="sd-subtab-body" id={`sd-sec-${subTab}`}>
+                  <div className="pf-sechead">
+                    <div className="pf-sechead-eyebrow">档案录入</div>
+                    <h3>{head[0]}</h3>
+                    <p>{head[1]}</p>
+                  </div>
+
+                  {subTab === 'basic' && <BasicFields />}
+                  {subTab === 'household' && <HouseholdFields />}
+                  {subTab === 'exam' && <ExamFields rankCheck={student.rankCheck} />}
+                  {subTab === 'bonus' && (
+                    <div className="space-y-4">
+                      <BonusFields />
+                      <BonusCalcCard studentProfileId={Number(studentId)} />
+                    </div>
+                  )}
+                  {subTab === 'health' && <HealthFields />}
+                  {subTab === 'preference' && (
+                    <PreferenceFields
+                      eligibleLevel={student?.eligibleLevel ?? null}
+                      examType={student?.examType ?? null}
+                    />
+                  )}
+
+                  {progress && !progress.isRecommendable ? (
+                    <Alert
+                      style={{ marginTop: 20 }}
+                      type="info"
+                      showIcon
+                      message={'档案未达到"可推荐"阈值'}
+                      description={(() => {
+                        const missing = Array.isArray(progress.missingFieldsForRecommend)
+                          ? progress.missingFieldsForRecommend
+                          : [];
+                        if (missing.length === 0) {
+                          return '补完整关键字段后，"生成方案"按钮才会启用。';
+                        }
+                        // 把后端字段 key 翻译成中文 label, 直接列出来让老师知道缺什么
+                        const labels = (missing as string[]).map((f: string) => fieldLabel(f));
+                        return `还缺 ${missing.length} 项关键字段: ${labels.join('、')}。补齐后"生成方案"按钮才会启用。`;
+                      })()}
+                    />
+                  ) : null}
+                </div>
+
+                <div className="sd-savebar">
+                  <div className="sd-savebar-info">
+                    <span className="sd-savebar-pct">
+                      档案完整度 <b>{overall}%</b>
+                    </span>
+                    <span className="sd-savebar-dot" />
+                    <span className={missingFieldsList.length > 0 ? 'sd-savebar-miss' : 'sd-savebar-ok'}>
+                      {missingFieldsList.length > 0
+                        ? `还缺 ${missingFieldsList.length} 项关键资料`
+                        : '关键资料就绪'}
+                    </span>
+                    <span className="sd-savebar-note">渐进式录入 · 任何时候可保存</span>
+                  </div>
+                  <div className="sd-savebar-actions">
+                    <button type="button" className="sd-savebar-ghost" onClick={onExportIntake}>
+                      <TIcon.excel /> 导出登记表
+                    </button>
+                    <button
+                      type="button"
+                      className="sd-savebar-save"
+                      onClick={handleSave}
+                      disabled={saveMutation.isPending}
+                    >
+                      <TIcon.save /> {saveMutation.isPending ? '保存中...' : '保存资料'}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            </Form>
+          );
+        })()}
         {activeTab === 'comm' && <CommunicationTabContent studentId={studentId} />}
         {activeTab === 'plan' && <PlanListTabContent student={student} />}
         {activeTab === 'external' && (
@@ -1142,38 +1217,173 @@ export default function StudentDetailPage() {
   );
 }
 
+/* —— 资料页设计控件 (复刻 student-detail.jsx, 经 Form.Item 注入 value/onChange) —— */
+function PfSeg<T extends string | number | boolean>({
+  value,
+  onChange,
+  options,
+}: {
+  value?: T;
+  onChange?: (v: T) => void;
+  options: { value: T; label: string }[];
+}) {
+  return (
+    <div className="pf-seg">
+      {options.map((o) => (
+        <button
+          type="button"
+          key={String(o.value)}
+          className={`pf-seg-opt ${value === o.value ? 'on' : ''}`}
+          onClick={() => onChange?.(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PfSwitch({
+  checked,
+  onChange,
+  onText = '接受',
+  offText = '不接受',
+}: {
+  checked?: boolean;
+  onChange?: (v: boolean) => void;
+  onText?: string;
+  offText?: string;
+}) {
+  return (
+    <div className="pf-sw">
+      <button
+        type="button"
+        className={`pf-sw-track ${checked ? 'on' : ''}`}
+        onClick={() => onChange?.(!checked)}
+      >
+        <span className="pf-sw-knob" />
+      </button>
+      <span className="pf-sw-label">{checked ? <b>{onText}</b> : offText}</span>
+    </div>
+  );
+}
+
+function PfUnitInput({
+  value,
+  onChange,
+  unit,
+  placeholder,
+  step,
+  min,
+  max,
+}: {
+  value?: number | null;
+  onChange?: (v: number | null) => void;
+  unit?: string;
+  placeholder?: string;
+  step?: number;
+  min?: number;
+  max?: number;
+}) {
+  return (
+    <div className="pf-unit">
+      <input
+        type="number"
+        inputMode="decimal"
+        value={value == null ? '' : value}
+        placeholder={placeholder}
+        step={step}
+        min={min}
+        max={max}
+        onChange={(e) => {
+          const r = e.target.value;
+          onChange?.(r === '' ? null : Number(r));
+        }}
+      />
+      {unit ? <span>{unit}</span> : null}
+    </div>
+  );
+}
+
+/* sc-cell 录分控件: 有值变白底, 超分报红字; 经 Form.Item 注入 value/onChange,
+   onValueChange 单独透传给联动逻辑 (首选/再选互斥) */
+function ScoreCellControl({
+  value,
+  onChange,
+  onValueChange,
+  label,
+  max,
+  disabled,
+  placeholder,
+}: {
+  value?: number | null;
+  onChange?: (v: number | null) => void;
+  onValueChange?: (v: number | null) => void;
+  label: string;
+  max: number;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  const has = value != null && !Number.isNaN(value as number);
+  const over = value != null && (value as number) > max;
+  return (
+    <div className={`sc-cell ${has ? 'has' : ''} ${over ? 'err' : ''}`}>
+      <div className="sc-cell-head">
+        <span className="sc-cell-label">{label}</span>
+        <span className="sc-cell-max">满分 {max}</span>
+      </div>
+      <input
+        type="number"
+        inputMode="numeric"
+        disabled={disabled}
+        value={value == null ? '' : value}
+        placeholder={placeholder ?? '—'}
+        onChange={(e) => {
+          const r = e.target.value;
+          const v = r === '' ? null : Number(r);
+          onChange?.(v);
+          onValueChange?.(v);
+        }}
+      />
+      {over && <div className="sc-cell-err">不能超过 {max} 分</div>}
+    </div>
+  );
+}
+
 function BasicFields() {
   return (
     <div className="sd-form-grid">
       <div className="field">
-        <label>姓名<span className="req">必填</span></label>
+        <label>姓名<span className="req">*</span></label>
         <Form.Item name="realName" rules={[{ required: true }]} noStyle>
           <Input placeholder="学生姓名" />
         </Form.Item>
       </div>
       <div className="field">
-        <label>手机号<span className="req">必填</span></label>
+        <label>手机号<span className="req">*</span></label>
         <Form.Item name="phone" noStyle>
           <Input placeholder="手机号" />
         </Form.Item>
       </div>
       <div className="field">
-        <label>家长手机号<span className="req">必填</span></label>
+        <label>家长手机号<span className="req">*</span></label>
         <Form.Item name="parentPhone" noStyle>
           <Input placeholder="家长手机号" />
         </Form.Item>
       </div>
       <div className="field">
-        <label>性别<span className="req">必填</span></label>
+        <label>性别<span className="req">*</span></label>
         <Form.Item name="gender" noStyle>
-          <Radio.Group>
-            <Radio value="MALE">男</Radio>
-            <Radio value="FEMALE">女</Radio>
-          </Radio.Group>
+          <PfSeg
+            options={[
+              { value: 'MALE', label: '男' },
+              { value: 'FEMALE', label: '女' },
+            ]}
+          />
         </Form.Item>
       </div>
       <div className="field">
-        <label>出生日期<span className="req">必填</span><span className="sc-hint"> 批次年龄校验用</span></label>
+        <label>出生日期<span className="req">*</span><span className="sc-hint"> 批次年龄校验用</span></label>
         <Form.Item name="birthDate" noStyle>
           <DatePicker
             style={{ width: '100%' }}
@@ -1184,7 +1394,7 @@ function BasicFields() {
         </Form.Item>
       </div>
       <div className="field">
-        <label>民族<span className="req">必填</span></label>
+        <label>民族<span className="req">*</span></label>
         <Form.Item name="ethnicity" noStyle>
           <Select
             showSearch
@@ -1196,13 +1406,15 @@ function BasicFields() {
         </Form.Item>
       </div>
       <div className="field">
-        <label>政治面貌<span className="req">必填</span></label>
+        <label>政治面貌<span className="req">*</span></label>
         <Form.Item name="politicalStatus" noStyle>
-          <Radio.Group>
-            <Radio value="PARTY_MEMBER">党员</Radio>
-            <Radio value="LEAGUE_MEMBER">团员</Radio>
-            <Radio value="MASSES">群众</Radio>
-          </Radio.Group>
+          <PfSeg
+            options={[
+              { value: 'MASSES', label: '群众' },
+              { value: 'LEAGUE_MEMBER', label: '团员' },
+              { value: 'PARTY_MEMBER', label: '党员' },
+            ]}
+          />
         </Form.Item>
       </div>
       <div className="field">
@@ -1234,39 +1446,53 @@ function HouseholdFields() {
   };
 
   return (
-    <div className="sd-form-grid">
+    <div className="pf-form">
+      <div className="pf-shared">
+        <TIcon.info />
+        户籍与高考报名地学生可自填、老师可改可审核；决定一分一段表与三州十七县两区加分适用。
+      </div>
       {/* 户籍所在地 — Cascader 保留 antd (业务下拉, 不改) */}
-      <div className="field sd-field-full">
-        <label>户籍所在地<span className="req">必填</span></label>
+      <div className="pf-field">
+        <label>
+          户籍所在地 <i className="req">*</i>
+        </label>
         <RegionCascaderField
           fieldKeys={['province', 'city', 'county']}
           options={regionOptions}
           placeholder="选择户籍省 / 市 / 县区"
         />
       </div>
-      <div className="field">
-        <label>户口性质<span className="req">必填</span></label>
-        <Form.Item name="isRural" noStyle>
-          <Radio.Group>
-            <Radio value={true}>农村户籍</Radio>
-            <Radio value={false}>城镇户籍</Radio>
-          </Radio.Group>
-        </Form.Item>
+      <div className="pf-row2">
+        <div className="pf-field">
+          <label>
+            户口性质 <i className="req">*</i>
+          </label>
+          <Form.Item name="isRural" noStyle>
+            <PfSeg
+              options={[
+                { value: true, label: '农村户籍' },
+                { value: false, label: '城镇户籍' },
+              ]}
+            />
+          </Form.Item>
+        </div>
+        <div className="pf-field">
+          <label>&nbsp;</label>
+          <button type="button" className="pf-gbtn" onClick={copyHukouToExamLocation}>
+            <TIcon.check /> 同户籍所在地
+          </button>
+        </div>
       </div>
       {/* 高考报名地 — Cascader 保留 antd */}
-      <div className="field sd-field-full">
-        <label>高考报名地<span className="req">必填</span></label>
+      <div className="pf-field">
+        <label>
+          高考报名地 <i className="req">*</i> <em>决定一分一段 / 加分适用</em>
+        </label>
         <RegionCascaderField
           fieldKeys={['examLocationProvince', 'examLocationCity', 'examLocationCounty']}
           options={regionOptions}
           placeholder="选择报名省 / 市 / 县区"
         />
-      </div>
-      <div className="field">
-        <label>&nbsp;</label>
-        <Button icon={<SwapOutlined />} onClick={copyHukouToExamLocation}>
-          同户籍所在地
-        </Button>
       </div>
     </div>
   );
@@ -1324,187 +1550,249 @@ function RegionCascaderField({
 
 function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
   const form = Form.useFormInstance();
+  const examType = Form.useWatch('examType', form) as 'PHYSICS' | 'HISTORY' | undefined;
+  const RE = [
+    { key: 'scoreChemistry', label: '化学' },
+    { key: 'scoreBiology', label: '生物' },
+    { key: 'scorePolitics', label: '政治' },
+    { key: 'scoreGeography', label: '地理' },
+  ] as const;
+  // 再选选择是纯 UI 本地态, 初值从已填分数推导 (4 选 2); 分数本身仍是 form 的真值
+  const [reSel, setReSel] = useState<string[]>(() =>
+    RE.filter((r) => form.getFieldValue(r.key) != null).map((r) => r.key),
+  );
+
+  const pickFirst = (type: 'PHYSICS' | 'HISTORY') => {
+    form.setFieldsValue({
+      examType: type,
+      firstChoice: type === 'PHYSICS' ? '物理' : '历史',
+      // 切首选 → 清另一首选分数 (物理/历史互斥)
+      ...(type === 'PHYSICS' ? { scoreHistory: undefined } : { scorePhysics: undefined }),
+    });
+  };
+  const toggleRe = (key: string) => {
+    setReSel((prev) => {
+      if (prev.includes(key)) {
+        form.setFieldValue(key, undefined); // 取消选择 → 清该科分数
+        return prev.filter((k) => k !== key);
+      }
+      if (prev.length >= 2) return prev; // 最多 2 门
+      return [...prev, key];
+    });
+  };
+
+  const firstKey = examType === 'HISTORY' ? 'scoreHistory' : 'scorePhysics';
+  const firstLabel = examType === 'HISTORY' ? '历史' : '物理';
+
   return (
-    <div className="sd-form-grid">
-      {/* —— 顶部三段: 科类(可手选, 选物理/历史首选时自动同步) / 年份 / 来源 —— */}
-      <div className="field">
-        <label>科类<span className="req">必填</span><span className="sc-hint"> 可手选 · 选物理/历史首选时自动同步</span></label>
-        <Form.Item name="examType" noStyle>
-          <Select
-            placeholder="选择科类"
-            options={[
-              { value: 'PHYSICS', label: '物理类' },
-              { value: 'HISTORY', label: '历史类' },
-              // 文科综合 / 理科综合 是 2024 前旧高考方案; 四川 2025+ 新高考
-              // 只有 物理类 / 历史类 两类, 此处不再提供.
-              // EXAM_TYPE_LABEL 映射仍保留这两个 key, 仅用于回显旧届数据.
-            ]}
-          />
-        </Form.Item>
-      </div>
-      <div className="field">
-        <label>高考年份</label>
-        <Form.Item name="examYear" noStyle>
-          <Select
-            placeholder="年份"
-            options={[
-              { value: 2026, label: '2026' },
-              { value: 2025, label: '2025' },
-              { value: 2024, label: '2024' },
-            ]}
-          />
-        </Form.Item>
-      </div>
-      <div className="field">
-        <label>分数来源</label>
-        <Form.Item name="examSource" noStyle>
-          <Select
-            placeholder="来源"
-            options={[
-              { value: 'REAL_EXAM', label: '高考实考' },
-              { value: 'MOCK_EXAM', label: '模考' },
-              { value: 'ESTIMATED', label: '估分' },
-            ]}
-          />
-        </Form.Item>
+    <div className="exam-redo">
+      {/* 顶部: 年份 / 来源 */}
+      <div className="sd-form-grid" style={{ marginBottom: 0 }}>
+        <div className="field">
+          <label>高考年份</label>
+          <Form.Item name="examYear" noStyle>
+            <Select
+              placeholder="年份"
+              options={[
+                { value: 2026, label: '2026' },
+                { value: 2025, label: '2025' },
+                { value: 2024, label: '2024' },
+              ]}
+            />
+          </Form.Item>
+        </div>
+        <div className="field">
+          <label>成绩来源</label>
+          <Form.Item name="examSource" noStyle>
+            <Select
+              placeholder="来源"
+              options={[
+                { value: 'REAL_EXAM', label: '高考实考' },
+                { value: 'MOCK_EXAM', label: '模考' },
+                { value: 'ESTIMATED', label: '估分' },
+              ]}
+            />
+          </Form.Item>
+        </div>
       </div>
 
-      {/* —— 必填三科: 语数英 —— */}
-      <div className="field full">
-        <label>必填三科<span className="sc-hint"> 语文 / 数学 / 英语</span></label>
-        <div className="sc-9subjects-grid">
-          {/* 不加 required: 老师建档支持渐进式录入 (先填一部分先保存, 后续补).
-              学生端 stage 表单是"提交意向"语义所以 required; 老师端是"档案管理"
-              语义, 任何时候保存都该允许. 完整度 / missing-card 仍标缺失项. */}
+      {/* ① 选科组合 — 勾选 / 复选框, 不录分 */}
+      <div className="exam-block">
+        <div className="exam-block-h">
+          ① 选科组合<span>先勾选科目，再到下方录分 · 科类随首选自动确定</span>
+        </div>
+        <div className="choice-cols">
+          <div className="choice-col">
+            <div className="choice-label">
+              首选科目 <i className="req">*</i>
+              <em>物理 / 历史 二选一</em>
+            </div>
+            <div className="ec-chips">
+              {(['PHYSICS', 'HISTORY'] as const).map((t) => {
+                const on = examType === t;
+                return (
+                  <button
+                    type="button"
+                    key={t}
+                    className={`ec-chip radio ${on ? 'on' : ''}`}
+                    onClick={() => pickFirst(t)}
+                  >
+                    <span className="ec-box">{on ? <TIcon.check /> : null}</span>
+                    {t === 'PHYSICS' ? '物理' : '历史'}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="ec-derived">
+              科类：
+              <b>{examType === 'HISTORY' ? '历史类' : examType === 'PHYSICS' ? '物理类' : '未定'}</b>
+            </div>
+          </div>
+          <div className="choice-col">
+            <div className="choice-label">
+              再选科目 <i className="req">*</i>
+              <em>化 / 生 / 政 / 地 四选二</em>
+            </div>
+            <div className="ec-chips">
+              {RE.map((r) => {
+                const on = reSel.includes(r.key);
+                const dis = !on && reSel.length >= 2;
+                return (
+                  <button
+                    type="button"
+                    key={r.key}
+                    className={`ec-chip ${on ? 'on' : ''}`}
+                    disabled={dis}
+                    onClick={() => toggleRe(r.key)}
+                  >
+                    <span className="ec-box">{on ? <TIcon.check /> : null}</span>
+                    {r.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="ec-derived">
+              已选 <b>{reSel.length}/2</b>
+              {reSel.length === 2 ? ' · 组合已定' : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ② 各科成绩 — 只为已选科目录分 */}
+      <div className="exam-block">
+        <div className="exam-block-h">
+          ② 各科成绩<span>语数外满分 150，选考科目满分 100 · 超限报红字</span>
+        </div>
+        <div className="sc-sub">必考三科</div>
+        <div className="sc-grid">
+          {/* 不加 required: 老师建档支持渐进式录入, 完整度 / missing-card 仍标缺失项 */}
           <TeacherScoreInput name="scoreChinese" label="语文" max={150} />
           <TeacherScoreInput name="scoreMath" label="数学" max={150} />
           <TeacherScoreInput name="scoreEnglish" label="英语" max={150} />
         </div>
-      </div>
-
-      {/* —— 首选: 物理/历史互斥 —— */}
-      <div className="field full">
-        <label>首选科目<span className="req">必填</span><span className="sc-hint"> 物理 / 历史二选一</span></label>
-        <Form.Item
-          noStyle
-          shouldUpdate={(p, c) =>
-            p.scorePhysics !== c.scorePhysics || p.scoreHistory !== c.scoreHistory
-          }
-        >
-          {({ getFieldValue }) => {
-            const hasPhysics = getFieldValue('scorePhysics') != null;
-            const hasHistory = getFieldValue('scoreHistory') != null;
-            return (
-              <div className="sc-9subjects-grid sc-9subjects-grid--2col">
-                <TeacherScoreInput
-                  name="scorePhysics"
-                  label="物理"
-                  max={100}
-                  disabled={hasHistory}
-                  placeholder={hasHistory ? '已选历史' : undefined}
-                  onChange={(v) => {
-                    if (v != null) {
-                      form.setFieldValue('scoreHistory', undefined);
-                      form.setFieldsValue({ examType: 'PHYSICS', firstChoice: '物理' });
-                    }
-                  }}
-                />
-                <TeacherScoreInput
-                  name="scoreHistory"
-                  label="历史"
-                  max={100}
-                  disabled={hasPhysics}
-                  placeholder={hasPhysics ? '已选物理' : undefined}
-                  onChange={(v) => {
-                    if (v != null) {
-                      form.setFieldValue('scorePhysics', undefined);
-                      form.setFieldsValue({ examType: 'HISTORY', firstChoice: '历史' });
-                    }
-                  }}
-                />
+        <div className="sc-sub">选考三科（按上方选科组合）</div>
+        <div className="sc-grid">
+          <TeacherScoreInput
+            name={firstKey}
+            label={`首选 · ${firstLabel}`}
+            max={100}
+            onChange={(v) => {
+              // 未点首选就直接录分 → 默认按当前列(物理)落 examType
+              if (v != null && examType == null) {
+                form.setFieldsValue({ examType: 'PHYSICS', firstChoice: '物理' });
+              }
+            }}
+          />
+          {[0, 1].map((i) => {
+            const r = RE.find((x) => x.key === reSel[i]);
+            return r ? (
+              <TeacherScoreInput key={r.key} name={r.key} label={`再选 · ${r.label}`} max={100} />
+            ) : (
+              <div className="sc-cell empty" key={`re-empty-${i}`}>
+                请先选再选科目 {i + 1}
               </div>
             );
-          }}
-        </Form.Item>
+          })}
+        </div>
       </div>
 
-      {/* —— 再选: 化 / 生 / 政 / 地 — 4 选 2 —— */}
-      <div className="field full">
-        <label>再选科目<span className="req">必填</span><span className="sc-hint"> 化 / 生 / 政 / 地 四选二</span></label>
-        <Form.Item
-          noStyle
-          shouldUpdate={(p, c) =>
-            p.scoreChemistry !== c.scoreChemistry ||
-            p.scoreBiology !== c.scoreBiology ||
-            p.scorePolitics !== c.scorePolitics ||
-            p.scoreGeography !== c.scoreGeography
-          }
-        >
-          {({ getFieldValue }) => {
-            const reKeys = [
-              'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
-            ] as const;
-            const filledCount = reKeys.filter((k) => getFieldValue(k) != null).length;
-            const lockOthers = filledCount >= 2;
-            const isFilled = (k: string) => getFieldValue(k) != null;
-            return (
-              <div className="sc-9subjects-grid">
-                <TeacherScoreInput name="scoreChemistry" label="化学" max={100}
-                  disabled={lockOthers && !isFilled('scoreChemistry')} />
-                <TeacherScoreInput name="scoreBiology" label="生物" max={100}
-                  disabled={lockOthers && !isFilled('scoreBiology')} />
-                <TeacherScoreInput name="scorePolitics" label="政治" max={100}
-                  disabled={lockOthers && !isFilled('scorePolitics')} />
-                <TeacherScoreInput name="scoreGeography" label="地理" max={100}
-                  disabled={lockOthers && !isFilled('scoreGeography')} />
-              </div>
-            );
-          }}
-        </Form.Item>
-      </div>
-
-      {/* —— 总分(自动累加) + 全省位次 —— */}
-      <div className="field">
-        <label>总分<span className="req">必填</span><span className="sc-hint"> 自动累加</span></label>
-        <Form.Item
-          noStyle
-          shouldUpdate={(p, c) =>
-            p.scoreChinese !== c.scoreChinese ||
-            p.scoreMath !== c.scoreMath ||
-            p.scoreEnglish !== c.scoreEnglish ||
-            p.scorePhysics !== c.scorePhysics ||
-            p.scoreHistory !== c.scoreHistory ||
-            p.scoreChemistry !== c.scoreChemistry ||
-            p.scoreBiology !== c.scoreBiology ||
-            p.scorePolitics !== c.scorePolitics ||
-            p.scoreGeography !== c.scoreGeography
-          }
-        >
-          {({ getFieldsValue }) => {
-            const v = getFieldsValue([
-              'scoreChinese', 'scoreMath', 'scoreEnglish',
-              'scorePhysics', 'scoreHistory',
-              'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
-            ]) as Subject9Form;
-            const total = sum9Subjects(v);
-            return (
-              <div className="sc-total-display">
-                <span className="sc-total-num">{total}</span>
-                <span className="sc-total-unit"> 分</span>
-              </div>
-            );
-          }}
-        </Form.Item>
-      </div>
-      <div className="field">
-        <label>全省位次<span className="sc-hint"> 自动计算 · 6 科齐后实时估算 · 可手动校正</span></label>
-        <Form.Item name="provincialRank" noStyle>
-          <InputNumber min={1} style={{ width: '100%' }} placeholder="6 科齐后自动估算" />
-        </Form.Item>
-        <EstimatedRankHint />
-        {rankCheck ? <div className="sc-hint"><RankCheckExtra rankCheck={rankCheck} /></div> : null}
+      {/* ③ 总分(自动累加) + 全省位次 */}
+      <div className="exam-foot">
+        <div className="exam-total">
+          <div className="k">总分 · 自动累加</div>
+          <Form.Item
+            noStyle
+            shouldUpdate={(p, c) =>
+              p.scoreChinese !== c.scoreChinese ||
+              p.scoreMath !== c.scoreMath ||
+              p.scoreEnglish !== c.scoreEnglish ||
+              p.scorePhysics !== c.scorePhysics ||
+              p.scoreHistory !== c.scoreHistory ||
+              p.scoreChemistry !== c.scoreChemistry ||
+              p.scoreBiology !== c.scoreBiology ||
+              p.scorePolitics !== c.scorePolitics ||
+              p.scoreGeography !== c.scoreGeography
+            }
+          >
+            {({ getFieldsValue }) => {
+              const v = getFieldsValue([
+                'scoreChinese', 'scoreMath', 'scoreEnglish',
+                'scorePhysics', 'scoreHistory',
+                'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
+              ]) as Subject9Form;
+              const total = sum9Subjects(v);
+              return (
+                <div className="v">
+                  {total}
+                  <small>分</small>
+                </div>
+              );
+            }}
+          </Form.Item>
+        </div>
+        <div className="exam-rank">
+          <label>
+            全省位次{' '}
+            <span className="lock-chip">
+              <TIcon.lock /> 老师独占
+            </span>
+          </label>
+          <Form.Item name="provincialRank" noStyle>
+            <RankInputControl />
+          </Form.Item>
+          <EstimatedRankHint />
+          {rankCheck ? (
+            <div className="sc-hint">
+              <RankCheckExtra rankCheck={rankCheck} />
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
+  );
+}
+
+/* 全省位次原生输入 (设计稿 .exam-rank input 样式); EstimatedRankHint 仍会自动回填 */
+function RankInputControl({
+  value,
+  onChange,
+}: {
+  value?: number | null;
+  onChange?: (v: number | null) => void;
+}) {
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={1}
+      value={value == null ? '' : value}
+      placeholder="6 科齐后自动估算"
+      onChange={(e) => {
+        const r = e.target.value;
+        onChange?.(r === '' ? null : Number(r));
+      }}
+    />
   );
 }
 
@@ -1529,36 +1817,23 @@ function TeacherScoreInput({
   onChange?: (value: number | null) => void;
 }) {
   return (
-    <div className={`sc-input-card ${disabled ? 'is-disabled' : ''}`}>
-      <div className="sc-input-card-head">
-        <span className="sc-input-card-label">{label}</span>
-        <span className="sc-input-card-max">满分 {max}</span>
-      </div>
-      <Form.Item
-        name={name}
-        rules={[
-          ...(required ? [{ required: true, message: '必填' }] : []),
-          // 用 rules 校验而不是 InputNumber 的 max prop —— max prop 会在 blur 时
-          // 自动 clamp 到 150 (silent 截断, 老师以为 input 自己改了数字).
-          // 改 rules: 用户输 200 不 clamp, 但提交时显示红字"不能超过 150".
-          {
-            type: 'number',
-            max,
-            message: `不能超过 ${max} 分`,
-          },
-        ]}
-        className="mb-0"
-        style={{ marginBottom: 0 }}
-      >
-        <InputNumber
-          min={0}
-          style={{ width: '100%' }}
-          disabled={disabled}
-          placeholder={placeholder}
-          onChange={onChange}
-        />
-      </Form.Item>
-    </div>
+    <Form.Item
+      name={name}
+      rules={[
+        ...(required ? [{ required: true, message: '必填' }] : []),
+        // 用 rules 校验而非原生 max —— 超分不静默截断, 提交时报红字"不能超过 N"
+        { type: 'number', max, message: `不能超过 ${max} 分` },
+      ]}
+      noStyle
+    >
+      <ScoreCellControl
+        label={label}
+        max={max}
+        disabled={disabled}
+        placeholder={placeholder}
+        onValueChange={onChange}
+      />
+    </Form.Item>
   );
 }
 
@@ -1676,19 +1951,30 @@ function EstimatedRankHint() {
 
 function BonusFields() {
   return (
-    <div className="sd-form-grid">
-      <div className="field sd-field-full">
-        <label>加分政策状态<span className="req">必填</span></label>
+    <div className="pf-form">
+      <div className="pf-shared">
+        <TIcon.info />
+        加分政策按四川省高考实施细则录入，关系到投档有效分计算；老师核验材料后维护。
+      </div>
+      <div className="pf-field">
+        <label>
+          加分政策状态 <i className="req">*</i>
+        </label>
         <Form.Item name="bonusPolicyStatus" noStyle>
-          <Radio.Group>
-            <Radio value="NONE">没有</Radio>
-            <Radio value="HAS_BONUS">有</Radio>
-            <Radio value="UNKNOWN">不清楚</Radio>
-          </Radio.Group>
+          <PfSeg
+            options={[
+              { value: 'NONE', label: '没有' },
+              { value: 'HAS_BONUS', label: '有' },
+              { value: 'UNKNOWN', label: '不清楚' },
+            ]}
+          />
         </Form.Item>
       </div>
-      <div className="field sd-field-full">
-        <label>加分细则</label>
+      <div className="pf-field">
+        <label>
+          加分细则 <em>关系投档有效分</em>
+        </label>
+        {/* bonusItems 库里是 {type,value,source}[], UI 用 type[] 多选; 搜索量大保留 antd Select */}
         <Form.Item
           name="bonusItems"
           noStyle
@@ -1711,25 +1997,47 @@ function BonusFields() {
 
 function HealthFields() {
   return (
-    <div className="sd-form-grid">
-      <div className="field">
-        <label>身高 (cm)<span className="req">必填</span></label>
-        <Form.Item name="height" noStyle><InputNumber min={100} max={250} style={{ width: '100%' }} /></Form.Item>
+    <div className="pf-form">
+      <div className="pf-row2">
+        <div className="pf-field">
+          <label>
+            身高 <i className="req">*</i>
+          </label>
+          <Form.Item name="height" noStyle>
+            <PfUnitInput unit="cm" placeholder="100 – 250" min={100} max={250} />
+          </Form.Item>
+        </div>
+        <div className="pf-field">
+          <label>
+            体重 <i className="req">*</i>
+          </label>
+          <Form.Item name="weight" noStyle>
+            <PfUnitInput unit="kg" placeholder="20 – 200" min={20} max={200} />
+          </Form.Item>
+        </div>
       </div>
-      <div className="field">
-        <label>体重 (kg)<span className="req">必填</span></label>
-        <Form.Item name="weight" noStyle><InputNumber min={20} max={200} style={{ width: '100%' }} /></Form.Item>
+      <div className="pf-row2">
+        <div className="pf-field">
+          <label>
+            左眼裸眼视力 <i className="req">*</i> <em>五分记录法</em>
+          </label>
+          <Form.Item name="visionLeft" noStyle>
+            <PfUnitInput placeholder="1.0 – 5.3" step={0.1} min={1} max={5.3} />
+          </Form.Item>
+        </div>
+        <div className="pf-field">
+          <label>
+            右眼裸眼视力 <i className="req">*</i> <em>五分记录法</em>
+          </label>
+          <Form.Item name="visionRight" noStyle>
+            <PfUnitInput placeholder="1.0 – 5.3" step={0.1} min={1} max={5.3} />
+          </Form.Item>
+        </div>
       </div>
-      <div className="field">
-        <label>左眼裸眼视力<span className="req">必填</span></label>
-        <Form.Item name="visionLeft" noStyle><InputNumber min={1} max={5.3} step={0.1} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field">
-        <label>右眼裸眼视力<span className="req">必填</span></label>
-        <Form.Item name="visionRight" noStyle><InputNumber min={1} max={5.3} step={0.1} style={{ width: '100%' }} /></Form.Item>
-      </div>
-      <div className="field">
-        <label>色觉<span className="req">必填</span></label>
+      <div className="pf-field">
+        <label>
+          色觉 <i className="req">*</i> <em>底层映射 colorBlind / colorWeak 两布尔</em>
+        </label>
         {/* UI 三选一, 底层仍是 colorBlind/colorWeak 两个布尔 (后端资格引擎按布尔判定) */}
         <Form.Item name="colorBlind" hidden valuePropName="checked"><Checkbox /></Form.Item>
         <Form.Item name="colorWeak" hidden valuePropName="checked"><Checkbox /></Form.Item>
@@ -1742,28 +2050,32 @@ function HealthFields() {
             const weak = getFieldValue('colorWeak');
             const val = blind ? 'BLIND' : weak ? 'WEAK' : (blind === false && weak === false ? 'NORMAL' : undefined);
             return (
-              <Radio.Group
+              <PfSeg
                 value={val}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setFieldsValue({ colorBlind: v === 'BLIND', colorWeak: v === 'WEAK' });
-                }}
-              >
-                <Radio value="NORMAL">正常</Radio>
-                <Radio value="BLIND">色盲</Radio>
-                <Radio value="WEAK">色弱</Radio>
-              </Radio.Group>
+                onChange={(v) => setFieldsValue({ colorBlind: v === 'BLIND', colorWeak: v === 'WEAK' })}
+                options={[
+                  { value: 'NORMAL', label: '正常' },
+                  { value: 'BLIND', label: '色盲' },
+                  { value: 'WEAK', label: '色弱' },
+                ]}
+              />
             );
           }}
         </Form.Item>
       </div>
-      <div className="field sd-field-full">
-        <label>体检受限项</label>
-        <Form.Item name="physicalLimits" noStyle><Select mode="tags" allowClear placeholder="可输入多个,回车添加" /></Form.Item>
+      <div className="pf-field">
+        <label>
+          体检受限项 <em>自由打标签</em>
+        </label>
+        <Form.Item name="physicalLimits" noStyle>
+          <Select mode="tags" allowClear placeholder="可输入多个,回车添加" />
+        </Form.Item>
       </div>
-      <div className="field sd-field-full">
+      <div className="pf-field">
         <label>既往病史 / 特殊情况</label>
-        <Form.Item name="medicalHistory" noStyle><Input.TextArea rows={2} placeholder="如有先天性疾病、过敏等请详填" /></Form.Item>
+        <Form.Item name="medicalHistory" noStyle>
+          <Input.TextArea rows={2} placeholder="如有先天性疾病、过敏等请详填" />
+        </Form.Item>
       </div>
     </div>
   );
@@ -1796,62 +2108,66 @@ function PreferenceFields({
   );
 
   return (
-    <div className="sd-form-grid">
-      <div className="field sd-field-full">
-        <label>优先模式<span className="req">必填</span></label>
+    <div className="pf-form">
+      <div className="pf-field">
+        <label>
+          优先模式 <i className="req">*</i>
+        </label>
         <Form.Item name="priorityMode" noStyle>
-          <Radio.Group>
-            <Radio value="UNIVERSITY_FIRST">院校优先</Radio>
-            <Radio value="MAJOR_FIRST">专业优先</Radio>
-            <Radio value="CITY_FIRST">城市优先</Radio>
-            <Radio value="BALANCED">均衡</Radio>
-          </Radio.Group>
+          <PfSeg
+            options={[
+              { value: 'UNIVERSITY_FIRST', label: '院校优先' },
+              { value: 'MAJOR_FIRST', label: '专业优先' },
+              { value: 'CITY_FIRST', label: '城市优先' },
+              { value: 'BALANCED', label: '均衡' },
+            ]}
+          />
         </Form.Item>
       </div>
       {/* 经济边界: 工作台"接受边界 民办: 未确定"读的就是这个字段, 此前只有学生小程序能填,
           老师面谈采集到的信息没有落库入口 → 对经济困难学生这是候选过滤的第一变量 */}
-      <div className="field sd-field-full">
-        <label>是否接受民办<span className="sc-hint"> 学费通常 3-8 万/年 · 经济困难家庭重点确认</span></label>
+      <div className="pf-field">
+        <label>
+          是否接受民办 <em>学费通常 3-8 万/年 · 经济困难家庭重点确认</em>
+        </label>
         <Form.Item name="acceptPrivate" noStyle>
-          <Radio.Group>
-            <Radio value="STRICT">不接受</Radio>
-            <Radio value="MODERATE">部分接受</Radio>
-            <Radio value="RELAXED">接受</Radio>
-            <Radio value="UNDECIDED">未定</Radio>
-          </Radio.Group>
+          <PfSeg
+            options={[
+              { value: 'STRICT', label: '不接受' },
+              { value: 'MODERATE', label: '部分接受' },
+              { value: 'RELAXED', label: '接受' },
+              { value: 'UNDECIDED', label: '未定' },
+            ]}
+          />
         </Form.Item>
       </div>
-      <div className="field sd-field-full">
+      <div className="pf-field">
         <label>
-          是否接受中外合作办学
-          <span className="sc-hint"> 学费通常较高 · 多为合作办学 / 双校园培养</span>
+          是否接受中外合作办学 <em>学费通常较高 · 多为合作办学 / 双校园培养</em>
         </label>
         <Form.Item name="acceptSinoForeign" valuePropName="checked" noStyle>
-          <Switch checkedChildren="接受" unCheckedChildren="不接受" />
+          <PfSwitch />
         </Form.Item>
       </div>
       {/* 院校/专业/省市 Picker 保留 antd Select (业务搜索下拉, 不改) */}
-      <div className="field">
-        <label>意向省份</label>
-        <Form.Item name="preferredProvinces" noStyle>
-          <Select {...pickerSelectProps(provinceOptions)} placeholder="选择省份" />
-        </Form.Item>
+      <div className="pf-row2">
+        <div className="pf-field">
+          <label>意向省份</label>
+          <Form.Item name="preferredProvinces" noStyle>
+            <Select {...pickerSelectProps(provinceOptions)} placeholder="选择省份" />
+          </Form.Item>
+        </div>
+        <div className="pf-field">
+          <label>意向城市</label>
+          <Form.Item name="preferredCities" noStyle>
+            <Select {...pickerSelectProps(cityOptions)} placeholder="选择城市" />
+          </Form.Item>
+        </div>
       </div>
-      <div className="field">
-        <label>意向城市</label>
-        <Form.Item name="preferredCities" noStyle>
-          <Select {...pickerSelectProps(cityOptions)} placeholder="选择城市" />
-        </Form.Item>
-      </div>
-      <div className="field sd-field-full">
+      <div className="pf-field">
         <label>
-          意向专业 (梯队)<span className="req">必填</span>
-          <a
-            href={`/majors?studentId=${prefParams.id}`}
-            target="_blank"
-            rel="noreferrer"
-            style={{ marginLeft: 10, fontSize: 12, fontWeight: 400 }}
-          >
+          意向专业（梯队） <i className="req">*</i>
+          <a className="pf-link" href={`/majors?studentId=${prefParams.id}`} target="_blank" rel="noreferrer">
             去专业库挑选（看在川计划/分数带）→
           </a>
         </label>
@@ -1864,15 +2180,10 @@ function PreferenceFields({
           />
         </Form.Item>
       </div>
-      <div className="field">
+      <div className="pf-field">
         <label>
           意向院校
-          <a
-            href={`/universities?studentId=${prefParams.id}`}
-            target="_blank"
-            rel="noreferrer"
-            style={{ marginLeft: 10, fontSize: 12, fontWeight: 400 }}
-          >
+          <a className="pf-link" href={`/universities?studentId=${prefParams.id}`} target="_blank" rel="noreferrer">
             去院校库挑选（带冲稳保）→
           </a>
         </label>
@@ -1880,35 +2191,47 @@ function PreferenceFields({
           <Select {...pickerSelectProps(markedUniversityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
         </Form.Item>
       </div>
-      <div className="field">
-        <label>排除院校</label>
-        <Form.Item name="excludedUniversities" noStyle>
-          <Select {...pickerSelectProps(universityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
-        </Form.Item>
+      <div className="pf-row2">
+        <div className="pf-field">
+          <label>排除院校</label>
+          <Form.Item name="excludedUniversities" noStyle>
+            <Select {...pickerSelectProps(universityOptions)} loading={isUniversityLoading} placeholder="搜索院校" />
+          </Form.Item>
+        </div>
+        <div className="pf-field">
+          <label>
+            排除专业类 <em>整类不要 · 如机械类 / 安全类</em>
+          </label>
+          <Form.Item name="excludedMajorCategories" noStyle>
+            <Select
+              {...pickerSelectProps(majorCategoryOptions ?? [])}
+              loading={isMajorCategoryLoading}
+              placeholder="搜索专业类"
+            />
+          </Form.Item>
+        </div>
       </div>
-      <div className="field">
-        <label>排除专业类<span className="sc-hint"> 整类不要 · 如机械类 / 安全类</span></label>
-        <Form.Item name="excludedMajorCategories" noStyle>
-          <Select
-            {...pickerSelectProps(majorCategoryOptions ?? [])}
-            loading={isMajorCategoryLoading}
-            placeholder="搜索专业类"
-          />
-        </Form.Item>
-      </div>
-      <div className="field">
-        <label>排除个别专业<span className="sc-hint"> 类内某几个不要 · 精确到名</span></label>
+      <div className="pf-field">
+        <label>
+          排除个别专业 <em>类内某几个不要 · 精确到名</em>
+        </label>
         <Form.Item name="excludedMajors" noStyle>
           <Select {...pickerSelectProps(majorOptions)} loading={isMajorLoading} placeholder="搜索专业" />
         </Form.Item>
       </div>
-      <div className="field sd-field-full">
-        <label>职业方向</label>
-        <Form.Item name="careerDirection" noStyle><Input.TextArea rows={2} placeholder="可填多个方向,如电子信息 / 计算机" /></Form.Item>
-      </div>
-      <div className="field sd-field-full">
-        <label>其他要求</label>
-        <Form.Item name="otherRequirements" noStyle><Input.TextArea rows={2} placeholder="如希望保留独立招生计划院校等" /></Form.Item>
+      <div className="pf-row2">
+        <div className="pf-field">
+          <label>职业方向</label>
+          <Form.Item name="careerDirection" noStyle>
+            <Input.TextArea rows={2} placeholder="可填多个方向,如电子信息 / 计算机" />
+          </Form.Item>
+        </div>
+        <div className="pf-field">
+          <label>其他要求</label>
+          <Form.Item name="otherRequirements" noStyle>
+            <Input.TextArea rows={2} placeholder="如希望保留独立招生计划院校等" />
+          </Form.Item>
+        </div>
       </div>
     </div>
   );
@@ -1921,47 +2244,44 @@ function PreferenceFields({
 // MVP 实装 (Plan 10 版本对比按需后做): 列出该学生所有方案版本, 点击跳转到方案详情页
 function PlanListTabContent({ student }: { student: any }) {
   const plans: any[] = student?.volunteerPlans ?? [];
-  if (plans.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-border bg-bg/30 p-12 text-center">
-        <p className="m-0 text-text-muted">还没有方案</p>
-        <p className="m-0 mt-2 text-xs text-text-muted">
-          补全学生关键资料后, 用顶部"生成方案"按钮自动出方案
-        </p>
-      </div>
-    );
-  }
   return (
-    <div className="pt-2">
-      <ul className="m-0 list-none space-y-2 p-0">
-        {plans.map((p) => (
-          <li
-            key={p.id}
-            className="flex items-center justify-between rounded-md border border-border-subtle bg-surface px-3 py-2"
-          >
-            <div>
-              <p className="m-0 text-sm font-medium text-text">
-                v{p.versionNo}
-                {p.versionNote ? ` · ${p.versionNote}` : ''}
-                {p.isFinal ? (
-                  <span className="ml-2 inline-block rounded bg-safe/15 px-1.5 text-[10px] font-medium text-safe">
-                    终稿
-                  </span>
-                ) : null}
-              </p>
-              <p className="m-0 text-xs text-text-muted">
-                {p.status} · 更新于 {new Date(p.updatedAt).toLocaleString('zh-CN')}
-              </p>
-            </div>
+    <div>
+      <div className="pf-sechead">
+        <div className="pf-sechead-eyebrow">志愿方案</div>
+        <h3>方案版本</h3>
+        <p>AI 生成的冲 / 稳 / 保方案，按版本管理</p>
+      </div>
+      {plans.length === 0 ? (
+        <WnEmpty
+          icon="plans"
+          title="还没有方案"
+          sub="补全学生关键资料后，用顶部「生成方案」按钮自动出方案"
+        />
+      ) : (
+        <div className="plan-list">
+          {plans.map((p) => (
             <Link
+              key={p.id}
               href={`/teacher/plans/${p.id}`}
-              className="text-sm text-primary no-underline hover:underline"
+              className="plan-row"
+              style={{ textDecoration: 'none' }}
             >
-              查看 →
+              <span className="v">
+                v{p.versionNo}
+                {p.isFinal ? <span className="tail">终稿</span> : null}
+              </span>
+              <span className="note">{p.versionNote || '—'}</span>
+              <span>
+                <PlanStatusChip status={p.status} dict={PLAN_STATUS_LABEL} toneDict={PLAN_STATUS_TONE} />
+              </span>
+              <span className="when">{new Date(p.updatedAt).toLocaleDateString('zh-CN')}</span>
+              <span className="actions">
+                <span className="go">查看 →</span>
+              </span>
             </Link>
-          </li>
-        ))}
-      </ul>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2028,49 +2348,6 @@ function getFieldChecks(student: any): FieldCheckInfo[] {
   ];
 }
 
-function DataCompletenessHeader({ student }: { student: any }) {
-  // 统一用后端 progress 数据 (与顶部 ProgressBar 同源, 避免 18 字段 vs 8 字段两套数字打架).
-  // 用 fieldLabel 把英文 key 翻译成中文 chip.
-  const progress = student?.progress;
-  const missing: string[] = Array.isArray(progress?.missingFieldsForRecommend)
-    ? progress.missingFieldsForRecommend
-    : [];
-  const isRecommendable = !!progress?.isRecommendable;
-  const overallPercent: number | null =
-    typeof progress?.overallCompleteness === 'number' ? progress.overallCompleteness : null;
-
-  return (
-    <div className="mb-4 rounded-lg border border-border-subtle bg-bg/30 px-4 py-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="m-0 text-sm">
-          <span className="font-medium text-text">
-            {isRecommendable ? (
-              <span className="text-safe">关键资料就绪</span>
-            ) : (
-              <span className="text-rush">还缺 {missing.length} 项关键资料</span>
-            )}
-          </span>
-          {overallPercent != null ? (
-            <span className="ml-2 text-text-muted">档案完整度 {overallPercent}%</span>
-          ) : null}
-        </p>
-      </div>
-      {missing.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {missing.map((key: string) => (
-            <span
-              key={key}
-              className="inline-block rounded border border-rush bg-rush/10 px-2 py-0.5 text-[11px] font-medium text-rush"
-            >
-              {fieldLabel(key)}
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function ChangeLogTabContent({ studentId }: { studentId: string | number }) {
   const { data, isLoading } = useQuery({
     queryKey: ['student-change-logs', studentId],
@@ -2078,68 +2355,65 @@ function ChangeLogTabContent({ studentId }: { studentId: string | number }) {
     enabled: !!studentId,
   });
 
+  const head = (
+    <div className="pf-sechead">
+      <div className="pf-sechead-eyebrow">留痕</div>
+      <h3>变更日志</h3>
+      <p>关键字段的修改记录，按时间倒序</p>
+    </div>
+  );
+
   if (isLoading) {
     return (
-      <div className="rounded-lg bg-bg/30 py-12 text-center">
-        <Spin />
+      <div>
+        {head}
+        <div className="rounded-lg bg-bg/30 py-12 text-center">
+          <Spin />
+        </div>
       </div>
     );
   }
 
   const logs = data?.logs ?? [];
-  if (logs.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-border bg-bg/30 p-12 text-center">
-        <p className="m-0 text-text-muted">暂无变更记录</p>
-        <p className="m-0 mt-2 text-xs text-text-muted">
-          学生 / 老师修改关键字段时会在这里显示
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="pt-2">
-      <div className="mb-3 flex items-baseline justify-between">
-        <p className="m-0 text-sm font-medium text-text">
-          共 {data?.total ?? logs.length} 条变更
-        </p>
-        <p className="m-0 text-xs text-text-muted">按时间倒序</p>
-      </div>
-      <ol className="m-0 list-none space-y-2 p-0">
-        {logs.map((log) => {
-          const fieldLabel = CHANGE_LOG_FIELD_LABEL[log.fieldKey] ?? log.fieldKey;
-          const actorLabel = log.actor === 'student' ? '学生 / 家长' : '老师';
-          const actorName = log.changedBy?.realName ?? log.changedBy?.username ?? '未知';
-          const when = new Date(log.createdAt).toLocaleString('zh-CN', {
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-          });
-          return (
-            <li
-              key={log.id}
-              className="rounded-md border border-border-subtle bg-surface px-3 py-2"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="m-0 text-sm">
-                  <span className="font-medium text-text">{fieldLabel}</span>
-                  <span className="ml-2 text-xs text-text-muted">
-                    {actorLabel}({actorName})
-                  </span>
-                </p>
-                <span className="text-xs text-text-muted">{when}</span>
+    <div>
+      {head}
+      {logs.length === 0 ? (
+        <WnEmpty
+          icon="history"
+          title="暂无变更记录"
+          sub="学生 / 老师修改关键字段时会在这里显示"
+        />
+      ) : (
+        <div className="cl-list">
+          {logs.map((log) => {
+            const fieldName = CHANGE_LOG_FIELD_LABEL[log.fieldKey] ?? log.fieldKey;
+            const actorLabel = log.actor === 'student' ? '学生 / 家长' : '老师';
+            const actorName = log.changedBy?.realName ?? log.changedBy?.username ?? '未知';
+            const when = new Date(log.createdAt).toLocaleString('zh-CN', {
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+            return (
+              <div className="cl-row" key={log.id}>
+                <span className="when">{when}</span>
+                <span className="field-name">{fieldName}</span>
+                <span className="change">
+                  <span className="old">{formatFieldValue(log.oldValue)}</span>
+                  <span className="arr">→</span>
+                  <span className="new">{formatFieldValue(log.newValue)}</span>
+                </span>
+                <span className="who">
+                  {actorName}
+                  <span className="role">{actorLabel}</span>
+                </span>
               </div>
-              <p className="m-0 mt-1 text-xs text-text-muted">
-                <span className="text-rush">{formatFieldValue(log.oldValue)}</span>
-                {' -> '}
-                <span className="text-safe">{formatFieldValue(log.newValue)}</span>
-              </p>
-            </li>
-          );
-        })}
-      </ol>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -2165,60 +2439,74 @@ function ExternalMaterialsTabContent({
   const plans: any[] = student?.volunteerPlans ?? [];
 
   return (
-    <div className="space-y-4 pt-2">
-      <Card title="对外材料" size="small">
-        <div className="space-y-3">
-          <div className="rounded-md border border-border-subtle p-3">
-            <div className="mb-2 flex items-baseline justify-between gap-2">
-              <div>
-                <p className="m-0 font-medium text-text">方案 Excel</p>
-                <p className="m-0 text-xs text-text-muted">
-                  按版本独立导出 (A3 横版 24 列 · 冲稳保彩色分组 · 可在 Excel 内继续微调)
-                </p>
-              </div>
-              <span className="text-xs text-text-muted">{plans.length} 个方案</span>
-            </div>
-            {plans.length === 0 ? (
-              <p className="m-0 text-xs text-text-muted">暂无方案</p>
-            ) : (
-              <ul className="m-0 list-none space-y-1 p-0">
-                {plans.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex items-center justify-between border-t border-border-subtle pt-1"
-                  >
-                    <span className="text-sm text-text">
-                      v{p.versionNo}{p.versionNote ? ` (${p.versionNote})` : ''} · {p.status}
-                      {p.isFinal ? ' · 终稿' : ''}
-                    </span>
-                    <Button
-                      size="small"
-                      type="text"
-                      onClick={async () => {
-                        const key = `plan-${p.id}`;
-                        setExporting(key);
-                        try {
-                          const blob = await planApi.exportExcel(p.id);
-                          const name = student?.user?.realName ?? 'student';
-                          downloadBlob(blob, `${name}-v${p.versionNo}-方案.xlsx`);
-                          message.success('方案 Excel 已导出');
-                        } catch (e: any) {
-                          message.error(`导出失败:${e?.message ?? '未知错误'}`);
-                        } finally {
-                          setExporting(null);
-                        }
-                      }}
-                      loading={exporting === `plan-${p.id}`}
-                    >
-                      导出 Excel
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+    <div>
+      <div className="pf-sechead">
+        <div className="pf-sechead-eyebrow">交付物</div>
+        <h3>对外材料</h3>
+        <p>导出给学生 / 家长的方案 Excel</p>
+      </div>
+      <div className="collapse" data-open="true">
+        <div className="collapse-head" style={{ cursor: 'default' }}>
+          <h4>
+            <span className="ic"><TIcon.excel /></span>
+            方案 Excel
+          </h4>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{plans.length} 个方案</span>
         </div>
-      </Card>
+        <div style={{ padding: '0 22px 16px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: -4 }}>
+          按版本独立导出 · A3 横版 24 列 · 冲稳保彩色分组 · 可在 Excel 内继续微调
+        </div>
+        <div style={{ padding: '0 8px 12px' }}>
+          {plans.length === 0 ? (
+            <div style={{ padding: '24px 14px', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
+              暂无方案 · 先去出第一版
+            </div>
+          ) : null}
+          {plans.map((p) => (
+            <div
+              key={p.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 14px',
+                borderBottom: '1px solid var(--border-subtle)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16 }}>
+                  v{p.versionNo}
+                </span>
+                <PlanStatusChip status={p.status} dict={PLAN_STATUS_LABEL} toneDict={PLAN_STATUS_TONE} />
+                {p.versionNote ? (
+                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{p.versionNote}</span>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="qa"
+                disabled={exporting === `plan-${p.id}`}
+                onClick={async () => {
+                  const key = `plan-${p.id}`;
+                  setExporting(key);
+                  try {
+                    const blob = await planApi.exportExcel(p.id);
+                    const name = student?.user?.realName ?? 'student';
+                    downloadBlob(blob, `${name}-v${p.versionNo}-方案.xlsx`);
+                    message.success('方案 Excel 已导出');
+                  } catch (e: any) {
+                    message.error(`导出失败:${e?.message ?? '未知错误'}`);
+                  } finally {
+                    setExporting(null);
+                  }
+                }}
+              >
+                <TIcon.download /> 导出 Excel
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2277,10 +2565,21 @@ function CommunicationTabContent({ studentId }: { studentId: string | number }) 
     onError: (e: any) => message.error(e?.response?.data?.message ?? '取消失败'),
   });
 
+  const head = (
+    <div className="pf-sechead">
+      <div className="pf-sechead-eyebrow">学生服务</div>
+      <h3>沟通记录</h3>
+      <p>面谈 / 电话 / 微信记录，含主题、状态与服务时长</p>
+    </div>
+  );
+
   if (isLoading) {
     return (
-      <div className="rounded-lg bg-bg/30 py-12 text-center">
-        <Spin />
+      <div>
+        {head}
+        <div className="rounded-lg bg-bg/30 py-12 text-center">
+          <Spin />
+        </div>
       </div>
     );
   }
@@ -2289,22 +2588,30 @@ function CommunicationTabContent({ studentId }: { studentId: string | number }) 
   const totalMinutes = items.reduce((acc, c) => acc + (c.durationAct ?? 0), 0);
 
   return (
-    <div className="pt-2 space-y-3">
-      <div className="flex items-baseline justify-between">
-        <p className="m-0 text-sm font-medium text-text">
-          共 {items.length} 次 · 累计 {Math.floor(totalMinutes / 60)}h{totalMinutes % 60}m
-        </p>
-        <Button type="primary" size="small" onClick={() => setCreateOpen(true)}>
-          新建预约
-        </Button>
+    <div>
+      {head}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
+          共 <span style={{ color: 'var(--text)', fontWeight: 500 }}>{items.length}</span> 次 · 累计{' '}
+          <span style={{ color: 'var(--text)', fontWeight: 500 }}>{fmtMins(totalMinutes)}</span>
+        </div>
+        <button type="button" className="qa primary" onClick={() => setCreateOpen(true)}>
+          <TIcon.plus /> 新建预约
+        </button>
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-bg/30 p-12 text-center">
-          <p className="m-0 text-text-muted">暂无沟通记录</p>
-        </div>
+        <WnEmpty icon="reflect" title="暂无沟通记录" sub="新建预约后, 面谈 / 电话记录会在这里" />
       ) : (
-        <ol className="m-0 list-none space-y-2 p-0">
+        <div className="tbl">
+          <div className="tbl-head">
+            <span>时间</span>
+            <span>方式</span>
+            <span>主题</span>
+            <span>状态</span>
+            <span>时长</span>
+            <span></span>
+          </div>
           {items.map((c) => (
             <ConsultationRow
               key={c.id}
@@ -2315,7 +2622,7 @@ function CommunicationTabContent({ studentId }: { studentId: string | number }) 
               onCancelAppt={() => cancelMutation.mutate(c.id)}
             />
           ))}
-        </ol>
+        </div>
       )}
 
       <CreateConsultationModal
@@ -2356,49 +2663,40 @@ function ConsultationRow({
     minute: '2-digit',
   });
   const channelLabel = CHANNEL_LABEL[c.channel] ?? c.channel;
-  const statusLabel = STATUS_LABEL[c.status] ?? c.status;
+  const channelKind = (c.channel === 'in_person' ? 'inperson' : c.channel) as keyof typeof TIcon;
+  const dur =
+    c.durationAct != null ? `${c.durationAct} 分` : c.durationEst != null ? `预 ${c.durationEst} 分` : '—';
 
   return (
-    <li className="rounded-md border border-border-subtle bg-surface px-3 py-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="min-w-0">
-          <p className="m-0 text-sm font-medium text-text">
-            {when} · {channelLabel}
-            {c.purpose ? ` · ${c.purpose}` : ''}
-          </p>
-          <p className="m-0 text-xs text-text-muted">
-            状态:{statusLabel}
-            {c.durationEst != null ? ` · 预估 ${c.durationEst} 分` : ''}
-            {c.durationAct != null ? ` · 实际 ${c.durationAct} 分` : ''}
-          </p>
-        </div>
-        <div className="flex gap-1">
-          {c.status === 'scheduled' ? (
-            <>
-              <Button size="small" type="primary" onClick={onStart}>
-                开始
-              </Button>
-              <Button size="small" onClick={onEdit}>
-                改期
-              </Button>
-              <Popconfirm title="确定取消这条预约?" okText="取消预约" cancelText="再想想" onConfirm={onCancelAppt}>
-                <Button size="small" danger>
-                  取消
-                </Button>
-              </Popconfirm>
-            </>
-          ) : null}
-          {c.status === 'in_progress' ? (
-            <Button size="small" type="primary" onClick={() => onEnd()}>
-              结束
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      {c.notes ? (
-        <p className="m-0 mt-1 text-xs text-text-muted">{c.notes}</p>
-      ) : null}
-    </li>
+    <div className="tbl-row">
+      <span className="when">{when}</span>
+      <span className="ch">
+        <ChannelIcon kind={channelKind} />
+        {channelLabel}
+      </span>
+      <span className="topic">
+        {c.purpose || '—'}
+        {c.notes ? <div className="note">{c.notes}</div> : null}
+      </span>
+      <span>
+        <StatusChip status={c.status} dict={STATUS_LABEL} />
+      </span>
+      <span className="dur">{dur}</span>
+      <span className="act">
+        {c.status === 'scheduled' ? (
+          <>
+            <button type="button" className="go" onClick={onStart}>开始</button>
+            <button type="button" onClick={onEdit}>改期</button>
+            <Popconfirm title="确定取消这条预约?" okText="取消预约" cancelText="再想想" onConfirm={onCancelAppt}>
+              <button type="button" className="end">取消</button>
+            </Popconfirm>
+          </>
+        ) : null}
+        {c.status === 'in_progress' ? (
+          <button type="button" className="end" onClick={() => onEnd()}>结束</button>
+        ) : null}
+      </span>
+    </div>
   );
 }
 

@@ -13,9 +13,9 @@ import { EXAM_TYPE_LABEL, VERDICT_ORDER, fmtTime } from './maps';
 import './batch-rec.css';
 
 /**
- * 批次推荐页 (老师端) — WillNest 视觉系统复刻.
- * 严格按 docs/superpowers/specs/2026-06-04-batch-recommendation-page-redesign-brief.md 契约:
- *   §7 区块 / §8 枚举 / §9 边界态 / §10 交互 / §11 不可破坏契约.
+ * 批次推荐页 (老师端) — WillNest 视觉系统复刻 (设计稿重做版).
+ * 单列表 + 折叠判定说明 + 极简操作行: 一屏看完所有批次, 点卡选择, 详情点开看。
+ * 契约: §7 区块 / §8 枚举 / §9 边界态 / §10 交互 / §11 不可破坏契约.
  */
 export function BatchRecommendationsClient({ studentId }: { studentId: number }) {
   const router = useRouter();
@@ -25,9 +25,8 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [kw, setKw] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
   const [showNote, setShowNote] = useState(false);
-  const [showGap, setShowGap] = useState(false);
 
   useEffect(() => {
     batchRecommendationsApi
@@ -46,21 +45,6 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
     if (!data) return [] as BatchRecommendation[];
     return data.batches.filter(b => b.verdict === 'ELIGIBLE' || b.verdict === 'CONDITIONAL');
   }, [data]);
-
-  // —— 搜索 + 四段归属 (§7.6): DATA_PENDING 单列「待人工判断」, 不与"符合"混在一起误导勾选 ——
-  const sectioned = useMemo(() => {
-    if (!data) return { sel: [] as BatchRecommendation[], el: [] as BatchRecommendation[], dp: [] as BatchRecommendation[], ie: [] as BatchRecommendation[] };
-    const q = kw.trim();
-    const match = (b: BatchRecommendation) => !q || b.batchName.includes(q);
-    const shown = data.batches.filter(match);
-    const sel = shown.filter(b => selected.has(b.batchName));
-    const el = shown
-      .filter(b => !selected.has(b.batchName) && ['ELIGIBLE', 'CONDITIONAL'].includes(b.verdict))
-      .sort((a, b) => (VERDICT_ORDER[a.verdict] ?? 9) - (VERDICT_ORDER[b.verdict] ?? 9));
-    const dp = shown.filter(b => !selected.has(b.batchName) && b.verdict === 'DATA_PENDING');
-    const ie = shown.filter(b => !selected.has(b.batchName) && b.verdict === 'INELIGIBLE');
-    return { sel, el, dp, ie };
-  }, [data, selected, kw]);
 
   // —— actions ——
   const toggleBatch = (name: string) => {
@@ -137,6 +121,25 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
   const submitDisabled = submitting || selected.size === 0 || (data.intakeGap && data.intakeGap.ok === false);
   const submitLabel = data.intakeGap && data.intakeGap.ok === false ? '资料未完成 - 无法确认' : '确认并提交';
 
+  // —— §7.6 单一列表: 非 INELIGIBLE 在上 (选中置顶 → 再按 verdict), INELIGIBLE 沉底 ——
+  const shown = data.batches;
+  const top = shown
+    .filter(b => b.verdict !== 'INELIGIBLE')
+    .sort((a, b) =>
+      (Number(selected.has(b.batchName)) - Number(selected.has(a.batchName)))
+      || ((VERDICT_ORDER[a.verdict] ?? 9) - (VERDICT_ORDER[b.verdict] ?? 9)),
+    );
+  const bottom = shown.filter(b => b.verdict === 'INELIGIBLE');
+  const renderCard = (b: BatchRecommendation) => (
+    <BatchCard
+      key={b.batchConfigId}
+      batch={b}
+      checked={selected.has(b.batchName)}
+      locked={locked}
+      onToggleCheck={() => toggleBatch(b.batchName)}
+    />
+  );
+
   return (
     <div className="br-page">
       {/* 面包屑 */}
@@ -176,115 +179,68 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
         </div>
       )}
 
-      {/* §7.3 标题行 + 说明条 */}
+      {/* §7.3 标题行 + 可折叠判定说明 */}
       <div className="br-titlerow">
-        <div>
-          <span className="eyebrow">BATCH ELIGIBILITY</span>
+        <div className="br-titlerow-l">
           <h1>批次推荐</h1>
+          <button className="br-help-toggle" onClick={() => setShowHelp(v => !v)}>
+            <TIcon.info/> 判定说明 <span className={`chev${showHelp ? ' up' : ''}`}><TIcon.chevDown/></span>
+          </button>
         </div>
         <span className="back-link" onClick={goBack}><TIcon.arrowRight/> 返回学生详情</span>
       </div>
-      <div className="br-note">
-        <span className="ic"><TIcon.info/></span>
-        <div style={{ flex: 1 }}>
-          勾选批次后, 方案生成页即可用该批次。
-          <span
-            onClick={() => setShowNote((s) => !s)}
-            style={{ cursor: 'pointer', marginLeft: 6, color: '#1f4e78', fontWeight: 600 }}
-          >
-            {showNote ? '收起说明 ▲' : '展开说明 ▼'}
-          </span>
-          {showNote && (
-            <div style={{ marginTop: 6 }}>
-              勾选某批次 = 让方案生成可用该批次下<strong>所有「资格通过」</strong>的子类别 (例如本科批会包含普通类等)。
-              点批次卡片可展开看子类别 + 相关政策文件。<strong>本页只判定「资格」, 不计算录取概率</strong>, 分数仅作过线参考。
-            </div>
-          )}
+      {showHelp && (
+        <div className="br-note">
+          <span className="ic"><TIcon.info/></span>
+          <div>
+            勾选某批次 = 让方案生成可用该批次下<strong>所有「资格通过」</strong>的子类别（例如本科批会包含普通类等）。
+            点批次卡片可展开看子类别 + 相关政策文件。<strong>本页只判定「资格」，不计算录取概率</strong>，分数仅作过线参考。
+          </div>
         </div>
-      </div>
+      )}
 
       {/* §7.4 资料缺失警告框 */}
       {data.intakeGap && data.intakeGap.ok === false && (
         <div className="br-gapwarn">
           <span className="ic"><TIcon.alert/></span>
           <div className="body">
-            <div className="ttl">
-              学生关键资料未完成 — 缺 {(data.intakeGap.missing ?? []).length} 项, 当前判定可能不准
-              <span
-                onClick={() => setShowGap((s) => !s)}
-                style={{ cursor: 'pointer', marginLeft: 8, color: '#1f4e78', fontWeight: 600 }}
-              >
-                {showGap ? '收起 ▲' : '展开查看 ▼'}
-              </span>
+            <div className="ttl">学生关键资料未完成 — 当前判定可能不准</div>
+            <div className="miss">
+              <span>缺失字段:</span>
+              {(data.intakeGap.missing ?? []).map((m) => (
+                <span className="mchip" key={m.field}>{m.label}</span>
+              ))}
             </div>
-            {showGap && (
-              <>
-                <div className="miss">
-                  <span>缺失字段:</span>
-                  {(data.intakeGap.missing ?? []).map((m) => (
-                    <span className="mchip" key={m.field}>{m.label}</span>
-                  ))}
-                </div>
-                <div className="go" onClick={goBack}>→ 跳学生详情页催补资料</div>
-              </>
-            )}
+            <div className="go" onClick={goBack}>→ 跳学生详情页催补资料</div>
           </div>
         </div>
       )}
 
-      {/* §7.5 工具条 */}
-      <div className="br-toolbar">
-        <span className="br-search">
-          <TIcon.search/>
-          <input
-            placeholder="搜批次名 (例如: 高职 / 本科批)"
-            value={kw}
-            onChange={(e) => setKw(e.target.value)}
-          />
-        </span>
-        <button className="br-tool-btn primary" onClick={selectAll} disabled={locked || submitting}>
-          <TIcon.check/> 全选符合资格 <span className="n">{eligibleForAll.length}</span>
-        </button>
-        <button className="br-tool-btn" onClick={clearAll} disabled={locked || submitting || selected.size === 0}>
-          <TIcon.close/> 清空已选
-        </button>
-      </div>
-
-      {/* §7.6 三段 Section */}
-      <Section seg="selected" title="已选批次" count={sectioned.sel.length}
-        hint="勾选 / 取消会同步到方案生成页可用范围"
-        emptyText='还没选, 在下方"符合填报条件"段勾选'
-        batches={sectioned.sel}
-        renderCard={(b) => (
-          <BatchCard key={b.batchConfigId} batch={b} checked locked={locked} onToggleCheck={() => toggleBatch(b.batchName)}/>
-        )}
-      />
-      <Section seg="eligible" title="符合填报条件" count={sectioned.el.length}
-        hint="可勾选进推荐"
-        emptyText="无"
-        batches={sectioned.el}
-        renderCard={(b) => (
-          <BatchCard key={b.batchConfigId} batch={b} checked={false} locked={locked} onToggleCheck={() => toggleBatch(b.batchName)}/>
-        )}
-      />
-      {sectioned.dp.length > 0 && (
-        <Section seg="pending" title="待人工判断" count={sectioned.dp.length}
-          hint="资格规则待完善(如高水平运动队需运动员资质) — 确认学生具备特殊资格后再手动勾选"
-          emptyText="无"
-          batches={sectioned.dp}
-          renderCard={(b) => (
-            <BatchCard key={b.batchConfigId} batch={b} checked={false} locked={locked} onToggleCheck={() => toggleBatch(b.batchName)}/>
-          )}
-        />
+      {/* §7.5 极简操作行 (仅未锁定) */}
+      {!locked && (
+        <div className="br-actions">
+          <span className="br-actions-count">
+            共 {data.batches.length} 个批次 · 符合资格 <strong>{eligibleForAll.length}</strong> · 已选 <strong className="sel">{selected.size}</strong>
+          </span>
+          <span className="br-actions-links">
+            <button onClick={selectAll}>全选符合资格</button>
+            <span className="sep">·</span>
+            <button onClick={clearAll} disabled={selected.size === 0}>清空</button>
+          </span>
+        </div>
       )}
-      <Section seg="ineligible" title="不符合条件" count={sectioned.ie.length}
-        hint="硬性资格未满足 — 通常不建议勾选"
-        emptyText="无"
-        batches={sectioned.ie}
-        renderCard={(b) => (
-          <BatchCard key={b.batchConfigId} batch={b} checked={false} locked={locked} onToggleCheck={() => toggleBatch(b.batchName)}/>
+
+      {/* §7.6 单一列表 */}
+      <div className="br-list">
+        {top.length === 0 && bottom.length === 0 && (
+          <div className="br-list-empty">无匹配批次</div>
         )}
-      />
+        {top.map(renderCard)}
+        {bottom.length > 0 && (
+          <div className="br-list-div"><span className="ln"/>不符合条件 · {bottom.length}<span className="ln"/></div>
+        )}
+        {bottom.map(renderCard)}
+      </div>
 
       {/* §7.10 底部提交栏 (仅未锁定时显示) */}
       {!locked && (
@@ -315,15 +271,19 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
             )}
 
             <div className="br-submit-foot">
-              <div className="br-note-field">
-                <label>老师备注 (可选, 提交将覆盖上次备注)</label>
-                <textarea
-                  rows={2}
-                  placeholder="例如: 学生想冲强基, 我担心保不住二本"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
-              </div>
+              {showNote ? (
+                <div className="br-note-field">
+                  <label>老师备注 (可选, 提交将覆盖上次备注)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="例如: 学生想冲强基, 我担心保不住二本"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <button className="br-addnote" onClick={() => setShowNote(true)}>+ 添加备注</button>
+              )}
               <button
                 className="br-submit-btn"
                 disabled={submitDisabled}
@@ -410,35 +370,5 @@ function Overview({ student: s }: { student: StudentSummary }) {
         </div>
       </div>
     </div>
-  );
-}
-
-/* §7.6 段容器 */
-function Section({
-  seg, title, count, hint, emptyText, batches, renderCard,
-}: {
-  seg: 'selected' | 'eligible' | 'pending' | 'ineligible';
-  title: string;
-  count: number;
-  hint: string;
-  emptyText: string;
-  batches: BatchRecommendation[];
-  renderCard: (b: BatchRecommendation) => React.ReactNode;
-}) {
-  return (
-    <section className={`br-section seg-${seg}`}>
-      <div className="br-section-head">
-        <span className="dot"/>
-        <h2>{title}</h2>
-        <span className="count">{count}</span>
-        <span className="line"/>
-        <span className="hint">{hint}</span>
-      </div>
-      {batches.length === 0 ? (
-        <div className="br-section-empty">{emptyText}</div>
-      ) : (
-        <div className="br-section-cards">{batches.map(renderCard)}</div>
-      )}
-    </section>
   );
 }
