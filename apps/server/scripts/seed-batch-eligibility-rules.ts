@@ -182,6 +182,12 @@ const ref_dxjs_2026_jihua = {
   filename: 'dxjs_2026_jihua.pdf',
   type: 'pdf' as const,
 };
+const ref_dxjs_2026_mingdan = {
+  // 公告 4840 二维码附件2: 征兵办上报用的名单式样, 同源 .docx 转 PDF
+  title: '四川省 2026 年定向培养军士体检合格政考通过考生名单(式样)',
+  filename: 'dxjs_2026_mingdan_shiyang.pdf',
+  type: 'pdf' as const,
+};
 const ref_yingzheng_tijian = {
   title: '《应征公民体格检查标准》(国家征兵体检通用标准)',
   filename: 'yingzheng_tijian.doc',
@@ -723,8 +729,9 @@ const RULES: Record<string, any> = {
           },
         ],
         references: [
-          // 定向军士专有 (招生计划 / 国家征兵体检 / 官网公告)
+          // 定向军士专有 (招生计划 / 名单式样 / 国家征兵体检 / 官网公告)
           ref_dxjs_2026_jihua,
+          ref_dxjs_2026_mingdan,
           ref_yingzheng_tijian,
           ref_sceea_2026_dxjs,
           // 政审通用 (与军队/公安/司法共用)
