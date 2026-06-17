@@ -176,11 +176,11 @@ const ref_gongan_tijian = {
   type: 'doc' as const,
 };
 // —— 定向培养军士 (高职提前批 / dingxiang_junshi) ——
-const ref_dxjs_2025_jihua = {
-  title: '四川省 2025 年定向培养军士招生计划表',
-  filename: 'dxjs_2025_sichuan_jihua.doc',
-  type: 'doc' as const,
-  sourceNote: '2026 计划表见 4840 官网二维码(无直链); 此为 2025 占位',
+const ref_dxjs_2026_jihua = {
+  // 2026 计划表来自公告 4840 二维码(草料活码)→ ncstatic.clewm.net 的 .wps, 已转 PDF
+  title: '四川省 2026 年定向培养军士招生计划表',
+  filename: 'dxjs_2026_jihua.pdf',
+  type: 'pdf' as const,
 };
 const ref_yingzheng_tijian = {
   title: '《应征公民体格检查标准》(国家征兵体检通用标准)',
@@ -724,7 +724,7 @@ const RULES: Record<string, any> = {
         ],
         references: [
           // 定向军士专有 (招生计划 / 国家征兵体检 / 官网公告)
-          ref_dxjs_2025_jihua,
+          ref_dxjs_2026_jihua,
           ref_yingzheng_tijian,
           ref_sceea_2026_dxjs,
           // 政审通用 (与军队/公安/司法共用)
