@@ -488,6 +488,12 @@ export default function StudentDetailPage() {
     mutationFn: () => studentApi.delete(studentId),
     onSuccess: () => {
       message.success('学生已彻底删除');
+      // 删除后必须失效学生列表 / 看板缓存: 全局 staleTime 60s(看板更长达 1h), 列表/看板的
+      // ['teacher-students']、['teacher-dashboard-*'] 在删除时处于非激活态, 不失效就会被标记为"仍新鲜",
+      // router.push 回列表时不重拉 → 渲染出已删学生的残留卡片。invalidate 把它们标脏, 回到页面即重拉。
+      queryClient.invalidateQueries({ queryKey: ['teacher-students'] });
+      queryClient.invalidateQueries({ queryKey: ['teacher-dashboard-students'] });
+      queryClient.invalidateQueries({ queryKey: ['teacher-dashboard-pending-plans'] });
       router.push('/teacher/students');
     },
     onError: (error: any) => {
