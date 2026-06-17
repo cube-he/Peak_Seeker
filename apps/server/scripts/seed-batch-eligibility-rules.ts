@@ -180,19 +180,18 @@ const ref_dxjs_2025_jihua = {
   title: '四川省 2025 年定向培养军士招生计划表',
   filename: 'dxjs_2025_sichuan_jihua.doc',
   type: 'doc' as const,
-  sourceNote: '2025 版本, 待 2026 计划表出后替换',
+  sourceNote: '2026 计划表见 4840 官网二维码(无直链); 此为 2025 占位',
 };
 const ref_yingzheng_tijian = {
   title: '《应征公民体格检查标准》(国家征兵体检通用标准)',
   filename: 'yingzheng_tijian.doc',
   type: 'doc' as const,
 };
-const ref_sceea_2025_dxjs = {
-  title: '四川教育考试院 2025 定向培养军士通知 (官网, 待 2026 替换)',
+const ref_sceea_2026_dxjs = {
+  title: '四川教育考试院 2026 定向培养军士公告 (官网)',
   filename: null,
-  externalUrl: 'https://www.sceea.cn/Html/202506/Newsdetail_4322.html',
+  externalUrl: 'https://www.sceea.cn/Html/202606/Newsdetail_4840.html',
   type: 'announcement' as const,
-  sourceNote: '2025 版本, 待 2026 出后替换为今年链接',
 };
 // —— 农村订单定向医学生 (mianfei_yixue) ——
 const ref_noddyxs_2025 = {
@@ -680,11 +679,13 @@ const RULES: Record<string, any> = {
         code: 'dingxiang_junshi',
         name: '定向培养军士',
         description: '部分高职院校面向陆海空军方向培养, 按《应征公民体格检查标准》',
+        // 2026 公告 (Newsdetail_4840): 报考条件/计划/流程/时间节点
+        policyText: '报考定向培养军士须为 2026 年参加全国统考的高级中等教育学校毕业生,年龄不超过20周岁(2006年8月31日以后出生),未婚,志愿至少服现役满5年,政治和身体条件按征集义务兵规定执行。2026 年在38所地方高校高职(专科)层次招生计划内,面向全省为解放军和武警部队招收定向培养军士998人(含女军士6人,具体计划见官网附件)。执行提前批录取:7月5日17时前在专科提前批志愿栏填报「定向培养军士生」志愿。体检控制线在本科批控制线下、专科批控制线上,按招生计划数4倍划定(超本科批线的填报考生全部纳入、不计比例);政治考核由户籍地县级征兵办会同招考机构、公安部门组织,办法与标准按征集义务兵执行。学制3年取大专学历,前2.5年在校、后0.5年入伍实习。',
         hardRules: [
           {
             scope: 'SUBSET', subset: '定向军士',
             rule: 'AGE_RANGE',
-            params: { min: 17, max: 22, asOf: '2025-08-31' },
+            params: { min: 17, max: 20, asOf: '2026-08-31' },
           },
           {
             scope: 'SUBSET', subset: '定向军士',
@@ -725,7 +726,7 @@ const RULES: Record<string, any> = {
           // 定向军士专有 (招生计划 / 国家征兵体检 / 官网公告)
           ref_dxjs_2025_jihua,
           ref_yingzheng_tijian,
-          ref_sceea_2025_dxjs,
+          ref_sceea_2026_dxjs,
           // 政审通用 (与军队/公安/司法共用)
           ref_zhengshen_biao,
           ref_zhengshen_shuoming,
