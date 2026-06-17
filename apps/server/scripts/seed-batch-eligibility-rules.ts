@@ -220,12 +220,22 @@ const ref_sifa_mianshi_tijian = {
   filename: 'sifa_mianshi_tijian_tineng.docx',
   type: 'doc' as const,
 };
-const ref_sceea_2025_sifa = {
-  title: '四川教育考试院 2025 司法警官类招生通知 (官网, 待 2026 替换)',
+// —— 司法警官类 2026 (中央司法警官学院, 本科提前批A段; 公告 Newsdetail_4843, 替换上面 2025 占位) ——
+const ref_sifa_2026_zhengzhi = {
+  title: '中央司法警官学院 2026 年招生政治考察表',
+  filename: 'sifa_2026_zhengzhi_kaocha.pdf',
+  type: 'pdf' as const,
+};
+const ref_sifa_2026_mianshi_tijian = {
+  title: '中央司法警官学院面试体检体能测试登记表 (2026)',
+  filename: 'sifa_2026_mianshi_tijian_tineng.pdf',
+  type: 'pdf' as const,
+};
+const ref_sceea_2026_sifa = {
+  title: '四川教育考试院 2026 司法警官类招生通知 (官网)',
   filename: null,
-  externalUrl: 'https://www.sceea.cn/Html/202506/Newsdetail_4312.html',
+  externalUrl: 'https://www.sceea.cn/Html/202606/Newsdetail_4843.html',
   type: 'announcement' as const,
-  sourceNote: '2025 版本, 待 2026 出后替换为今年链接',
 };
 // —— 航海类: 国标 GB 30035-2021 船员健康检查要求 ——
 const ref_chuanyuan_jiankang = {
@@ -479,6 +489,8 @@ const RULES: Record<string, any> = {
         code: 'sifa',
         name: '司法警官类',
         description: '司法部院校, 警务方向 (按司法类面试/体检/体能测试标准)',
+        // 2026 公告 (中央司法警官学院, Newsdetail_4843): 报考条件/体检体能标准/政考与体检时间地点
+        policyText: '中央司法警官学院 2026 年在川所有专业（含专业方向）均为提前录取，志愿报考考生须参加政治考察、面试、体检和体能测试。【报考条件】高考成绩达本科第二批录取控制分数线；国家专项计划在控制分数线下一定分数内、符合报考条件者也可报考其在川农村贫困地区定向招生专项计划相应专业。【体检标准】五官端正、体形匀称、心理健康；双侧裸眼视力均≥4.7，无色盲色弱；两耳听力均>3米；男生身高≥1.68米、体重≥50公斤，女生身高≥1.58米、体重≥45公斤；面部无明显缺陷，无文身、驼背。【体能测试】男生：俯卧撑10秒≥6次、立定跳远≥2.3米；女生：仰卧起坐10秒≥5次、立定跳远≥1.6米（每项最多测3次，取最好一次）。【政治考察】须于2026年6月30日前持《政治考察表》、准考证及复印件、二代身份证、户口本到户籍地公安派出所完成。【面试/体检/体能测试】2026年6月30日—7月1日 8:30—12:00、14:00—17:00，地点：四川省司法警官总医院新体检中心（成都市双流区学府路二段9号）。',
         hardRules: [
           {
             scope: 'SUBSET', subset: '司法警官',
@@ -512,10 +524,10 @@ const RULES: Record<string, any> = {
           },
         ],
         references: [
-          // 司法警官专有 (中央司法警官学院, 2025 占位)
-          ref_sifa_2025_zhengzhi,
-          ref_sifa_mianshi_tijian,
-          ref_sceea_2025_sifa,
+          // 司法警官专有 (中央司法警官学院 2026, 公告 Newsdetail_4843)
+          ref_sifa_2026_zhengzhi,
+          ref_sifa_2026_mianshi_tijian,
+          ref_sceea_2026_sifa,
           // 政审通用 (军队/公安/司法共用)
           ref_zhengshen_biao,
           ref_zhengshen_shuoming,
