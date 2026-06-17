@@ -71,7 +71,9 @@ const ref_88 = {
 // —— 2025 县名单 PDF (逐县视觉核对、内嵌字体、预览无乱码) ——
 const ref_fj1_68 = { title: '附件1 集中连片特困+国家扶贫重点县名单（68县）', filename: 'fj1_jizhonglianpian_68_2025.pdf', type: 'pdf' as const };
 const ref_fj2_119 = { title: '附件2 民族地区/革命老区/边远名单（119县）', filename: 'fj2_minzu_bianyuan_119_2025.pdf', type: 'pdf' as const };
-const ref_fj3_bushu = { title: '附件3 部属师范本研衔接公费履约任教范围', filename: 'fj3_bushu_shifan_2025.pdf', type: 'pdf' as const };
+// 国家公费师范生 2026 (实施办法 Newsdetail_4842 + 分省分专业计划表含四川履约范围, 替换 2025 的 fj3_bushu)
+const ref_gongfei_2026_jihua = { title: '2026 年度部属师范大学本研衔接公费师范生分省分专业招生计划表(含四川履约任教范围)', filename: 'gongfei_2026_jihua.pdf', type: 'pdf' as const };
+const ref_sceea_2026_gongfei_banfa = { title: '教育部直属师范大学本研衔接师范生公费教育实施办法 (2026, 官网)', filename: null, externalUrl: 'https://www.sceea.cn/Html/202606/Newsdetail_4842.html', type: 'announcement' as const };
 const ref_fj4_143 = { title: '附件4 省级公费师范生实施范围（143县）', filename: 'fj4_shengji_gongfei_shifan_143_2025.pdf', type: 'pdf' as const };
 const ref_fj5_88 = { title: '附件5 乡村振兴实施范围（88县）', filename: 'fj5_xiangcun_zhenxing_88_2025.pdf', type: 'pdf' as const };
 const ref_fj6_45 = { title: '附件6 原深度贫困县名单（45县）', filename: 'fj6_shendu_pinkun_45_2025.pdf', type: 'pdf' as const };
@@ -603,7 +605,7 @@ const RULES: Record<string, any> = {
         hardRules: [
           { scope: 'SUBSET', subset: '国家公费师范生', rule: 'SERVICE_COMMITMENT', params: { years: 6 } },
         ],
-        references: [ref_fj3_bushu, ref_zhaosheng_wuli],
+        references: [ref_gongfei_2026_jihua, ref_sceea_2026_gongfei_banfa, ref_zhaosheng_wuli],
       },
       {
         code: 'guojia_youshi',
