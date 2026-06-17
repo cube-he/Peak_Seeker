@@ -691,7 +691,8 @@ const RULES: Record<string, any> = {
           {
             scope: 'SUBSET', subset: '定向军士',
             rule: 'AGE_RANGE',
-            params: { min: 17, max: 20, asOf: '2026-08-31' },
+            // 公告 4840 仅「不超过20周岁(2006-08-31后出生)」, 无下限 → 省略 min
+            params: { max: 20, asOf: '2026-08-31' },
           },
           {
             scope: 'SUBSET', subset: '定向军士',

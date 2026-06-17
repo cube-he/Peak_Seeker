@@ -345,14 +345,16 @@ function evalHardRule(
       return { satisfied: true, hint: 'PASS' };
     }
     case 'AGE_RANGE': {
-      const { min, max, asOf } = (rule.params ?? {}) as { min: number; max: number; asOf: string };
+      // min 可选: 公告只给上限时(如定向军士「不超过20周岁」, 无下限)省略 min, 仅判 ≤max。
+      const { min, max, asOf } = (rule.params ?? {}) as { min?: number; max: number; asOf: string };
+      const rangeLabel = min != null ? `${min}-${max} 周岁` : `不超过 ${max} 周岁`;
       if (!student.birthDate) {
-        return { satisfied: false, hint: `${subsetLabel}需 ${min}-${max} 周岁 (截至 ${asOf}), 学生未填出生日期 → 请先催学生补完资料` };
+        return { satisfied: false, hint: `${subsetLabel}需 ${rangeLabel} (截至 ${asOf}), 学生未填出生日期 → 请先催学生补完资料` };
       }
       const asOfDate = new Date(asOf);
       const age = Math.floor((asOfDate.getTime() - student.birthDate.getTime()) / (365.25 * 86400 * 1000));
-      if (age < min || age > max) {
-        return { satisfied: false, hint: `${subsetLabel}需 ${min}-${max} 周岁 (截至 ${asOf}), 学生为 ${age} 岁` };
+      if ((min != null && age < min) || age > max) {
+        return { satisfied: false, hint: `${subsetLabel}需 ${rangeLabel} (截至 ${asOf}), 学生为 ${age} 岁` };
       }
       return { satisfied: true, hint: 'PASS' };
     }
