@@ -113,21 +113,21 @@ const ref_junjian = {
   filename: 'junjian_tijian.pdf',
   type: 'pdf' as const,
 };
-// —— 军队/公安/司法政审 (POLITICAL_REVIEW_REQUIRED) 共用 4 个 references ——
+// —— 军队征集政审 2026 (征集和招录人员政治考核表 3 件, 公告 Newsdetail_4815; 军队院校 junxiao + 定向军士 dingxiang_junshi 共用) ——
 const ref_zhengshen_biao = {
   title: '征集和招录人员政治考核表（式样）',
-  filename: 'zhengshen_kaohe_biao.doc',
-  type: 'doc' as const,
+  filename: 'zhengshen_2026_biao.pdf',
+  type: 'pdf' as const,
 };
 const ref_zhengshen_shuoming = {
   title: '《征集和招录人员政治考核表》填写说明',
-  filename: 'zhengshen_kaohe_shuoming.docx',
-  type: 'doc' as const,
+  filename: 'zhengshen_2026_shuoming.pdf',
+  type: 'pdf' as const,
 };
 const ref_zhengshen_tongji = {
   title: '政治考核情况统计表',
-  filename: 'zhengshen_tongji.docx',
-  type: 'doc' as const,
+  filename: 'zhengshen_2026_tongji.pdf',
+  type: 'pdf' as const,
 };
 const ref_sceea_2026_zhengshen = {
   title: '四川教育考试院 2026 军队院校政考通知 (官网)',
@@ -377,11 +377,13 @@ const RULES: Record<string, any> = {
         code: 'junxiao',
         name: '军队院校',
         description: '军队 27 院校, 录取后入伍 (体检按《军队选拔军官和文职人员体检标准》)',
+        // 2026 公告 (Newsdetail_4815): 军队院校招收高中毕业生政治考核流程/对象/时间
+        policyText: '报考军队院校的普通高中毕业生须参加政治考核(2026)。【对象】参加2026年高考、有意愿报考军队院校、未婚、年龄不低于16周岁不超过20周岁(截至2026年8月31日)、高中阶段体质测试及格以上。【政治考核流程】考生所在学校于6月14日前组织有意愿者下载《征集和招录人员政治考核表》并按填写说明填写,打印高中阶段国家体质健康测试报告(盖校章);学校汇总后6月16日前(逾期个人最迟6月17日18时)报县级征兵办公室;经公安派出所初步考核→县征兵办联合考核→作出结论(通过/不通过);6月27日18时前市州征兵办报送《政治考核情况统计表》;政治考核结论7月4日前有效。体检/体测另按军检标准执行(身高男≥162/女≥158,裸眼≥4.5,无色盲色弱等)。',
         hardRules: [
           {
             scope: 'SUBSET', subset: '军队院校',
             rule: 'AGE_RANGE',
-            params: { min: 16, max: 20, asOf: '2025-08-31' },
+            params: { min: 16, max: 20, asOf: '2026-08-31' },
           },
           {
             scope: 'SUBSET', subset: '军队院校',
