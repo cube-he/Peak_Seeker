@@ -133,32 +133,29 @@ const ref_sceea_2026_zhengshen = {
   externalUrl: 'https://www.sceea.cn/Html/202605/Newsdetail_4815.html',
   type: 'announcement' as const,
 };
-// —— 公安院校专有 references (2025 版本, 待 2026 出后替换) ——
-const ref_gongan_xianchang_ceshi = {
-  title: '公安院校现场招生测试有关注意事项 (2025)',
-  filename: 'gongan_xianchang_ceshi_zhuyi.docx',
-  type: 'doc' as const,
-  sourceNote: '2025 版本, 待 2026 通知出后替换',
+// —— 公安院校专有 references 2026 (公告 Newsdetail_4838, 含专科/预科) ——
+const ref_gongan_2026_zicha = {
+  title: '公安院校公安专业招生考生身体状况自查表 (2026)',
+  filename: 'gongan_2026_zicha.pdf',
+  type: 'pdf' as const,
 };
-const ref_gongan_huanbing_shenbao = {
-  title: '公安院校公安专业招生患病经历申报表 (2025)',
-  filename: 'gongan_huanbing_shenbaobiao.docx',
-  type: 'doc' as const,
-  sourceNote: '2025 版本, 待 2026 通知出后替换',
+const ref_gongan_2026_tineng_chengnuo = {
+  title: '四川省 2026 年公安院校公安专业招生体能测评考生承诺书',
+  filename: 'gongan_2026_tineng_chengnuo.pdf',
+  type: 'pdf' as const,
 };
-const ref_gongan_2025_sichuan_zhaosheng = {
-  title: '四川省 2025 年公安院校公安专业招生通知',
-  filename: 'gongan_2025_sichuan_zhaosheng.docx',
-  type: 'doc' as const,
-  sourceNote: '2025 版本, 待 2026 通知出后替换',
+const ref_gongan_2026_xianchang = {
+  title: '公安院校现场招生测试有关注意事项 (2026)',
+  filename: 'gongan_2026_xianchang_zhuyi.pdf',
+  type: 'pdf' as const,
 };
-const ref_sceea_2025_gongan = {
-  title: '四川教育考试院 2025 公安院校招生通知 (官网, 待 2026 替换)',
+const ref_sceea_2026_gongan = {
+  title: '四川教育考试院 2026 公安院校招生通知 (官网)',
   filename: null,
-  externalUrl: 'https://www.sceea.cn/Html/202506/Newsdetail_4309.html',
+  externalUrl: 'https://www.sceea.cn/Html/202606/Newsdetail_4838.html',
   type: 'announcement' as const,
-  sourceNote: '2025 版本, 待 2026 出后替换为今年链接',
 };
+const POLICY_GONGAN_2026 = '2026 年报考公安院校公安专业的考生(含专科、预科)须参加体检、体测、面试、政治考察。【报考条件】中国国籍;拥护党的领导和中国特色社会主义制度;志愿从事公安工作;政治素质与道德品行良好;身心条件良好;年龄16-22周岁(2004-09-01至2010-08-31出生;四川警察学院藏文类本科预科为15-21周岁);高中毕业。【体检】按《公安院校公安学科专业招生体检标准》并参照公务员录用体检标准,审查考生《身体状况自查表》后综合作结论。【体测】50米跑、1000米(男)/800米(女)、立定跳远、引体向上(男)/仰卧起坐(女)4项全测,3项合格即合格。【面试】按面试标准,避免奇装异服/染烫发/浓妆/首饰。【时间地点】体检体测面试2026年6月29日—7月1日,设成都/泸州/南充/阿坝/甘孜/凉山等点。【政治考察】合格者现场领取省公安厅政治部《政治考察通知书》,于6月29日—7月2日17:00前持身份证/毕业证/准考证到户籍地(川籍)或现居住地(非川籍)派出所报到;未报到或不合格者公安志愿无效。';
 // —— 公安招生稳定标准 (相对稳定, 不标"待替换") ——
 const ref_gongan_tineng = {
   title: '公安院校公安专业招生体能测评标准',
@@ -432,11 +429,12 @@ const RULES: Record<string, any> = {
         code: 'gongan',
         name: '公安院校',
         description: '公安部直属院校, 政考要求高, 体检按公安院校招生体检标准',
+        policyText: POLICY_GONGAN_2026,
         hardRules: [
           {
             scope: 'SUBSET', subset: '公安院校',
             rule: 'AGE_RANGE',
-            params: { min: 16, max: 22, asOf: '2025-08-31' },
+            params: { min: 16, max: 22, asOf: '2026-08-31' },
           },
           {
             scope: 'SUBSET', subset: '公安院校',
@@ -477,16 +475,12 @@ const RULES: Record<string, any> = {
           ref_gongan_tineng,
           ref_gongan_zhengzhi,
           ref_gongan_tijian,
-          // 公安专有 (2025 占位, 等今年通知出后替换)
-          ref_gongan_2025_sichuan_zhaosheng,
-          ref_gongan_xianchang_ceshi,
-          ref_gongan_huanbing_shenbao,
-          ref_sceea_2025_gongan,
-          // 政审通用 (与军队/司法共用)
-          ref_zhengshen_biao,
-          ref_zhengshen_shuoming,
-          ref_zhengshen_tongji,
-          ref_sceea_2026_zhengshen,
+          // 公安专有 2026 (公告 Newsdetail_4838: 自查表/体能承诺书/现场注意/官网通知)
+          ref_gongan_2026_zicha,
+          ref_gongan_2026_tineng_chengnuo,
+          ref_gongan_2026_xianchang,
+          ref_sceea_2026_gongan,
+          // 招生考试报前言。军队征集政审(zhengshen_*/4815)已移除: 公安走自己的派出所政治考察(《政治考察通知书》, 标准见 ref_gongan_zhengzhi)
           ref_zhaosheng_wuli,
         ],
       },
@@ -748,8 +742,9 @@ const RULES: Record<string, any> = {
         code: 'gongan_zhuanke',
         name: '公安专科',
         description: '公安类高职, 政考/体检按公安院校招生标准（身高男170/女160, 裸眼4.8, 无色盲色弱）',
+        policyText: POLICY_GONGAN_2026,
         hardRules: [
-          { scope: 'SUBSET', subset: '公安专科', rule: 'AGE_RANGE', params: { min: 16, max: 22, asOf: '2025-08-31' } },
+          { scope: 'SUBSET', subset: '公安专科', rule: 'AGE_RANGE', params: { min: 16, max: 22, asOf: '2026-08-31' } },
           { scope: 'SUBSET', subset: '公安专科', rule: 'POLITICAL_REVIEW_REQUIRED' },
           { scope: 'SUBSET', subset: '公安专科', rule: 'HEIGHT_MIN_BY_GENDER', params: { male: 170, female: 160 } },
           { scope: 'SUBSET', subset: '公安专科', rule: 'BMI_RANGE', params: { male: { min: 17.3, max: 27.3 }, female: { min: 17.1, max: 25.7 } } },
@@ -760,7 +755,8 @@ const RULES: Record<string, any> = {
         softHints: ['需通过体能测评与现场招生测试, 老师核实'],
         references: [
           ref_gongan_tineng, ref_gongan_zhengzhi, ref_gongan_tijian,
-          ref_gongan_2025_sichuan_zhaosheng, ref_zhengshen_biao, ref_zhaosheng_wuli,
+          ref_gongan_2026_zicha, ref_gongan_2026_tineng_chengnuo, ref_gongan_2026_xianchang,
+          ref_sceea_2026_gongan, ref_zhaosheng_wuli,
         ],
       },
       {
