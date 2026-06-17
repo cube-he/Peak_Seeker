@@ -528,11 +528,8 @@ const RULES: Record<string, any> = {
           ref_sifa_2026_zhengzhi,
           ref_sifa_2026_mianshi_tijian,
           ref_sceea_2026_sifa,
-          // 政审通用 (军队/公安/司法共用)
-          ref_zhengshen_biao,
-          ref_zhengshen_shuoming,
-          ref_zhengshen_tongji,
-          ref_sceea_2026_zhengshen,
+          // 招生考试报前言 (报考须知)。军队征集口径政审表 (zhengshen_* + 4815 军队院校政考通知)
+          // 已移除: 司法警官走该校《政治考察表》+户籍地派出所, 非军队《政治考核表》, 口径不符易误导。
           ref_zhaosheng_wuli,
         ],
       },
