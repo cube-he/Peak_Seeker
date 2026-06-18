@@ -1548,6 +1548,12 @@
 }
 .wn-teacher-scope .field .live-hint.warn { color: var(--rush); font-weight: 500; }
 
+/* 去 noStyle 的校验字段(手机号/身高/体重/视力等): 清 antd 默认 margin, inline 错误紧贴输入框下方 */
+.wn-teacher-scope .field > .ant-form-item,
+.wn-teacher-scope .pf-field > .ant-form-item { margin-bottom: 0; }
+.wn-teacher-scope .field .ant-form-item-explain-error,
+.wn-teacher-scope .pf-field .ant-form-item-explain-error { font-size: 11.5px; line-height: 1.4; margin-top: 3px; }
+
 /* ── Nested sub-tabs (资料 Tab 内嵌 6 个子表单) ───────────────────── */
 .wn-teacher-scope .sd-subtabs {
   display: flex;

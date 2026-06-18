@@ -10,6 +10,7 @@ import {
   ValidateNested,
   Min,
   Max,
+  Matches,
 } from 'class-validator';
 import { Transform, Type, plainToInstance } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -59,6 +60,7 @@ export class UpdateStudentProfileDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @Matches(/^1[3-9]\d{9}$/, { message: '手机号格式不正确' })
   phone?: string;
 
   @ApiPropertyOptional()
@@ -84,6 +86,7 @@ export class UpdateStudentProfileDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @Matches(/^1[3-9]\d{9}$/, { message: '手机号格式不正确' })
   parentPhone?: string;
 
   @ApiPropertyOptional()

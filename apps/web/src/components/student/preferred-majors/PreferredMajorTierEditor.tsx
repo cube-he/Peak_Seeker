@@ -425,7 +425,9 @@ export default function PreferredMajorTierEditor({
         optionFilterProp="label"
         loading={isLoading}
         onSelect={(v) => addMajor(containerId, v as string, true)}
-        onBlur={() => setAdding(null)}
+        // 不在 transient blur 上拆控件(选一个就重渲染→blur→弹回, 无法多选);
+        // 改为下拉真正关闭(点空白/Esc)时才收起
+        onDropdownVisibleChange={(open) => { if (!open) setAdding(null); }}
       />
     );
   };

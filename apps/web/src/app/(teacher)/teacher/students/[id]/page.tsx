@@ -597,6 +597,8 @@ export default function StudentDetailPage() {
         delete (values as Record<string, unknown>).birthDate;
       }
       saveMutation.mutate(values);
+    }).catch(() => {
+      // 校验未过: antd 已就近在对应字段下标红(取代顶部 toast); 吞掉 rejection 避免 unhandledrejection
     });
   };
 
@@ -1367,13 +1369,13 @@ function BasicFields() {
       </div>
       <div className="field">
         <label>手机号<span className="req">*</span></label>
-        <Form.Item name="phone" noStyle>
+        <Form.Item name="phone" rules={[{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的 11 位手机号' }]}>
           <Input placeholder="手机号" />
         </Form.Item>
       </div>
       <div className="field">
         <label>家长手机号<span className="req">*</span></label>
-        <Form.Item name="parentPhone" noStyle>
+        <Form.Item name="parentPhone" rules={[{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的 11 位手机号' }]}>
           <Input placeholder="家长手机号" />
         </Form.Item>
       </div>
@@ -1595,6 +1597,9 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
 
   return (
     <div className="exam-redo">
+      {/* examType / firstChoice 靠 setFieldsValue 写入, 必须注册成 field entity, 否则 useWatch 读不到 → chip 高亮/科类/首选列全失效 */}
+      <Form.Item name="examType" hidden><Input /></Form.Item>
+      <Form.Item name="firstChoice" hidden><Input /></Form.Item>
       {/* 顶部: 年份 / 来源 */}
       <div className="sd-form-grid" style={{ marginBottom: 0 }}>
         <div className="field">
@@ -2012,7 +2017,7 @@ function HealthFields() {
           <label>
             身高 <i className="req">*</i>
           </label>
-          <Form.Item name="height" noStyle>
+          <Form.Item name="height" rules={[{ type: 'number', min: 100, max: 250, message: '身高需在 100-250cm 之间' }]}>
             <PfUnitInput unit="cm" placeholder="100 – 250" min={100} max={250} />
           </Form.Item>
         </div>
@@ -2020,7 +2025,7 @@ function HealthFields() {
           <label>
             体重 <i className="req">*</i>
           </label>
-          <Form.Item name="weight" noStyle>
+          <Form.Item name="weight" rules={[{ type: 'number', min: 20, max: 200, message: '体重需在 20-200kg 之间' }]}>
             <PfUnitInput unit="kg" placeholder="20 – 200" min={20} max={200} />
           </Form.Item>
         </div>
@@ -2030,7 +2035,7 @@ function HealthFields() {
           <label>
             左眼裸眼视力 <i className="req">*</i> <em>五分记录法</em>
           </label>
-          <Form.Item name="visionLeft" noStyle>
+          <Form.Item name="visionLeft" rules={[{ type: 'number', min: 1, max: 5.3, message: '裸眼视力需在 1.0-5.3 之间' }]}>
             <PfUnitInput placeholder="1.0 – 5.3" step={0.1} min={1} max={5.3} />
           </Form.Item>
         </div>
@@ -2038,7 +2043,7 @@ function HealthFields() {
           <label>
             右眼裸眼视力 <i className="req">*</i> <em>五分记录法</em>
           </label>
-          <Form.Item name="visionRight" noStyle>
+          <Form.Item name="visionRight" rules={[{ type: 'number', min: 1, max: 5.3, message: '裸眼视力需在 1.0-5.3 之间' }]}>
             <PfUnitInput placeholder="1.0 – 5.3" step={0.1} min={1} max={5.3} />
           </Form.Item>
         </div>
