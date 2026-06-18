@@ -736,6 +736,11 @@ function CandidateMajorSection({
             <div
               key={major.enrollmentPlanId}
               className={`${compareStyles.majorRowV2} ${section === 'RISK' ? compareStyles.majorRowV2Risk : ''}`}
+              // 软规则不符(学费/民办/中外等)灰显区分 —— 不替老师藏, 仍可"确认风险后加入"
+              style={major.matchStatus === 'SOFT_FAIL' ? { opacity: 0.62, filter: 'grayscale(0.5)' } : undefined}
+              title={major.matchStatus === 'SOFT_FAIL' && major.failReasons?.length
+                ? `软性风险: ${major.failReasons.map((r) => r.note).join('；')} —— 已灰显, 老师可权衡后加入。`
+                : undefined}
             >
               <div className={`${compareStyles.majorStarV2} ${starClass}`}>★</div>
 

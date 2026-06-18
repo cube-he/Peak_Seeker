@@ -207,15 +207,28 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   const tuition = group?.anchorTuition;
   const tuitionText = tuition == null ? null : tuition === 0 ? '免费' : tuition.toLocaleString();
 
+  // 灰显区分(不替老师藏): 非意向地区 / 够不着(门槛位次远好于学生) / 分数偏低(学生远高于门槛)。
+  // 阈值与院校卡一致(rankGapRatio = 修正后门槛位次/学生位次 - 1)。
+  const regionMismatch = !!group?.regionMismatch;
+  const edge = group?.dynamicGradient?.rankGapRatio;
+  const reachFar = typeof edge === 'number' && edge < -0.45;
+  const tooLow = typeof edge === 'number' && edge > 0.5;
+  const mutedReason = regionMismatch ? '非意向地区' : reachFar ? '够不着(门槛远高于学生)' : tooLow ? '分数偏低(可能浪费分)' : '';
+
   return (
     <article
       className={`pgv2-card ${isExpanded ? 'is-expanded' : ''} ${isHidden ? 'is-hidden' : ''} ${isCompare ? 'is-compare' : ''} tier-${tone}`}
+      style={mutedReason ? { opacity: 0.62, filter: 'grayscale(0.5)' } : undefined}
+      title={mutedReason ? `${mutedReason} —— 已灰显区分, 但仍可由老师自主决策加入。` : undefined}
     >
       {/* —— MatchHeader: 匹配环 + 理由 + 4 偏好 dots + 趋势 + 预测 —— */}
       <div className="pgv2-match-header" onClick={onToggleExpand}>
         <MatchRing score={group?.matchScore} />
         <div className="pgv2-match-body">
-          <div className="pgv2-match-reason">{group?.matchReason ?? '—'}</div>
+          <div className="pgv2-match-reason">
+            {mutedReason ? <span style={{ color: '#8c8c8c', fontWeight: 600 }}>【{mutedReason}】 </span> : null}
+            {group?.matchReason ?? '—'}
+          </div>
           <div className="pgv2-pref-row">
             <PrefDot ok={group?.prefMatch?.province === 'match'} label="地域" />
             <PrefDot ok={group?.prefMatch?.tuition === 'within'} label="学费" />
