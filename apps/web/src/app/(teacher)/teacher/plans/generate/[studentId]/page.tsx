@@ -2447,8 +2447,8 @@ export default function GeneratePlanPage() {
                 </div>
               ) : null}
 
-              {/* —— 分数条: 今年预估分区间 (两视图通用; 拖动只更显示, 松手才筛) —— */}
-              {predictedScoreRange && predictedScoreRange.max > predictedScoreRange.min ? (
+              {/* —— 分数条: 全量程 150-750 (两视图通用; 拖动只更显示, 松手才筛) —— */}
+              {candidateGroups ? (
                 <div className="pgv2-tier-bar" style={{ marginTop: 4, alignItems: 'center', gap: 12 }}>
                   <span style={{ color: '#666', fontSize: 12 }}>
                     今年预估分{' '}
@@ -2459,13 +2459,15 @@ export default function GeneratePlanPage() {
                   <div style={{ flex: 1, maxWidth: 420, padding: '0 8px' }}>
                     <Slider
                       range
-                      min={predictedScoreRange.min}
-                      max={predictedScoreRange.max}
-                      value={scoreSlider ?? scoreRange ?? [predictedScoreRange.min, predictedScoreRange.max]}
+                      // 全量程 150-750: 老师有自主决策权, 不被预估分窗口卡死, 可下拉看保底/上拉看冲档。
+                      // thumbs 默认仍落在预估带(predictedScoreRange)给参考, 但可拖到任意位置。
+                      min={150}
+                      max={750}
+                      value={scoreSlider ?? scoreRange ?? [predictedScoreRange?.min ?? 150, predictedScoreRange?.max ?? 750]}
                       onChange={(v) => setScoreSlider(v as [number, number])}
                       onChangeComplete={(v) => {
                         const [lo, hi] = v as [number, number];
-                        const isFull = lo <= predictedScoreRange.min && hi >= predictedScoreRange.max;
+                        const isFull = lo <= 150 && hi >= 750;
                         setScoreRange(isFull ? null : [lo, hi]);
                         setScoreSlider(null);
                         setCandidatePage(1);
