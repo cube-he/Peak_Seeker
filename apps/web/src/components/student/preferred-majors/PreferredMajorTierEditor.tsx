@@ -417,6 +417,9 @@ export default function PreferredMajorTierEditor({
         open
         size="small"
         mode="multiple"
+        // 选中后保留搜索词 (默认 true 会清空 → 列表跳回全量, 一次搜索只能挑一个);
+        // false 让搜一次能连续挑多个匹配项
+        autoClearSearchValue={false}
         // 受控空值: 选中即转入容器 Tag 列表, 不在 Select 内累积; 下拉保持打开可连续多选
         value={[]}
         style={{ minWidth: 240 }}
