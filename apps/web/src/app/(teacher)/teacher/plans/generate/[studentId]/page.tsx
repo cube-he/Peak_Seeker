@@ -1287,7 +1287,6 @@ export default function GeneratePlanPage() {
   });
   const candidateGroups = unwrap<CandidateGroupListResult>(groupData);
   const regionMismatchCount = candidateGroups?.regionMismatchCount ?? 0;
-  const predictedScoreRange = (candidateGroups as any)?.predictedScoreRange as { min: number; max: number } | null | undefined;
   const groups = candidateGroups?.groups ?? [];
   const candidateUniversities = candidateGroups?.universities ?? [];
 
@@ -2507,10 +2506,10 @@ export default function GeneratePlanPage() {
                     <Slider
                       range
                       // 全量程 150-750: 老师有自主决策权, 不被预估分窗口卡死, 可下拉看保底/上拉看冲档。
-                      // thumbs 默认仍落在预估带(predictedScoreRange)给参考, 但可拖到任意位置。
+                      // 兜底值 [150,750] 而非预估带: 拉满(=不筛, scoreRange=null)后 thumbs 停在两端不缩回。
                       min={150}
                       max={750}
-                      value={scoreSlider ?? scoreRange ?? [predictedScoreRange?.min ?? 150, predictedScoreRange?.max ?? 750]}
+                      value={scoreSlider ?? scoreRange ?? [150, 750]}
                       onChange={(v) => setScoreSlider(v as [number, number])}
                       onChangeComplete={(v) => {
                         const [lo, hi] = v as [number, number];
