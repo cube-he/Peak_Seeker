@@ -430,12 +430,28 @@ export default function StudentDetailPage() {
         ...values,
         dataVersion: student?.dataVersion,
       } as UpdateStudentDto),
-    onSuccess: () => {
-      message.success('保存成功');
+    onSuccess: (_data, savedValues) => {
       queryClient.invalidateQueries({ queryKey: ['student-detail', studentId] });
       // 加分自动测算依赖 户籍县/民族/申报细则, 这些字段刚保存 → 立即重算,
       // 否则卡片吃 5 分钟 staleTime, 老师看到的是"无加分"旧结果
       queryClient.invalidateQueries({ queryKey: ['bonus-calc', Number(studentId)] });
+      // 保存后跨子页必填检查: 刚提交的 values 叠加原 student = 保存后状态(partial update,
+      // 未提交字段沿用库里旧值)。缺关键资料则提示缺哪 + 定位到第一个缺的子页(复用生成方案那套)。
+      // 不拦截保存 — 渐进式录入随时可存。toast 统一 key, 连点保存只刷新同一条不堆叠。
+      const merged = { ...student, ...(savedValues as Record<string, any>) };
+      const checksAfter = getFieldChecks(merged);
+      const miss = checksAfter.filter((c) => !c.passed);
+      const sec = firstMissingSectionKey(checksAfter);
+      if (miss.length > 0 && sec) {
+        const labels = miss.slice(0, 3).map((c) => c.label).join('、');
+        void message.warning({
+          content: `已保存 · 还缺 ${miss.length} 项关键资料:${labels}${miss.length > 3 ? ' 等' : ''}，已为你定位`,
+          key: 'save-profile',
+        });
+        jumpToSection(sec);
+      } else {
+        void message.success({ content: '保存成功', key: 'save-profile' });
+      }
     },
     onError: (error: any) => {
       // 把后端真实回错原样打到 console, 便于排查 (老师 F12 截图给我).
