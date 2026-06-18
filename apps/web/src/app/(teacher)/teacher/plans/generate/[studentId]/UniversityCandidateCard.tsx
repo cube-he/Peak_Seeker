@@ -56,6 +56,8 @@ export default function UniversityCandidateCard({
   const groups: any[] = Array.isArray(university.groups) ? university.groups : [];
   // 民办: 软科榜按办学性质分别排名, 民办的 softRanking 是民办分类排名, 需标注区分
   const isPrivate = String(u.runningNature ?? '').includes('民办');
+  // 非意向地区(院校级属性, 同校所有组一致): 灰显区分 —— 不替老师藏, 但视觉降级, 老师自主决策。
+  const regionMismatch = groups.some((g: any) => g?.regionMismatch);
 
   return (
     <div
@@ -65,6 +67,9 @@ export default function UniversityCandidateCard({
         background: 'var(--surface, #fff)',
         marginBottom: 12,
         overflow: 'hidden',
+        // 非意向地区 → 灰显(去饱和+降透明), 一眼区分"不在意向地区, 可权衡"
+        opacity: regionMismatch ? 0.6 : 1,
+        filter: regionMismatch ? 'grayscale(0.55)' : undefined,
       }}
     >
       {/* 头部 */}
@@ -85,6 +90,11 @@ export default function UniversityCandidateCard({
           {s.isPreferred && (
             <Tag color="gold" style={{ marginInlineEnd: 0 }}>
               意向院校{s.preferredRank ? ` #${s.preferredRank}` : ''}
+            </Tag>
+          )}
+          {regionMismatch && (
+            <Tag color="default" style={{ marginInlineEnd: 0, color: '#8c8c8c', borderStyle: 'dashed' }}>
+              非意向地区
             </Tag>
           )}
         </div>
