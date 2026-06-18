@@ -63,6 +63,8 @@ export interface CandidateGroupListParams extends CandidateListParams {
   sinoForeign?: 'only' | 'exclude';
   // 是否展开"非意向地区"院校组 (默认 false=折叠隐藏); 仅 GROUP 视图
   includeRegionMismatch?: boolean;
+  // 是否带出"硬规则不符"(资格不符)放各组 hardFailMajors 桶(灰显+禁加入); 默认不带
+  includeHardFails?: boolean;
   minScore?: number;
   maxScore?: number;
 }
@@ -146,6 +148,7 @@ export const planApi = {
         nature: params?.nature,
         sinoForeign: params?.sinoForeign,
         includeRegionMismatch: params?.includeRegionMismatch,
+        includeHardFails: params?.includeHardFails,
         minScore: params?.minScore,
         maxScore: params?.maxScore,
       },
