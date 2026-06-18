@@ -154,6 +154,13 @@ export default function UniversityCandidateCard({
           const added = isGroupAdded(g);
           const grad = g.suggestedGradient ?? g.dynamicGradient?.gradient ?? 'WEN';
           const pur = g.purity?.level as string | undefined;
+          // 在冲稳保之外再分两档(按修正后位次差距 rankGapRatio = 门槛位次/学生位次 - 1):
+          // 够不着 = 门槛位次远好于学生(差距过大, 极冲之上); 偏低 = 学生远高于门槛(可能浪费分, 低保之下)。
+          // 这两档照常显示, 但整行灰显区分, 不替老师藏 —— 阈值可调。
+          const edge = g.dynamicGradient?.rankGapRatio;
+          const reachFar = typeof edge === 'number' && edge < -0.45;
+          const tooLow = typeof edge === 'number' && edge > 0.5;
+          const extreme = reachFar || tooLow;
           return (
             <div
               key={g.groupKey}
@@ -164,6 +171,8 @@ export default function UniversityCandidateCard({
                 padding: '10px 16px',
                 borderBottom: '1px solid var(--border-subtle, #f0f0f0)',
                 fontSize: 13,
+                opacity: extreme ? 0.55 : 1,
+                filter: extreme ? 'grayscale(0.6)' : undefined,
               }}
             >
               <span style={{ fontWeight: 600, color: 'var(--text-primary)', minWidth: 56 }}>
@@ -175,6 +184,16 @@ export default function UniversityCandidateCard({
               <Tag color={GRAD_COLOR[grad] ?? 'default'} style={{ marginInlineEnd: 0 }}>
                 {GRAD_LABEL[grad] ?? grad}
               </Tag>
+              {reachFar && (
+                <Tag color="default" style={{ marginInlineEnd: 0, color: '#8c8c8c', borderStyle: 'dashed' }} title="该专业组录取门槛位次远好于学生, 差距过大、基本够不着, 仅供参考。老师可自主决策。">
+                  够不着
+                </Tag>
+              )}
+              {tooLow && (
+                <Tag color="default" style={{ marginInlineEnd: 0, color: '#8c8c8c', borderStyle: 'dashed' }} title="学生位次远高于该专业组录取门槛, 报考可能浪费分数。老师可自主决策。">
+                  分数偏低
+                </Tag>
+              )}
               {pur && PURITY_META[pur] && (
                 <Tag color={PURITY_META[pur].color} style={{ marginInlineEnd: 0 }}>
                   {PURITY_META[pur].label}
