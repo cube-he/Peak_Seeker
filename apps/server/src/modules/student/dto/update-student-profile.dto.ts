@@ -8,6 +8,7 @@ import {
   IsNumber,
   IsDate,
   ValidateNested,
+  ValidateIf,
   Min,
   Max,
   Matches,
@@ -57,8 +58,11 @@ export class UpdateStudentProfileDto {
   @IsString()
   realName?: string;
 
+  // 手机号 / 家长手机号 二选一(渐进式录入): 另一个常为空。@IsOptional 只跳过 null/undefined,
+  // 空字符串 '' 会照样过 @Matches 而失败 → 用 @ValidateIf 把 空/null/undefined 全部当"未填"跳过,
+  // 只在真正填了非空值时才校验格式。
   @ApiPropertyOptional()
-  @IsOptional()
+  @ValidateIf((o) => o.phone !== undefined && o.phone !== null && o.phone !== '')
   @IsString()
   @Matches(/^1[3-9]\d{9}$/, { message: '手机号格式不正确' })
   phone?: string;
@@ -84,7 +88,7 @@ export class UpdateStudentProfileDto {
   birthDate?: Date;
 
   @ApiPropertyOptional()
-  @IsOptional()
+  @ValidateIf((o) => o.parentPhone !== undefined && o.parentPhone !== null && o.parentPhone !== '')
   @IsString()
   @Matches(/^1[3-9]\d{9}$/, { message: '手机号格式不正确' })
   parentPhone?: string;

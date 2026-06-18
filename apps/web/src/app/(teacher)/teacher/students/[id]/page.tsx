@@ -2362,8 +2362,10 @@ function getFieldChecks(student: any): FieldCheckInfo[] {
     },
     {
       key: 'cities',
-      label: '意向城市',
+      // 省/市二选一: 填了意向省份就够(不必再选城市); 城市/排除城市/留省偏好同样算满足
+      label: '意向地区',
       passed:
+        (Array.isArray(student?.preferredProvinces) && student.preferredProvinces.length > 0) ||
         (Array.isArray(student?.preferredCities) && student.preferredCities.length > 0) ||
         (Array.isArray(student?.excludedCities) && student.excludedCities.length > 0) ||
         !!student?.stayPreference,
