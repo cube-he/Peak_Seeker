@@ -1886,8 +1886,11 @@ export class PlanCandidateService {
           degree: ep.major?.degree ?? null,
           standardDuration: ep.major?.standardDuration ?? ep.duration ?? null,
           satisfactionScore: ep.major?.satisfactionScore ?? null,
-          localMasterPoint: ep.major?.localMasterPoint ?? null,
-          localDoctoralPoint: ep.major?.localDoctoralPoint ?? null,
+          // 硕/博点要读 enrollment_plan 自身的 local_master_point/doctoral(按院校×专业组导入,
+          // 值为学科名串, 约 37%/16% 的计划有), 不能读 major 关联的同名 Boolean 列 —— 那列
+          // 全表是默认 false, 从没回填过, 会让每行的 硕/博 都灰显(看着像每个学校都有点)。
+          localMasterPoint: !!ep.localMasterPoint,
+          localDoctoralPoint: !!ep.localDoctoralPoint,
           planCount: ep.planCount,
           tuition: ep.tuition,
           duration: ep.duration,
@@ -2082,7 +2085,8 @@ export class PlanCandidateService {
           studentCareerPlan: (student as any).careerPlan ?? null,
           universityProvince: first.university?.province,
           anchorTuition: first.tuition,
-          anchorHasMasterPoint: first.major?.localMasterPoint ?? false,
+          // 同上: 读 enrollment_plan 自身的硕士点(majors.localMasterPoint 全表 false 没回填)
+          anchorHasMasterPoint: !!first.localMasterPoint,
           anchorEmploymentRate:
             typeof first.major?.employmentRate === 'number'
               ? first.major.employmentRate
