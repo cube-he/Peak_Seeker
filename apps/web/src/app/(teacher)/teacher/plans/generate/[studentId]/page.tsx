@@ -1123,6 +1123,8 @@ export default function GeneratePlanPage() {
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
   // 非意向地区(整所院校省市都不在学生意向地区): 默认折叠隐藏, 开关展开
   const [includeRegionMismatch, setIncludeRegionMismatch] = useState(false);
+  // 是否带出"硬规则不符"(选科/再选/性别/健康/户籍/民族)放各组 hardFailMajors 桶: 灰显+禁加入。默认关。
+  const [includeHardFails, setIncludeHardFails] = useState(false);
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
   // 排序方向 (GROUP 视图): DESC=轴默认, ASC=翻转; 切轴时重置回 DESC
   const [candidateSortDir, setCandidateSortDir] = useState<CandidateSortDir>('DESC');
@@ -1252,7 +1254,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, hasSearch ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null)],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, hasSearch ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null)],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1266,6 +1268,8 @@ export default function GeneratePlanPage() {
       includeSoftFails,
       // 展开/折叠非意向地区: 两视图通用; 搜索时强制展开(effectiveIncludeRegion), 否则搜非意向地区院校无果
       includeRegionMismatch: effectiveIncludeRegion,
+      // 硬规则不符(资格不符)带出来放 hardFailMajors 桶(灰显+禁加入); 默认 undefined=后端走原逻辑
+      includeHardFails: includeHardFails || undefined,
       sort: effectiveSort as CandidateGroupSort,
       // 方向仅 GROUP 视图生效; 院校视图沿用其自身排序, 不传 sortDir
       sortDir: viewMode === 'UNIVERSITY' ? undefined : candidateSortDir,
@@ -2422,6 +2426,17 @@ export default function GeneratePlanPage() {
                   />
                   显示学费/办学性质不符
                 </label>
+                <label
+                  className="pgv2-toggle"
+                  title="勾选: 把选科/再选/性别/健康/户籍/民族不符的专业也显示出来(灰显, 标'资格不符·不可填', 不可加入)。这些是客观资格不符, 真填会退档, 与软规则(可权衡)不同。不勾: 直接从候选剔除。"
+                >
+                  <input
+                    type="checkbox"
+                    checked={includeHardFails}
+                    onChange={(event) => setIncludeHardFails(event.target.checked)}
+                  />
+                  显示资格不符
+                </label>
                 {regionMismatchCount > 0 ? (
                   <label
                     className="pgv2-toggle"
@@ -2901,6 +2916,19 @@ export default function GeneratePlanPage() {
                                   <CandidateMajorSection title="推荐填写" section="RECOMMENDED" majors={majorSections.recommended} group={group} onAdd={addCandidateGroup} />
                                   <CandidateMajorSection title="可备选" section="BACKUP" majors={majorSections.backup} group={group} onAdd={addCandidateGroup} />
                                   <CandidateMajorSection title="风险/不建议" section="RISK" majors={majorSections.risk} group={group} onAdd={addCandidateGroup} />
+                                  {/* 硬规则不符(客观资格): 灰显 + 删除线 + 禁用"加入" —— 真填会退档, 不可选 */}
+                                  {Array.isArray((group as any).hardFailMajors) && (group as any).hardFailMajors.length > 0 ? (
+                                    <div style={{ marginTop: 8 }}>
+                                      <div style={{ fontSize: 12, color: '#8c8c8c', margin: '6px 0 4px', fontWeight: 500 }}>资格不符 · 不可填（客观条件不符，填报会被退档）</div>
+                                      {(group as any).hardFailMajors.map((m: any) => (
+                                        <div key={m.enrollmentPlanId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(0,0,0,0.035)', borderRadius: 6, marginBottom: 4, opacity: 0.78 }}>
+                                          <span style={{ flex: 1, textDecoration: 'line-through', color: '#8c8c8c', fontSize: 13 }}>{m.majorName}</span>
+                                          <span style={{ fontSize: 12, color: '#cf1322' }}>{(m.hardFailReasons ?? []).join('；') || '资格不符'}</span>
+                                          <button type="button" disabled style={{ opacity: 0.5, cursor: 'not-allowed', fontSize: 12, padding: '2px 8px', border: '1px solid var(--border, #ddd)', borderRadius: 4, background: 'transparent', color: '#999' }}>不可填</button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
                                 </>
                               );
                             }
