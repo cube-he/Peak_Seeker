@@ -1377,6 +1377,9 @@ function BasicFields() {
           <Input placeholder="家长手机号" />
         </Form.Item>
       </div>
+      <div className="field full">
+        <div className="live-hint">手机号、家长手机号 至少填一个即可（保证能联系上）</div>
+      </div>
       <div className="field">
         <label>性别<span className="req">*</span></label>
         <Form.Item name="gender" noStyle>

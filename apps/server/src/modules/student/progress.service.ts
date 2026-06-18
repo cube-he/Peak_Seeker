@@ -98,11 +98,17 @@ export class ProgressService {
     const missingFieldsForRecommend: string[] = TEACHER_ONLY_FIELDS.filter(
       (f) => !this.isFilled(profile[f]),
     );
+    // 手机号 / 家长手机号 二选一: 只要其一填了就算"联系方式已满足"(业务: 保证能联系上).
+    const contactFilled =
+      this.isFilled(profile['phone']) || this.isFilled(profile['parentPhone']);
     for (const f of [...CORE_FOR_RECOMMEND, ...CORE_FOR_ELIGIBILITY, ...PHYSICAL_REQUIRED]) {
       // preferredMajors 是梯队结构: 只有意向池(tier=0)不算"已填", 池子专业不参与推荐
-      const filled = f === 'preferredMajors'
-        ? flattenPreferredMajors(profile[f]).length > 0
-        : this.isFilled(profile[f]);
+      const filled =
+        f === 'phone' || f === 'parentPhone'
+          ? contactFilled
+          : f === 'preferredMajors'
+            ? flattenPreferredMajors(profile[f]).length > 0
+            : this.isFilled(profile[f]);
       if (!filled) missingFieldsForRecommend.push(f);
     }
     const isRecommendable = missingFieldsForRecommend.length === 0;

@@ -127,6 +127,36 @@ describe('ProgressService', () => {
       expect(r.isRecommendable).toBe(true);
     });
 
+    it('手机号/家长手机号 二选一: 填其一即可推荐, 都空则两者都列入 missing', () => {
+      const base = {
+        realName: '小王', gender: 'MALE', examType: 'PHYSICS', examYear: 2026, formFiller: 'STUDENT',
+        firstChoice: '物理', reChoices: ['化学', '生物'],
+        totalScore: 600, scoreChinese: 120, scoreMath: 130, scoreEnglish: 140,
+        scoreFirstChoice: 90, scoreSub1: 80, scoreSub2: 70,
+        provincialRank: 1000, bonusPolicyStatus: 'NONE', bonusItems: [{ type: 'minority', value: 5 }],
+        province: '四川', city: '成都', county: '武侯区', isRural: false,
+        examLocationProvince: '四川', examLocationCity: '成都', examLocationCounty: '武侯区',
+        birthDate: new Date('2008-01-01'), ethnicity: '汉族',
+        height: 175, weight: 65, visionLeft: 4.8, visionRight: 4.8, colorBlind: false, colorWeak: false,
+        preferredMajors: [{ tier: 1, majors: ['计算机科学与技术'] }], priorityMode: 'MAJOR_FIRST',
+        politicalStatus: 'LEAGUE_MEMBER',
+      };
+      // 只填家长手机号(学生手机号空) → 联系方式已满足
+      const onlyParent = service.compute({ ...base, parentPhone: '13900000000' } as any);
+      expect(onlyParent.missingFieldsForRecommend).not.toContain('phone');
+      expect(onlyParent.missingFieldsForRecommend).not.toContain('parentPhone');
+      expect(onlyParent.isRecommendable).toBe(true);
+      // 只填学生手机号(家长空) → 同样满足
+      const onlyStudent = service.compute({ ...base, phone: '13800000000' } as any);
+      expect(onlyStudent.isRecommendable).toBe(true);
+      // 两者都空 → 都列入 missing, 不可推荐
+      const neither = service.compute({ ...base } as any);
+      expect(neither.missingFieldsForRecommend).toEqual(
+        expect.arrayContaining(['phone', 'parentPhone']),
+      );
+      expect(neither.isRecommendable).toBe(false);
+    });
+
     it('缺政治面貌/报名地/语数外成绩 → missing 列出 (2026-06-11 追加)', () => {
       const r = service.compute({} as any);
       for (const f of ['politicalStatus', 'examLocationProvince', 'examLocationCounty', 'scoreChinese', 'scoreMath', 'scoreEnglish', 'scoreFirstChoice', 'scoreSub1', 'scoreSub2']) {
