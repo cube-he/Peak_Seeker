@@ -822,10 +822,13 @@ function CandidateMajorSection({
                 </div>
               </div>
 
-              <div className={compareStyles.degreePoints}>
-                <span className={major.localMasterPoint ? compareStyles.has : ''}>硕</span>
-                <span className={(major as any).localDoctoralPoint ? compareStyles.has : ''}>博</span>
-              </div>
+              {/* 硕/博点: 有才显示, 没有就不渲染(不再灰显占位) */}
+              {major.localMasterPoint || (major as any).localDoctoralPoint ? (
+                <div className={compareStyles.degreePoints}>
+                  {major.localMasterPoint ? <span className={compareStyles.has}>硕</span> : null}
+                  {(major as any).localDoctoralPoint ? <span className={compareStyles.has}>博</span> : null}
+                </div>
+              ) : null}
 
               {trendArrow}
 
