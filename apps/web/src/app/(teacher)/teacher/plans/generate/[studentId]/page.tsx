@@ -1201,6 +1201,11 @@ export default function GeneratePlanPage() {
   // 院校优先不按意向梯队过滤(梯队是专业维度, 且院校优先隐藏了梯队 chips → 否则成"看不见、改不了"
   // 的隐形筛选, 在专业优先选的梯队会污染院校优先)。0 = 全部。要按专业筛院校优先可用"搜索专业"。
   const effectiveTier = viewMode === 'UNIVERSITY' ? 0 : appliedTier;
+  // 搜索穿透: 老师搜了具体院校/专业时, 无视"非意向地区 / 分数窗口 / 档位"等隐藏, 让匹配项一定
+  // 显示出来(没过规则的以真实档位灰显)。否则搜"清华"这类非意向地区/够不着的院校会被默认隐藏掉,
+  // 等于工具替老师藏了数据。规则: 有任一搜索词 → 强制展开非意向地区 + 不发分数窗口 + 不带档位过滤。
+  const hasSearch = !!(keyword || keywordUniversity || keywordMajor || keywordGroupName);
+  const effectiveIncludeRegion = hasSearch ? true : includeRegionMismatch;
 
   const { data: studentData, isLoading: studentLoading } = useQuery({
     queryKey: ['student-detail', studentId],
@@ -1241,7 +1246,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, includeRegionMismatch, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, hasSearch ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null)],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1249,11 +1254,12 @@ export default function GeneratePlanPage() {
       keywordUniversity,
       keywordMajor,
       keywordGroup: keywordGroupName,
-      // 档位过滤走服务端(全池口径+正确分页); 服务端在缓存后的分页层应用, 切档不重算
-      gradientBand: viewMode !== 'UNIVERSITY' && gradientFilter !== 'all' ? gradientFilter : undefined,
+      // 档位过滤走服务端(全池口径+正确分页); 服务端在缓存后的分页层应用, 切档不重算。
+      // 搜索时不带档位(hasSearch): 让搜到的院校无视冲/稳/保过滤都能出来。
+      gradientBand: !hasSearch && viewMode !== 'UNIVERSITY' && gradientFilter !== 'all' ? gradientFilter : undefined,
       includeSoftFails,
-      // 展开/折叠非意向地区: 两视图通用 (GROUP 折叠院校组, UNIVERSITY 折叠整所院校卡)
-      includeRegionMismatch,
+      // 展开/折叠非意向地区: 两视图通用; 搜索时强制展开(effectiveIncludeRegion), 否则搜非意向地区院校无果
+      includeRegionMismatch: effectiveIncludeRegion,
       sort: effectiveSort as CandidateGroupSort,
       // 方向仅 GROUP 视图生效; 院校视图沿用其自身排序, 不传 sortDir
       sortDir: viewMode === 'UNIVERSITY' ? undefined : candidateSortDir,
@@ -1263,8 +1269,9 @@ export default function GeneratePlanPage() {
       groupBy: viewMode === 'UNIVERSITY' ? 'UNIVERSITY' : undefined,
       nature: viewMode === 'UNIVERSITY' ? (natureFilter ?? undefined) : undefined,
       sinoForeign: sinoForeignFilter ?? undefined,
-      minScore: scoreRange ? scoreRange[0] : undefined,
-      maxScore: scoreRange ? scoreRange[1] : undefined,
+      // 搜索时不发分数窗口: 让够不着(超出预估分)的院校也能被搜到
+      minScore: hasSearch ? undefined : (scoreRange ? scoreRange[0] : undefined),
+      maxScore: hasSearch ? undefined : (scoreRange ? scoreRange[1] : undefined),
     }),
     enabled: !!planId,
   });
@@ -2371,6 +2378,25 @@ export default function GeneratePlanPage() {
                     })()}
                   </>
                 )}
+                {/* 显示全部: 一键展开所有被隐藏的候选(非意向地区/软不符/已隐藏/已填报)+ 放开分数窗口。
+                    灰显区分但都看得到 —— 工具不替老师藏数据, 老师有最终决策权。 */}
+                <button
+                  type="button"
+                  className="pgv2-toggle"
+                  style={{ fontWeight: 600, color: '#1e3a5f', border: '1px dashed #91caff', background: '#f0f7ff', borderRadius: 4, padding: '2px 10px', cursor: 'pointer' }}
+                  title="一键显示所有候选: 非意向地区 / 学费办学不符 / 已隐藏 / 已填报 都展开, 并放开分数窗口。没过软规则的灰显区分, 但都看得到, 由老师自主决策。"
+                  onClick={() => {
+                    setShowHidden(true);
+                    setIncludeSoftFails(true);
+                    setIncludeRegionMismatch(true);
+                    setExcludeAdded(false);
+                    setScoreRange(null);
+                    setScoreSlider(null);
+                    setCandidatePage(1);
+                  }}
+                >
+                  显示全部
+                </button>
                 <label className="pgv2-toggle">
                   <input
                     type="checkbox"
