@@ -1198,6 +1198,9 @@ export default function GeneratePlanPage() {
   // 当前生效的分页大小 / 排序 (随视图模式切换)
   const effectivePageSize = viewMode === 'UNIVERSITY' ? universityPageSize : candidatePageSize;
   const effectiveSort: string = viewMode === 'UNIVERSITY' ? uniSort : candidateSort;
+  // 院校优先不按意向梯队过滤(梯队是专业维度, 且院校优先隐藏了梯队 chips → 否则成"看不见、改不了"
+  // 的隐形筛选, 在专业优先选的梯队会污染院校优先)。0 = 全部。要按专业筛院校优先可用"搜索专业"。
+  const effectiveTier = viewMode === 'UNIVERSITY' ? 0 : appliedTier;
 
   const { data: studentData, isLoading: studentLoading } = useQuery({
     queryKey: ['student-detail', studentId],
@@ -1238,7 +1241,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, includeRegionMismatch, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, appliedTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, includeRegionMismatch, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1254,7 +1257,7 @@ export default function GeneratePlanPage() {
       sort: effectiveSort as CandidateGroupSort,
       // 方向仅 GROUP 视图生效; 院校视图沿用其自身排序, 不传 sortDir
       sortDir: viewMode === 'UNIVERSITY' ? undefined : candidateSortDir,
-      tier: appliedTier,
+      tier: effectiveTier,
       excludeAdded,
       purity: purityFilter,
       groupBy: viewMode === 'UNIVERSITY' ? 'UNIVERSITY' : undefined,
