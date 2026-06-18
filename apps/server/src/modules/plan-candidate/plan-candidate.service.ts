@@ -1173,7 +1173,7 @@ export class PlanCandidateService {
   // 数据演进：早期记录只有 majorMin，2024 起有 groupMin，2025 起有 filing。
   // 组最低 fallback 到 majorMin 以维持趋势连续；投档线不 fallback（保严谨）。
   private pickGroupHistory(records: any[], sourceYear: number) {
-    const history3y: Array<{ year: number; score: number; rank: number }> = [];
+    const history3y: Array<{ year: number; score: number; rank: number; count: number | null }> = [];
     const historyFiling3y: Array<{ year: number; score: number; rank: number }> = [];
 
     for (let offset = 2; offset >= 0; offset--) {
@@ -1188,8 +1188,10 @@ export class PlanCandidateService {
       const groupRank =
         bestNumber(yearRecords.map((r) => r.groupMinRank), 'max') ??
         bestNumber(yearRecords.map((r) => r.majorMinRank), 'max');
+      // 录取数: 只取组级总数(groupAdmissionCount), 不 fallback 专业级(语义不同, 会偏小); 缺则 null → 前端显 "—"
+      const groupCount = bestNumber(yearRecords.map((r) => r.groupAdmissionCount), 'max');
       if (groupScore !== null && groupRank !== null) {
-        history3y.push({ year, score: groupScore, rank: groupRank });
+        history3y.push({ year, score: groupScore, rank: groupRank, count: groupCount });
       }
 
       // 投档线不 fallback（投档分 ≠ 专业最低分，语义不同）

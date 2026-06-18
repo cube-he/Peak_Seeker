@@ -379,6 +379,45 @@
   font-weight: 600;
 }
 
+/* 近3年录取紧凑小表: 每年一列(年/位次/分/录取数) */
+.trend3y {
+  display: inline-flex;
+  gap: 4px;
+  align-items: stretch;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #faf9f5;
+  border: 1px solid #efeee8;
+}
+.trend3yCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 40px;
+  line-height: 1.2;
+}
+.trend3yCol + .trend3yCol {
+  border-left: 1px dashed #e6e4dc;
+  padding-left: 4px;
+}
+.trend3yYear {
+  font-size: 9px;
+  color: #a8a7a0;
+}
+.trend3yRank {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+.trend3yScore {
+  font-size: 10px;
+  color: #87867f;
+}
+.trend3yCount {
+  font-size: 9px;
+  color: #b0afa8;
+}
+
 .majorTrendArrow {
   font-size: 13px;
   font-weight: 700;

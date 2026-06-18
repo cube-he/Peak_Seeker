@@ -262,7 +262,7 @@ interface CandidateGroup {
     career?: 'strong' | 'weak';
     subjects?: 'match';
   };
-  history3y?: Array<{ year: number; score: number; rank: number }>;
+  history3y?: Array<{ year: number; score: number; rank: number; count?: number | null }>;
   historyFiling3y?: Array<{ year: number; score: number; rank: number }>;
   universityRank?: number | null;
   anchorMajorMinScore?: number | null;
@@ -651,6 +651,35 @@ function getRankingClass(ranking?: string | null): string {
   return compareStyles.majorRankingC;
 }
 
+/**
+ * 候选行内的"近3年录取"紧凑小表: 取专业组 history3y(组最低 位次/分 + 录取人数), 按年分列。
+ * 口径诚实: 位次为主(跨年可比), 分为次; 缺数据的年份/字段显示 "—"。计划/征集因 2023/2024
+ * 库里无干净数据(组级 NULL / 无组代码), 不并入本表, 仍以单年指标(征集 chip / 本专业计划)呈现。
+ */
+function CandidateThreeYearTrend({
+  history,
+}: {
+  history?: Array<{ year: number; score: number; rank: number; count?: number | null }>;
+}) {
+  if (!history || history.length === 0) return null;
+  const years = history.slice(-3); // 后端已按年升序倒推近3年
+  return (
+    <div
+      className={compareStyles.trend3y}
+      title="该专业组近3年录取门槛: 组最低位次(主)/最低分/录取人数。位次跨年可比, 越小越难进; 缺数据的年份显示 —。"
+    >
+      {years.map((h) => (
+        <div key={h.year} className={compareStyles.trend3yCol}>
+          <span className={compareStyles.trend3yYear}>{`'${String(h.year).slice(2)}`}</span>
+          <span className={compareStyles.trend3yRank}>{h.rank != null ? h.rank.toLocaleString() : '—'}</span>
+          <span className={compareStyles.trend3yScore}>{h.score != null ? h.score : '—'}</span>
+          <span className={compareStyles.trend3yCount}>{h.count != null ? `${h.count}人` : '—'}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CandidateMajorSection({
   title,
   section,
@@ -821,6 +850,9 @@ function CandidateMajorSection({
                   位次 {major.majorMinRank?.toLocaleString() ?? '—'}
                 </div>
               </div>
+
+              {/* 近3年录取(专业组): 位次/分/录取数 */}
+              <CandidateThreeYearTrend history={group?.history3y} />
 
               {/* 硕/博点: 有才显示, 没有就不渲染(不再灰显占位) */}
               {major.localMasterPoint || (major as any).localDoctoralPoint ? (
