@@ -83,6 +83,23 @@ const EXAM_TYPE_LABEL: Record<string, string> = {
   COMPREHENSIVE_SCIENCE: '理科',
 };
 
+// DTO 字段名 → 所在子页 key。保存校验失败(后端回传 fields)时据此定位到出错字段的子页。
+// 只需覆盖"有格式/范围约束、会 400"的字段; 其余未列字段不跳转(仅提示)。
+const FIELD_TO_SUBTAB: Record<string, string> = {
+  realName: 'basic', phone: 'basic', parentPhone: 'basic', birthDate: 'basic',
+  gender: 'basic', ethnicity: 'basic', politicalStatus: 'basic', highSchool: 'basic', classInfo: 'basic',
+  province: 'household', city: 'household', county: 'household', isRural: 'household',
+  examLocationProvince: 'household', examLocationCity: 'household', examLocationCounty: 'household',
+  examType: 'exam', firstChoice: 'exam', reChoices: 'exam', examYear: 'exam', examSource: 'exam',
+  scoreChinese: 'exam', scoreMath: 'exam', scoreEnglish: 'exam',
+  scoreFirstChoice: 'exam', scoreSub1: 'exam', scoreSub2: 'exam',
+  totalScore: 'exam', provincialRank: 'exam',
+  bonusPolicyStatus: 'bonus', bonusItems: 'bonus',
+  height: 'health', weight: 'health', visionLeft: 'health', visionRight: 'health',
+  visionLeftCorrected: 'health', visionRightCorrected: 'health', colorBlind: 'health', colorWeak: 'health',
+  physicalLimits: 'health', medicalHistory: 'health',
+};
+
 // 字段 key → 中文 label 映射(与后端 student-change-log.config.ts 保持一致)
 const CHANGE_LOG_FIELD_LABEL: Record<string, string> = {
   // CORE_FOR_RECOMMEND 字段 — 跟后端 field-policy.ts 对齐
@@ -463,14 +480,32 @@ export default function StudentDetailPage() {
       const friendlyMsg = Array.isArray(rawMsg)
         ? rawMsg.slice(0, 3).join('; ')
         : (typeof rawMsg === 'string' ? rawMsg : '');
+      // 校验失败(400): 后端回传 fields(出错字段名)。跨子页保存时出错字段可能在未挂载的
+      // 子页, 这里定位到第一个能识别子页的出错字段, 切过去并触发校验把它标红, 让老师直接看到。
+      const badFields: string[] = Array.isArray(data?.fields) ? data.fields : [];
+      if (status === 400 && badFields.length > 0) {
+        const targetField = badFields.find((f) => FIELD_TO_SUBTAB[f]) ?? badFields[0];
+        const label = CHANGE_LOG_FIELD_LABEL[targetField] ?? targetField;
+        const sec = FIELD_TO_SUBTAB[targetField];
+        void message.error({
+          content: `保存失败 ·「${label}」${friendlyMsg || '格式/取值不正确'}${sec ? '，已为你定位' : ''}`,
+          key: 'save-profile',
+        });
+        if (sec) {
+          jumpToSection(sec);
+          // 切到子页后该字段才挂载, 下一拍触发校验把出错字段标红
+          setTimeout(() => { void form.validateFields().catch(() => {}); }, 80);
+        }
+        return;
+      }
       if (status === 409) {
-        message.error('数据已被其他人修改，请刷新后重试');
+        message.error({ content: '数据已被其他人修改，请刷新后重试', key: 'save-profile' });
       } else if (status === 400 && friendlyMsg) {
-        message.error(`保存失败: ${friendlyMsg}`);
+        message.error({ content: `保存失败: ${friendlyMsg}`, key: 'save-profile' });
       } else if (friendlyMsg) {
-        message.error(friendlyMsg);
+        message.error({ content: friendlyMsg, key: 'save-profile' });
       } else {
-        message.error(`保存失败 (${status ?? 'network'})`);
+        message.error({ content: `保存失败 (${status ?? 'network'})`, key: 'save-profile' });
       }
     },
   });

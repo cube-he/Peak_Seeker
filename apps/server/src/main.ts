@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, BadRequestException } from '@nestjs/common';
+import type { ValidationError } from 'class-validator';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { SlowRequestInterceptor } from './common/interceptors/slow-request.interceptor';
@@ -19,6 +20,29 @@ async function bootstrap() {
       transform: true,
       transformOptions: {
         enableImplicitConversion: true,
+      },
+      // 校验失败时除 message(字符串数组, 保持向后兼容)外, 额外回传 fields(出错字段名)。
+      // 前端资料页据此把光标定位到出错字段所在子页并标红 —— 跨子页保存时, 出错字段可能
+      // 在未挂载的子页, 前端无法本地校验, 必须靠后端告知是哪个字段。
+      exceptionFactory: (errors: ValidationError[]) => {
+        const messages: string[] = [];
+        const fields: string[] = [];
+        const walk = (errs: ValidationError[]) => {
+          for (const e of errs) {
+            if (e.constraints) {
+              fields.push(e.property);
+              messages.push(...Object.values(e.constraints));
+            }
+            if (e.children?.length) walk(e.children);
+          }
+        };
+        walk(errors);
+        return new BadRequestException({
+          message: messages,
+          fields,
+          error: 'Bad Request',
+          statusCode: 400,
+        });
       },
     }),
   );
