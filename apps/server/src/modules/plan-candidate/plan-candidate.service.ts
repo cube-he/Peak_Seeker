@@ -21,7 +21,7 @@ import {
   poolRankBounds,
   type RankWindow,
 } from './rank-window-filter';
-import { filterEpsBySubjectRequirement } from './subject-requirement-filter';
+import { filterEpsBySubjectRequirement, studentMeetsSubjectRequirement } from './subject-requirement-filter';
 import { isRegionMismatch, normalizeRegion } from './region-match';
 import { SoftRule, SoftFailReason } from './filters/soft-rule.interface';
 import { calcDynamicGradient, calcGradient } from './gradient-calculator';
@@ -60,6 +60,9 @@ interface GetCandidatesQuery {
   includeRegionMismatch?: boolean | string; // 是否展开"非意向地区"院校组(默认 false=折叠); 仅 GROUP 视图
   minScore?: number; // 分数条下界(今年预估分)
   maxScore?: number; // 分数条上界
+  // 是否把"硬规则不符"(选科/再选/性别/健康/户籍/民族, 客观资格不符=投档资格不符)也带出来,
+  // 放进每组的 hardFailMajors 独立桶(灰显+禁加入), 默认 false=维持原逻辑(直接剔除, 输出不变)。
+  includeHardFails?: boolean | string;
 }
 
 type CandidateGroupSort =
@@ -561,6 +564,8 @@ export class PlanCandidateService {
       keywordMajor: q.keywordMajor?.trim() || '',
       keywordGroup: q.keywordGroup?.trim() || '',
       includeSoftFails: q.includeSoftFails !== false,
+      // includeHardFails 影响池构建(是否生成 hardFailMajors), 必须进缓存键, 否则开关切换命中旧池。
+      includeHardFails: q.includeHardFails === true || q.includeHardFails === 'true',
       sort: q.sort ?? 'MAJOR_MATCH',
       tier: q.tier ?? 0,
       excludeAdded: q.excludeAdded !== false,
@@ -1630,7 +1635,12 @@ export class PlanCandidateService {
     ]);
     // 再选科目硬过滤: 剔除学生选科不满足"再选科目要求"的专业(投档资格不符, 不进候选).
     // reChoices 空 → filterEps 原样返回(不过滤), 交生成前置校验催补.
-    const eps = filterEpsBySubjectRequirement(epsRaw, student.reChoices);
+    const includeHardFails = q.includeHardFails === true || q.includeHardFails === 'true';
+    // includeHardFails 时不预过滤"再选不符" — 留到循环里标 HARD_FAIL(灰显+禁加入), 而非直接剔除。
+    const cleanReChoices = (Array.isArray(student.reChoices) ? student.reChoices : [])
+      .filter((s: unknown): s is string => typeof s === 'string' && s.trim().length > 0)
+      .map((s: string) => s.trim());
+    const eps = includeHardFails ? epsRaw : filterEpsBySubjectRequirement(epsRaw, student.reChoices);
     const hardRules = this.buildHardRules(restrictions);
     const softRules = this.buildSoftRules();
     // 3 年历史：sourceYear / -1 / -2（前端 TrendChart 需要 3 点）
@@ -1832,9 +1842,30 @@ export class PlanCandidateService {
       const riskSupplementary = supplementaryForGroupRisk(supplementary);
 
       const majorsRaw = await Promise.all(rows.map(async (ep) => {
-        // 硬过滤: 学生身份属性不符合 (性别/健康/户籍/民族) 直接剔除该专业, 不进任何分区
+        // 硬过滤: 性别/健康/户籍/民族 + 再选不符 = 客观资格不符(投档资格不符, 真填会退档)。
+        // 默认直接剔除(不进任何分区); includeHardFails 时改标 HARD_FAIL 放独立桶(前端灰显+禁加入)。
         const hardFails = this.checkSoftFails(student, ep, hardRules);
-        if (hardFails.length > 0) return null;
+        const reChoiceOk = cleanReChoices.length === 0
+          || studentMeetsSubjectRequirement(ep.subjectRequirements, cleanReChoices);
+        if (hardFails.length > 0 || !reChoiceOk) {
+          if (!includeHardFails) return null;
+          return {
+            enrollmentPlanId: ep.id,
+            universityId: ep.universityId,
+            majorId: ep.majorId,
+            majorCode: ep.majorCode,
+            majorName: ep.majorName,
+            majorCategory: ep.major?.category ?? null,
+            planCount: ep.planCount,
+            tuition: ep.tuition,
+            subjectRequirements: ep.subjectRequirements,
+            matchStatus: 'HARD_FAIL',
+            hardFailReasons: [
+              ...hardFails.map((r: any) => r.note),
+              ...(reChoiceOk ? [] : [`选科不符: 需 ${ep.subjectRequirements || '指定再选科目'}`]),
+            ],
+          } as any;
+        }
 
         const currentRecord = adIndex.get(recordKeyOf({ ...ep, year: source.sourceYear }));
         const previousRecord = adIndex.get(recordKeyOf({ ...ep, year: source.sourceYear - 1 }));
@@ -1934,8 +1965,11 @@ export class PlanCandidateService {
           matchesPreferredTier: tierMajors.length > 0 && tierMajors.includes(ep.majorName),
         };
       }));
-      // 剔除硬过滤命中的专业 (hardRules: 性别/健康/户籍/民族, 不可改变 → 学生根本去不了)
-      const majors = (majorsRaw as any[]).filter((m): m is any => m !== null);
+      // 非 null = 通过硬过滤(PASS/SOFT_FAIL) 或 HARD_FAIL(includeHardFails 时保留)。
+      // HARD_FAIL 单独放 hardFailMajors 桶, 不进 majors → 完全不影响现有分区/计数/锚定/梯度。
+      const allMajors = (majorsRaw as any[]).filter((m): m is any => m !== null);
+      const hardFailMajors = allMajors.filter((m) => m.matchStatus === 'HARD_FAIL');
+      const majors = allMajors.filter((m) => m.matchStatus !== 'HARD_FAIL');
 
       const visibleMajors = q.includeSoftFails === false
         ? majors.filter((major) => major.matchStatus === 'PASS')
@@ -2098,6 +2132,8 @@ export class PlanCandidateService {
         historyFiling3y: groupHistory.historyFiling3y,
         recommendedAnchorEnrollmentPlanId: recommendedAnchor?.enrollmentPlanId ?? null,
         majors: orderedMajors,
+        // 硬规则不符(资格不符)独立桶: 仅 includeHardFails 时非空; 前端灰显+锁+禁加入。
+        hardFailMajors,
         majorSections,
         // 全 RISK 标记: 当 tier 命中但所有专业都进 RISK 时为 true. 前端据此显示位次差预警 +
         // 禁用/警告"加入"按钮 (避免老师误加位次远远不到的专业)

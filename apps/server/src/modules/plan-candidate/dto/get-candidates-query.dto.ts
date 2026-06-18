@@ -62,6 +62,9 @@ export class GetCandidatesQueryDto {
   // 是否展开"非意向地区"院校组(整所院校省市都不在学生意向地区内). 默认 false=折叠隐藏; 仅 GROUP 视图。
   // 类型声明 boolean|string 绕过 ValidationPipe 隐式转换(见上方注释), 经 @Transform 后恒为 boolean。
   @IsOptional() @Transform(onlyExplicitTrue) @IsBoolean() includeRegionMismatch?: boolean | string = false;
+  // 是否把"硬规则不符"(选科/再选/性别/健康/户籍/民族, 客观资格不符)带出来放各组 hardFailMajors 桶
+  // (前端灰显+禁加入). 默认 false=维持原逻辑(直接剔除, 输出不变)。
+  @IsOptional() @Transform(onlyExplicitTrue) @IsBoolean() includeHardFails?: boolean | string = false;
   // 分数条: 今年预估分区间过滤 (两端都给才生效). 0..750
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(750) minScore?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(750) maxScore?: number;

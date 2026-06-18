@@ -1668,9 +1668,9 @@ describe('PlanCandidateService', () => {
 
     expect(result.groups).toHaveLength(1);
     expect(result.groups[0].history3y).toEqual([
-      { year: 2023, score: 619, rank: 12200 },
-      { year: 2024, score: 622, rank: 10800 },
-      { year: 2025, score: 624, rank: 9500 },
+      { year: 2023, score: 619, rank: 12200, count: 10 },
+      { year: 2024, score: 622, rank: 10800, count: 10 },
+      { year: 2025, score: 624, rank: 9500, count: 10 },
     ]);
     expect(result.groups[0].historyFiling3y).toEqual([
       { year: 2023, score: 624, rank: 11700 },
@@ -1721,6 +1721,7 @@ describe('PlanCandidateService', () => {
           majorCode: '080901', majorName: '计算机科学', subjects: 'Physics', batch: 'Batch A',
           groupCode: 'G1', groupName: '计算机类', groupPlanCount: 10, subjectRequirements: 'Physics required',
           planCount: 10,
+          localMasterPoint: '计算机科学',          // EP 级硕士点(真值在 enrollment_plan) → anchorHasMasterPoint=true → 考研方向 strong
         },
       ])
       .mockResolvedValueOnce([]);
