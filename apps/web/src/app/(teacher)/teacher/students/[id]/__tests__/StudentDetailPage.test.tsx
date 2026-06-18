@@ -240,6 +240,31 @@ describe('StudentDetailPage', () => {
       );
     });
   });
+
+  // 整档保存: 在 A 子页编辑后切到 B 子页保存, A 的编辑也要进 payload (而非只存当前 B 子页)
+  it('保存时提交所有访问过子页的编辑, 而非只当前子页', async () => {
+    const user = userEvent.setup();
+    render(<StudentDetailPage />);
+
+    // 在「户籍信息」子页做一处编辑: 把户籍地复制到高考报名地
+    await gotoSubtab(user, /户籍信息/);
+    await user.click(screen.getByRole('button', { name: /同户籍所在地/ }));
+
+    // 切到「偏好与规划」子页 (户籍子页随之卸载), 在这里点保存
+    await gotoSubtab(user, /偏好与规划/);
+    await user.click(screen.getByRole('button', { name: /保存资料/ }));
+
+    // 户籍子页那处编辑必须一并提交 (旧逻辑只收当前挂载子页 → 会漏掉)
+    await waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          examLocationProvince: '四川',
+          examLocationCity: '成都市',
+          examLocationCounty: '锦江区',
+        }),
+      );
+    });
+  });
 });
 
 async function openSelect(

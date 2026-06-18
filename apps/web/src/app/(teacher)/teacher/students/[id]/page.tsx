@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import PrerequisiteCheckModal, { hasRankedPreferredMajors } from '@/components/plan/PrerequisiteCheckModal';
 import { Alert, Cascader, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Spin, message } from 'antd';
 import dayjs from 'dayjs';
@@ -411,6 +411,10 @@ export default function StudentDetailPage() {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [showPrereqModal, setShowPrereqModal] = useState(false);
+  // 整档保存用: 累积"访问过的子页里注册过的表单字段名"。子页是条件渲染(切走即卸载),
+  // 保存时只能从 store 取全量, 但 store 被 initialValues 灌入了非表单字段(id/rankCheck/…),
+  // 后端 forbidNonWhitelisted 见到就 400 → 用这份白名单只挑真正的表单字段。
+  const knownFieldsRef = useRef<Set<string>>(new Set());
 
   const { data: studentData, isLoading } = useQuery({
     queryKey: ['student-detail', studentId],
@@ -545,7 +549,13 @@ export default function StudentDetailPage() {
   };
 
   const handleSave = () => {
-    form.validateFields().then((values) => {
+    form.validateFields().then(() => {
+      // 整档保存: 不只存当前子页。先把当前子页字段名并入白名单(兜底), 再从 store 全量里
+      // 只挑访问过的表单字段。store 是实时的, 含所有子页的编辑; 挑白名单字段 = 干净且完整。
+      Object.keys(form.getFieldsValue()).forEach((k) => knownFieldsRef.current.add(k));
+      const store = form.getFieldsValue(true) as Record<string, unknown>;
+      const values: Record<string, any> = {};
+      for (const k of knownFieldsRef.current) values[k] = store[k];
       // 9 科 → 后端 6 槽位字段翻译。
       // 老师可能只动了一两个字段，但只要 9 科里任一有值就走翻译。
       const subj9: Subject9Form = {
@@ -644,6 +654,13 @@ export default function StudentDetailPage() {
     };
     requestAnimationFrame(tryScroll);
   };
+
+  // 每次进入某个子页(或切回资料主 tab), 把它此刻注册的表单字段名收进白名单。
+  // 离开后子页卸载但名字已记下 → 保存时能从 store 把这些字段一并提交, 不丢跨子页编辑。
+  useEffect(() => {
+    if (activeTab !== 'profile' || !student) return;
+    Object.keys(form.getFieldsValue()).forEach((k) => knownFieldsRef.current.add(k));
+  }, [subTab, activeTab, form, student]);
 
   const handleTabChange = (key: string) => {
     const next = key as DetailTab;
