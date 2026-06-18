@@ -410,6 +410,11 @@ export default function PreferredMajorTierEditor({
       <Select
         showSearch
         autoFocus
+        // 强制保持下拉打开 = 多选的关键。
+        // 选中一个专业后它被 selectedSet 从 options 过滤掉, antd 在 multiple 模式下
+        // 会因"当前高亮项消失"自动收起下拉, 收起又触发 setAdding(null) 把添加器弹回按钮,
+        // 于是永远只能选一个。受控 open 让 antd 无法自动关, 可连续多选。
+        open
         size="small"
         mode="multiple"
         // 受控空值: 选中即转入容器 Tag 列表, 不在 Select 内累积; 下拉保持打开可连续多选
@@ -425,9 +430,8 @@ export default function PreferredMajorTierEditor({
         optionFilterProp="label"
         loading={isLoading}
         onSelect={(v) => addMajor(containerId, v as string, true)}
-        // 不在 transient blur 上拆控件(选一个就重渲染→blur→弹回, 无法多选);
-        // 改为下拉真正关闭(点空白/Esc)时才收起
-        onDropdownVisibleChange={(open) => { if (!open) setAdding(null); }}
+        // 收起整个添加器: 点下拉/控件以外才真失焦 (选中项不会触发 blur, antd 内部 preventDefault)
+        onBlur={() => setAdding(null)}
       />
     );
   };
