@@ -736,8 +736,9 @@ function CandidateMajorSection({
             <div
               key={major.enrollmentPlanId}
               className={`${compareStyles.majorRowV2} ${section === 'RISK' ? compareStyles.majorRowV2Risk : ''}`}
-              // 软规则不符(学费/民办/中外等)灰显区分 —— 不替老师藏, 仍可"确认风险后加入"
-              style={major.matchStatus === 'SOFT_FAIL' ? { opacity: 0.62, filter: 'grayscale(0.5)' } : undefined}
+              // 软规则不符(学费/民办/中外等): 主观意愿、可权衡、仍可"确认风险后加入" → 用暖色(琥珀)
+              // 底提醒, 而非灰显降级(灰留给"够不着/偏低"与硬规则不符)。
+              style={major.matchStatus === 'SOFT_FAIL' ? { background: 'rgba(250, 173, 20, 0.1)' } : undefined}
               title={major.matchStatus === 'SOFT_FAIL' && major.failReasons?.length
                 ? `软性风险: ${major.failReasons.map((r) => r.note).join('；')} —— 已灰显, 老师可权衡后加入。`
                 : undefined}
