@@ -247,6 +247,32 @@ const ref_chuanyuan_jiankang = {
   filename: 'chuanyuan_jiankang_jiancha_gb30035.pdf',
   type: 'pdf' as const,
 };
+// —— 中国消防救援学院 2026 (本科提前批A段 xiaofang_jiuyuan; 公告 Newsdetail_4844) ——
+// 注意: 消防有自己的《中国消防救援学院招收青年学生政治考核表》, 区别于军队/征兵的
+// 《征集和招录人员政治考核表》(ref_zhengshen_biao), 旧版误挂军队表已在此替换。
+const ref_xiaofang_2026_zhengkao = {
+  title: '中国消防救援学院招收青年学生政治考核表 (2026)',
+  filename: 'xiaofang_2026_zhengkao_biao.pdf',
+  type: 'pdf' as const,
+};
+const ref_xiaofang_2026_zhengkao_shuoming = {
+  title: '中国消防救援学院政治考核表填写说明 (2026)',
+  filename: 'xiaofang_2026_zhengkao_shuoming.pdf',
+  type: 'pdf' as const,
+};
+const ref_xiaofang_2026_lianxi = {
+  title: '各市(州)消防救援局招生工作人员联系方式 (2026)',
+  filename: 'xiaofang_2026_lianxi.pdf',
+  type: 'pdf' as const,
+};
+const ref_sceea_2026_xiaofang = {
+  title: '四川教育考试院 2026 中国消防救援学院招生公告 (官网)',
+  filename: null,
+  externalUrl: 'https://www.sceea.cn/Html/202606/Newsdetail_4844.html',
+  type: 'announcement' as const,
+};
+// 体检数值同步在 hardRules.params 与下文 policyText, 改一处必两处同步。
+const POLICY_XIAOFANG_2026 = '2026 年中国消防救援学院在川招收青年学生 8 名(均为男生;物理类 7 人、历史类 1 人;消防救援方向 6 人、机动消防救援方向 2 人), 生源地须为四川省。【报考条件】中国国籍;政治立场坚定;较强组织纪律性和良好品行;年龄不超过 22 周岁(截至 2026-08-31)。【考核测试】对填报志愿且达到特殊类型招生录取控制分数线的考生, 按不低于招生计划 3 倍比例确定入围名单, 电话通知;政治审查、体格检查、心理测试、面试每项结论均须合格, 任意一项不合格不予录取。①政治考核: 下载《中国消防救援学院招收青年学生政治考核表》(附件1)按填写说明(附件2)填写, 亲笔签名后于 6 月 29 日 17:00 前送交本人户籍所在地市(州)消防救援局(联系人见附件3), 逾期视为放弃;标准参照《关于军队院校招收普通中学高中毕业生政治条件的规定》(2001 版)。②体格检查: 7 月 1 日上午西部战区总医院, 参照《军队院校招收学员体格检查标准》(2017 版, 陆勤人员、其他专业合格)——身高男 162cm 以上;体重不超过标准体重 30%、不低于标准体重 15%;裸眼视力低于 4.5 不合格, 任一眼裸眼低于 4.9 需查矫正视力, 矫正视力低于 4.9 或矫正度数超过 600 度不合格(视力矫正手术须 2026-02-28 前完成)。③心理测试、④面试: 7 月 1 日下午, 参照《国家综合性消防救援队伍消防员招录办法》执行, 评判合格/不合格、无复测复试。【就业】入学取得学籍后办理加入国家综合性消防救援队伍手续, 毕业采取多种方式就业。咨询: 消防救援学院招生办 010-69787118;四川省消防救援局干部招录办 028-63003136。';
 
 const RULES: Record<string, any> = {
   本科批A段: {
@@ -576,13 +602,22 @@ const RULES: Record<string, any> = {
       {
         code: 'xiaofang_jiuyuan',
         name: '消防救援',
-        description: '消防救援院校，需政审 + 体检 + 体能测试',
+        description: '中国消防救援学院, 仅招男生, 生源四川, 需政治考核 + 体格检查 + 心理测试 + 面试',
+        policyText: POLICY_XIAOFANG_2026,
         hardRules: [
+          // 招生计划均为男生
+          { scope: 'SUBSET', subset: '消防救援', rule: 'GENDER', params: { allowed: 'MALE' } },
+          // 年龄不超过 22 周岁(截至 2026-08-31), 公告未给下限故不写 min
+          { scope: 'SUBSET', subset: '消防救援', rule: 'AGE_RANGE', params: { max: 22, asOf: '2026-08-31' } },
+          // 体检(2017 军检·陆勤其他专业): 身高男 162cm 以上, 仅招男生故无女标
+          { scope: 'SUBSET', subset: '消防救援', rule: 'HEIGHT_MIN_BY_GENDER', params: { male: 162 } },
+          // 裸眼视力低于 4.5 不合格
+          { scope: 'SUBSET', subset: '消防救援', rule: 'VISION_NAKED_MIN', params: { value: 4.5 } },
           { scope: 'SUBSET', subset: '消防救援', rule: 'POLITICAL_REVIEW_REQUIRED' },
           { scope: 'SUBSET', subset: '消防救援', rule: 'PHYSICAL_EXAM_REQUIRED' },
         ],
-        softHints: ['政审 + 体检 + 体能测试合格，老师核实招生章程'],
-        references: [ref_zhengshen_biao, ref_zhaosheng_wuli],
+        softHints: ['体重不超过标准体重 30%、不低于 15%; 任一眼裸眼 < 4.9 需查矫正视力(矫正 < 4.9 或 > 600 度不合格); 心理测试 + 面试合格, 老师核实招生章程'],
+        references: [ref_xiaofang_2026_zhengkao, ref_xiaofang_2026_zhengkao_shuoming, ref_xiaofang_2026_lianxi, ref_sceea_2026_xiaofang, ref_zhaosheng_wuli],
       },
       {
         code: 'qita_a',
