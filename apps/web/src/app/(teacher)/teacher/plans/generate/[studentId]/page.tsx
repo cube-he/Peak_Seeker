@@ -66,7 +66,6 @@ import {
   NotesChip,
   HiddenCard, ComparePanel,
 } from '@/components/candidate-pool-v2';
-import compareStyles from '@/components/candidate-pool-v2/styles.module.css';
 
 type Gradient = 'CHONG' | 'WEN' | 'BAO';
 type DynamicGradientTier =
@@ -641,45 +640,6 @@ function majorSectionTone(section: MajorDisplaySection, major: CandidateMajor) {
   return major.matchStatus === 'SOFT_FAIL' ? 'warn' : gradientTone(gradientTier(major));
 }
 
-function getRankingClass(ranking?: string | null): string {
-  if (!ranking) return '';
-  const norm = String(ranking).replace(/[\s+]/g, (m) => m === '+' ? '+' : '').trim();
-  if (norm === 'A+') return compareStyles.majorRankingAplus;
-  if (norm === 'A') return compareStyles.majorRankingA;
-  if (norm === 'B+') return compareStyles.majorRankingBplus;
-  if (norm === 'B') return compareStyles.majorRankingB;
-  return compareStyles.majorRankingC;
-}
-
-/**
- * 候选行内的"近3年录取"紧凑小表: 取专业组 history3y(组最低 位次/分 + 录取人数), 按年分列。
- * 口径诚实: 位次为主(跨年可比), 分为次; 缺数据的年份/字段显示 "—"。计划/征集因 2023/2024
- * 库里无干净数据(组级 NULL / 无组代码), 不并入本表, 仍以单年指标(征集 chip / 本专业计划)呈现。
- */
-function CandidateThreeYearTrend({
-  history,
-}: {
-  history?: Array<{ year: number; score: number; rank: number; count?: number | null }>;
-}) {
-  if (!history || history.length === 0) return null;
-  const years = history.slice(-3); // 后端已按年升序倒推近3年
-  return (
-    <div
-      className={compareStyles.trend3y}
-      title="该专业组近3年录取门槛: 组最低位次(主)/最低分/录取人数。位次跨年可比, 越小越难进; 缺数据的年份显示 —。"
-    >
-      {years.map((h) => (
-        <div key={h.year} className={compareStyles.trend3yCol}>
-          <span className={compareStyles.trend3yYear}>{`'${String(h.year).slice(2)}`}</span>
-          <span className={compareStyles.trend3yRank}>{h.rank != null ? h.rank.toLocaleString() : '—'}</span>
-          <span className={compareStyles.trend3yScore}>{h.score != null ? h.score : '—'}</span>
-          <span className={compareStyles.trend3yCount}>{h.count != null ? `${h.count}人` : '—'}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function CandidateMajorSection({
   title,
   section,
@@ -696,198 +656,120 @@ function CandidateMajorSection({
   addingMajorKey?: number | null;
 }) {
   if (!majors.length) return null;
-  // 视觉排序优先级 (不改 anchor 持久语义):
-  //   1. matchesPreferredTier (意向梯队命中) 排最前
-  //   2. matchesKeyword (搜索命中) 次之
+  // 视觉排序优先级 (不改 anchor 持久语义): 意向梯队命中最前, 搜索命中次之
   const sortedMajors = [...majors].sort((a, b) => {
     const ap = a.matchesPreferredTier ? 1 : 0;
     const bp = b.matchesPreferredTier ? 1 : 0;
     if (ap !== bp) return bp - ap;
     return (b.matchesKeyword ? 1 : 0) - (a.matchesKeyword ? 1 : 0);
   });
+  const sup = (group as any)?.supplementary;
+  const supYear = sup?.sourceYear ? `'${String(sup.sourceYear).slice(2)}` : '征集';
   return (
     <div className={styles.majorSection}>
       <div className={styles.majorSectionHead}>
         <span>{title}</span>
         <em>{majors.length}</em>
       </div>
-      <div className={styles.majorSectionRows}>
+      <div className="pgv2-major-rows pgv3-major-rows">
+        <div className="pgv2-major-head pgv3-major-head">
+          <span />
+          <span>专业</span>
+          <span>当年最低<br />分 / 位次</span>
+          <span>近 3 年组录取 <i>位次 / 分 / 录取数</i></span>
+          <span>近 3 年征集 <i>人 / 轮</i></span>
+          <span>硕博</span>
+          <span>本专业<br />计划</span>
+          <span />
+        </div>
         {sortedMajors.map((major) => {
-          const starClass =
-            section === 'RECOMMENDED' ? compareStyles.majorStarRec :
-            section === 'RISK' ? compareStyles.majorStarRisk :
-            compareStyles.majorStarBak;
-
-          // 1 年涨跌（majorMinScore vs previousMajorMinScore）
           const curr = major.majorMinScore;
           const prev = major.previousMajorMinScore;
-          const trendArrow =
-            curr != null && prev != null
-              ? curr > prev
-                ? <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendUp}`}>↗</span>
-                : curr < prev
-                  ? <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendDown}`}>↘</span>
-                  : <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendFlat}`}>→</span>
-              : <span className={`${compareStyles.majorTrendArrow} ${compareStyles.majorTrendFlat}`}>—</span>;
-
+          const trend = curr != null && prev != null ? curr - prev : null;
           const isAdded = addingMajorKey === major.enrollmentPlanId;
-
+          const evalText = major.disciplineEval && String(major.disciplineEval).trim() && String(major.disciplineEval).trim() !== '/' ? String(major.disciplineEval).trim() : null;
+          const rankText = !evalText && major.majorRanking && String(major.majorRanking).trim() && String(major.majorRanking).trim() !== '/' ? String(major.majorRanking).trim() : null;
+          const hist = (group?.history3y ?? []).slice(-3);
+          const supCount = major.supplementaryCount;
           return (
             <div
               key={major.enrollmentPlanId}
-              className={`${compareStyles.majorRowV2} ${section === 'RISK' ? compareStyles.majorRowV2Risk : ''}`}
-              // 软规则不符(学费/民办/中外等): 主观意愿、可权衡、仍可"确认风险后加入" → 用暖色(琥珀)
-              // 底提醒, 而非灰显降级(灰留给"够不着/偏低"与硬规则不符)。
-              style={major.matchStatus === 'SOFT_FAIL' ? { background: 'rgba(250, 173, 20, 0.1)' } : undefined}
+              className={`pgv2-major-row pgv3-major-row ${section === 'RISK' ? 'is-risk' : ''} ${major.matchStatus === 'SOFT_FAIL' ? 'is-soft' : ''}`}
               title={major.matchStatus === 'SOFT_FAIL' && major.failReasons?.length
-                ? `软性风险: ${major.failReasons.map((r) => r.note).join('；')} —— 已灰显, 老师可权衡后加入。`
+                ? `软性风险: ${major.failReasons.map((r) => r.note).join('；')} —— 暖色提醒, 老师可权衡后加入。`
                 : undefined}
             >
-              <div className={`${compareStyles.majorStarV2} ${starClass}`}>★</div>
-
-              <div className={compareStyles.majorNameV2}>
-                <b>
-                  {major.majorName}
-                  {major.majorCode ? (
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85em', marginLeft: 6, fontWeight: 400, letterSpacing: '0.5px' }}>
-                      {major.majorCode}
-                    </span>
-                  ) : null}
-                </b>
-                {/* 评级优先级：① 学科评估等级 disciplineEval (A+/A/B+ 字母) - 学校×专业最权威
-                    ② 专业排名 majorRanking (#N 数字) - 全国该专业排名，覆盖率更高
-                    都没有就不显示 */}
-                {(() => {
-                  const evalText = major.disciplineEval && String(major.disciplineEval).trim() && String(major.disciplineEval).trim() !== '/' ? String(major.disciplineEval).trim() : null;
-                  if (evalText) {
-                    return (
-                      <span
-                        className={`${compareStyles.majorRankingChip} ${getRankingClass(evalText)}`}
-                        title="学科评估等级（学校×专业）"
-                      >
-                        {evalText}
-                      </span>
-                    );
-                  }
-                  const rankText = major.majorRanking && String(major.majorRanking).trim() && String(major.majorRanking).trim() !== '/' ? String(major.majorRanking).trim() : null;
-                  if (rankText) {
-                    const n = parseInt(rankText, 10);
-                    const numClass =
-                      !Number.isFinite(n) ? compareStyles.majorRankNumOther :
-                      n <= 3 ? compareStyles.majorRankNumTop3 :
-                      n <= 10 ? compareStyles.majorRankNumTop10 :
-                      n <= 30 ? compareStyles.majorRankNumTop30 :
-                      n <= 100 ? compareStyles.majorRankNumTop100 :
-                      compareStyles.majorRankNumOther;
-                    return (
-                      <span
-                        className={`${compareStyles.majorRankNum} ${numClass}`}
-                        title={`专业全国排名 第 ${rankText} 名`}
-                      >
-                        #{rankText}
-                      </span>
-                    );
-                  }
-                  return null;
-                })()}
-                {major.isNationalFeature ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagNational}`}>国家特色</span> : null}
-                {major.isSinoForeign ? <span className={`${compareStyles.majorTag} ${compareStyles.majorTagSino}`}>中外</span> : null}
-                {major.matchesKeyword ? (
-                  <span
-                    style={{
-                      marginLeft: 6,
-                      padding: '1px 6px',
-                      borderRadius: 4,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      background: '#fffbe6',
-                      color: '#d48806',
-                      border: '1px solid #ffe58f',
-                    }}
-                    title="临时高亮:命中当前搜索关键词。不影响该专业组的锚定专业(以学生意向为准)。"
-                  >
-                    🔍 搜索匹配
-                  </span>
+              {/* 1 星标 */}
+              <span className={`pgv2-star ${section === 'RECOMMENDED' ? 'rec' : section === 'RISK' ? 'risk' : 'bak'}`}>★</span>
+              {/* 2 专业名 + 评级/标签 */}
+              <span className="nm">
+                <b>{major.majorName}{major.majorCode ? <i className="mcode">{major.majorCode}</i> : null}</b>
+                {evalText ? (
+                  <span className={`pgv2-eval-chip rank-${evalText.toLowerCase().replace('+', 'plus').replace('-', '')}`} title="学科评估等级(学校×专业)">{evalText}</span>
                 ) : null}
-                {major.matchesPreferredTier ? (
-                  <span
-                    style={{
-                      marginLeft: 6,
-                      padding: '1px 6px',
-                      borderRadius: 4,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      background: '#f6ffed',
-                      color: '#389e0d',
-                      border: '1px solid #b7eb8f',
-                    }}
-                    title="该专业属于当前选中的意向梯队。"
-                  >
-                    🎯 梯队意向
-                  </span>
-                ) : null}
+                {rankText ? <span className="pgv2-rank-chip" title={`专业全国排名 第 ${rankText} 名`}>#{rankText}</span> : null}
+                {major.isNationalFeature ? <span className="pgv2-mt-tag national">国家特色</span> : null}
+                {major.isSinoForeign ? <span className="pgv2-mt-tag sino">中外</span> : null}
+                {major.matchesKeyword ? <span className="pgv2-mt-tag" style={{ background: '#fffbe6', color: '#d48806', borderColor: '#ffe58f' }}>🔍 搜索</span> : null}
+                {major.matchesPreferredTier ? <span className="pgv2-mt-tag" style={{ background: '#f6ffed', color: '#389e0d', borderColor: '#b7eb8f' }}>🎯 梯队意向</span> : null}
                 {major.planNotes ? <NotesChip notes={major.planNotes} /> : null}
-                {major.supplementaryCount != null && major.supplementaryCount > 0 ? (
-                  <span
-                    style={{
-                      marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                      background: '#f6ffed', color: '#389e0d', border: '1px solid #b7eb8f',
-                    }}
-                    title="该专业去年(本科类)累计征集人数: 没招满需补录, 调剂/征集可达性参考"
-                  >
-                    征集 {major.supplementaryCount} 人
+                {major.isRecommendedAnchor ? <span className="pgv2-mt-tag anchor">推荐锚定</span> : null}
+              </span>
+              {/* 3 当年最低分 / 位次 */}
+              <span className="sc">
+                <b>{curr ?? '—'}</b>
+                {trend != null && trend !== 0 ? <span className={trend > 0 ? 'up' : 'down'}>{trend > 0 ? '↗ +' : '↘ '}{trend}</span> : null}
+                <em style={{ display: 'block' }}>位次 {major.majorMinRank?.toLocaleString() ?? '—'}</em>
+              </span>
+              {/* 4 近3年组录取 */}
+              <span className="hist3" title="该专业组近 3 年录取门槛: 组最低位次 / 最低分 / 录取人数。专业级仅当年, 跨年看组级。">
+                {hist.length ? hist.map((h) => (
+                  <span className="h3col" key={h.year}>
+                    <i className="hy">{`'${String(h.year).slice(2)}`}</i>
+                    <i className="hr">{h.rank != null ? h.rank.toLocaleString() : '—'}</i>
+                    <i className="hsc">{h.score != null ? h.score : '—'}</i>
+                    <i className="hc">{h.count != null ? `${h.count}人` : '—'}</i>
                   </span>
-                ) : null}
-              </div>
-
-              <div className={compareStyles.majorScoreCell}>
-                <div className={compareStyles.scoreMain}>
-                  <span className={compareStyles.scoreMainValue}>{curr ?? '—'}</span>
-                  {curr != null && prev != null && curr !== prev ? (
-                    <span style={{
-                      fontSize: 11, fontWeight: 600,
-                      color: curr > prev ? '#c53030' : '#276749',
-                    }}>
-                      {curr > prev ? '+' : ''}{curr - prev}
-                    </span>
-                  ) : null}
-                </div>
-                <div className={compareStyles.scoreSub}>
-                  位次 {major.majorMinRank?.toLocaleString() ?? '—'}
-                </div>
-              </div>
-
-              {/* 近3年录取(专业组): 位次/分/录取数 */}
-              <CandidateThreeYearTrend history={group?.history3y} />
-
-              {/* 硕/博点: 有才显示, 没有就不渲染(不再灰显占位) */}
-              {major.localMasterPoint || (major as any).localDoctoralPoint ? (
-                <div className={compareStyles.degreePoints}>
-                  {major.localMasterPoint ? <span className={compareStyles.has}>硕</span> : null}
-                  {(major as any).localDoctoralPoint ? <span className={compareStyles.has}>博</span> : null}
-                </div>
-              ) : null}
-
-              {trendArrow}
-
-              <div className={compareStyles.majorPlanText}>
-                本专业 <b>{major.planCount ?? '—'}</b> 人
-              </div>
-
-              {group && onAdd ? (
-                <button
-                  type="button"
-                  className={`${compareStyles.majorRowAction} ${isAdded ? compareStyles.majorRowActionDone : ''}`}
-                  onClick={() => onAdd(group, major)}
-                  disabled={isAdded}
-                >
-                  {isAdded ? '✓ 已加入' : <><PlusOutlined /> 加入</>}
-                </button>
-              ) : (
-                <span className={tagClass(majorSectionTone(section, major))}>
-                  {section === 'RISK' ? MAJOR_SECTION_LABEL.RISK : section === 'BACKUP' ? MAJOR_SECTION_LABEL.BACKUP : GRADIENT_LABEL[gradientTier(major)]}
-                </span>
-              )}
+                )) : <span className="h3none">无史线<br />需人工判断</span>}
+              </span>
+              {/* 5 近3年征集(数据驱动: 后端只有当年组级, 2023/2024旧高考无组代码) */}
+              <span className="sup3" title="本专业征集: 没招满需补录, 常伴随降分, 是可达性的积极信号。2023/2024 旧高考无专业组征集数据, 仅当年。">
+                {supCount != null && supCount > 0 ? (
+                  <span className="s3col">
+                    <i className="sy">{supYear}</i>
+                    <i className="sc2">{supCount}人</i>
+                    <i className="sr">{sup?.totalRounds ? `${sup.totalRounds}轮` : '—'}</i>
+                  </span>
+                ) : <span className="none">无征集</span>}
+              </span>
+              {/* 6 硕/博点 */}
+              <span className="dg">
+                {major.localMasterPoint || (major as any).localDoctoralPoint ? (
+                  <>
+                    {major.localMasterPoint ? <i className="has">硕</i> : null}
+                    {(major as any).localDoctoralPoint ? <i className="has">博</i> : null}
+                  </>
+                ) : <i className="none">—</i>}
+              </span>
+              {/* 7 本专业计划 */}
+              <span className="pl"><b>{major.planCount ?? '—'}</b> 人</span>
+              {/* 8 操作 */}
+              <span className="op">
+                {group && onAdd ? (
+                  <button
+                    type="button"
+                    className={`pgv2-add-btn major ${isAdded ? 'added' : ''}`}
+                    onClick={() => onAdd(group, major)}
+                    disabled={isAdded}
+                  >
+                    {isAdded ? '✓ 已加入' : <><PlusOutlined /> 加入</>}
+                  </button>
+                ) : (
+                  <span className={tagClass(majorSectionTone(section, major))}>
+                    {section === 'RISK' ? MAJOR_SECTION_LABEL.RISK : section === 'BACKUP' ? MAJOR_SECTION_LABEL.BACKUP : GRADIENT_LABEL[gradientTier(major)]}
+                  </span>
+                )}
+              </span>
             </div>
           );
         })}
@@ -1384,7 +1266,6 @@ export default function GeneratePlanPage() {
   // 政策加分双轨: 后端已用 裸分+加分 换算有效位次参与梯度, 这里拿到加分值与裸分位次做口径标注
   const studentBonusPoints = Number((candidateGroups as any)?.studentBonusPoints) || 0;
   const studentRawRank = Number((candidateGroups as any)?.studentRawRank) || null;
-  const studentScoreForDecision = Number.isFinite(rawStudentScore) ? rawStudentScore : undefined;
   // 卡片分差口径: 有效分 = 裸分 + 已确认政策加分 (省内批次投档口径, 与梯度引擎一致)
   const studentEffectiveScore = Number.isFinite(rawStudentScore) && rawStudentScore > 0
     ? rawStudentScore + studentBonusPoints
@@ -3252,16 +3133,22 @@ export default function GeneratePlanPage() {
       >
         {activeDetail ? (
           <div>
-            <section className={styles.decisionSummary}>
-              <div className={styles.decisionGrid}>
-                <div className={styles.decisionCell}><div className={styles.label}>Anchor</div><div className={styles.value}>{activeDetail.major.majorName}</div></div>
-                <div className={styles.decisionCell}><div className={styles.label}>Student Rank</div><div className={styles.value}><span className={styles.rank}>{formatRankValue(studentRankForDecision)}</span><span className={styles.score}>{formatScoreValue(studentScoreForDecision)}</span></div></div>
-                <div className={styles.decisionCell}><div className={styles.label}>Group Min</div><div className={styles.value}><span className={styles.rank}>{formatRankValue(activeDetail.group.groupMinRank)}</span><span className={styles.score}>{formatScoreValue(activeDetail.group.groupMinScore)}</span></div></div>
-                <div className={styles.decisionCell}><div className={styles.label}>Major Min</div><div className={styles.value}><span className={styles.rank}>{formatRankValue(activeDetail.major.majorMinRank)}</span><span className={styles.score}>{formatScoreValue(activeDetail.major.majorMinScore)}</span></div></div>
-                <div className={styles.decisionCell}><div className={styles.label}>Adjusted Rank</div><div className={styles.value}><span className={styles.rank}>{formatRankValue(getAdjustedRank(activeDetail.group, activeDetail.major))}</span><span className={styles.score}>dynamicGradient.adjustedMinRank</span></div></div>
-                <div className={styles.decisionCell}><div className={styles.label}>Judgement</div><div className={styles.value}>{getDecisionText(activeDetail.group, activeDetail.major, studentRankForDecision)}</div></div>
-              </div>
-            </section>
+            {/* —— pgv3-decision 决策条 —— */}
+            {(() => {
+              const adj = getAdjustedRank(activeDetail.group, activeDetail.major);
+              const gap = formatRankGap(studentRankForDecision, adj);
+              return (
+                <div className="pgv3-decision">
+                  <div className="dc"><span className="dl">锚定专业</span><span className="dv">{activeDetail.major.majorName}</span></div>
+                  <div className="dc"><span className="dl">组最低 位次 / 分</span><span className="dv">{activeDetail.group.groupMinRank != null ? activeDetail.group.groupMinRank.toLocaleString() : '—'} <i>/ {activeDetail.group.groupMinScore ?? '—'}</i></span></div>
+                  <div className="dc"><span className="dl">修正后位次</span><span className="dv">{adj != null ? adj.toLocaleString() : '—'}</span></div>
+                  <div className="dc"><span className="dl">距学生位次</span><span className="dv" style={{ color: gap.tone === 'ahead' ? 'var(--safe)' : gap.tone === 'behind' ? 'var(--rush)' : undefined }}>{gap.text || '—'}</span></div>
+                </div>
+              );
+            })()}
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '4px 0 14px' }}>
+              {getDecisionText(activeDetail.group, activeDetail.major, studentRankForDecision)}
+            </div>
 
             <section className={styles.drawerSection}>
               <h3>专业列表</h3>
