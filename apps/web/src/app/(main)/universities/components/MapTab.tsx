@@ -76,23 +76,9 @@ const DOT_SIZE_BY_LEVEL: Record<PathNode['level'], number> = {
   district: 18,
 };
 
-// 区域填充色:12 色 pastel 调色板(Tailwind -200 系列),按 adcode % 12 取色。
-// 用 adcode 取色而非 index 保证同省/同市每次刷新颜色固定,用户能形成位置记忆。
-// 配合 fillOpacity 0.25 视觉很淡,不会盖住 dot 和数字 label。
-const REGION_COLORS = [
-  '#fde68a', // amber
-  '#fed7aa', // orange
-  '#fecaca', // red
-  '#fbcfe8', // pink
-  '#ddd6fe', // violet
-  '#c7d2fe', // indigo
-  '#bfdbfe', // blue
-  '#a5f3fc', // cyan
-  '#a7f3d0', // emerald
-  '#bbf7d0', // green
-  '#d9f99d', // lime
-  '#fef3c7', // yellow
-];
+// 区域填充色:3 档暖纸中性(底图已退成纸,省块不再彩色,只靠极淡明度差分隔相邻区)。
+// 仍按 adcode % 3 取色而非 index,保证同省/同市每次刷新颜色固定,用户能形成位置记忆。
+const REGION_COLORS = ['#efece2', '#eae6da', '#f2efe6']; // 暖纸三档
 function getRegionFill(adcode: number): string {
   return REGION_COLORS[Math.abs(adcode) % REGION_COLORS.length];
 }
@@ -166,12 +152,14 @@ function buildDrillUpdater(adcode: number, name: string, level: PathNode['level'
 // 985 不会因为也"是公办"被淹没,民办本科 / 民办专科 这种风险/学费敏感档次
 // 也能一眼跟同档次公办区分。
 type MarkerStyle = { fill: string; stroke: string; strokeWidth: number };
+// 品牌和谐色:同明度/同彩度、只变色相,无霓虹,跟奶油底图协调。
+// 配白描边 + 柔影在浅底上更清楚。民办红描边保留(警示语义,该跳)。
 const TIER_COLORS = {
-  is985: '#d4af37',          // 金
-  is211: '#9333ea',          // 紫
-  doubleFirstClass: '#0ea5e9',// 蓝
-  bachelor: '#16a34a',       // 绿
-  diploma: '#f97316',        // 橙
+  is985:            '#B8860B', // 金(品牌 985 当家色)
+  is211:            '#4F5BA8', // 靛蓝(替掉霓虹紫)
+  doubleFirstClass: '#2C6FB0', // 蓝
+  bachelor:         '#2E7D5B', // 绿
+  diploma:          '#C2682E', // 赭橙
 } as const;
 const NATURE_STROKE = {
   publicLike: { stroke: '#ffffff', width: 2 },     // 公办 / 合作办学 等
@@ -202,7 +190,8 @@ function dotIconUrl(style: MarkerStyle, size: number = 18): string {
   // 半径 = (size - stroke)/2 - 留 anti-alias 边(随 size 缩小也缩小)
   const aaPad = Math.max(0.3, size / 36);
   const r = Math.max((size - scaledStroke) / 2 - aaPad, 1);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${half}" cy="${half}" r="${r}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="${scaledStroke}"/></svg>`;
+  // 柔影让点从纸面"浮"起来(drop-shadow 同步随 size 渲染)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${half}" cy="${half}" r="${r}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="${scaledStroke}" style="filter:drop-shadow(0 1px 1.5px rgba(26,26,25,.25))"/></svg>`;
   // utf8 编码(btoa 对中文不安全;这里 svg 是纯 ASCII 但保险起见用 utf8)
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
@@ -369,6 +358,9 @@ export function MapTab() {
         mapRef.current = new AMap.Map(containerRef.current, {
           zoom: 4,
           center: [104, 36],
+          // 底图退成"纸":whitesmoke 近白底图,让彩色点位成为唯一信息层
+          // (默认彩色底图的亮蓝海 + 高饱和省块跟品牌奶油+藏青+金打架)。
+          mapStyle: 'amap://styles/whitesmoke',
           features: ['bg', 'road'],
         });
         explorerRef.current = new DistrictExplorer({
@@ -660,15 +652,15 @@ export function MapTab() {
             fillOpacity: 0.12,
           };
         }
-        // 有数据区:pastel 色,淡淡铺底让相邻区域可辨。
+        // 有数据区:暖中性铺底,描边收敛(底图已是纸,中性色可稍实但不抢眼)。
         return {
           cursor: 'pointer',
           bubble: true,
-          strokeColor: '#94a3b8',
-          strokeWeight: 1.2,
-          strokeOpacity: 0.6,
+          strokeColor: '#d1cfc5',
+          strokeWeight: 1,
+          strokeOpacity: 0.7,
           fillColor: baseFill,
-          fillOpacity: 0.25,
+          fillOpacity: 0.55,
         };
       });
 
@@ -690,21 +682,29 @@ export function MapTab() {
         const fAdcode: number = feature.properties.adcode;
 
         const labelDiv = document.createElement('div');
+        // 奶油玻璃卡:地名做次要灰,金色衬线 tabular 数字当主角。
         labelDiv.style.cssText = [
           'transform: translate(-50%, -50%)',
-          'padding: 4px 10px',
-          'background: rgba(15,23,42,0.88)',
-          'border: 1px solid rgba(255,255,255,0.12)',
-          'border-radius: 4px',
-          'color: #ffffff',
+          'display: flex', 'align-items: center', 'gap: 5px',
+          'padding: 3px 9px',
+          'background: rgba(250,249,245,0.94)',
+          'backdrop-filter: blur(10px)',
+          '-webkit-backdrop-filter: blur(10px)',
+          'border: 1px solid #e8e6dc',
+          'border-radius: 8px',
+          'box-shadow: 0 2px 8px rgba(107,69,32,0.12)',
+          'font-family: Inter, sans-serif',
           'font-size: 12px',
-          'font-family: inherit',
+          'color: #4d4c48',
           'white-space: nowrap',
           'cursor: pointer',
           'user-select: none',
           'pointer-events: auto',
         ].join(';');
-        labelDiv.textContent = `${shortName} ${count}`;
+        labelDiv.innerHTML =
+          `<span>${shortName}</span>`
+          + `<b style="font-family:'Crimson Pro',Georgia,serif;font-weight:600;`
+          + `font-size:14px;color:#b8860b;font-variant-numeric:tabular-nums">${count}</b>`;
         labelDiv.addEventListener('click', (ev) => {
           ev.stopPropagation();
           setCurrentPath(buildDrillUpdater(fAdcode, shortName, fLevel));
@@ -857,23 +857,23 @@ export function MapTab() {
           <div className="map-legend">
             <h5>档次(主色)</h5>
             <div className="lg-row">
-              <span className="swatch" style={{ background: '#d4af37' }} />
+              <span className="swatch" style={{ background: '#B8860B' }} />
               985 工程
             </div>
             <div className="lg-row">
-              <span className="swatch" style={{ background: '#9333ea' }} />
+              <span className="swatch" style={{ background: '#4F5BA8' }} />
               211 工程
             </div>
             <div className="lg-row">
-              <span className="swatch" style={{ background: '#0ea5e9' }} />
+              <span className="swatch" style={{ background: '#2C6FB0' }} />
               双一流
             </div>
             <div className="lg-row">
-              <span className="swatch" style={{ background: '#16a34a' }} />
+              <span className="swatch" style={{ background: '#2E7D5B' }} />
               本科
             </div>
             <div className="lg-row">
-              <span className="swatch" style={{ background: '#f97316' }} />
+              <span className="swatch" style={{ background: '#C2682E' }} />
               专科
             </div>
             <div className="divider" />

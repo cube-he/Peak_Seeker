@@ -875,8 +875,8 @@ button { font-family: inherit; cursor: pointer; }
 .map-legend h5 { margin: 0 0 8px; font-family: var(--font-heading); font-size: 11.5px; font-weight: 600; color: var(--text-secondary); letter-spacing: .04em; }
 .map-legend .lg-row { display: flex; align-items: center; gap: 7px; padding: 2px 0; color: var(--text-tertiary); }
 .map-legend .swatch { width: 10px; height: 10px; border-radius: 999px; flex: 0 0 auto; }
-.map-legend .swatch.ring-white { background: #d4af37; border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--border); }
-.map-legend .swatch.ring-red   { background: #16a34a; border: 1.5px solid #b91c1c; }
+.map-legend .swatch.ring-white { background: #B8860B; border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--border); }
+.map-legend .swatch.ring-red   { background: #2E7D5B; border: 1.5px solid #b91c1c; }
 .map-legend .divider { height: 1px; background: var(--border); margin: 7px 0; }
 
 /* ==========================================================================
