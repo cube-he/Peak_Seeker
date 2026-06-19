@@ -2270,47 +2270,38 @@ export default function GeneratePlanPage() {
                 </div>
               </div>
 
-              {/* —— 视图模式切换: 专业优先 / 院校优先 —— */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <div
-                  style={{
-                    display: 'inline-flex',
-                    border: '1px solid var(--border, #d9d9d9)',
-                    borderRadius: 6,
-                    overflow: 'hidden',
-                  }}
-                >
-                  {([
-                    { key: 'MAJOR', label: '专业优先' },
-                    { key: 'UNIVERSITY', label: '院校优先' },
-                  ] as const).map((m) => (
-                    <button
-                      key={m.key}
-                      type="button"
-                      onClick={() => setViewMode(m.key)}
-                      style={{
-                        border: 'none',
-                        padding: '6px 16px',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        fontWeight: viewMode === m.key ? 600 : 400,
-                        background: viewMode === m.key ? 'var(--primary, #1677ff)' : 'transparent',
-                        color: viewMode === m.key ? '#fff' : 'var(--text-secondary)',
-                      }}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
+              {/* —— 视图分段开关 + 距离/状态二维编码图例 —— */}
+              <div className="pgv3-pool-bar">
+                <div className="pgv3-viewseg">
+                  <button className={viewMode === 'MAJOR' ? 'on' : ''} onClick={() => setViewMode('MAJOR')}>
+                    专业优先 <span className="seg-sub">一卡=一组</span>
+                  </button>
+                  <button className={viewMode === 'UNIVERSITY' ? 'on' : ''} onClick={() => setViewMode('UNIVERSITY')}>
+                    院校优先 <span className="seg-sub">一卡=一校</span>
+                  </button>
                 </div>
-                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                  {viewMode === 'UNIVERSITY'
-                    ? '一张卡 = 一所院校,内含该校够得着的专业组'
-                    : '一张卡 = 一个院校专业组'}
-                </span>
+                <div className="pgv3-legend">
+                  <span className="grp">
+                    <span className="lbl">距离</span>
+                    <span className="key"><span className="swatch bar sw-reach" />够不着</span>
+                    <span className="key"><span className="swatch bar sw-chong" />冲</span>
+                    <span className="key"><span className="swatch bar sw-wen" />稳</span>
+                    <span className="key"><span className="swatch bar sw-bao" />保</span>
+                    <span className="key"><span className="swatch bar sw-low" />偏低</span>
+                  </span>
+                  <span className="div" />
+                  <span className="grp">
+                    <span className="lbl">状态</span>
+                    <span className="key"><span className="swatch sw-soft" />软不符</span>
+                    <span className="key"><span className="swatch sw-hard" />资格不符</span>
+                    <span className="key"><span className="swatch sw-region" />非意向地区</span>
+                  </span>
+                </div>
               </div>
 
-              {/* —— Region 4: pgv2-toolbar 搜索 + 排序 + 显示已隐藏 —— */}
-              <div className="pgv2-toolbar">
+              {/* —— Region 4: pgv3-toolbar 搜索 + 排序 + 显示全部 / 状态勾选 —— */}
+              <div className="pgv3-toolbar">
+                <div className="pgv3-search-group">
                 <UniversitySearchAutoComplete
                   value={searchTextUniversity}
                   onChange={setSearchTextUniversity}
@@ -2328,7 +2319,7 @@ export default function GeneratePlanPage() {
                 />
                 {viewMode === 'UNIVERSITY' ? (
                   <select
-                    className="pgv2-sort"
+                    className="pgv3-sort"
                     value={uniSort}
                     onChange={(event) => setUniSort(event.target.value as UniversitySortValue)}
                   >
@@ -2339,7 +2330,7 @@ export default function GeneratePlanPage() {
                 ) : (
                   <>
                     <select
-                      className="pgv2-sort"
+                      className="pgv3-sort"
                       value={candidateSort}
                       onChange={(event) => {
                         setCandidateSort(event.target.value as CandidateGroupSort);
@@ -2406,16 +2397,18 @@ export default function GeneratePlanPage() {
                 >
                   显示全部
                 </button>
-                <label className="pgv2-toggle">
+                </div>
+                <div className="pgv3-checks">
+                <label className="pgv3-check">
                   <input
                     type="checkbox"
                     checked={showHidden}
                     onChange={(event) => setShowHidden(event.target.checked)}
                   />
-                  显示已隐藏 ({hiddenGroupKeys.size})
+                  显示已隐藏 <span className="cnt">({hiddenGroupKeys.size})</span>
                 </label>
                 <label
-                  className="pgv2-toggle"
+                  className="pgv3-check"
                   title="勾选: 显示学费超预算 / 民办性质不符等可权衡的专业 (进风险区);不勾: 这些专业直接从候选隐藏。学生性别/健康/户籍/民族不符的专业总是被剔除(不进候选)"
                 >
                   <input
@@ -2426,7 +2419,7 @@ export default function GeneratePlanPage() {
                   显示学费/办学性质不符
                 </label>
                 <label
-                  className="pgv2-toggle"
+                  className="pgv3-check"
                   title="勾选: 把选科/再选/性别/健康/户籍/民族不符的专业也显示出来(灰显, 标'资格不符·不可填', 不可加入)。这些是客观资格不符, 真填会退档, 与软规则(可权衡)不同。不勾: 直接从候选剔除。"
                 >
                   <input
@@ -2438,7 +2431,7 @@ export default function GeneratePlanPage() {
                 </label>
                 {regionMismatchCount > 0 ? (
                   <label
-                    className="pgv2-toggle"
+                    className="pgv3-check"
                     title="勾选: 显示整所院校都不在学生意向省/市的院校组(默认折叠隐藏)。学生意向地区在档案里设置。"
                   >
                     <input
@@ -2449,7 +2442,7 @@ export default function GeneratePlanPage() {
                     显示非意向地区 ({regionMismatchCount})
                   </label>
                 ) : null}
-                <label className="pgv2-toggle">
+                <label className="pgv3-check">
                   <input
                     type="checkbox"
                     checked={!excludeAdded}
@@ -2457,8 +2450,11 @@ export default function GeneratePlanPage() {
                   />
                   显示已填报院校专业组
                 </label>
+                </div>
               </div>
 
+              {/* —— 多行筛选盒: 中外合作 / 分数 / 纯净度 / 意向梯队 / 梯度 / 办学性质 —— */}
+              <div className="pgv3-filter-rows">
               {/* —— 中外合作过滤 chip (三态; 两视图通用) —— */}
               <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
                 <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>中外合作</span>
@@ -2659,6 +2655,7 @@ export default function GeneratePlanPage() {
                   </span>
                 </div>
               )}
+              </div>{/* /pgv3-filter-rows */}
 
               {/* —— Region 6: pgv2-source-note 计划口径回退提示 —— */}
               {isUsingFallbackYear ? (
@@ -3005,33 +3002,48 @@ export default function GeneratePlanPage() {
                   </div>
                 </div>
 
-                {/* 方案体检 (#5): 按 25/42/33 经验比例诊断 */}
-                {planHealth ? (
-                  <div
-                    style={{
-                      margin: '8px 0',
-                      padding: '8px 10px',
-                      borderRadius: 6,
-                      background: planHealth.issues.length === 0 ? 'rgba(52, 211, 153, 0.12)' : 'rgba(251, 191, 36, 0.14)',
-                      border: `1px solid ${planHealth.issues.length === 0 ? 'rgba(52, 211, 153, 0.4)' : 'rgba(251, 191, 36, 0.45)'}`,
-                      fontSize: 12,
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                      {planHealth.issues.length === 0 ? '✓ 梯度比例合理' : `⚠ 方案体检（${planHealth.issues.length} 项待改进）`}
-                    </div>
-                    {planHealth.issues.length === 0 ? (
-                      <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                        按 25/42/33 经验比例：冲 {planHealth.expectedRush} / 稳 {planHealth.expectedStable} / 保 {planHealth.expectedSafe}
+                {/* 方案体检 (#5): pgv3-health 进度条 + 目标线 + 检查项 (25/42/33 经验比例) */}
+                {planHealth ? (() => {
+                  const hTotal = tierStats.rush + tierStats.stable + tierStats.safe || 1;
+                  const pct = {
+                    rush: Math.round((tierStats.rush / hTotal) * 100),
+                    stable: Math.round((tierStats.stable / hTotal) * 100),
+                    safe: Math.round((tierStats.safe / hTotal) * 100),
+                  };
+                  const checks: Array<{ ok: boolean; text: string }> = planHealth.issues.length === 0
+                    ? [{ ok: true, text: `梯度结构均衡 · 冲 ${pct.rush}% / 稳 ${pct.stable}% / 保 ${pct.safe}%, 接近经验 25/42/33` }]
+                    : planHealth.issues.map((t) => ({ ok: false, text: t }));
+                  if (tierStats.safe >= 4) {
+                    checks.unshift({ ok: true, text: `保底充足 · 当前 ${tierStats.safe} 条, ≥4 条确保有学上` });
+                  }
+                  return (
+                    <div className="pgv3-health">
+                      <h4>🛡 方案体检 <span className="ratio">经验比例 冲25 / 稳42 / 保33</span></h4>
+                      <div className="pgv3-health-bar">
+                        <div className="seg-rush" style={{ width: pct.rush + '%' }} />
+                        <div className="seg-stable" style={{ width: pct.stable + '%' }} />
+                        <div className="seg-safe" style={{ width: pct.safe + '%' }} />
                       </div>
-                    ) : (
-                      planHealth.issues.map((tip, i) => (
-                        <div key={i} style={{ color: '#a16207' }}>• {tip}</div>
-                      ))
-                    )}
-                  </div>
-                ) : null}
+                      <div className="pgv3-health-target">
+                        <span className="tick" data-l="25" style={{ left: '25%' }} />
+                        <span className="tick" data-l="67" style={{ left: '67%' }} />
+                      </div>
+                      <div className="pgv3-health-legend">
+                        <span className="hl"><span className="dot rush" />冲 {pct.rush}%</span>
+                        <span className="hl"><span className="dot stable" />稳 {pct.stable}%</span>
+                        <span className="hl"><span className="dot safe" />保 {pct.safe}%</span>
+                      </div>
+                      <div className="pgv3-health-items">
+                        {checks.map((c, i) => (
+                          <div className={`pgv3-hcheck ${c.ok ? 'ok' : 'warn'}`} key={i}>
+                            <span className="ic">{c.ok ? '✓' : '⚠'}</span>
+                            <span>{c.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })() : null}
 
                 {/* 已选志愿列表 (HTML5 drag-and-drop 排序, onDragEnd 调 reorderItems 持久化) */}
                 <div className="pgv2-rail-list">

@@ -140,6 +140,58 @@ function MBar({ k, v, suffix = '', chg, title }: { k: string; v?: string | numbe
   );
 }
 
+// 距离虚线灰标(够不着 / 偏低 / 无史线) — 仅极端档/无史线显示
+const DIST_FLAG: Record<string, { label: string; hint: string }> = {
+  reach: { label: '够不着', hint: '该专业组录取门槛位次远好于学生, 差距过大、基本够不着, 仅供参考。老师可自主决策。' },
+  toolow: { label: '分数偏低', hint: '学生位次远高于该专业组录取门槛, 报考可能浪费分数。老师可自主决策。' },
+  noline: { label: '无史线', hint: '无历史录取线的新设组, 梯度未知, 需人工判断。' },
+};
+function DistFlag({ distKey }: { distKey: string }) {
+  const d = DIST_FLAG[distKey];
+  if (!d) return null;
+  return <span className={`pgv2-dist-flag ${distKey === 'noline' ? 'noline' : ''}`} title={d.hint}>{d.label}</span>;
+}
+
+// 位次刻度尺: 冲 ←— 你的位次 —→ 保, marker 落在组门槛相对学生的位置
+function RankRuler({ studentRank, groupMinRank, adjusted, ratio, noLine, gapText }: {
+  studentRank?: number; groupMinRank?: number | null; adjusted?: number | null; ratio?: number; noLine?: boolean; gapText?: string;
+}) {
+  if (noLine || groupMinRank == null) {
+    return (
+      <div className="pgv2-ruler is-noline">
+        <div className="rk-track"><span className="rk-center" style={{ left: '50%' }} /></div>
+        <div className="rk-labels"><span className="rk-l">冲</span><span className="rk-you">你 {Number(studentRank || 0).toLocaleString()}</span><span className="rk-r">保</span></div>
+        <div className="rk-note muted">无历史录取线, 梯度需人工判断</div>
+      </div>
+    );
+  }
+  const basis = adjusted != null ? adjusted : groupMinRank;
+  const r = typeof ratio === 'number' ? ratio : (studentRank ? (basis - studentRank) / studentRank : 0);
+  const clamped = Math.max(-0.7, Math.min(0.7, r));
+  const half = clamped / 0.7 * 50; // -50%(冲) .. +50%(保)
+  const markerLeft = 50 + half;
+  const ahead = r >= 0;
+  const fillStyle = ahead ? { left: '50%', width: half + '%' } : { left: markerLeft + '%', width: -half + '%' };
+  return (
+    <div className="pgv2-ruler">
+      <div className="rk-track">
+        <span className="rk-zone rush" /><span className="rk-zone safe" />
+        <span className={`rk-fill ${ahead ? 'safe' : 'rush'}`} style={fillStyle} />
+        <span className="rk-center" style={{ left: '50%' }} />
+        <span className={`rk-marker ${ahead ? 'safe' : 'rush'}`} style={{ left: markerLeft + '%' }} title={`组门槛位次 ${basis.toLocaleString()}`} />
+      </div>
+      <div className="rk-labels">
+        <span className="rk-l">冲</span>
+        <span className="rk-you">你 {Number(studentRank || 0).toLocaleString()}</span>
+        <span className="rk-r">保</span>
+      </div>
+      <div className={`rk-note ${ahead ? 'ahead' : 'behind'}`}>
+        组门槛 <b>{basis.toLocaleString()}</b>{adjusted != null ? '(修正)' : ''} · {gapText || (ahead ? '学生领先' : '学生落后')}
+      </div>
+    </div>
+  );
+}
+
 // ============ 主组件 ============
 
 export interface CandidateCardV3Props {
@@ -214,11 +266,15 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   const reachFar = typeof edge === 'number' && edge < -0.45;
   const tooLow = typeof edge === 'number' && edge > 0.5;
   const mutedReason = regionMismatch ? '非意向地区' : reachFar ? '够不着(门槛远高于学生)' : tooLow ? '分数偏低(可能浪费分)' : '';
+  // —— 二维编码: 距离(左色条 dist-*) + 状态(底色 status-*). 距离极端档/无史线 → is-muted 去饱和 ——
+  const noLine = group?.dynamicGradient?.baseMinRank == null;
+  const distKey = reachFar ? 'reach' : tooLow ? 'toolow' : noLine ? 'noline'
+    : tone === 'rush' ? 'chong' : tone === 'safe' ? 'bao' : 'wen';
+  const isMuted = reachFar || tooLow || noLine;
 
   return (
     <article
-      className={`pgv2-card ${isExpanded ? 'is-expanded' : ''} ${isHidden ? 'is-hidden' : ''} ${isCompare ? 'is-compare' : ''} tier-${tone}`}
-      style={mutedReason ? { opacity: 0.62, filter: 'grayscale(0.5)' } : undefined}
+      className={`pgv2-card ${isExpanded ? 'is-expanded' : ''} ${isHidden ? 'is-hidden' : ''} ${isCompare ? 'is-compare' : ''} dist-${distKey} ${regionMismatch ? 'status-region' : ''} ${isMuted ? 'is-muted' : ''}`}
       title={mutedReason ? `${mutedReason} —— 已灰显区分, 但仍可由老师自主决策加入。` : undefined}
     >
       {/* —— MatchHeader: 匹配环 + 理由 + 4 偏好 dots + 趋势 + 预测 —— */}
@@ -270,6 +326,8 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 </span>
               ) : null}
             </h3>
+            <DistFlag distKey={distKey} />
+            {regionMismatch ? <span className="pgv2-status-flag s-region">非意向地区</span> : null}
             {/* 冲稳保标签只在右侧 grade-badge 显示一次, 此处删除重复 */}
             {isAdded ? <span className="pgv2-tag tone-muted">已加入</span> : null}
             {/* 软规则失败分类显示（#3）— 学费/办学性质各自 chip，便于老师判定 */}
@@ -292,6 +350,38 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
               <span className="pgv2-tag tone-rush-soft">{group.softFailCount} 风险专业</span>
             ) : null}
             {isHidden ? <span className="pgv2-tag tone-muted">已隐藏</span> : null}
+          </div>
+          {/* —— 位次刻度尺(核心可视化) —— */}
+          <RankRuler
+            studentRank={studentRankForDecision}
+            groupMinRank={group?.groupMinRank}
+            adjusted={group?.dynamicGradient?.adjustedMinRank ?? group?.predictedMinRank?.point}
+            ratio={typeof edge === 'number' ? edge : undefined}
+            noLine={noLine}
+          />
+          {/* —— 决策要素 chip(纯净度 / 意向命中 / 征集) —— */}
+          <div className="pgv2-decision-row">
+            {group?.purity?.level && PURITY_META[group.purity.level] ? (
+              <span className={`pgv2-dchip tone-${PURITY_META[group.purity.level].tone}`} title={PURITY_META[group.purity.level].desc}>
+                纯净度 {PURITY_META[group.purity.level].label}
+              </span>
+            ) : null}
+            {typeof preferredHitCount === 'number' ? (
+              <span
+                className={`pgv2-dchip ${preferredHitCount > 0 ? 'tone-safe' : 'tone-rush'}`}
+                title="组内命中学生意向的专业数 / 组内专业总数, 命中越少服从调剂落到非意向的风险越高"
+              >
+                意向命中 {preferredHitCount}/{groupMajorCount}
+              </span>
+            ) : null}
+            {group?.supplementary && group.supplementary.totalPlanCount > 0 ? (
+              <span
+                className="pgv2-dchip tone-safe-soft"
+                title={`${group.supplementary.sourceYear} 年本组累计征集 ${group.supplementary.totalPlanCount} 人 / ${group.supplementary.totalRounds ?? 1} 轮。征集=没招满需补录, 常伴随降分, 是可达性的积极信号`}
+              >
+                征集 {group.supplementary.totalPlanCount}人/{group.supplementary.totalRounds ?? 1}轮
+              </span>
+            ) : null}
           </div>
           {/* —— 院校级标签 —— */}
           <div className="pgv2-card-tags">
