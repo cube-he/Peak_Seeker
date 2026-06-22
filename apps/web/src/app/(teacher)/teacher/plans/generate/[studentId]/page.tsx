@@ -28,6 +28,8 @@ import {
   CheckOutlined,
   CloseOutlined,
   DeleteOutlined,
+  DoubleLeftOutlined,
+  DoubleRightOutlined,
   DownOutlined,
   FileTextOutlined,
   InfoCircleOutlined,
@@ -66,6 +68,7 @@ import {
   NotesChip,
   HiddenCard, ComparePanel,
 } from '@/components/candidate-pool-v2';
+import { usePersistentCollapse } from '@/hooks/usePersistentCollapse';
 
 type Gradient = 'CHONG' | 'WEN' | 'BAO';
 type DynamicGradientTier =
@@ -1017,6 +1020,7 @@ export default function GeneratePlanPage() {
     searchParams.get('view') === 'university' ? 'UNIVERSITY' : 'MAJOR',
   );
   const viewModeAutoApplied = useRef(false);
+  const [railCollapsed, toggleRail] = usePersistentCollapse('vh.teacher.generate.railCollapsed');
   const [uniSort, setUniSort] = useState<UniversitySortValue>('UNIVERSITY_OVERALL');
   // 院校优先视图: 办学性质过滤 (null=全部, 'public'=公办, 'private'=民办)
   const [natureFilter, setNatureFilter] = useState<'public' | 'private' | null>(null);
@@ -2156,7 +2160,7 @@ export default function GeneratePlanPage() {
           </div>
 
           {/* —— 主区: 候选池 + 当前方案 —— */}
-          <div className="pgv2-workbench">
+          <div className={`pgv2-workbench ${railCollapsed ? 'is-rail-collapsed' : ''}`}>
             {/* —— Region 3: pgv2-pool 候选池 —— */}
             <section className="pgv2-pool">
               <div className="pgv2-pool-head">
@@ -2898,6 +2902,12 @@ export default function GeneratePlanPage() {
             </section>
 
             {/* —— Region 7: pgv2-rail 右侧 sticky 当前方案 (最大重写) —— */}
+            {railCollapsed ? (
+              <button type="button" className="pgv2-rail-reopen" onClick={toggleRail} title="展开当前方案">
+                <DoubleLeftOutlined />
+                <span className="pgv2-rail-reopen-txt">当前方案</span>
+              </button>
+            ) : (
             <aside className="pgv2-rail">
               <div className="pgv2-rail-card">
                 <h3>
@@ -2906,7 +2916,10 @@ export default function GeneratePlanPage() {
                   {selectedBatchPlan ? (
                     <span className="pgv2-tag tone-accent">V{selectedBatchPlan.versionNo ?? 1}</span>
                   ) : null}
-                  {planFetching ? <Spin size="small" style={{ marginLeft: 'auto' }} /> : null}
+                  {planFetching ? <Spin size="small" style={{ marginLeft: 8 }} /> : null}
+                  <button type="button" className="pgv2-rail-collapse" onClick={toggleRail} title="收起当前方案">
+                    <DoubleRightOutlined />
+                  </button>
                 </h3>
 
                 {/* 三梯度 + 总数 统计 */}
@@ -3124,6 +3137,7 @@ export default function GeneratePlanPage() {
                 </div>
               </div>
             </aside>
+            )}
           </div>
         </>
       ) : null}

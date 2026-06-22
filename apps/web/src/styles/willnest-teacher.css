@@ -8570,3 +8570,24 @@
 .wn-teacher-scope .pgv3-fact-grid .fv.tone-rush { color: var(--rush); }
 .wn-teacher-scope .pgv3-fact-grid .fv.tone-stable { color: var(--stable); }
 .wn-teacher-scope .pgv3-fact-grid .fv.tone-safe { color: var(--safe); }
+
+/* —— 当前方案右栏折叠 (功能层; 把手/箭头精修交 claude-design) —— */
+.wn-teacher-scope .pgv2-workbench.is-rail-collapsed { grid-template-columns: 1fr; }
+.wn-teacher-scope .pgv2-rail-collapse {
+  margin-left: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-tertiary); cursor: pointer;
+  transition: background .2s, color .2s;
+}
+.wn-teacher-scope .pgv2-rail-collapse:hover { background: var(--surface-dim); color: var(--primary); }
+.wn-teacher-scope .pgv2-rail-reopen {
+  position: fixed; right: 0; top: 42%; z-index: 30;
+  display: inline-flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 14px 8px;
+  border: 0; border-top-left-radius: 12px; border-bottom-left-radius: 12px;
+  background: var(--surface); box-shadow: var(--shadow-card);
+  color: var(--primary); cursor: pointer; transition: background .2s;
+}
+.wn-teacher-scope .pgv2-rail-reopen:hover { background: var(--surface-dim); }
+.wn-teacher-scope .pgv2-rail-reopen-txt { writing-mode: vertical-rl; letter-spacing: 3px; font-size: 13px; }
