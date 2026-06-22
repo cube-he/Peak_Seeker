@@ -55,6 +55,8 @@ export interface CandidateGroupListParams extends CandidateListParams {
   excludeAdded?: boolean;
   // 客观纯净度过滤. 空数组或 undefined = 不过滤; ['S','A'] = 仅显示干净/较纯
   purity?: string[];
+  // 招生类型过滤. 空数组/undefined = 不过滤; ['普通类本科'] = 仅该类
+  recruitType?: string[];
   // 视图模式: 不传/GROUP = 专业组卡; UNIVERSITY = 院校卡上卷
   groupBy?: 'GROUP' | 'UNIVERSITY';
   // 院校优先视图: 办学性质过滤 (public=公办, private=民办, 不传=全部)
@@ -143,6 +145,9 @@ export const planApi = {
         excludeAdded: params?.excludeAdded,
         purity: params?.purity && params.purity.length > 0 && params.purity.length < 4
           ? params.purity.join(',')
+          : undefined,
+        recruitType: params?.recruitType && params.recruitType.length > 0
+          ? params.recruitType.join(',')
           : undefined,
         groupBy: params?.groupBy,
         nature: params?.nature,

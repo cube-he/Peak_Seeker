@@ -319,6 +319,7 @@ interface CandidateGroupListResult {
   total: number;
   // "非意向地区"院校组数量(当前其他过滤后口径); 驱动"显示非意向地区 (N)"开关
   regionMismatchCount?: number;
+  availableRecruitTypes?: string[];
   planYear?: number;
   sourceYear?: number;
   previousYear?: number;
@@ -1038,6 +1039,10 @@ export default function GeneratePlanPage() {
   const [purityFilter, setPurityFilter] = useState<string[]>([]);
   const togglePurity = (lv: string) =>
     setPurityFilter((prev) => (prev.includes(lv) ? prev.filter((x) => x !== lv) : [...prev, lv]));
+  // 招生类型过滤. 空数组 = 全部; 多选 (同批次混多招生类型时聚焦)
+  const [recruitTypeFilter, setRecruitTypeFilter] = useState<string[]>([]);
+  const toggleRecruitType = (rt: string) =>
+    setRecruitTypeFilter((prev) => (prev.includes(rt) ? prev.filter((x) => x !== rt) : [...prev, rt]));
   // FilterBar / 趋势 toggle 已下线: pgv2 设计稿用 4 chip 梯度 + showHidden 替代
   // 不持久化的"不考虑"集合（per-session）
   const [hiddenGroupKeys, setHiddenGroupKeys] = useState<Set<string>>(new Set());
@@ -1136,7 +1141,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, hasSearch ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null)],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, hasSearch ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null), recruitTypeFilter.join(',')],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1161,6 +1166,7 @@ export default function GeneratePlanPage() {
       groupBy: viewMode === 'UNIVERSITY' ? 'UNIVERSITY' : undefined,
       nature: viewMode === 'UNIVERSITY' ? (natureFilter ?? undefined) : undefined,
       sinoForeign: sinoForeignFilter ?? undefined,
+      recruitType: recruitTypeFilter,
       // 搜索时不发分数窗口: 让够不着(超出预估分)的院校也能被搜到
       minScore: hasSearch ? undefined : (scoreRange ? scoreRange[0] : undefined),
       maxScore: hasSearch ? undefined : (scoreRange ? scoreRange[1] : undefined),
@@ -1400,6 +1406,15 @@ export default function GeneratePlanPage() {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(STICKY_BAR_STORAGE_KEY, stickyBarExpanded ? '1' : '0');
   }, [stickyBarExpanded]);
+
+  // 切批次/池变化 → 清掉当前已不在可选项里的招生类型选择, 避免空列表
+  useEffect(() => {
+    const avail = ((candidateGroups as any)?.availableRecruitTypes ?? []) as string[];
+    if (recruitTypeFilter.length === 0) return;
+    const kept = recruitTypeFilter.filter((rt) => avail.includes(rt));
+    if (kept.length !== recruitTypeFilter.length) setRecruitTypeFilter(kept);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(candidateGroups as any)?.availableRecruitTypes]);
 
   const createMutation = useMutation({
     mutationFn: () => planApi.createForStudent(studentId, { batchConfigId: batchConfigId! }),
@@ -2443,6 +2458,37 @@ export default function GeneratePlanPage() {
                   </button>
                 ) : null}
               </div>
+
+              {/* —— 招生类型过滤 chip (多选; 空 = 全部; 同批次混多招生类型时才出现) —— */}
+              {(((candidateGroups as any)?.availableRecruitTypes ?? []) as string[]).length > 1 ? (
+                <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
+                  <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>招生类型</span>
+                  {(((candidateGroups as any).availableRecruitTypes) as string[]).map((rt) => {
+                    const active = recruitTypeFilter.includes(rt);
+                    return (
+                      <button
+                        key={rt}
+                        type="button"
+                        className={`pgv2-tier-chip ${active ? 'is-active' : ''}`}
+                        onClick={() => { toggleRecruitType(rt); setCandidatePage(1); }}
+                        title={`仅显示「${rt}」(再点取消, 全不选 = 全部)`}
+                      >
+                        {rt}
+                      </button>
+                    );
+                  })}
+                  {recruitTypeFilter.length > 0 ? (
+                    <button
+                      type="button"
+                      className="pgv2-tier-chip"
+                      onClick={() => { setRecruitTypeFilter([]); setCandidatePage(1); }}
+                      style={{ opacity: 0.7 }}
+                    >
+                      清除
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
 
               {/* —— 意向梯队过滤 chip (每个 chip 带粗略命中数); 院校优先模式下隐藏(专业维度) —— */}
               {viewMode === 'MAJOR' && ((candidateGroups as any)?.availableTiers ?? []).length > 0 ? (
