@@ -40,19 +40,23 @@
 
 ## 三、设计
 
+> **落点决策（2026-06-22 写计划时优化，取代早期"DB where + batch-alias AND"草案）**：recruitType 过滤放在**分页层（post-cache），与 `sinoForeign` 完全同层**，不进 DB where、不进缓存键。理由：① 缓存的 `fullResult.groups` 本就是整批次全量池（含所有招生类型），`availableRecruitTypes` 直接 distinct 即可，无需额外查库；② 选项变化只在分页层重过滤，秒切、不重建池（若进 DB where 则要进缓存键、每次切都重建）；③ 彻底绕开 batch-alias 的 `contains` 与 `in` 叠加冲突。group 对象已带 `recruitType`（`plan-candidate.service.ts:2052`），分页层过滤天然可行。
+
 ### 3.1 后端 DTO
 `apps/server/src/modules/plan-candidate/dto/get-candidates-query.dto.ts` 加：
 ```
 @IsOptional() @IsString() recruitType?: string;  // CSV 多选, 沿用 purity 风格; 空/缺省 = 不过滤
 ```
 
-### 3.2 后端过滤（取数 where）
-- 把 CSV 解析成数组，非空时在 eps 查询 where 加 `recruitType: { in: [...] }`（**精确 in**，因为值来自库 distinct 出的真实值）。
-- ⚠️ 与 batch-alias 的 `recruitTypeContains` 叠加：若该批次已被 alias 收窄，则两条件 AND 共存（已收窄批次里通常只剩 1 个值 → 筛选器隐藏，不会冲突）。落点跟随现有 where 构造（`filters/hard-filter.ts` 里 `where.recruitType = { contains: ... }` 的同一处，确保 contains 与 in 不互相覆盖）。
+### 3.2 后端过滤（分页层，纯函数）
+- 新增纯函数模块 `plan-candidate/recruit-type-filter.ts`，对标 `sino-foreign-filter.ts`：
+  - `filterGroupsByRecruitType(groups, csv)`：空 csv → 原样返回；否则 `groups.filter(g => selected.includes(g.recruitType))`。
+  - `filterUniversitiesByRecruitType(universities, csv)`：上卷视图，组级先筛、空组院校剔除（在 rollup 前对 `value.groups` 收窄，更简单）。
+  - `collectRecruitTypes(groups): string[]`：distinct + 按组数降序（普通类自然置顶）、同数 localeCompare，供 `availableRecruitTypes`。
+- 接入点：`paginateCandidateGroups` 加 `recruitType?` 参数，在 band 过滤前先把 `value.groups` 收窄成工作集，后续 band/sino/rank/region/tierCounts 全部基于工作集（避免 chip 计数 > total）。`paginateAsUniversities` 已收 `q`，直接读 `q.recruitType`，在 `rollupByUniversity` 前收窄。
 
 ### 3.3 候选响应附带可选项
-- 候选响应里新增 `availableRecruitTypes: string[]`——当前批次候选池 distinct `recruitType` 的集合（**在 recruitType 过滤之前、batch-alias 收窄之后**算，否则勾掉某类后选项也跟着消失）。
-- 复用 service 已有 distinct 调用聚合，不额外查库。
+- 候选响应里新增 `availableRecruitTypes: string[]` = `collectRecruitTypes(value.groups)`（**从缓存的全量池算，与当前 recruitType 选择无关**，故勾掉某类后选项不塌缩）。两个 paginate 函数各自挂到返回对象。
 
 ### 3.4 前端 UI
 `apps/web/src/app/(teacher)/teacher/plans/generate/[studentId]/page.tsx`：
@@ -64,15 +68,21 @@
 - 视觉样式留 className 交 claude-design。
 
 ## 四、测试（TDD）
+纯函数单测（`recruit-type-filter.spec.ts`）：
+1. `filterGroupsByRecruitType(groups, '国家专项计划')` → 只留该类组。
+2. 多值 `'国家专项计划,地方专项计划'` → 留两类。
+3. 空 / undefined csv → 原样返回（同引用，回归保护）。
+4. `filterUniversitiesByRecruitType`：剔除筛后无组的院校。
+5. `collectRecruitTypes` → distinct + 按组数降序（普通类置顶）。
+
 service 单测（`plan-candidate.service.spec.ts` 同套路）：
-1. 传 `recruitType='国家专项计划'` → where 命中 `recruitType.in`，只返回该类候选。
-2. 传多值 `recruitType='国家专项计划,地方专项计划'` → in 含两值。
-3. 与 batch-alias 收窄叠加：alias 已设 `recruitTypeContains` 的批次下，contains 与 in 同时存在、互不覆盖。
-4. 空 / 缺省参数 → where 不含 recruitType（回归保护，结果与现状一致）。
-5. `availableRecruitTypes` 聚合正确（在过滤前算，勾掉某类不丢选项）。
-6. 院校优先视图（groupBy=UNIVERSITY）：过滤在 rollup 前生效，上卷结果只含选中类。
+6. 传 `recruitType='普通类'`（构造混类池）→ GROUP 视图 total/groups 只含该类。
+7. 空 / 缺省 → 结果与现状一致（回归保护）。
+8. 响应含 `availableRecruitTypes`，且为全量池的招生类型（不随 `recruitType` 选择塌缩）。
+9. 院校优先视图（groupBy=UNIVERSITY）：上卷前收窄，universities 只含选中类。
 
 ## 五、风险 / 回归点
-- **默认零回归**：不传参 = 不过滤，所有现有调用行为不变。
-- **batch-alias 覆盖**：最大坑是 in 把 contains 覆盖掉（或反之）导致已收窄批次出错——单测 #3 专门守。
-- **availableRecruitTypes 时序**：必须在 recruitType 过滤之前算，否则选项会随勾选塌缩。
+- **默认零回归**：不传参 = 不过滤，纯函数原样返回，所有现有调用行为不变。
+- **不进缓存键**：recruitType 是分页层过滤，**绝不能进 `candidateGroupCacheKey`**（否则每次切都重建池，且会复刻 purity 那种"未进键"的陷阱反向版）——它本就不该进，保持现状即可。
+- **tierCounts/total 一致性**：必须在 band 过滤前把 `value.groups` 收窄成工作集，否则冲/稳/保 chip 计数会大于列表 total（沿用 region 折叠那处已有教训）。
+- **availableRecruitTypes 时序**：从 `value.groups`（全量池）算，与 recruitType 选择解耦，故勾选不塌缩选项。
