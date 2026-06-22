@@ -15,6 +15,7 @@ import { EthnicityRule } from './filters/soft-rules/ethnicity.rule';
 import { TuitionRule } from './filters/soft-rules/tuition.rule';
 import { NatureRule } from './filters/soft-rules/nature.rule';
 import { filterGroupsBySinoForeign, filterUniversitiesBySinoForeign } from './sino-foreign-filter';
+import { filterGroupsByRecruitType, collectRecruitTypes } from './recruit-type-filter';
 import {
   filterGroupsByRankWindow,
   filterUniversitiesByRankWindow,
@@ -54,6 +55,7 @@ interface GetCandidatesQuery {
   tier?: number;
   excludeAdded?: boolean | string;
   purity?: string; // csv 'S,A,B,C'; 空 = 不过滤
+  recruitType?: string; // 招生类型 CSV 多选; 空 = 不过滤; 分页层应用(同 sinoForeign)
   groupBy?: 'GROUP' | 'UNIVERSITY'; // 视图模式; UNIVERSITY=院校卡上卷
   nature?: 'public' | 'private'; // 院校优先视图: 办学性质过滤
   sinoForeign?: 'only' | 'exclude'; // 中外合作过滤: only/exclude/空; 两视图均生效
@@ -601,15 +603,19 @@ export class PlanCandidateService {
     sinoForeign?: 'only' | 'exclude',
     rankWindow?: RankWindow | null,
     includeRegionMismatch = false,
+    recruitType?: string,
   ) {
+    // 招生类型过滤(分页层): 先把全量池收窄成工作集, 让 band/sino/rank/region/tierCounts 全部基于它,
+    // 否则冲/稳/保 chip 计数会大于列表 total(同非意向地区折叠的已有教训)。空选择 = 全部。
+    const baseGroups = filterGroupsByRecruitType(value.groups, recruitType);
     // 档位过滤在缓存后的分页层做: 切换冲/稳/保/无史线 chip 不触发全量重算,
-    // total 改为档内数量(驱动分页), tierCounts 保持全池口径(驱动 chip 计数)
+    // total 改为档内数量(驱动分页), tierCounts 保持(收窄后)全池口径(驱动 chip 计数)
     const validBand = gradientBand && ['RUSH', 'STABLE', 'SAFE', 'NO_LINE'].includes(gradientBand)
       ? gradientBand
       : null;
     const banded = validBand
-      ? value.groups.filter((g: any) => gradientBandOf(g) === validBand)
-      : value.groups;
+      ? baseGroups.filter((g: any) => gradientBandOf(g) === validBand)
+      : baseGroups;
     const afterSino = filterGroupsBySinoForeign(banded, sinoForeign);
     const afterRank = filterGroupsByRankWindow(afterSino, rankWindow ?? null);
     // 非意向地区(整所院校都不在学生意向省/市): 默认折叠隐藏, "显示非意向地区"开关展开。
@@ -617,12 +623,11 @@ export class PlanCandidateService {
     const regionMismatchCount = afterRank.filter((g: any) => g?.regionMismatch).length;
     const pool = includeRegionMismatch ? afterRank : afterRank.filter((g: any) => !g?.regionMismatch);
     const start = (page - 1) * pageSize;
-    // tierCounts 驱动冲/稳/保/无史线 chip 计数, 仍保持"不随 band/sino/rank 过滤变"的全池口径,
-    // 但折叠态(includeRegionMismatch=false)下必须扣掉被隐藏的非意向地区组, 否则 chip 数 > 列表 total,
-    // 且'全部'chip(=rush+stable+safe+noLine) 也比 total 大, 与老师实际能看到的候选数对不上。
+    // tierCounts 驱动冲/稳/保/无史线 chip 计数, 保持(招生类型收窄后)全池口径,
+    // 折叠态(includeRegionMismatch=false)下扣掉被隐藏的非意向地区组, 否则 chip 数 > 列表 total。
     const tierCounts = includeRegionMismatch
-      ? value.tierCounts
-      : countTiers(value.groups.filter((g: any) => !g?.regionMismatch));
+      ? countTiers(baseGroups)
+      : countTiers(baseGroups.filter((g: any) => !g?.regionMismatch));
     return {
       ...value,
       page,
@@ -630,6 +635,7 @@ export class PlanCandidateService {
       total: pool.length,
       regionMismatchCount,
       tierCounts,
+      availableRecruitTypes: collectRecruitTypes(value.groups),
       groups: pool.slice(start, start + pageSize),
     };
   }
@@ -682,7 +688,8 @@ export class PlanCandidateService {
     rankWindow?: RankWindow | null,
   ) {
     const ctx = this.buildRollupContext(student);
-    let universities = rollupByUniversity(value.groups, ctx);
+    const baseGroups = filterGroupsByRecruitType(value.groups, q.recruitType);
+    let universities = rollupByUniversity(baseGroups, ctx);
     // 办学性质过滤 (公办/民办), 在排序+分页前
     if (q.nature === 'public' || q.nature === 'private') {
       universities = universities.filter((u) => {
@@ -710,6 +717,7 @@ export class PlanCandidateService {
     return {
       ...meta,
       groupBy: 'UNIVERSITY' as const,
+      availableRecruitTypes: collectRecruitTypes(value.groups),
       total: universities.length,
       regionMismatchCount,
       page,
@@ -1531,7 +1539,7 @@ export class PlanCandidateService {
       if (q.groupBy === 'UNIVERSITY') {
         return this.paginateAsUniversities(cached, q, student, page, pageSize, rankWindow);
       }
-      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true);
+      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType);
     }
 
     // 拆分搜索: 院校 / 专业各自独立; 同时填则 AND 组合 (院校的特定专业)
@@ -1615,7 +1623,7 @@ export class PlanCandidateService {
           predictedScoreRange: null,
         };
         this.setCandidateGroupCache(cacheKey, emptyResult);
-        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true);
+        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType);
       }
       (where as any).OR = matchedGroups.map((g) => ({
         universityId: g.universityId,
@@ -2267,7 +2275,7 @@ export class PlanCandidateService {
     if (q.groupBy === 'UNIVERSITY') {
       return this.paginateAsUniversities(fullResult, q, student, page, pageSize, rankWindow);
     }
-    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true);
+    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType);
   }
 
   async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {

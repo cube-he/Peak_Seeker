@@ -1813,4 +1813,62 @@ describe('PlanCandidateService', () => {
       expect(g).toHaveProperty('matchScoreRaw');
     }
   });
+
+  it('paginateCandidateGroups: 招生类型过滤 + availableRecruitTypes(全量池不塌缩) + tierCounts一致', () => {
+    const mk = (name: string, recruitType: string) => ({ groupKey: name, universityName: name, recruitType, regionMismatch: false });
+    const value: any = {
+      total: 3,
+      groups: [mk('A', '普通类本科'), mk('B', '普通类本科'), mk('C', '民族班')],
+      tierCounts: { rush: 0, stable: 3, safe: 0, noLine: 0 },
+    };
+    const sumTiers = (tc: any) => tc.rush + tc.stable + tc.safe + tc.noLine;
+    const only: any = (service as any).paginateCandidateGroups(value, 1, 20, undefined, undefined, null, false, '普通类本科');
+    expect(only.groups.map((g: any) => g.universityName)).toEqual(['A', 'B']);
+    expect(only.total).toBe(2);
+    expect(only.availableRecruitTypes).toEqual(['普通类本科', '民族班']);
+    expect(sumTiers(only.tierCounts)).toBe(only.total);
+    const all: any = (service as any).paginateCandidateGroups(value, 1, 20, undefined, undefined, null, false);
+    expect(all.total).toBe(3);
+    expect(all.availableRecruitTypes).toEqual(['普通类本科', '民族班']);
+  });
+
+  it('getCandidateGroups: 响应带 availableRecruitTypes(全量池招生类型)', async () => {
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({ id: 801, universityId: 81, groupCode: 'G81', recruitType: '普通类本科', university: { id: 81, name: 'U81', code: 'U81' }, majorName: 'M81', majorCode: '0001', major: { id: 811, name: 'M81', code: '0001', category: 'Science' } }),
+        makeGroupEnrollmentPlan({ id: 802, universityId: 82, groupCode: 'G82', recruitType: '民族班', university: { id: 82, name: 'U82', code: 'U82' }, majorName: 'M82', majorCode: '0002', major: { id: 822, name: 'M82', code: '0002', category: 'Science' } }),
+      ],
+      records: [],
+    });
+    const res: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true });
+    expect(res.availableRecruitTypes).toEqual(expect.arrayContaining(['普通类本科', '民族班']));
+  });
+
+  it('getCandidateGroups: recruitType 过滤只留选中类(GROUP 视图)', async () => {
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({ id: 801, universityId: 81, groupCode: 'G81', recruitType: '普通类本科', university: { id: 81, name: 'U81', code: 'U81' }, majorName: 'M81', majorCode: '0001', major: { id: 811, name: 'M81', code: '0001', category: 'Science' } }),
+        makeGroupEnrollmentPlan({ id: 802, universityId: 82, groupCode: 'G82', recruitType: '民族班', university: { id: 82, name: 'U82', code: 'U82' }, majorName: 'M82', majorCode: '0002', major: { id: 822, name: 'M82', code: '0002', category: 'Science' } }),
+      ],
+      records: [],
+    });
+    const res: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, recruitType: '普通类本科' });
+    expect(res.groups.length).toBeGreaterThan(0);
+    expect(res.groups.every((g: any) => g.recruitType === '普通类本科')).toBe(true);
+    expect(res.availableRecruitTypes).toEqual(expect.arrayContaining(['普通类本科', '民族班']));
+  });
+
+  it('getCandidateGroups: recruitType 过滤(院校优先视图, 上卷前收窄)', async () => {
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({ id: 801, universityId: 81, groupCode: 'G81', recruitType: '普通类本科', university: { id: 81, name: 'U81', code: 'U81' }, majorName: 'M81', majorCode: '0001', major: { id: 811, name: 'M81', code: '0001', category: 'Science' } }),
+        makeGroupEnrollmentPlan({ id: 802, universityId: 82, groupCode: 'G82', recruitType: '民族班', university: { id: 82, name: 'U82', code: 'U82' }, majorName: 'M82', majorCode: '0002', major: { id: 822, name: 'M82', code: '0002', category: 'Science' } }),
+      ],
+      records: [],
+    });
+    const res: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, groupBy: 'UNIVERSITY', recruitType: '普通类本科' });
+    const types = new Set((res.universities ?? []).flatMap((u: any) => (u.groups ?? []).map((g: any) => g.recruitType)));
+    expect(Array.from(types)).toEqual(['普通类本科']);
+    expect(res.availableRecruitTypes).toEqual(expect.arrayContaining(['普通类本科', '民族班']));
+  });
 });

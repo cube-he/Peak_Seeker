@@ -57,6 +57,8 @@ export class GetCandidatesQueryDto {
   @IsOptional() @Transform(onlyExplicitFalse) @IsBoolean() excludeAdded?: boolean | string = true;
   // 客观纯净度过滤. csv 形式 'S,A,B,C'; 空或 undefined = 不过滤
   @IsOptional() @IsString() purity?: string;
+  // 招生类型过滤: CSV 多选(如 普通类本科,国家专项计划); 空/缺省 = 不过滤. 两视图均生效, 分页层应用
+  @IsOptional() @IsString() recruitType?: string;
   // 中外合作办学过滤: only=只看含中外合作的, exclude=排除含中外合作的, 空=全部. 两视图均生效
   @IsOptional() @IsIn(['only', 'exclude']) sinoForeign?: 'only' | 'exclude';
   // 是否展开"非意向地区"院校组(整所院校省市都不在学生意向地区内). 默认 false=折叠隐藏; 仅 GROUP 视图。
