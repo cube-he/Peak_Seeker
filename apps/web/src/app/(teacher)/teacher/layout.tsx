@@ -151,10 +151,10 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
         {/* 折叠开关(仅桌面) */}
         <button
           onClick={toggleNav}
-          title={navCollapsed ? '展开导航' : '收起导航'}
+          title={collapsed ? '展开导航' : '收起导航'}
           className={`hidden lg:flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-secondary border-0 bg-transparent cursor-pointer transition-colors ${collapsed ? 'justify-center' : ''}`}
         >
-          {navCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
           {!collapsed && <span>收起</span>}
         </button>
         {collapsed ? (

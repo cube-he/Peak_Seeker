@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 
-// 折叠状态 + localStorage 持久化. 返回 [collapsed, toggle, setCollapsed].
+// 折叠状态 + localStorage 持久化. 返回 [collapsed, toggle].
 // SSR 安全: 首次渲染恒为 defaultCollapsed(服务端与客户端一致), mount 后再从
 // localStorage 同步, 避免 hydration mismatch。
 export function usePersistentCollapse(
   storageKey: string,
   defaultCollapsed = false,
-): [boolean, () => void, (v: boolean) => void] {
+): [boolean, () => void] {
   const [collapsed, setCollapsedState] = useState(defaultCollapsed);
 
   useEffect(() => {
@@ -23,11 +23,6 @@ export function usePersistentCollapse(
     }
   }, [storageKey]);
 
-  const setCollapsed = useCallback((v: boolean) => {
-    setCollapsedState(v);
-    persist(v);
-  }, [persist]);
-
   const toggle = useCallback(() => {
     setCollapsedState((prev) => {
       const next = !prev;
@@ -36,5 +31,5 @@ export function usePersistentCollapse(
     });
   }, [persist]);
 
-  return [collapsed, toggle, setCollapsed];
+  return [collapsed, toggle];
 }

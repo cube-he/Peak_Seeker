@@ -30,11 +30,4 @@ describe('usePersistentCollapse', () => {
     const { result } = renderHook(() => usePersistentCollapse('k'));
     expect(result.current[0]).toBe(true);
   });
-
-  it('setCollapsed 直接设值并持久化', () => {
-    const { result } = renderHook(() => usePersistentCollapse('k'));
-    act(() => result.current[2](true));
-    expect(result.current[0]).toBe(true);
-    expect(localStorage.getItem('k')).toBe('1');
-  });
 });
