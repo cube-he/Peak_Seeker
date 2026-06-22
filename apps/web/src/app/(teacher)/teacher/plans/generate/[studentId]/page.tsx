@@ -1409,12 +1409,12 @@ export default function GeneratePlanPage() {
 
   // 切批次/池变化 → 清掉当前已不在可选项里的招生类型选择, 避免空列表
   useEffect(() => {
-    const avail = ((candidateGroups as any)?.availableRecruitTypes ?? []) as string[];
+    const avail = candidateGroups?.availableRecruitTypes ?? [];
     if (recruitTypeFilter.length === 0) return;
     const kept = recruitTypeFilter.filter((rt) => avail.includes(rt));
     if (kept.length !== recruitTypeFilter.length) setRecruitTypeFilter(kept);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [(candidateGroups as any)?.availableRecruitTypes]);
+  }, [candidateGroups?.availableRecruitTypes]);
 
   const createMutation = useMutation({
     mutationFn: () => planApi.createForStudent(studentId, { batchConfigId: batchConfigId! }),
@@ -2460,10 +2460,10 @@ export default function GeneratePlanPage() {
               </div>
 
               {/* —— 招生类型过滤 chip (多选; 空 = 全部; 同批次混多招生类型时才出现) —— */}
-              {(((candidateGroups as any)?.availableRecruitTypes ?? []) as string[]).length > 1 ? (
+              {(candidateGroups?.availableRecruitTypes ?? []).length > 1 ? (
                 <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
                   <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>招生类型</span>
-                  {(((candidateGroups as any).availableRecruitTypes) as string[]).map((rt) => {
+                  {(candidateGroups?.availableRecruitTypes ?? []).map((rt) => {
                     const active = recruitTypeFilter.includes(rt);
                     return (
                       <button
