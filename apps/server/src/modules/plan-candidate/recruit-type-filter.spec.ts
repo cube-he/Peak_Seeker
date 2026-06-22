@@ -39,6 +39,7 @@ describe('recruit-type-filter', () => {
     const out = filterUniversitiesByRecruitType(unis, '普通类本科');
     expect(out.map((u) => u.id)).toEqual([1]);
     expect(out[0].groups).toEqual([g('普通类本科')]);
+    expect(out[0].id).toBe(1);
   });
 
   it('filterUniversitiesByRecruitType: 空 csv 原样返回同引用', () => {

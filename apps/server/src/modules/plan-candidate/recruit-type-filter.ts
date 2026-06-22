@@ -25,18 +25,16 @@ export function filterUniversitiesByRecruitType<
   G extends { recruitType?: string | null },
   T extends { groups?: G[] },
 >(universities: T[], csv?: string | null): T[] {
-  const selected = parseRecruitTypeCsv(csv);
-  if (selected.length === 0) return universities;
-  const allow = new Set(selected);
+  if (parseRecruitTypeCsv(csv).length === 0) return universities;
   const out: T[] = [];
   for (const u of universities) {
-    const kept = (u.groups ?? []).filter((grp) => allow.has(String(grp.recruitType ?? '')));
+    const kept = filterGroupsByRecruitType(u.groups ?? [], csv);
     if (kept.length > 0) out.push({ ...u, groups: kept });
   }
   return out;
 }
 
-/** 全量池里有哪些招生类型: distinct + 按组数降序(普通类自然置顶), 同数 localeCompare. */
+/** 全量池里有哪些招生类型: distinct + 按出现组数降序(同数 localeCompare). 组数最多者居首(本科批里通常是普通类). */
 export function collectRecruitTypes(groups: Array<{ recruitType?: string | null }>): string[] {
   const counts = new Map<string, number>();
   for (const g of groups) {
