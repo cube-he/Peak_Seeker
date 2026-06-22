@@ -6,6 +6,8 @@ type BrandLogoProps = {
   variant?: 'default' | 'reverse';
   size?: 'sm' | 'md';
   showSubtitle?: boolean;
+  // 只渲染 logo 图标、不渲染文字 (折叠侧栏 64px 宽时用, 避免文字被裁成破相)
+  markOnly?: boolean;
   className?: string;
 };
 
@@ -29,6 +31,7 @@ export default function BrandLogo({
   variant = 'default',
   size = 'sm',
   showSubtitle = true,
+  markOnly = false,
   className = '',
 }: BrandLogoProps) {
   const styles = sizeStyles[size];
@@ -39,17 +42,21 @@ export default function BrandLogo({
   // reverse（深色背景）时用 CSS filter 将深蓝 PNG 反白，避免图标不可见
   const markStyle = variant === 'reverse' ? { filter: 'brightness(0) invert(1)' } : undefined;
 
-  const content = (
+  const mark = (
+    <Image
+      src="/images/brand-mark.png"
+      alt="智愿家 logo"
+      width={48}
+      height={48}
+      className={`${styles.mark} flex-shrink-0 object-contain`}
+      style={markStyle}
+      aria-hidden="true"
+    />
+  );
+
+  const content = markOnly ? mark : (
     <>
-      <Image
-        src="/images/brand-mark.png"
-        alt="智愿家 logo"
-        width={48}
-        height={48}
-        className={`${styles.mark} flex-shrink-0 object-contain`}
-        style={markStyle}
-        aria-hidden="true"
-      />
+      {mark}
       <span className="flex flex-col">
         <span className={`font-serif ${styles.title} font-semibold leading-tight ${titleColor}`}>
           智愿家

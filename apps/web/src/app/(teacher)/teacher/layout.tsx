@@ -111,8 +111,8 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
   const renderSidebar = (collapsed: boolean) => (
     <>
       {/* Brand */}
-      <div className={`${collapsed ? 'px-3 py-6' : 'p-6'} mb-2 overflow-hidden`}>
-        <BrandLogo href="/teacher/dashboard" />
+      <div className={`mb-2 ${collapsed ? 'px-2 py-6 flex justify-center' : 'p-6'}`}>
+        <BrandLogo href="/teacher/dashboard" markOnly={collapsed} />
         {!collapsed && (
           <p className="ml-12 mt-1 text-[9px] uppercase tracking-[1.5px] text-text-muted">
             Teacher Workspace
