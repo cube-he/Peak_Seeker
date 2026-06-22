@@ -10,7 +10,7 @@ import '@/styles/willnest-teacher.css';
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Dropdown } from 'antd';
+import { Dropdown, Tooltip } from 'antd';
 import {
   AppstoreOutlined,
   TeamOutlined,
@@ -22,6 +22,8 @@ import {
   UserOutlined,
   BellOutlined,
   MenuOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   CloseOutlined,
   MessageOutlined,
   BarChartOutlined,
@@ -31,6 +33,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import BrandLogo from '@/components/layout/BrandLogo';
+import { usePersistentCollapse } from '@/hooks/usePersistentCollapse';
 
 const mainNavItems = [
   { href: '/teacher/dashboard', icon: <AppstoreOutlined />, label: '看板' },
@@ -54,7 +57,27 @@ const browseNavItems = [
   { href: '/majors', icon: <ReadOutlined />, label: '专业库' },
 ];
 
-const bottomNavItems = [] as Array<(typeof mainNavItems)[number]>;
+type NavItem = { href: string; icon: React.ReactNode; label: string };
+
+function SidebarNavLink({
+  item, collapsed, active, onClick,
+}: { item: NavItem; collapsed: boolean; active: boolean; onClick: () => void }) {
+  const link = (
+    <Link
+      href={item.href}
+      onClick={onClick}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 no-underline text-sm transition-colors duration-200 ${collapsed ? 'justify-center' : ''} ${
+        active ? 'bg-primary-fixed text-primary font-medium' : 'text-text-tertiary hover:bg-surface-dim'
+      }`}
+    >
+      <span className="text-base">{item.icon}</span>
+      {!collapsed && <span>{item.label}</span>}
+    </Link>
+  );
+  return collapsed ? (
+    <Tooltip title={item.label} placement="right">{link}</Tooltip>
+  ) : link;
+}
 
 interface TeacherLayoutProps {
   children: React.ReactNode;
@@ -64,6 +87,7 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [navCollapsed, toggleNav] = usePersistentCollapse('vh.teacher.navCollapsed');
   const isSupervisor = user?.teacherProfile?.isSupervisor === true;
   const visibleCommNavItems = isSupervisor
     ? [...commNavItems, ...supervisorOnlyCommNavItems]
@@ -84,117 +108,78 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
     { key: 'logout', label: '退出登录', onClick: handleLogout },
   ];
 
-  const sidebarContent = (
+  const renderSidebar = (collapsed: boolean) => (
     <>
       {/* Brand */}
-      <div className="p-6 mb-2">
+      <div className={`${collapsed ? 'px-3 py-6' : 'p-6'} mb-2 overflow-hidden`}>
         <BrandLogo href="/teacher/dashboard" />
-        <p className="ml-12 mt-1 text-[9px] uppercase tracking-[1.5px] text-text-muted">
-          Teacher Workspace
-        </p>
+        {!collapsed && (
+          <p className="ml-12 mt-1 text-[9px] uppercase tracking-[1.5px] text-text-muted">
+            Teacher Workspace
+          </p>
+        )}
       </div>
 
       {/* Main Nav */}
       <nav className="flex-1 px-3">
-        <div className="text-[10px] uppercase tracking-wider text-text-faint font-medium px-3 mb-2">
-          工作台
-        </div>
+        {!collapsed && (
+          <div className="text-[10px] uppercase tracking-wider text-text-faint font-medium px-3 mb-2">工作台</div>
+        )}
         {mainNavItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setSidebarOpen(false)}
-            className={`
-              flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 no-underline text-sm transition-colors duration-200
-              ${isActive(item.href)
-                ? 'bg-primary-fixed text-primary font-medium'
-                : 'text-text-tertiary hover:bg-surface-dim'
-              }
-            `}
-          >
-            <span className="text-base">{item.icon}</span>
-            {item.label}
-          </Link>
+          <SidebarNavLink key={item.href} item={item} collapsed={collapsed} active={isActive(item.href)} onClick={() => setSidebarOpen(false)} />
         ))}
 
         <div className="border-t border-border-subtle my-3" />
-
-        <div className="text-[10px] uppercase tracking-wider text-text-faint font-medium px-3 mb-2">
-          沟通
-        </div>
+        {!collapsed && (
+          <div className="text-[10px] uppercase tracking-wider text-text-faint font-medium px-3 mb-2">沟通</div>
+        )}
         {visibleCommNavItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setSidebarOpen(false)}
-            className={`
-              flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 no-underline text-sm transition-colors duration-200
-              ${isActive(item.href)
-                ? 'bg-primary-fixed text-primary font-medium'
-                : 'text-text-tertiary hover:bg-surface-dim'
-              }
-            `}
-          >
-            <span className="text-base">{item.icon}</span>
-            {item.label}
-          </Link>
+          <SidebarNavLink key={item.href} item={item} collapsed={collapsed} active={isActive(item.href)} onClick={() => setSidebarOpen(false)} />
         ))}
 
         <div className="border-t border-border-subtle my-3" />
-
-        <div className="text-[10px] uppercase tracking-wider text-text-faint font-medium px-3 mb-2">
-          浏览
-        </div>
+        {!collapsed && (
+          <div className="text-[10px] uppercase tracking-wider text-text-faint font-medium px-3 mb-2">浏览</div>
+        )}
         {browseNavItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setSidebarOpen(false)}
-            className={`
-              flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 no-underline text-sm transition-colors duration-200
-              ${isActive(item.href)
-                ? 'bg-primary-fixed text-primary font-medium'
-                : 'text-text-tertiary hover:bg-surface-dim'
-              }
-            `}
-          >
-            <span className="text-base">{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
-
-        <div className="border-t border-border-subtle my-3" />
-
-        {bottomNavItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setSidebarOpen(false)}
-            className={`
-              flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 no-underline text-sm transition-colors duration-200
-              ${isActive(item.href)
-                ? 'bg-primary-fixed text-primary font-medium'
-                : 'text-text-tertiary hover:bg-surface-dim'
-              }
-            `}
-          >
-            <span className="text-base">{item.icon}</span>
-            {item.label}
-          </Link>
+          <SidebarNavLink key={item.href} item={item} collapsed={collapsed} active={isActive(item.href)} onClick={() => setSidebarOpen(false)} />
         ))}
       </nav>
 
       {/* Bottom */}
-      <div className="px-6 pb-6 space-y-1">
-        <button className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-secondary border-0 bg-transparent cursor-pointer transition-colors">
-          <QuestionCircleOutlined /> 帮助支持
-        </button>
+      <div className="px-3 pb-6 space-y-1">
+        {/* 折叠开关(仅桌面) */}
         <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-secondary border-0 bg-transparent cursor-pointer transition-colors"
+          onClick={toggleNav}
+          title={navCollapsed ? '展开导航' : '收起导航'}
+          className={`hidden lg:flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-secondary border-0 bg-transparent cursor-pointer transition-colors ${collapsed ? 'justify-center' : ''}`}
         >
-          <LogoutOutlined /> 退出登录
+          {navCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          {!collapsed && <span>收起</span>}
         </button>
+        {collapsed ? (
+          <>
+            <Tooltip title="帮助支持" placement="right">
+              <button className="flex items-center justify-center w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-secondary border-0 bg-transparent cursor-pointer transition-colors">
+                <QuestionCircleOutlined />
+              </button>
+            </Tooltip>
+            <Tooltip title="退出登录" placement="right">
+              <button onClick={handleLogout} className="flex items-center justify-center w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-secondary border-0 bg-transparent cursor-pointer transition-colors">
+                <LogoutOutlined />
+              </button>
+            </Tooltip>
+          </>
+        ) : (
+          <>
+            <button className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-secondary border-0 bg-transparent cursor-pointer transition-colors">
+              <QuestionCircleOutlined /> 帮助支持
+            </button>
+            <button onClick={handleLogout} className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:text-text-secondary border-0 bg-transparent cursor-pointer transition-colors">
+              <LogoutOutlined /> 退出登录
+            </button>
+          </>
+        )}
       </div>
     </>
   );
@@ -202,8 +187,8 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
   return (
     <div className="min-h-screen bg-bg flex">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-[260px] flex-col fixed inset-y-0 left-0 bg-surface border-r border-border z-40">
-        {sidebarContent}
+      <aside className={`hidden lg:flex ${navCollapsed ? 'w-[64px]' : 'w-[260px]'} flex-col fixed inset-y-0 left-0 bg-surface border-r border-border z-40 transition-[width] duration-200`}>
+        {renderSidebar(navCollapsed)}
       </aside>
 
       {/* Mobile Sidebar Overlay */}
@@ -217,13 +202,13 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
             >
               <CloseOutlined />
             </button>
-            {sidebarContent}
+            {renderSidebar(false)}
           </aside>
         </div>
       )}
 
       {/* Main Content */}
-      <div className="flex-1 min-w-0 lg:ml-[260px]">
+      <div className={`flex-1 min-w-0 ${navCollapsed ? 'lg:ml-[64px]' : 'lg:ml-[260px]'} transition-[margin] duration-200`}>
         {/* Top Bar */}
         <header className="sticky top-0 z-40 h-14 bg-[rgba(250,249,245,0.92)] backdrop-blur-xl shadow-nav">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 h-full">
