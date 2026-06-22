@@ -1,7 +1,6 @@
 import {
   parseRecruitTypeCsv,
   filterGroupsByRecruitType,
-  filterUniversitiesByRecruitType,
   collectRecruitTypes,
 } from './recruit-type-filter';
 
@@ -29,22 +28,6 @@ describe('recruit-type-filter', () => {
     const groups = [g('普通类本科')];
     expect(filterGroupsByRecruitType(groups, '')).toBe(groups);
     expect(filterGroupsByRecruitType(groups, undefined)).toBe(groups);
-  });
-
-  it('filterUniversitiesByRecruitType: 剔除筛后无组的院校', () => {
-    const unis = [
-      { id: 1, groups: [g('普通类本科'), g('民族班')] },
-      { id: 2, groups: [g('民族班')] },
-    ];
-    const out = filterUniversitiesByRecruitType(unis, '普通类本科');
-    expect(out.map((u) => u.id)).toEqual([1]);
-    expect(out[0].groups).toEqual([g('普通类本科')]);
-    expect(out[0].id).toBe(1);
-  });
-
-  it('filterUniversitiesByRecruitType: 空 csv 原样返回同引用', () => {
-    const unis = [{ id: 1, groups: [g('普通类本科')] }];
-    expect(filterUniversitiesByRecruitType(unis, '')).toBe(unis);
   });
 
   it('collectRecruitTypes: distinct + 按组数降序(普通类置顶), 同数 localeCompare', () => {
