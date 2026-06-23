@@ -477,7 +477,11 @@ export class PlanService {
         comment: '开始审核',
       },
     });
-    return this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
+    const plan = await this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
+    if (plan) {
+      await this.notify({ userId: plan.createdById, type: 'plan_review_started', title: '方案进入审核', content: `你的方案「${plan.name}」已被主管认领，正在审核`, refType: 'plan', refId: planId });
+    }
+    return plan;
   }
 
   async submitReview(planId: number, userId: number, underfillReason?: string) {
@@ -508,7 +512,7 @@ export class PlanService {
     // 不足额提交的理由进 notes, 主管审核时可见
     const underfilled = itemCount < maxGroupCount && (underfillReason ?? '').trim().length >= 10;
     const underfillNote = `[不足额提交 ${itemCount}/${maxGroupCount}] ${underfillReason?.trim()}`;
-    return this.prisma.volunteerPlan.update({
+    const updated = await this.prisma.volunteerPlan.update({
       where: { id: planId },
       data: {
         status: next,
@@ -520,6 +524,8 @@ export class PlanService {
           : {}),
       },
     });
+    await this.notifySupervisors({ type: 'plan_submitted', title: '有新方案待审核', content: `方案「${plan.name}」已提交，待主管认领审核`, refType: 'plan', refId: planId });
+    return updated;
   }
 
   async withdrawReview(planId: number, userId: number, reason?: string) {
@@ -718,8 +724,8 @@ export class PlanService {
     }
     const next = this.sm.transition(plan.status, 'PARENT_CONFIRM');
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.volunteerPlan.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.volunteerPlan.update({
         where: { id: planId },
         data: {
           status: next,
@@ -737,8 +743,10 @@ export class PlanService {
           comment: '家长已确认方案',
         },
       });
-      return updated;
+      return result;
     });
+    await this.notify({ userId: plan.createdById, type: 'parent_confirmed', title: '家长已确认方案', content: `方案「${plan.name}」家长已确认，可定稿`, refType: 'plan', refId: planId });
+    return updated;
   }
 
   async parentRequestChange(planId: number, studentUserId: number, comment: string) {
@@ -752,8 +760,8 @@ export class PlanService {
     }
     const next = this.sm.transition(plan.status, 'PARENT_REQUEST_CHANGE');
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.volunteerPlan.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.volunteerPlan.update({
         where: { id: planId },
         data: {
           status: next,
@@ -771,7 +779,9 @@ export class PlanService {
           comment,
         },
       });
-      return updated;
+      return result;
     });
+    await this.notify({ userId: plan.createdById, type: 'parent_change_requested', title: '家长要求修改方案', content: `家长对方案「${plan.name}」提出修改：${comment}`, refType: 'plan', refId: planId });
+    return updated;
   }
 }

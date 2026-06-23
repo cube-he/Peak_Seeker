@@ -391,4 +391,17 @@ describe('PlanService review notifications', () => {
     expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'plan_rejected', refId: 7 }));
     expect(notifications.send).toHaveBeenCalledTimes(1);
   });
+  it('主管认领后通知出方案老师', async () => {
+    prisma.teacherProfile.findUnique.mockResolvedValue({ isSupervisor: true });
+    prisma.$executeRaw = jest.fn().mockResolvedValue(1);
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, createdById: 20, name: 'X' });
+    await service.startReview(7, 99);
+    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'plan_review_started', refId: 7 }));
+  });
+  it('家长确认后通知出方案老师', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, status: 'APPROVED', createdById: 20, studentId: 10, name: 'X', student: { userId: 30 } });
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'PARENT_CONFIRMED' });
+    await service.parentConfirm(7, 30);
+    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'parent_confirmed', refId: 7 }));
+  });
 });
