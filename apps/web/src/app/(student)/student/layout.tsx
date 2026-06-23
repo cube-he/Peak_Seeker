@@ -10,10 +10,10 @@ import {
   StarOutlined,
   BankOutlined,
   UserOutlined,
-  BellOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/authStore';
 import BrandLogo from '@/components/layout/BrandLogo';
+import { NotificationBell } from '@/components/notification/NotificationBell';
 import {
   STUDENT_NAV_ITEMS,
   type StudentNavKey,
@@ -85,9 +85,7 @@ export default function StudentLayout({ children }: StudentLayoutProps) {
           </nav>
 
           <div className="flex items-center gap-3">
-            <button className="w-8 h-8 bg-surface-dim rounded-full flex items-center justify-center text-text-tertiary border-0 cursor-pointer hover:text-primary transition-colors">
-              <BellOutlined className="text-base" />
-            </button>
+            <NotificationBell resolveHref={(n) => `/student/plans/${n.refId}`} />
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
               <button
                 type="button"

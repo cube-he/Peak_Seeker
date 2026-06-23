@@ -20,7 +20,6 @@ import {
   QuestionCircleOutlined,
   LogoutOutlined,
   UserOutlined,
-  BellOutlined,
   MenuOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -34,6 +33,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import BrandLogo from '@/components/layout/BrandLogo';
 import { usePersistentCollapse } from '@/hooks/usePersistentCollapse';
+import { NotificationBell } from '@/components/notification/NotificationBell';
 
 const mainNavItems = [
   { href: '/teacher/dashboard', icon: <AppstoreOutlined />, label: '看板' },
@@ -220,9 +220,7 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
             </button>
             <div className="flex-1" />
             <div className="flex items-center gap-3">
-              <button className="w-8 h-8 bg-surface-dim rounded-full flex items-center justify-center text-text-tertiary border-0 cursor-pointer transition-colors duration-200 hover:text-primary">
-                <BellOutlined className="text-base" />
-              </button>
+              <NotificationBell resolveHref={(n) => `/teacher/plans/${n.refId}`} />
               <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
                 <button
                   type="button"
