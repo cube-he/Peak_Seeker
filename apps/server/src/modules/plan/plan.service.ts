@@ -664,8 +664,8 @@ export class PlanService {
     }
     const next = this.sm.transition(plan.status, dto.action as PlanAction);
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.volunteerPlan.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.volunteerPlan.update({
         where: { id: planId },
         data: {
           status: next,
@@ -690,8 +690,21 @@ export class PlanService {
       await tx.planReviewDraft.deleteMany({
         where: { planId, reviewerId: supervisorUserId },
       });
-      return updated;
+      return result;
     });
+
+    if (dto.action === 'APPROVE') {
+      await this.notify({ userId: plan.createdById, type: 'plan_approved', title: '方案已通过审核', content: `你的方案「${plan.name}」已通过主管审核`, refType: 'plan', refId: planId });
+      const student = await this.prisma.studentProfile.findUnique({ where: { id: plan.studentId }, select: { userId: true } });
+      if (student?.userId) {
+        await this.notify({ userId: student.userId, type: 'plan_approved', title: '方案待确认', content: '老师为你制定的方案已通过审核，请查看并确认', refType: 'plan', refId: planId });
+      }
+    } else if (dto.action === 'REJECT') {
+      await this.notify({ userId: plan.createdById, type: 'plan_rejected', title: '方案被驳回', content: `你的方案「${plan.name}」被主管驳回${dto.comment ? '：' + dto.comment : ''}，可派生新版本修改`, refType: 'plan', refId: planId });
+    } else if (dto.action === 'REQUEST_CHANGE') {
+      await this.notify({ userId: plan.createdById, type: 'plan_change_requested', title: '方案被打回修改', content: `你的方案「${plan.name}」被打回${dto.comment ? '：' + dto.comment : ''}，请修改后重新提交`, refType: 'plan', refId: planId });
+    }
+    return updated;
   }
 
   async parentConfirm(planId: number, studentUserId: number) {

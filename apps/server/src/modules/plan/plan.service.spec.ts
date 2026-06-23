@@ -327,3 +327,68 @@ describe('PlanService workflow gates', () => {
     });
   });
 });
+
+describe('PlanService review notifications', () => {
+  let service: PlanService;
+  let prisma: any;
+  let notifications: any;
+
+  beforeEach(async () => {
+    prisma = {
+      teacherProfile: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      studentProfile: { findUnique: jest.fn() },
+      batchConfig: { findUnique: jest.fn() },
+      volunteerPlan: {
+        create: jest.fn(),
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      planItem: { count: jest.fn(), findMany: jest.fn() },
+      planReview: { create: jest.fn() },
+      planReviewDraft: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      $transaction: jest.fn((cb: any) => cb(prisma)),
+    };
+
+    const mod = await Test.createTestingModule({
+      providers: [
+        PlanService,
+        PlanStateMachineService,
+        { provide: PrismaService, useValue: prisma },
+        {
+          provide: RiskEngineService,
+          useValue: {
+            recomputeForPlan: jest.fn().mockResolvedValue({ evaluated: 0, totalFindings: 0 }),
+            countByPlan: jest.fn().mockResolvedValue({ critical: 0, moderate: 0, minor: 0 }),
+          },
+        },
+        {
+          provide: NotificationService,
+          useValue: { send: jest.fn().mockResolvedValue(undefined) },
+        },
+      ],
+    }).compile();
+    service = mod.get(PlanService);
+    notifications = mod.get(NotificationService);
+  });
+
+  it('APPROVE 通知出方案老师 + 学生', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, status: 'REVIEWING', currentReviewerId: 99, createdById: 20, studentId: 10, name: '小王-本科批' });
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'APPROVED' });
+    prisma.studentProfile.findUnique.mockResolvedValue({ userId: 30 });
+    await service.review(7, 99, { action: 'APPROVE' } as any);
+    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'plan_approved', refId: 7, refType: 'plan' }));
+    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 30, type: 'plan_approved', refId: 7 }));
+  });
+  it('REJECT 只通知出方案老师', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, status: 'REVIEWING', currentReviewerId: 99, createdById: 20, studentId: 10, name: 'X' });
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'REJECTED' });
+    await service.review(7, 99, { action: 'REJECT', comment: '冲档太多' } as any);
+    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'plan_rejected', refId: 7 }));
+    expect(notifications.send).toHaveBeenCalledTimes(1);
+  });
+});
