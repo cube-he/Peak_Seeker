@@ -377,9 +377,8 @@ describe('PlanService review notifications', () => {
   });
 
   it('APPROVE 通知出方案老师 + 学生', async () => {
-    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, status: 'REVIEWING', currentReviewerId: 99, createdById: 20, studentId: 10, name: '小王-本科批' });
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, status: 'REVIEWING', currentReviewerId: 99, createdById: 20, studentId: 10, name: '小王-本科批', student: { userId: 30 } });
     prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'APPROVED' });
-    prisma.studentProfile.findUnique.mockResolvedValue({ userId: 30 });
     await service.review(7, 99, { action: 'APPROVE' } as any);
     expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'plan_approved', refId: 7, refType: 'plan' }));
     expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 30, type: 'plan_approved', refId: 7 }));
@@ -403,5 +402,28 @@ describe('PlanService review notifications', () => {
     prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'PARENT_CONFIRMED' });
     await service.parentConfirm(7, 30);
     expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'parent_confirmed', refId: 7 }));
+  });
+  it('REQUEST_CHANGE 通知出方案老师打回', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, status: 'REVIEWING', currentReviewerId: 99, createdById: 20, studentId: 10, name: 'X' });
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'DRAFT' });
+    await service.review(7, 99, { action: 'REQUEST_CHANGE', comment: '补两个稳档' } as any);
+    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'plan_change_requested', refId: 7 }));
+    expect(notifications.send).toHaveBeenCalledTimes(1);
+  });
+  it('家长退回修改通知出方案老师', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, status: 'APPROVED', createdById: 20, studentId: 10, name: 'X', student: { userId: 30 } });
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'DRAFT' });
+    await service.parentRequestChange(7, 30, '想换个城市');
+    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'parent_change_requested', refId: 7 }));
+  });
+  it('submitReview 广播全部主管', async () => {
+    // findById 走 volunteerPlan.findUnique (含 student/planItems/reviews); batchConfigId=null 跳过批次查询
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, status: 'DRAFT', createdById: 20, studentId: 10, name: 'X', batchConfigId: null, student: { user: {} }, planItems: [], reviews: [] });
+    prisma.planItem.count.mockResolvedValue(0);
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'PENDING_REVIEW' });
+    prisma.teacherProfile.findMany.mockResolvedValue([{ userId: 40 }, { userId: 41 }]);
+    await service.submitReview(7, 20);
+    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 40, type: 'plan_submitted' }));
+    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 41, type: 'plan_submitted' }));
   });
 });

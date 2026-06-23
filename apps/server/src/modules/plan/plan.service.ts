@@ -663,7 +663,10 @@ export class PlanService {
   }
 
   async review(planId: number, supervisorUserId: number, dto: ReviewPlanDto) {
-    const plan = await this.prisma.volunteerPlan.findUnique({ where: { id: planId } });
+    const plan = await this.prisma.volunteerPlan.findUnique({
+      where: { id: planId },
+      include: { student: { select: { userId: true } } },
+    });
     if (!plan) throw new NotFoundException('方案不存在');
     if (plan.currentReviewerId !== supervisorUserId) {
       throw new ForbiddenException('您不是当前审核人');
@@ -701,9 +704,8 @@ export class PlanService {
 
     if (dto.action === 'APPROVE') {
       await this.notify({ userId: plan.createdById, type: 'plan_approved', title: '方案已通过审核', content: `你的方案「${plan.name}」已通过主管审核`, refType: 'plan', refId: planId });
-      const student = await this.prisma.studentProfile.findUnique({ where: { id: plan.studentId }, select: { userId: true } });
-      if (student?.userId) {
-        await this.notify({ userId: student.userId, type: 'plan_approved', title: '方案待确认', content: '老师为你制定的方案已通过审核，请查看并确认', refType: 'plan', refId: planId });
+      if (plan.student?.userId) {
+        await this.notify({ userId: plan.student.userId, type: 'plan_approved', title: '方案待确认', content: '老师为你制定的方案已通过审核，请查看并确认', refType: 'plan', refId: planId });
       }
     } else if (dto.action === 'REJECT') {
       await this.notify({ userId: plan.createdById, type: 'plan_rejected', title: '方案被驳回', content: `你的方案「${plan.name}」被主管驳回${dto.comment ? '：' + dto.comment : ''}，可派生新版本修改`, refType: 'plan', refId: planId });
