@@ -4,15 +4,20 @@ import { PlanService } from './plan.service';
 import { PlanStateMachineService } from './plan-state-machine.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RiskEngineService } from './risk-engine/risk-engine.service';
+import { NotificationService } from '../notification/notification.service';
 import { FEATURE_FLAGS } from '../../config/feature-flags';
 
 describe('PlanService workflow gates', () => {
   let service: PlanService;
   let prisma: any;
+  let notifications: any;
 
   beforeEach(async () => {
     prisma = {
-      teacherProfile: { findUnique: jest.fn().mockResolvedValue(null) },
+      teacherProfile: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       studentProfile: { findUnique: jest.fn() },
       batchConfig: { findUnique: jest.fn() },
       volunteerPlan: {
@@ -47,9 +52,14 @@ describe('PlanService workflow gates', () => {
             countByPlan: jest.fn().mockResolvedValue({ critical: 0, moderate: 0, minor: 0 }),
           },
         },
+        {
+          provide: NotificationService,
+          useValue: { send: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
     service = mod.get(PlanService);
+    notifications = mod.get(NotificationService);
   });
 
   it('createForStudent rejects unverified intake', async () => {

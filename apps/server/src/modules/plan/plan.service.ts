@@ -12,6 +12,7 @@ import { CreatePlanV2Dto } from './dto/create-plan-v2.dto';
 import { ReviewPlanDto } from './dto/review-plan.dto';
 import { PlanStateMachineService, PlanAction } from './plan-state-machine.service';
 import { RiskEngineService } from './risk-engine/risk-engine.service';
+import { NotificationService, NotificationEvent } from '../notification/notification.service';
 import { FEATURE_FLAGS } from '../../config/feature-flags';
 import { validateIntakeForBatchSelection } from '../batch-config/batch-config.service';
 
@@ -21,7 +22,26 @@ export class PlanService {
     private prisma: PrismaService,
     private sm: PlanStateMachineService,
     private riskEngine: RiskEngineService,
+    private notifications: NotificationService,
   ) {}
+
+  /** 发通知；失败静默——审核动作已落库，通知只是锦上添花，不能因发信失败回滚业务 */
+  private async notify(event: NotificationEvent): Promise<void> {
+    try {
+      await this.notifications.send(event);
+    } catch {
+      // 通知失败不阻断审核流转
+    }
+  }
+
+  /** 提交审核时还没有认领人，广播给所有主管 */
+  private async notifySupervisors(event: Omit<NotificationEvent, 'userId'>): Promise<void> {
+    const sups = await this.prisma.teacherProfile.findMany({
+      where: { isSupervisor: true },
+      select: { userId: true },
+    });
+    await Promise.all(sups.map((s) => this.notify({ ...event, userId: s.userId })));
+  }
 
   async create(userId: number, dto: CreatePlanDto) {
     const user = await this.prisma.user.findUnique({
