@@ -1496,9 +1496,18 @@ export class PlanCandidateService {
       groups.set(key, rows);
     }
 
+    // 历史计划查询从单年(sourceYear-1)扩到 4 年 IN(sourceYear-1..-4), 支撑专业层级 majorHistory4y
+    // 的 planCount 列. 2022 EP 不存在(memory 已确认), IN 自然返回空, 无需特判.
     const previousWhere: Record<string, unknown> = {
       province,
-      year: source.sourceYear - 1,
+      year: {
+        in: [
+          source.sourceYear - 1,
+          source.sourceYear - 2,
+          source.sourceYear - 3,
+          source.sourceYear - 4,
+        ],
+      },
     };
     addInFilter(previousWhere, 'subjects', eps.map((ep) => ep.subjects));
     addInFilter(previousWhere, 'batch', eps.map((ep) => ep.batch));
@@ -1516,6 +1525,9 @@ export class PlanCandidateService {
             groupCode: true,
             groupPlanCount: true,
             planCount: true,
+            // 4 年聚合需按 (groupKey, year, majorCode) 索引, year+majorCode 补进 select
+            year: true,
+            majorCode: true,
           },
         })
       : [];
@@ -1668,8 +1680,10 @@ export class PlanCandidateService {
       // 复制进了 plan_count 每行 → 逐行求和会把组总数放大约「专业数」倍(实查 245→5769),
       // 污染卡片"招生计划变动"显示(planCountChange)。
       // 故缺 group_plan_count 即视为去年计划不可比 → null(不走 planCountForGroup 的求和兜底)。
+      // previousByGroup 现在含 4 年, 必须按 year=sourceYear-1 过滤再找 groupPlanCount, 避免拿到更早年的值。
       const previousPlanCount =
-        (previousByGroup.get(groupKey) ?? []).find((r: any) => typeof r.groupPlanCount === 'number')
+        (previousByGroup.get(groupKey) ?? [])
+          .find((r: any) => r.year === source.sourceYear - 1 && typeof r.groupPlanCount === 'number')
           ?.groupPlanCount ?? null;
       const supplementary = supplementaryByGroup.get(groupKey) ?? null;
 

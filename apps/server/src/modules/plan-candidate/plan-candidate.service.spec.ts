@@ -456,13 +456,14 @@ describe('PlanCandidateService', () => {
       ])
       .mockResolvedValueOnce([
         // 去年同组: group_plan_count=24 (组级整组计划), 年度对比用它而非逐行求和
+        // sourceYear=2025 → 上一年 2024; previousPlanCount 现按 year===sourceYear-1 过滤(4年聚合)
         {
           universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
-          groupCode: 'G1', groupPlanCount: 24, planCount: 9,
+          groupCode: 'G1', year: 2024, majorCode: '080901', groupPlanCount: 24, planCount: 9,
         },
         {
           universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
-          groupCode: 'G1', groupPlanCount: 24, planCount: 15,
+          groupCode: 'G1', year: 2024, majorCode: '080801', groupPlanCount: 24, planCount: 15,
         },
       ]);
     prisma.admissionRecord.findMany.mockResolvedValue([
