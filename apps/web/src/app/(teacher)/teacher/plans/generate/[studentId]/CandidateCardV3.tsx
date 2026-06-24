@@ -40,10 +40,17 @@ const PURITY_META: Record<string, { tone: string; label: string; desc: string }>
   C: { tone: 'rush', label: '混乱', desc: '冷热混装，调剂风险高' },
 };
 
+// 把 0~1 score 渲染为「X%」字符串。null/undefined → 空串(由调用方兜底)
+function purityPercent(score: number | null | undefined): string {
+  if (typeof score !== 'number' || Number.isNaN(score)) return '';
+  return `${Math.round(score * 100)}%`;
+}
+
 function purityTitle(purity: any): string {
   if (!purity) return '';
   const m = PURITY_META[purity.level] ?? { desc: '' };
   const parts: string[] = [m.desc];
+  if (typeof purity.score === 'number') parts.unshift(`专家版纯净度 ${Math.round(purity.score * 100)}%`);
   if (purity.majorCount) parts.push(`组内 ${purity.majorCount} 个专业`);
   if (purity.dominantDiscipline) {
     const pct = Math.round((purity.dominantDisciplineRatio ?? 0) * 100);
@@ -52,7 +59,7 @@ function purityTitle(purity: any): string {
   if (purity.crossCategoryCount > 1) parts.push(`跨 ${purity.crossCategoryCount} 门类`);
   if (purity.mixedForeign) parts.push('混入中外合作');
   if (Array.isArray(purity.reasons) && purity.reasons[0]) parts.push(purity.reasons[0]);
-  return parts.join(' · ');
+  return parts.filter(Boolean).join(' · ');
 }
 
 /** rank gap 文案: 老师心算的就是"差多少位/差多少分", 系统直接给绝对值 */
@@ -362,8 +369,8 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
           {/* —— 决策要素 chip(纯净度 / 意向命中 / 征集) —— */}
           <div className="pgv2-decision-row">
             {group?.purity?.level && PURITY_META[group.purity.level] ? (
-              <span className={`pgv2-dchip tone-${PURITY_META[group.purity.level].tone}`} title={PURITY_META[group.purity.level].desc}>
-                纯净度 {PURITY_META[group.purity.level].label}
+              <span className={`pgv2-dchip tone-${PURITY_META[group.purity.level].tone}`} title={purityTitle(group.purity)}>
+                纯净度 {purityPercent(group.purity.score) || PURITY_META[group.purity.level].label}
               </span>
             ) : null}
             {typeof preferredHitCount === 'number' ? (
@@ -421,7 +428,7 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 title={purityTitle(group.purity)}
                 style={{ fontSize: '0.95rem', fontWeight: 600, padding: '4px 10px' }}
               >
-                {PURITY_META[group.purity.level]?.label ?? group.purity.level}
+                {purityPercent(group.purity.score) || PURITY_META[group.purity.level]?.label || group.purity.level}
               </span>
             ) : null}
             {/* 征集(本组·学生科类·累计各轮): 没录满=常伴随降分, 边缘/无史线组的可达性积极信号。
