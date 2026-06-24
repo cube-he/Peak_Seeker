@@ -11,6 +11,7 @@ build/
 # ETL 数据快照 / 大文件:不进 git。这些是 scripts/* 跑出来的中间产物,
 # 可重新生成,且单文件经常 50-100+ MB,GitHub 100MB 硬限会直接拒推。
 scripts/data-processing/output/
+scripts/data-processing/output_2026/
 scripts/data_integration/three_layer_output/
 scripts/import-data/import-data.sql
 
