@@ -55,11 +55,12 @@ async function run() {
   const codeToId = new Map<string, number>();
   let uniNew = 0, uniUpd = 0;
   for (const u of universities) {
-    const code = String(u.enrollCode);
+    const code = String(u.enrollCode).padStart(4, '0');  // 生产 universities.code 恒为 4 位补零, 必须对齐否则误建重复院校/跳过计划
     if (DRY) {
       const existing = await prisma.university.findUnique({ where: { code } });
       existing ? uniUpd++ : uniNew++;
-      if (existing) { codeToId.set(code, existing.id); codeToId.set(code.padStart(4, '0'), existing.id); }
+      // 新校写库时会创建; dry-run 用占位 id 登记, 使 plan/admission 解析计数与真实写库一致
+      codeToId.set(code, existing ? existing.id : -1);
       continue;
     }
     const data = {
