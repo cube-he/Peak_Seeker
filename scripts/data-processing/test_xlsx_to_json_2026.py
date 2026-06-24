@@ -12,6 +12,7 @@ from xlsx_to_json_2026 import (
     REQUIRED_COLS,
     convert_majors,
     extract_group_name,
+    convert_plans_row,
 )
 
 # 86-column header of 四川-2026-专家版数据_批次标准化.xlsx (Sheet1), in order.
@@ -70,3 +71,35 @@ def test_group_name_directed():
 def test_group_name_normal_is_none():
     r = {"专业备注": "(中外合作办学)", "招生类型": "普通类本科"}
     assert extract_group_name(r) is None
+
+
+def _plan_row(**ov):
+    base = {
+        "院校代码": "0001", "专业名称": "环境科学", "专业代码": "41", "专业组代码": "102",
+        "科类": "物理", "批次": "本科批B段", "招生类型": "普通类本科", "本科/专科": "本科",
+        "选科要求": "化学", "是否新增": "否", "老批次1": "本科一批", "学科评估": "A",
+        "本专业硕士点": "是", "本专业博士点": None, "软科评级": "A", "专业备注": "(中外合作办学)",
+        "计划人数": 3, "专业组计划人数": 20, "学费": 5000, "学制": 4,
+        "计划人数结果1": 3, "计划人数结果2": 2, "计划人数结果3": None,
+    }
+    base.update(ov)
+    return base
+
+
+def test_plans_2026_plus_history():
+    plans = convert_plans_row(_plan_row())
+    years = sorted(p["year"] for p in plans)
+    assert years == [2024, 2025, 2026]  # 计划人数结果3 为空 → 无 2023
+    p26 = [p for p in plans if p["year"] == 2026][0]
+    assert p26["planCount"] == 3 and p26["groupPlanCount"] == 20 and p26["tuition"] == 5000
+    assert p26["subjects"] == "物理" and p26["recruitType"] == "普通类本科"
+    assert p26["universityEnrollCode"] == "0001" and p26["groupCode"] == "102"
+    assert p26["planNotes"] == "(中外合作办学)"  # 中外合作回填用
+    assert p26["isNationalFeature"] is False and p26["groupName"] is None
+    p25 = [p for p in plans if p["year"] == 2025][0]
+    assert p25["planCount"] == 3 and p25["groupPlanCount"] is None
+
+
+def test_plans_only_2026_when_history_empty():
+    plans = convert_plans_row(_plan_row(计划人数结果1=None, 计划人数结果2=None, 计划人数结果3=None))
+    assert [p["year"] for p in plans] == [2026]
