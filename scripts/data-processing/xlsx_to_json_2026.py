@@ -94,3 +94,17 @@ def convert_majors(rows) -> list:
             "softRating": _str(r.get("软科评级")),
         })
     return out
+
+
+# --- group name (directed / special groups only) ---------------------------
+
+# 定向/专项类招生：组的可读标识(定向县/专项类型)在 专业备注 里；普通类组无 prose 名(= 生产 group_name 96% 空)
+_DIRECTED_KEYWORDS = ("专项", "定向", "优师", "公费", "民族")
+
+
+def extract_group_name(r) -> str | None:
+    """定向/专项组：返回 专业备注 里的定向县/专项标识；普通类返回 None。best-effort，上线前对生产 group_name 样式校准。"""
+    recruit = _str(r.get("招生类型")) or ""
+    if not any(k in recruit for k in _DIRECTED_KEYWORDS):
+        return None
+    return _str(r.get("专业备注"))

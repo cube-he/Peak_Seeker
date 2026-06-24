@@ -7,7 +7,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pytest
 
-from xlsx_to_json_2026 import build_header_index, REQUIRED_COLS, convert_majors
+from xlsx_to_json_2026 import (
+    build_header_index,
+    REQUIRED_COLS,
+    convert_majors,
+    extract_group_name,
+)
 
 # 86-column header of 四川-2026-专家版数据_批次标准化.xlsx (Sheet1), in order.
 HEADER = [
@@ -55,3 +60,13 @@ def test_majors_dedupe_and_level():
     assert huli["level"] == "本科"  # 职业本科 → 本科
     assert huli["discipline"] == "护理学类"
     assert huli["category"] == "医学"
+
+
+def test_group_name_directed():
+    r = {"专业备注": "(凉山州)(区域教育均衡发展专项计划)", "招生类型": "区域教育均衡发展专项计划"}
+    assert extract_group_name(r) == "(凉山州)(区域教育均衡发展专项计划)"
+
+
+def test_group_name_normal_is_none():
+    r = {"专业备注": "(中外合作办学)", "招生类型": "普通类本科"}
+    assert extract_group_name(r) is None
