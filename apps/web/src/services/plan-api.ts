@@ -58,10 +58,20 @@ export interface CandidateGroupListParams extends CandidateListParams {
   recruitType?: string[];
   // 视图模式: 不传/GROUP = 专业组卡; UNIVERSITY = 院校卡上卷
   groupBy?: 'GROUP' | 'UNIVERSITY';
-  // 院校优先视图: 办学性质过滤 (public=公办, private=民办, 不传=全部)
-  nature?: 'public' | 'private';
+  // 办学性质过滤 (两视图通用): public/private/sinoForeign/hkMacau/independent, 不传=全部
+  nature?: 'public' | 'private' | 'sinoForeign' | 'hkMacau' | 'independent';
   // 中外合作办学过滤 (only=只看, exclude=排除, 不传=全部)
   sinoForeign?: 'only' | 'exclude';
+  // 院校标签 CSV: 985 / 211 / doubleFirstClass; 多选 AND
+  tags?: string;
+  // 院校背景 CSV: 九校联盟 / 卓越大学联盟 / 国防七子 / 兵工七子 / 法学五院四系 / 六大农林 / 电气二龙四虎
+  backgrounds?: string;
+  // 院校所在省 CSV
+  universityProvinces?: string;
+  // 院校所在市 CSV
+  universityCities?: string;
+  // 新增院校/专业: major=组含 isNew 专业, university=院校首次在川招生, either=任一
+  isNewItem?: 'major' | 'university' | 'either';
   // 是否展开"非意向地区"院校组 (默认 false=折叠隐藏); 仅 GROUP 视图
   includeRegionMismatch?: boolean;
   // 是否带出"硬规则不符"(资格不符)放各组 hardFailMajors 桶(灰显+禁加入); 默认不带
@@ -151,6 +161,11 @@ export const planApi = {
         groupBy: params?.groupBy,
         nature: params?.nature,
         sinoForeign: params?.sinoForeign,
+        tags: params?.tags || undefined,
+        backgrounds: params?.backgrounds || undefined,
+        universityProvinces: params?.universityProvinces || undefined,
+        universityCities: params?.universityCities || undefined,
+        isNewItem: params?.isNewItem,
         includeRegionMismatch: params?.includeRegionMismatch,
         includeHardFails: params?.includeHardFails,
         minScore: params?.minScore,

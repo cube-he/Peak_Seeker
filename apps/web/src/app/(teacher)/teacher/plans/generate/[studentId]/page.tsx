@@ -219,6 +219,10 @@ interface CandidateGroup {
   groupName?: string | null;
   batch?: string | null;
   recruitType?: string | null;
+  // 后端 paginate 时挂的新增标记 (服务端任务 2 已接入):
+  // isNewMajor=组内存在 isNew 专业; isNewUniversity=院校历史 3 年未在川招生
+  isNewUniversity?: boolean | null;
+  isNewMajor?: boolean | null;
   subjects?: string | null;
   currentPlanYear?: number | null;
   previousPlanYear?: number | null;
@@ -1043,8 +1047,11 @@ export default function GeneratePlanPage() {
   const viewModeAutoApplied = useRef(false);
   const [railCollapsed, toggleRail] = usePersistentCollapse('vh.teacher.generate.railCollapsed');
   const [uniSort, setUniSort] = useState<UniversitySortValue>('UNIVERSITY_OVERALL');
-  // 院校优先视图: 办学性质过滤 (null=全部, 'public'=公办, 'private'=民办)
-  const [natureFilter, setNatureFilter] = useState<'public' | 'private' | null>(null);
+  // 办学性质过滤 (两视图通用; null=全部):
+  // public=公办 / private=民办 / sinoForeign=中外合作 / hkMacau=港澳合作办学 / independent=独立学院
+  const [natureFilter, setNatureFilter] = useState<
+    'public' | 'private' | 'sinoForeign' | 'hkMacau' | 'independent' | null
+  >(null);
   // 中外合作过滤 (两视图通用): null=全部, 'only'=只看, 'exclude'=排除
   const [sinoForeignFilter, setSinoForeignFilter] = useState<'only' | 'exclude' | null>(null);
   // 分数条: null=未筛; [lo,hi]=已选区间(今年预估分)
@@ -1068,6 +1075,32 @@ export default function GeneratePlanPage() {
   const [recruitTypeFilter, setRecruitTypeFilter] = useState<string[]>([]);
   const toggleRecruitType = (rt: string) =>
     setRecruitTypeFilter((prev) => (prev.includes(rt) ? prev.filter((x) => x !== rt) : [...prev, rt]));
+  // Task 4 7 项筛选 (服务端分页层应用, 不进缓存键):
+  // 院校标签 985/211/双一流 多选 AND
+  const [tagsFilter, setTagsFilter] = useState<string[]>([]);
+  const toggleTag = (t: string) =>
+    setTagsFilter((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  // 院校背景 (九校联盟 等) 多选 OR
+  const [backgroundsFilter, setBackgroundsFilter] = useState<string[]>([]);
+  const toggleBackground = (b: string) =>
+    setBackgroundsFilter((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]));
+  // 院校所在省 多选 IN
+  const [provincesFilter, setProvincesFilter] = useState<string[]>([]);
+  const toggleProvince = (p: string) =>
+    setProvincesFilter((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+  // 城市: 老师手敲(本期不画选项, claude-design 后续做).
+  const [citiesFilter, setCitiesFilter] = useState<string[]>([]);
+  const [cityInput, setCityInput] = useState<string>('');
+  const addCity = () => {
+    const v = cityInput.trim();
+    if (!v) return;
+    setCitiesFilter((prev) => (prev.includes(v) ? prev : [...prev, v]));
+    setCityInput('');
+  };
+  const removeCity = (c: string) =>
+    setCitiesFilter((prev) => prev.filter((x) => x !== c));
+  // 新增院校/专业 单选: 全部 / 含新增专业 (major) / 含新增院校 (university)
+  const [newItemFilter, setNewItemFilter] = useState<'major' | 'university' | null>(null);
   // FilterBar / 趋势 toggle 已下线: pgv2 设计稿用 4 chip 梯度 + showHidden 替代
   // 不持久化的"不考虑"集合（per-session）
   const [hiddenGroupKeys, setHiddenGroupKeys] = useState<Set<string>>(new Set());
@@ -1168,7 +1201,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), viewMode === 'UNIVERSITY' ? natureFilter : null, sinoForeignFilter, hasSearch ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null), recruitTypeFilter.join(',')],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), natureFilter, sinoForeignFilter, hasSearch ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null), recruitTypeFilter.join(','), tagsFilter.join(','), backgroundsFilter.join(','), provincesFilter.join(','), citiesFilter.join(','), newItemFilter],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1191,9 +1224,16 @@ export default function GeneratePlanPage() {
       excludeAdded,
       purity: purityFilter,
       groupBy: viewMode === 'UNIVERSITY' ? 'UNIVERSITY' : undefined,
-      nature: viewMode === 'UNIVERSITY' ? (natureFilter ?? undefined) : undefined,
+      // 办学性质: 2026-06-25 起两视图共用 (后端 GROUP 视图分页层也已接入)
+      nature: natureFilter ?? undefined,
       sinoForeign: sinoForeignFilter ?? undefined,
       recruitType: recruitTypeFilter,
+      // Task 4 7 项 chip 筛选 (CSV 透传到后端; 空数组 / null = undefined)
+      tags: tagsFilter.length > 0 ? tagsFilter.join(',') : undefined,
+      backgrounds: backgroundsFilter.length > 0 ? backgroundsFilter.join(',') : undefined,
+      universityProvinces: provincesFilter.length > 0 ? provincesFilter.join(',') : undefined,
+      universityCities: citiesFilter.length > 0 ? citiesFilter.join(',') : undefined,
+      isNewItem: newItemFilter ?? undefined,
       // 搜索时不发分数窗口: 让够不着(超出预估分)的院校也能被搜到
       minScore: hasSearch ? undefined : (scoreRange ? scoreRange[0] : undefined),
       maxScore: hasSearch ? undefined : (scoreRange ? scoreRange[1] : undefined),
@@ -1403,7 +1443,7 @@ export default function GeneratePlanPage() {
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
-  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, includeRegionMismatch, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, natureFilter]);
+  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, includeRegionMismatch, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, natureFilter, tagsFilter, backgroundsFilter, provincesFilter, citiesFilter, newItemFilter]);
 
   // 视图模式默认跟随 plan/student.priorityMode (仅在无 ?view= URL 参数时, 自动定一次)
   useEffect(() => {
@@ -2492,8 +2532,8 @@ export default function GeneratePlanPage() {
                 ) : null}
               </div>
 
-              {/* —— 招生类型过滤 chip (多选; 空 = 全部; 同批次混多招生类型时才出现) —— */}
-              {(candidateGroups?.availableRecruitTypes ?? []).length > 1 ? (
+              {/* —— 招生类型过滤 chip (多选; 空 = 全部; 后端给出可选项即渲染, 无 >1 守门) —— */}
+              {(candidateGroups?.availableRecruitTypes ?? []).length > 0 ? (
                 <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
                   <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>招生类型</span>
                   {(candidateGroups?.availableRecruitTypes ?? []).map((rt) => {
@@ -2554,6 +2594,195 @@ export default function GeneratePlanPage() {
                 </div>
               ) : null}
 
+              {/* —— 办学性质 chip (两视图通用; 5 项单选) —— */}
+              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
+                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>办学性质</span>
+                {([
+                  { v: null, label: '全部' },
+                  { v: 'public' as const, label: '公办' },
+                  { v: 'private' as const, label: '民办' },
+                  { v: 'sinoForeign' as const, label: '中外合作' },
+                  { v: 'hkMacau' as const, label: '港澳合作' },
+                  { v: 'independent' as const, label: '独立学院' },
+                ]).map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    className={`pgv2-tier-chip ${natureFilter === opt.v ? 'is-active' : ''}`}
+                    onClick={() => setNatureFilter(opt.v)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* —— 院校标签 chip (985 / 211 / 双一流; 多选 AND) —— */}
+              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
+                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>院校标签</span>
+                {([
+                  { v: '985', label: '985' },
+                  { v: '211', label: '211' },
+                  { v: 'doubleFirstClass', label: '双一流' },
+                ]).map((opt) => {
+                  const active = tagsFilter.includes(opt.v);
+                  return (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      className={`pgv2-tier-chip ${active ? 'is-active' : ''}`}
+                      onClick={() => toggleTag(opt.v)}
+                      title="多选 AND: 同时满足所选标签"
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+                {tagsFilter.length > 0 ? (
+                  <button
+                    type="button"
+                    className="pgv2-tier-chip"
+                    onClick={() => setTagsFilter([])}
+                    style={{ opacity: 0.7 }}
+                  >
+                    清除
+                  </button>
+                ) : null}
+              </div>
+
+              {/* —— 院校背景 chip (7 个联盟; 多选 OR) —— */}
+              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
+                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>院校背景</span>
+                {[
+                  '九校联盟',
+                  '卓越大学联盟',
+                  '国防七子',
+                  '兵工七子',
+                  '法学五院四系',
+                  '六大农林',
+                  '电气二龙四虎',
+                ].map((b) => {
+                  const active = backgroundsFilter.includes(b);
+                  return (
+                    <button
+                      key={b}
+                      type="button"
+                      className={`pgv2-tier-chip ${active ? 'is-active' : ''}`}
+                      onClick={() => toggleBackground(b)}
+                      title="多选 OR: 命中任一即显示"
+                    >
+                      {b}
+                    </button>
+                  );
+                })}
+                {backgroundsFilter.length > 0 ? (
+                  <button
+                    type="button"
+                    className="pgv2-tier-chip"
+                    onClick={() => setBackgroundsFilter([])}
+                    style={{ opacity: 0.7 }}
+                  >
+                    清除
+                  </button>
+                ) : null}
+              </div>
+
+              {/* —— 院校所在省 chip (常用 12 省; 多选 IN) —— */}
+              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
+                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>院校所在省</span>
+                {[
+                  '北京', '上海', '天津', '重庆',
+                  '江苏', '浙江', '广东', '湖北',
+                  '陕西', '四川', '辽宁', '山东',
+                ].map((p) => {
+                  const active = provincesFilter.includes(p);
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      className={`pgv2-tier-chip ${active ? 'is-active' : ''}`}
+                      onClick={() => toggleProvince(p)}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+                {provincesFilter.length > 0 ? (
+                  <button
+                    type="button"
+                    className="pgv2-tier-chip"
+                    onClick={() => setProvincesFilter([])}
+                    style={{ opacity: 0.7 }}
+                  >
+                    清除
+                  </button>
+                ) : null}
+              </div>
+
+              {/* —— 城市: 占位输入框, 老师手敲 + 回车添加 (claude-design 后续做选项) —— */}
+              <div className="pgv2-tier-bar" style={{ marginTop: 4, alignItems: 'center', gap: 6 }}>
+                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>院校所在市</span>
+                <input
+                  type="text"
+                  value={cityInput}
+                  onChange={(e) => setCityInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addCity();
+                    }
+                  }}
+                  placeholder="输入城市名,回车添加"
+                  style={{
+                    border: '1px solid #d9d9d9',
+                    borderRadius: 4,
+                    padding: '2px 8px',
+                    fontSize: 12,
+                    width: 160,
+                    height: 24,
+                  }}
+                />
+                {citiesFilter.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className="pgv2-tier-chip is-active"
+                    onClick={() => removeCity(c)}
+                    title="点击移除"
+                  >
+                    {c} ×
+                  </button>
+                ))}
+                {citiesFilter.length > 0 ? (
+                  <button
+                    type="button"
+                    className="pgv2-tier-chip"
+                    onClick={() => setCitiesFilter([])}
+                    style={{ opacity: 0.7 }}
+                  >
+                    清除
+                  </button>
+                ) : null}
+              </div>
+
+              {/* —— 新增院校/专业 chip (单选) —— */}
+              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
+                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>新增</span>
+                {([
+                  { v: null, label: '全部' },
+                  { v: 'major' as const, label: '含新增专业' },
+                  { v: 'university' as const, label: '含新增院校' },
+                ]).map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    className={`pgv2-tier-chip ${newItemFilter === opt.v ? 'is-active' : ''}`}
+                    onClick={() => setNewItemFilter(opt.v)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
               {/* —— Region 5: pgv2-tier-bar 8 段梯度过滤 chip; 院校优先模式下隐藏(专业维度) —— */}
               {viewMode === 'MAJOR' ? (
                 <div className="pgv2-tier-bar">
@@ -2592,22 +2821,6 @@ export default function GeneratePlanPage() {
                 </div>
               ) : (
                 <div className="pgv2-tier-bar">
-                  <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>办学性质</span>
-                  {([
-                    { v: null, label: '全部' },
-                    { v: 'public' as const, label: '公办' },
-                    { v: 'private' as const, label: '民办' },
-                  ]).map((opt) => (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      className={`pgv2-tier-chip ${natureFilter === opt.v ? 'is-active' : ''}`}
-                      onClick={() => setNatureFilter(opt.v)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                  <span className="pgv2-tier-sep" aria-hidden="true" />
                   <span className="pgv2-density-note">
                     当前展示 <strong>{candidateUniversities.length}</strong> 所院校（本页）,
                     共 <strong>{candidateGroups?.total ?? 0}</strong> 所 · 按
