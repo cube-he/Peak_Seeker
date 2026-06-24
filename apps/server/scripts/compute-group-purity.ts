@@ -9,7 +9,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
-import { GroupPurityService } from '../src/modules/group-purity/group-purity.service';
+import { GroupPurityService, isForeignMajor } from '../src/modules/group-purity/group-purity.service';
 
 interface CliArgs {
   year?: number;
@@ -51,6 +51,13 @@ async function main() {
   const levelStats: Record<string, number> = { S: 0, A: 0, B: 0, C: 0 };
 
   for (const scope of scopes) {
+    // 历史年(< 2026)无专家版分数, 跳过整个 scope; 现有 group_purities 记录(由旧规则引擎写入)保留不动。
+    // 见 docs/superpowers/plans/2026-06-24-group-purity-from-expert-data.md
+    if (scope.year < 2026) {
+      console.log(`[GroupPurity] 跳过 ${scope.year} / ${scope.province} (历史年无专家版分数, 保留既有记录)`);
+      continue;
+    }
+
     console.log(`\n[GroupPurity] 处理 ${scope.year} / ${scope.province}`);
 
     // 拉 enrollment_plans, 带 groupPurityScore + major 上下文(用于 tooltip 描述字段)
@@ -85,6 +92,12 @@ async function main() {
         groups.set(key, g);
       } else if (g.score === null && ep.groupPurityScore !== null) {
         g.score = ep.groupPurityScore;
+      } else if (
+        g.score !== null && ep.groupPurityScore !== null &&
+        Math.abs(g.score - ep.groupPurityScore) > 1e-6
+      ) {
+        // 主表组内分数应一致(2026-06-24 验证 12275 组 0 撞键)。若未来出现不一致, 抛日志, 不修复(保留第一个非空值)。
+        console.warn(`[GroupPurity] WARN: divergent score within group ${key}: first=${g.score} now=${ep.groupPurityScore}`);
       }
       g.majors.push({
         name: ep.major?.name ?? ep.majorName ?? '',
@@ -110,7 +123,7 @@ async function main() {
       // 描述字段(tooltip 用): 主导专业类/门类/N
       const catCount = new Map<string, number>();
       const discCount = new Map<string, number>();
-      const foreignFlags = g.majors.map((m) => /中外合作|合作办学|国际合作|中外合资/.test(m.name));
+      const foreignFlags = g.majors.map((m) => isForeignMajor(m.name));
       for (const m of g.majors) {
         if (m.category) catCount.set(m.category, (catCount.get(m.category) ?? 0) + 1);
         if (m.discipline) discCount.set(m.discipline, (discCount.get(m.discipline) ?? 0) + 1);

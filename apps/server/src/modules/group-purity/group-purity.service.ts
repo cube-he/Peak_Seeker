@@ -2,6 +2,11 @@ import { Injectable } from '@nestjs/common';
 
 /**
  * 客观纯净度档位。
+ *
+ * NOTE (2026-06-24): bandFromScore (static method below) is the production source of truth.
+ * The assess() rule engine is kept for backward compatibility but is no longer called by
+ * compute-group-purity.ts (see docs/superpowers/plans/2026-06-24-group-purity-from-expert-data.md).
+ *
  * - S（纯净）: 全同类 / 单门类且 N≤6（可填满无调剂）
  * - A（较纯净）: 同门类、主导专业类 ≥70%、N≤10
  * - B（混杂）: 跨 2 门类有主导 (≥50%)、N≤15
@@ -39,9 +44,13 @@ export interface GroupPurityResult {
   reasons: string[];
 }
 
-const FOREIGN_KEYWORDS = ['中外合作', '合作办学', '国际合作', '中外合资'];
+export const FOREIGN_KEYWORDS = ['中外合作', '合作办学', '国际合作', '中外合资'];
 
 function isForeign(name: string): boolean {
+  return FOREIGN_KEYWORDS.some((k) => name.includes(k));
+}
+
+export function isForeignMajor(name: string): boolean {
   return FOREIGN_KEYWORDS.some((k) => name.includes(k));
 }
 
