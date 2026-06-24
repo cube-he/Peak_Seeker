@@ -510,6 +510,70 @@ describe('PlanCandidateService', () => {
       majorMinScore: 615,
       majorMinRank: 9500,
     }));
+
+    // ---- 专业优先模式: 每个 CandidateMajor 暴露 4 年历史(min/avg score+rank + planCount)
+    // years = [admissionBaselineYear, -1, -2, -3] = [2025, 2024, 2023, 2022] (按年降序).
+    // fixture 有 2025/2024 majorCode='080901' record, 2023/2022 缺 → null. Automation 全缺 → 4 个 null record.
+    const csMajor = result.groups[0].majors.find((m: any) => m.majorCode === '080901');
+    expect(csMajor.majorHistory4y).toHaveLength(4);
+    expect(csMajor.majorHistory4y.map((h: any) => h.year)).toEqual([2025, 2024, 2023, 2022]);
+    expect(csMajor.majorHistory4y[0]).toEqual({
+      year: 2025, minScore: 615, minRank: 9500,
+      avgScore: null, avgRank: null, // fixture 未 mock avg* → null
+      planCount: 10, // 当前年 EP.planCount(2025 计划记录里 080901=10)
+    });
+    expect(csMajor.majorHistory4y[1]).toEqual({
+      year: 2024, minScore: 605, minRank: 9800,
+      avgScore: null, avgRank: null,
+      planCount: 9, // 去年 EP.planCount(2024 previousPlans 里 080901=9)
+    });
+    expect(csMajor.majorHistory4y[2].minScore).toBeNull();
+    expect(csMajor.majorHistory4y[3].minScore).toBeNull();
+
+    // ---- 组级 previousMajorsAdmissionSum2025: 用本组 majorCode 列表回查 sourceYear-1 录取数和.
+    // sourceYear=2025 → 取 2024 录取: 080901 majorAdmissionCount=8; 080801 无 record → sum=8.
+    expect(result.groups[0].previousMajorsAdmissionSum2025).toBe(8);
+  });
+
+  it('全组所有专业上一年均无录取记录时, previousMajorsAdmissionSum2025 为 null', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: [], preferredMajorCategories: [], excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 1 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 200, universityId: 2, majorId: 21,
+          university: { id: 2, name: 'Beta University', code: 'B01' },
+          major: { id: 21, name: 'Brand New Major', code: '999999', category: 'X' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '999999', majorName: 'Brand New Major', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G2', groupName: 'Physics group', groupPlanCount: 10,
+          subjectRequirements: 'Physics required', planCount: 10,
+        },
+      ])
+      .mockResolvedValueOnce([]); // 去年无任何 EP
+    // 只有当前年 record, 上一年(2024) 无任何 majorCode 命中
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      {
+        universityId: 2, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G2', majorCode: '999999', majorName: 'Brand New Major', year: 2025,
+        groupMinRank: 50000, groupMinScore: 540, groupAdmissionCount: 10,
+        majorMinRank: 50000, majorMinScore: 540, majorAdmissionCount: 10,
+      },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+    expect(result.groups).toHaveLength(1);
+    // 全组上一年(2024) 无录取 → null (而非 0, 避免显示"招生 X vs 去年 0 人"误导)
+    expect(result.groups[0].previousMajorsAdmissionSum2025).toBeNull();
   });
 
   it('去年缺 group_plan_count 时不逐行求和, previousPlanCount/planCountChange 置空', async () => {

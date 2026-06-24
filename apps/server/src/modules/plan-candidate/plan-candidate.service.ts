@@ -1733,20 +1733,24 @@ export class PlanCandidateService {
         const currentRecord = adIndex.get(recordKeyOf({ ...ep, year: source.admissionBaselineYear }));
         const previousRecord = adIndex.get(recordKeyOf({ ...ep, year: source.admissionBaselineYear - 1 }));
         // 专业 4 年历史: 每年从 adIndex(AdmissionRecord) + previousByGroup(EnrollmentPlan) 取
-        // 同 majorCode 的 6 指标: minScore/minRank/avgScore/avgRank/planCount/year. previousByGroup
-        // 是 groupKey 聚合 4 年, 这里按 (year, majorCode) 取 EP planCount.
-        // years 已为 [baseline, -1, -2, -3] 4 个;EP 端 sourceYear-4 对应 baseline-3 一致.
+        // 同 majorCode 的 6 指标: minScore/minRank/avgScore/avgRank/planCount/year.
+        // previousByGroup IN [sourceYear-1..-4], 不含当前 sourceYear; 当前年 planCount 直接读 ep.planCount.
+        // years=[baseline, -1, -2, -3]; 普通场景 baseline===sourceYear, fallback 时 baseline 可能 < sourceYear.
         const groupPrevPlans = previousByGroup.get(groupKeyOf(ep)) ?? [];
         const majorHistory4y = years.map((y) => {
           const ar = adIndex.get(recordKeyOf({ ...ep, year: y }));
           const pp = groupPrevPlans.find((r: any) => r.year === y && r.majorCode === ep.majorCode);
+          // 当前年(source.sourceYear) 的 planCount 走 ep.planCount, 其他年走 previousByGroup.
+          // previousByGroup IN [sourceYear-1..-4] 不含当前 sourceYear → 当前年只能从 ep 自身取.
+          // 用 sourceYear 而非 ep.year 比对, 兼容 select 未必取 year 列的情况.
+          const planCount = y === source.sourceYear ? (ep.planCount ?? null) : (pp?.planCount ?? null);
           return {
             year: y,
             minScore: ar?.majorMinScore ?? null,
             minRank: ar?.majorMinRank ?? null,
             avgScore: ar?.majorAvgScore ?? null,
             avgRank: ar?.majorAvgRank ?? null,
-            planCount: pp?.planCount ?? null,
+            planCount,
           };
         });
         // 软规则: 学费/办学性质 — 不符合时进 SOFT_FAIL, 由 includeSoftFails 控制
