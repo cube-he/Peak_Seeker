@@ -121,6 +121,8 @@ jest.mock('@tanstack/react-query', () => ({
           total: 1,
           planYear: 2026,
           sourceYear: 2026,
+          admissionBaselineYear: 2025,
+          scoreSegmentYear: 2025,
           previousYear: 2025,
           studentRankUsed: 8000,
           groups: [mockCandidateGroup],
@@ -196,6 +198,13 @@ describe('GeneratePlanPage', () => {
     // 切换按钮始终显示两个
     expect(await screen.findByText('投档线趋势')).toBeInTheDocument();
     expect(await screen.findByText('组最低趋势')).toBeInTheDocument();
+  });
+
+  it('renders historical-baseline note when admission lines come from an earlier year', async () => {
+    // 2026 计划 + 2025 录取基准 → 提示老师录取线/换算是用历史年预测的
+    render(<GeneratePlanPage />);
+
+    expect(await screen.findByText(/录取参考线与位次换算基于/)).toBeInTheDocument();
   });
 
   it('renders NotesChip next to major name when planNotes present', async () => {

@@ -325,6 +325,8 @@ interface CandidateGroupListResult {
   availableRecruitTypes?: string[];
   planYear?: number;
   sourceYear?: number;
+  admissionBaselineYear?: number;
+  scoreSegmentYear?: number;
   previousYear?: number;
   sourceBatchName?: string;
   isFallbackYear?: boolean;
@@ -1264,6 +1266,12 @@ export default function GeneratePlanPage() {
   }, [plan?.status, planItems.length, maxGroupCount, criticalUnresolved]);
 
   const isUsingFallbackYear = Boolean(candidateGroups?.isFallbackYear && candidateGroups.sourceYear && candidateGroups.planYear);
+  // 录取线/位次换算用的基准年早于招生计划年(典型: 2026计划已入库但录取线止于2025) → 提示老师这是历史线预测
+  const isUsingHistoricalBaseline = Boolean(
+    candidateGroups?.admissionBaselineYear &&
+    candidateGroups?.sourceYear &&
+    candidateGroups.admissionBaselineYear < candidateGroups.sourceYear,
+  );
   const isUsingScoreBasedRank = Boolean(
     candidateGroups?.studentRankSource === 'SCORE_SEGMENT' &&
     candidateGroups.scoreBasedRank &&
@@ -2595,6 +2603,14 @@ export default function GeneratePlanPage() {
                   当前候选池参考 <strong>{candidateGroups!.sourceYear}</strong> 年招生计划,
                   方案年份为 <strong>{candidateGroups!.planYear}</strong>。人数变化按
                   <strong> {candidateGroups!.previousYear ?? (candidateGroups!.sourceYear! - 1)}</strong> 年对比。
+                </div>
+              ) : null}
+
+              {/* —— Region 6b: 录取线/换算用历史基准年提示 (2026计划 + 2025线 场景) —— */}
+              {isUsingHistoricalBaseline ? (
+                <div className="pgv2-source-note">
+                  <InfoCircleOutlined />
+                  录取参考线与位次换算基于 <strong>{candidateGroups!.admissionBaselineYear}</strong> 年历史数据预测（<strong>{candidateGroups!.sourceYear}</strong> 年录取结果尚未公布）。
                 </div>
               ) : null}
 
