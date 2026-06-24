@@ -1810,6 +1810,7 @@ export class PlanCandidateService {
           groupCode: true,
           batch: true,
           subjects: true,
+          score: true,
           level: true,
           majorCount: true,
           dominantCategory: true,
@@ -1824,6 +1825,7 @@ export class PlanCandidateService {
       for (const p of rows) {
         purityMap.set(groupPurityKeyOf(p), {
           level: p.level,
+          score: p.score,
           majorCount: p.majorCount,
           dominantCategory: p.dominantCategory,
           dominantDiscipline: p.dominantDiscipline,
