@@ -7187,6 +7187,7 @@
 .wn-teacher-scope .pgv2-dchip.tone-safe-soft { background: var(--safe-fixed);   color: var(--safe); opacity: .9; }
 .wn-teacher-scope .pgv2-dchip.tone-accent    { background: var(--accent-fixed); color: var(--accent); }
 .wn-teacher-scope .pgv2-dchip.tone-rush      { background: var(--rush-fixed);   color: var(--rush); }
+.wn-teacher-scope .pgv2-dchip.tone-rush-soft { background: var(--rush-fixed);   color: var(--rush); opacity: .9; }
 .wn-teacher-scope .pgv2-dchip.tone-stable    { background: var(--stable-fixed); color: var(--stable); }
 
 /* #4 就业指标 mini 条形 */
