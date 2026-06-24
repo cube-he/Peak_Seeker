@@ -41,6 +41,7 @@ function loadJSON<T>(f: string): T {
 }
 const toInt = (v: any) => { if (v === null || v === undefined) return null; const n = parseInt(String(v), 10); return isNaN(n) ? null : n; };
 const toStr = (v: any) => { if (v === null || v === undefined) return null; const s = String(v).trim(); return s || null; };
+const toFloat = (v: any) => { if (v === null || v === undefined) return null; const n = parseFloat(String(v)); return isNaN(n) ? null : n; };
 
 async function run() {
   await prisma.$connect();
@@ -120,6 +121,7 @@ async function run() {
       oldBatch: toStr(p.oldBatch), disciplineEval: toStr(p.disciplineEval), isNationalFeature: !!p.isNationalFeature,
       majorRanking: toStr(p.majorRanking), majorHonor: toStr(p.majorHonor),
       localMasterPoint: toStr(p.localMasterPoint), localDoctoralPoint: toStr(p.localDoctoralPoint),
+      groupPurityScore: toFloat(p.groupPurityScore),
     };
   };
   const buildAdm = (r: any) => {
