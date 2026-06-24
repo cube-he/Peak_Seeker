@@ -235,6 +235,24 @@ describe('PlanCandidateService', () => {
     expect(supplSpy).toHaveBeenCalledWith(expect.anything(), expect.anything(), 2025, expect.anything());
   });
 
+  it('2026 场景下 score↔rank 换算用 scoreSegmentYear=2025（不是 2026）', async () => {
+    mockCandidateGroupRequest({
+      plans: [makeGroupEnrollmentPlan()],
+      records: [makeGroupAdmissionRecord({ year: 2025 })],
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2026, _count: { _all: 1 } }]);
+    prisma.admissionRecord.groupBy.mockResolvedValue([{ year: 2025 }]);
+    prisma.scoreSegment.groupBy.mockResolvedValue([{ year: 2025 }]);
+    scoreSegment.scoreToRank.mockResolvedValue({ rank: 50000, score: 600 });
+
+    await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH', minScore: 580, maxScore: 620 });
+
+    expect(scoreSegment.scoreToRank).toHaveBeenCalled();
+    for (const call of scoreSegment.scoreToRank.mock.calls) {
+      expect(call[0]).toBe(2025);
+    }
+  });
+
   it('使用紧凑条件查询历史记录，避免为大量候选生成巨大 OR', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: '本科批B段', batchConfigId: 22, year: 2026,

@@ -1555,7 +1555,7 @@ export class PlanCandidateService {
     });
     const page = q.page ?? 1;
     const pageSize = q.pageSize ?? 20;
-    const rankWindow = await this.resolveRankWindow(q.minScore, q.maxScore, source.sourceYear, subjects);
+    const rankWindow = await this.resolveRankWindow(q.minScore, q.maxScore, source.scoreSegmentYear, subjects);
     const cacheKey = this.candidateGroupCacheKey(plan, q);
     const cached = this.getCandidateGroupCache(cacheKey);
     if (cached) {
@@ -1621,7 +1621,7 @@ export class PlanCandidateService {
       });
       if (matchedGroups.length === 0) {
         // keyword 命中 0 个 group, 直接返回空(避免后续昂贵查询)
-        const studentRankInfo = await this.resolveStudentRank(student, source.sourceYear);
+        const studentRankInfo = await this.resolveStudentRank(student, source.scoreSegmentYear);
         const emptyResult: CandidateGroupFullResult = {
           total: 0,
           planYear: source.planYear,
@@ -1832,7 +1832,7 @@ export class PlanCandidateService {
       predictionMapPromise,
       this.resolveBatchCompetition(province, subjects, plan.batchName, source.admissionBaselineYear),
       this.loadSupplementaryByGroup(groups, province, source.admissionBaselineYear, subjects),
-      this.resolveStudentRank(student, source.sourceYear),
+      this.resolveStudentRank(student, source.scoreSegmentYear),
       purityMapPromise,
     ]);
     const previousByGroup = new Map<string, any[]>();
@@ -2296,7 +2296,7 @@ export class PlanCandidateService {
       groups: resultGroups,
       availableTiers,
       appliedTier: q.tier ?? 0,
-      predictedScoreRange: await this.computePredictedScoreRange(resultGroups, source.sourceYear, subjects),
+      predictedScoreRange: await this.computePredictedScoreRange(resultGroups, source.scoreSegmentYear, subjects),
     };
     this.setCandidateGroupCache(cacheKey, fullResult);
     if (q.groupBy === 'UNIVERSITY') {
