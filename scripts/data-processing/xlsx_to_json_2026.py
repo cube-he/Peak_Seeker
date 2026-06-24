@@ -163,3 +163,68 @@ def convert_plans_row(r) -> list:
         })
 
     return plans
+
+
+# --- admission records (2025 full / 2024-2023 major-level) -----------------
+
+def convert_admissions_row(r) -> list:
+    """One master row → admission record dicts for 2025/2024/2023 (suffix 1/2/3).
+
+    2025 carries group-level (专业组录取人数/最低分/位次1) + major-level; 2024/2023 are
+    major-level only (matches prod: group_min_rank only filled from 2024 onward).
+    A year is skipped if ALL its values are None. See spec『admission_records』.
+    """
+    shared = {
+        "universityEnrollCode": _str(r.get("院校代码")),
+        "majorName": _str(r.get("专业名称")),
+        "majorCode": _str(r.get("专业代码")),
+        "groupCode": _str(r.get("专业组代码")),
+        "subjects": _str(r.get("科类")),
+        "batch": _str(r.get("批次")),
+        "recruitType": _str(r.get("招生类型")),
+        "province": "四川",
+        "level": _norm_level(r.get("本科/专科")),
+    }
+
+    records = []
+
+    vals_25 = {
+        "groupAdmissionCount": _int(r.get("专业组录取人数1")),
+        "groupMinScore": _int(r.get("专业组最低分1")),
+        "groupMinRank": _int(r.get("专业组最低位次1")),
+        "majorAdmissionCount": _int(r.get("录取人数1")),
+        "majorMinScore": _int(r.get("最低分1")),
+        "majorMinRank": _int(r.get("最低位次1")),
+        "majorAvgScore": _int(r.get("平均分1")),
+        "majorAvgRank": _int(r.get("平均位次1")),
+        "majorMaxScore": _int(r.get("最高分1")),
+        "majorMaxRank": _int(r.get("最高位次1")),
+    }
+    if _any_not_none(*vals_25.values()):
+        records.append({**shared, "year": 2025, **vals_25})
+
+    # 2024：仅专业级（新主表后缀2 无 最高分/位次、无专业组级列）
+    vals_24 = {
+        "majorAdmissionCount": _int(r.get("录取人数2")),
+        "majorMinScore": _int(r.get("最低分2")),
+        "majorMinRank": _int(r.get("最低位次2")),
+        "majorAvgScore": _int(r.get("平均分2")),
+        "majorAvgRank": _int(r.get("平均位次2")),
+    }
+    if _any_not_none(*vals_24.values()):
+        records.append({**shared, "year": 2024, **vals_24})
+
+    # 2023：专业级（后缀3 有 最高分/位次）
+    vals_23 = {
+        "majorAdmissionCount": _int(r.get("录取人数3")),
+        "majorMinScore": _int(r.get("最低分3")),
+        "majorMinRank": _int(r.get("最低位次3")),
+        "majorAvgScore": _int(r.get("平均分3")),
+        "majorAvgRank": _int(r.get("平均位次3")),
+        "majorMaxScore": _int(r.get("最高分3")),
+        "majorMaxRank": _int(r.get("最高位次3")),
+    }
+    if _any_not_none(*vals_23.values()):
+        records.append({**shared, "year": 2023, **vals_23})
+
+    return records

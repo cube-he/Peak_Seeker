@@ -13,6 +13,7 @@ from xlsx_to_json_2026 import (
     convert_majors,
     extract_group_name,
     convert_plans_row,
+    convert_admissions_row,
 )
 
 # 86-column header of 四川-2026-专家版数据_批次标准化.xlsx (Sheet1), in order.
@@ -103,3 +104,35 @@ def test_plans_2026_plus_history():
 def test_plans_only_2026_when_history_empty():
     plans = convert_plans_row(_plan_row(计划人数结果1=None, 计划人数结果2=None, 计划人数结果3=None))
     assert [p["year"] for p in plans] == [2026]
+
+
+def _adm_row(**ov):
+    base = {
+        "院校代码": "0001", "专业名称": "环境科学", "专业代码": "41", "专业组代码": "102",
+        "科类": "物理", "批次": "本科批B段", "招生类型": "普通类本科", "本科/专科": "本科",
+        "专业组录取人数1": 50, "专业组最低分1": 600, "专业组最低位次1": 12000,
+        "录取人数1": 3, "最低分1": 605, "最低位次1": 10000, "平均分1": 610, "平均位次1": 9000,
+        "最高分1": 620, "最高位次1": 7000,
+        "录取人数2": 2, "最低分2": 598, "最低位次2": 13000, "平均分2": 602, "平均位次2": 11000,
+        "录取人数3": None, "最低分3": None, "最低位次3": None, "平均分3": None, "平均位次3": None,
+        "最高分3": None, "最高位次3": None,
+    }
+    base.update(ov)
+    return base
+
+
+def test_admissions_years_and_levels():
+    recs = convert_admissions_row(_adm_row())
+    years = sorted(r["year"] for r in recs)
+    assert years == [2024, 2025]  # 2023 全空 → 跳过
+    r25 = [r for r in recs if r["year"] == 2025][0]
+    assert r25["groupMinRank"] == 12000 and r25["majorMinRank"] == 10000 and r25["groupAdmissionCount"] == 50
+    assert r25["majorMaxRank"] == 7000 and r25["subjects"] == "物理"
+    r24 = [r for r in recs if r["year"] == 2024][0]
+    assert r24["majorMinRank"] == 13000 and r24.get("groupMinRank") is None
+
+
+def test_admissions_skip_all_empty_year():
+    recs = convert_admissions_row(_adm_row(
+        录取人数2=None, 最低分2=None, 最低位次2=None, 平均分2=None, 平均位次2=None))
+    assert sorted(r["year"] for r in recs) == [2025]
