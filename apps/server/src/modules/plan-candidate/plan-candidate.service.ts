@@ -1715,6 +1715,23 @@ export class PlanCandidateService {
 
         const currentRecord = adIndex.get(recordKeyOf({ ...ep, year: source.admissionBaselineYear }));
         const previousRecord = adIndex.get(recordKeyOf({ ...ep, year: source.admissionBaselineYear - 1 }));
+        // 专业 4 年历史: 每年从 adIndex(AdmissionRecord) + previousByGroup(EnrollmentPlan) 取
+        // 同 majorCode 的 6 指标: minScore/minRank/avgScore/avgRank/planCount/year. previousByGroup
+        // 是 groupKey 聚合 4 年, 这里按 (year, majorCode) 取 EP planCount.
+        // years 已为 [baseline, -1, -2, -3] 4 个;EP 端 sourceYear-4 对应 baseline-3 一致.
+        const groupPrevPlans = previousByGroup.get(groupKeyOf(ep)) ?? [];
+        const majorHistory4y = years.map((y) => {
+          const ar = adIndex.get(recordKeyOf({ ...ep, year: y }));
+          const pp = groupPrevPlans.find((r: any) => r.year === y && r.majorCode === ep.majorCode);
+          return {
+            year: y,
+            minScore: ar?.majorMinScore ?? null,
+            minRank: ar?.majorMinRank ?? null,
+            avgScore: ar?.majorAvgScore ?? null,
+            avgRank: ar?.majorAvgRank ?? null,
+            planCount: pp?.planCount ?? null,
+          };
+        });
         // 软规则: 学费/办学性质 — 不符合时进 SOFT_FAIL, 由 includeSoftFails 控制
         const failReasons = this.checkSoftFails(student, ep, softRules);
         const match = this.scoreMajorMatch(student, ep);
@@ -1782,6 +1799,8 @@ export class PlanCandidateService {
           previousMajorMinScore: previousRecord?.majorMinScore ?? null,
           previousMajorMinRank: previousRecord?.majorMinRank ?? null,
           previousMajorAdmissionCount: previousRecord?.majorAdmissionCount ?? null,
+          // 专业 4 年历史(min/avg score+rank + planCount), 供前端"按专业查看"模式渲染子表
+          majorHistory4y,
           matchScore: match.score,
           matchReasons: match.reasons,
           rankDiffRatio,
