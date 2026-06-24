@@ -125,10 +125,10 @@ describe('PlanCandidateService', () => {
         findMany: jest.fn(),
         groupBy: jest.fn().mockResolvedValue([{ year: 2026, _count: { _all: 1 } }]),
       },
-      admissionRecord: { findMany: jest.fn() },
+      admissionRecord: { findMany: jest.fn(), groupBy: jest.fn().mockResolvedValue([{ year: 2025 }]) },
       rankPrediction: { findMany: jest.fn().mockResolvedValue([]) },
       batchLine: { findFirst: jest.fn().mockResolvedValue(null) },
-      scoreSegment: { findFirst: jest.fn().mockResolvedValue(null) },
+      scoreSegment: { findFirst: jest.fn().mockResolvedValue(null), groupBy: jest.fn().mockResolvedValue([{ year: 2025 }]) },
       supplementarySummary: { findMany: jest.fn().mockResolvedValue([]) },
       supplementaryRecord: { findMany: jest.fn().mockResolvedValue([]) },
       healthRestriction: { findMany: jest.fn().mockResolvedValue([]) },
@@ -185,6 +185,23 @@ describe('PlanCandidateService', () => {
     expect(r.sourceBatchName).toBe('本科批B段');
     expect(r.isFallbackYear).toBe(true);
     expect(r.items).toHaveLength(1);
+  });
+
+  it('2026 计划入库时解耦三个年份：sourceYear=2026, 录取/段表基线=2025', async () => {
+    mockCandidateGroupRequest({
+      plans: [makeGroupEnrollmentPlan()],
+      records: [makeGroupAdmissionRecord({ year: 2025 })],
+    });
+    // 计划已有 2026 行；录取/段表仍止于 2025
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2026, _count: { _all: 1 } }]);
+    prisma.admissionRecord.groupBy.mockResolvedValue([{ year: 2025 }]);
+    prisma.scoreSegment.groupBy.mockResolvedValue([{ year: 2025 }]);
+
+    const r: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    expect(r.sourceYear).toBe(2026);
+    expect(r.admissionBaselineYear).toBe(2025);
+    expect(r.scoreSegmentYear).toBe(2025);
   });
 
   it('使用紧凑条件查询历史记录，避免为大量候选生成巨大 OR', async () => {

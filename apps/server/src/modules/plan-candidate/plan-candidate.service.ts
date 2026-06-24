@@ -91,6 +91,8 @@ interface CandidateGroupFullResult {
   total: number;
   planYear: number;
   sourceYear: number;
+  admissionBaselineYear: number;
+  scoreSegmentYear: number;
   previousYear: number;
   sourceBatchName: string;
   isFallbackYear: boolean;
@@ -993,9 +995,30 @@ export class PlanCandidateService {
     });
     const sourceYear = rows[0]?.year ?? input.planYear;
 
+    // 解耦取数年: 招生计划(sourceYear)归招生计划; 录取线/换算各自落到≤planYear的最近有数据年,
+    // 否则 2026 计划入库即 sourceYear=2026, 而录取/段表止于2025 → 当年线空 → 全组 NO_LINE。
+    const [adBaselineRows, segBaselineRows] = await Promise.all([
+      this.prisma.admissionRecord.groupBy({
+        by: ['year'],
+        where: { province: input.province, year: { lte: input.planYear } },
+        orderBy: { year: 'desc' },
+        take: 1,
+      }),
+      this.prisma.scoreSegment.groupBy({
+        by: ['year'],
+        where: { province: input.province, year: { lte: input.planYear } },
+        orderBy: { year: 'desc' },
+        take: 1,
+      }),
+    ]);
+    const admissionBaselineYear = adBaselineRows[0]?.year ?? sourceYear;
+    const scoreSegmentYear = segBaselineRows[0]?.year ?? sourceYear;
+
     return {
       planYear: input.planYear,
       sourceYear,
+      admissionBaselineYear,
+      scoreSegmentYear,
       sourceBatchName: input.batchName,
       isFallbackYear: sourceYear !== input.planYear,
     };
@@ -1603,6 +1626,8 @@ export class PlanCandidateService {
           total: 0,
           planYear: source.planYear,
           sourceYear: source.sourceYear,
+          admissionBaselineYear: source.admissionBaselineYear,
+          scoreSegmentYear: source.scoreSegmentYear,
           previousYear: source.sourceYear - 1,
           sourceBatchName: source.sourceBatchName,
           isFallbackYear: source.isFallbackYear,
@@ -2255,6 +2280,8 @@ export class PlanCandidateService {
       total: resultGroups.length,
       planYear: source.planYear,
       sourceYear: source.sourceYear,
+      admissionBaselineYear: source.admissionBaselineYear,
+      scoreSegmentYear: source.scoreSegmentYear,
       previousYear: source.sourceYear - 1,
       sourceBatchName: source.sourceBatchName,
       isFallbackYear: source.isFallbackYear,
@@ -2411,6 +2438,8 @@ export class PlanCandidateService {
       pageSize,
       planYear: source.planYear,
       sourceYear: source.sourceYear,
+      admissionBaselineYear: source.admissionBaselineYear,
+      scoreSegmentYear: source.scoreSegmentYear,
       sourceBatchName: source.sourceBatchName,
       isFallbackYear: source.isFallbackYear,
       studentRankUsed: studentRankInfo.rank,
