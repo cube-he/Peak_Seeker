@@ -621,10 +621,11 @@ model EnrollmentPlan {
   localDoctoralPoint String? @map("local_doctoral_point") @db.VarChar(200)
 
   // 专业组信息
-  groupCode      String  @default("") @map("group_code") @db.VarChar(50)
-  groupName      String? @map("group_name") @db.VarChar(200)
-  groupMajors    String? @map("group_majors") @db.Text
-  groupPlanCount Int?    @map("group_plan_count")
+  groupCode        String  @default("") @map("group_code") @db.VarChar(50)
+  groupName        String? @map("group_name") @db.VarChar(200)
+  groupMajors      String? @map("group_majors") @db.Text
+  groupPlanCount   Int?    @map("group_plan_count")
+  groupPurityScore Float?  @map("group_purity_score") // 2026 起从专家版主表直接读 0~1, 历史年 null
 
   // 招生属性
   isNew    Boolean @default(false) @map("is_new")
@@ -2034,6 +2035,11 @@ model GroupPurity {
 
   // 档位
   level String @db.VarChar(2) // S | A | B | C
+
+  // 专家版分数 (0~1, 由 EnrollmentPlan.groupPurityScore 聚合而来)。
+  // 单一专业类 = 1.0, 越散越接近 0。level 由本字段按阈值切档:
+  //   S ≥0.85, A 0.60-0.85, B 0.40-0.60, C <0.40
+  score Float? @map("score")
 
   // 统计字段
   majorCount              Int    @map("major_count")
