@@ -295,7 +295,7 @@ interface PrefMatchResult {
   career?: 'strong' | 'weak';
 }
 
-// 学生偏好对比：candidate group 与 student preferences 的 4 维匹配
+// 学生偏好对比：candidate group 与 student preferences 的 3 维匹配（省份/学费/前景）
 function buildPrefMatch(params: {
   studentProvince: string | null | undefined;
   studentTuitionBudget: string | null | undefined;

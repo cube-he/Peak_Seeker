@@ -298,9 +298,10 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   const tooLow = typeof edge === 'number' && edge > 0.5;
   const mutedReason = regionMismatch ? '非意向地区' : reachFar ? '够不着(门槛远高于学生)' : tooLow ? '分数偏低(可能浪费分)' : '';
   // —— 二维编码: 距离(左色条 dist-*) + 状态(底色 status-*). 距离极端档/无史线 → is-muted 去饱和 ——
-  // 无史线不进 distKey: 灰显由 isMuted 维持, 距离色条按 wen/chong/bao 走以避免色条空白。
+  // 无史线 → distKey='noline' 走 CSS 中性 accent 色条, 但 DistFlag 字典无 noline 条目即不渲染文案,
+  // 避免色条退化成绿色误导老师把无史线读成"稳"档。
   const noLine = group?.dynamicGradient?.baseMinRank == null;
-  const distKey = reachFar ? 'reach' : tooLow ? 'toolow'
+  const distKey = reachFar ? 'reach' : tooLow ? 'toolow' : noLine ? 'noline'
     : tone === 'rush' ? 'chong' : tone === 'safe' ? 'bao' : 'wen';
   const isMuted = reachFar || tooLow || noLine;
 
@@ -391,7 +392,7 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
             ratio={typeof edge === 'number' ? edge : undefined}
             noLine={noLine}
           />
-          {/* —— 决策要素 chip(纯净度 / 意向命中 / 征集) —— */}
+          {/* —— 决策要素 chip(纯净度 / 组变动 / 意向命中) —— */}
           <div className="pgv2-decision-row">
             {group?.purity?.level && PURITY_META[group.purity.level] ? (
               <span className={`pgv2-dchip tone-${PURITY_META[group.purity.level].tone}`} title={purityTitle(group.purity)}>
@@ -434,8 +435,8 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
             ) : null}
           </div>
           {/* —— 专业组级标签 (与院校级分行): 仅保留组身份信息, 决策类信号(纯净度/意向/征集)统一走决策行 —— */}
-          <div className="pgv2-card-tags" style={{ marginTop: 2 }}>
-            {group?.groupCode || group?.groupName ? (
+          {(group?.groupCode || group?.groupName) ? (
+            <div className="pgv2-card-tags" style={{ marginTop: 2 }}>
               <span
                 className="pgv2-tag tone-accent"
                 style={{ fontSize: '0.95rem', fontWeight: 600, padding: '4px 10px', letterSpacing: '0.2px' }}
@@ -443,8 +444,8 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 {group?.groupCode ? `[${group.groupCode}] ` : ''}{group?.groupName ?? '专业组'}
                 {groupMajorCount ? ` · ${groupMajorCount} 专业` : ''}
               </span>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
           <div className="pgv2-card-sub">
             {/* 选科已在组标签/池过滤体现, 折叠态不重复; 此行只留分数信号 */}
             {group?.groupMinScore != null ? (

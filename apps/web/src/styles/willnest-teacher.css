@@ -7094,6 +7094,8 @@
 
 .wn-teacher-scope .pgv2-card-actions {
   display: flex; flex-direction: column; gap: 4px;
+  /* 无史线卡 grade-badge 不渲染时, actions 用 auto 顶到列底, 与其他卡 actions 对齐 */
+  margin-top: auto;
 }
 /* 小图标行(对比 / 隐藏)—— 右上角横排 */
 .wn-teacher-scope .pgv2-card-iconcol {
