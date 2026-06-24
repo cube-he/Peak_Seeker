@@ -221,6 +221,20 @@ describe('PlanCandidateService', () => {
     expect(r.groups[0].dynamicGradient.baseMinRank).not.toBeNull();
   });
 
+  it('2026 场景下征集历史按 admissionBaselineYear=2025 取数（第3参为年份）', async () => {
+    mockCandidateGroupRequest({
+      plans: [makeGroupEnrollmentPlan()],
+      records: [makeGroupAdmissionRecord({ year: 2025 })],
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2026, _count: { _all: 1 } }]);
+    prisma.admissionRecord.groupBy.mockResolvedValue([{ year: 2025 }]);
+    const supplSpy = jest.spyOn(service as any, 'loadSupplementaryByGroup');
+
+    await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    expect(supplSpy).toHaveBeenCalledWith(expect.anything(), expect.anything(), 2025, expect.anything());
+  });
+
   it('使用紧凑条件查询历史记录，避免为大量候选生成巨大 OR', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: '本科批B段', batchConfigId: 22, year: 2026,

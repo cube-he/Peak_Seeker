@@ -1830,8 +1830,8 @@ export class PlanCandidateService {
     ] = await Promise.all([
       previousPlansPromise,
       predictionMapPromise,
-      this.resolveBatchCompetition(province, subjects, plan.batchName, source.sourceYear),
-      this.loadSupplementaryByGroup(groups, province, source.sourceYear, subjects),
+      this.resolveBatchCompetition(province, subjects, plan.batchName, source.admissionBaselineYear),
+      this.loadSupplementaryByGroup(groups, province, source.admissionBaselineYear, subjects),
       this.resolveStudentRank(student, source.sourceYear),
       purityMapPromise,
     ]);
