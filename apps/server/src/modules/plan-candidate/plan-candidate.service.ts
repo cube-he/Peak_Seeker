@@ -2370,7 +2370,10 @@ export class PlanCandidateService {
 
     const adRecords = eps.length
       ? await this.prisma.admissionRecord.findMany({
-          where: this.buildAdmissionRecordWhere(eps, province),
+          where: this.buildAdmissionRecordWhere(eps, province, [
+            source.admissionBaselineYear - 1,
+            source.admissionBaselineYear,
+          ]),
         })
       : [];
     const adIndex = new Map<string, any>();
@@ -2379,22 +2382,25 @@ export class PlanCandidateService {
       adIndex.set(key, ar);
     }
 
+    // 历史线锚定 admissionBaselineYear（当前年）与其上一年；字段名沿用 25/24 历史命名(前端契约), 语义已由基线年驱动
+    const yCur = source.admissionBaselineYear;
+    const yPrev = source.admissionBaselineYear - 1;
     const getHist = (ep: any) => {
-      const k25 = `${ep.universityId}|${ep.subjects}|${ep.batch}|${ep.recruitType}|${ep.groupCode}|${ep.majorCode}|${ep.majorName}|2025`;
-      const k24 = `${ep.universityId}|${ep.subjects}|${ep.batch}|${ep.recruitType}|${ep.groupCode}|${ep.majorCode}|${ep.majorName}|2024`;
-      const r25 = adIndex.get(k25);
-      const r24 = adIndex.get(k24);
+      const kCur = `${ep.universityId}|${ep.subjects}|${ep.batch}|${ep.recruitType}|${ep.groupCode}|${ep.majorCode}|${ep.majorName}|${yCur}`;
+      const kPrev = `${ep.universityId}|${ep.subjects}|${ep.batch}|${ep.recruitType}|${ep.groupCode}|${ep.majorCode}|${ep.majorName}|${yPrev}`;
+      const rCur = adIndex.get(kCur);
+      const rPrev = adIndex.get(kPrev);
       return {
-        score25Group: r25?.groupMinScore ?? null,
-        rank25Group: r25?.groupMinRank ?? null,
-        score25Major: r25?.majorMinScore ?? null,
-        rank25Major: r25?.majorMinRank ?? null,
-        score24Major: r24?.majorMinScore ?? null,
-        rank24Major: r24?.majorMinRank ?? null,
+        score25Group: rCur?.groupMinScore ?? null,
+        rank25Group: rCur?.groupMinRank ?? null,
+        score25Major: rCur?.majorMinScore ?? null,
+        rank25Major: rCur?.majorMinRank ?? null,
+        score24Major: rPrev?.majorMinScore ?? null,
+        rank24Major: rPrev?.majorMinRank ?? null,
       };
     };
 
-    const studentRankInfo = await this.resolveStudentRank(student, source.sourceYear);
+    const studentRankInfo = await this.resolveStudentRank(student, source.scoreSegmentYear);
     const studentRank = studentRankInfo.rank;
     const enriched = eps.flatMap((ep): any[] => {
       // 硬过滤: 学生身份不符合 (性别/健康/户籍/民族) 直接剔除该 EP

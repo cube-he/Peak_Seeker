@@ -261,6 +261,35 @@ describe('PlanCandidateService', () => {
     expect(res.scoreSource).toBe('GROUP');
   });
 
+  it('getCandidates(次要路径) 用 admissionBaselineYear 查历史线（基线=2024 时取 2024 记录）', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026 });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 30000,
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: '男', ethnicity: '汉族' },
+    });
+    // 计划年 2026，但录取只到 2024 → admissionBaselineYear=2024
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2026, _count: { _all: 1 } }]);
+    prisma.admissionRecord.groupBy.mockResolvedValue([{ year: 2024 }]);
+    prisma.enrollmentPlan.findMany.mockResolvedValue([
+      { id: 300, universityId: 3, majorId: 3, university: { name: 'C' }, major: { name: 'M3', code: '0806', notes: '' },
+        recruitType: '普通类', isSinoForeign: false, planNotes: '', tuition: 5000,
+        majorCode: '0806', subjects: '物理', batch: 'Batch A', groupCode: 'G3', majorName: 'M3' },
+    ]);
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      { universityId: 3, subjects: '物理', batch: 'Batch A', recruitType: '普通类', groupCode: 'G3',
+        majorCode: '0806', majorName: 'M3', year: 2024, groupMinRank: 88000, groupMinScore: 560, majorMinRank: 88000, majorMinScore: 560 },
+    ]);
+
+    const r: any = await service.getCandidates(1, { page: 1, pageSize: 10, includeSoftFails: true });
+
+    expect(r.admissionBaselineYear).toBe(2024);
+    // 解耦前：getHist 硬编码查 "|2025" 键 → 2024 记录取不到 → null
+    // 解耦后：基线=2024，当前年槽取到 2024 的线
+    expect(r.items[0].history.rank25Group).toBe(88000);
+  });
+
   it('使用紧凑条件查询历史记录，避免为大量候选生成巨大 OR', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: '本科批B段', batchConfigId: 22, year: 2026,
