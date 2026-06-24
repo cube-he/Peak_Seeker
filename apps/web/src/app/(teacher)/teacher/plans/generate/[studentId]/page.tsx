@@ -128,7 +128,6 @@ interface CandidateMajor {
   majorCategory?: string | null;
   discipline?: string | null;
   softRating?: string | null;
-  majorStrengthScore?: number | null;
   // 专业级征集数(本科类·累计各轮): 该专业去年没招满需补录多少人
   supplementaryCount?: number | null;
   description?: string | null;
@@ -242,7 +241,6 @@ interface CandidateGroup {
     province?: 'match' | 'mismatch';
     tuition?: 'within' | 'over';
     career?: 'strong' | 'weak';
-    subjects?: 'match';
   };
   history3y?: Array<{ year: number; score: number; rank: number; count?: number | null }>;
   historyFiling3y?: Array<{ year: number; score: number; rank: number }>;
@@ -253,7 +251,6 @@ interface CandidateGroup {
   anchorEmploymentRate?: number | string | null;
   anchorAvgSalary?: number | null;
   anchorTuition?: number | null;
-  majorStrengthScore?: number | null;
   recommendedAnchorEnrollmentPlanId?: number | null;
   majors: CandidateMajor[];
   majorSections?: CandidateMajorSections | null;
@@ -384,7 +381,6 @@ const CANDIDATE_SORT_OPTIONS: Array<{
   { label: '录取概率', value: 'SAFETY', dir: { desc: '偏保', asc: '偏冲' } },
   { label: '专业最低分', value: 'MAJOR_MIN_SCORE', dir: { desc: '分高', asc: '分低' } },
   { label: '院校层次', value: 'UNIVERSITY_RANK', dir: { desc: '排名高', asc: '排名低' } },
-  { label: '专业实力', value: 'MAJOR_STRENGTH', dir: { desc: '强', asc: '弱' } },
 ];
 
 // 院校优先视图的排序 (groupBy=UNIVERSITY)

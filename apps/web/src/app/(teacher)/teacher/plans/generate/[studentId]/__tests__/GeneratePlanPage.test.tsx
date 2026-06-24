@@ -69,7 +69,6 @@ const mockCandidateGroup = {
     province: 'match',
     tuition: 'within',
     career: 'strong',
-    subjects: 'match',
   },
   majors: [mockMajor],
   majorSections: {
@@ -216,7 +215,7 @@ describe('GeneratePlanPage', () => {
     expect(await screen.findByText('+1')).toBeInTheDocument();
   });
 
-  it('renders prefMatch chips (province / tuition / career / subjects)', async () => {
+  it('renders prefMatch chips (province / tuition / career)', async () => {
     const { container } = render(<GeneratePlanPage />);
 
     // 等待 match header 渲染
@@ -224,13 +223,12 @@ describe('GeneratePlanPage', () => {
 
     // prefChip 由 CSS class 标识（jest.style-mock 把 class 名映射为字面字符串）
     const prefChips = container.querySelectorAll('.prefChip');
-    expect(prefChips.length).toBeGreaterThanOrEqual(4);
+    expect(prefChips.length).toBeGreaterThanOrEqual(3);
 
-    // 4 个 label 都在 prefChip 容器里
+    // 3 个 label 都在 prefChip 容器里
     const labels = Array.from(prefChips).map((el) => el.textContent || '');
     expect(labels.some((t) => t.includes('本省'))).toBe(true);
     expect(labels.some((t) => t.includes('学费'))).toBe(true);
     expect(labels.some((t) => t.includes('考研方向'))).toBe(true);
-    expect(labels.some((t) => t.includes('选科'))).toBe(true);
   });
 });

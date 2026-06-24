@@ -50,7 +50,6 @@ export function MatchHeader({ matchScore, matchReason, prefMatch, compared, onCo
         {prefMatch?.province !== undefined && <PrefChip label="本省" value={prefMatch.province} kind="province" />}
         {prefMatch?.tuition !== undefined && <PrefChip label="学费" value={prefMatch.tuition} kind="tuition" />}
         {prefMatch?.career !== undefined && <PrefChip label="考研方向" value={prefMatch.career} kind="career" />}
-        {prefMatch?.subjects !== undefined && <PrefChip label="选科" value={prefMatch.subjects} kind="subjects" />}
       </div>
     </div>
   );

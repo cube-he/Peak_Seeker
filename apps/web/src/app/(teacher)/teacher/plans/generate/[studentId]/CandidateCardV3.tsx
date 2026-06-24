@@ -13,11 +13,12 @@ import React from 'react';
 import UniversityLogo from '@/components/university/UniversityLogo';
 
 // 8 段动态梯度 — 与 page.tsx 的 GRADIENT_LABEL / gradientTone 保持一致
+// 无史线状态(NO_LINE)不进 grade-badge 显示, 信号统一交给 RankRuler is-noline + 展开 banner;
+// 见下方 noLine 处理。
 const GRADIENT_LABEL_8: Record<string, string> = {
   JI_CHONG: '极冲', CHONG: '冲', XIAO_CHONG: '小冲',
   WEN: '稳', WEN_BAO: '稳保',
   BAO: '保', QIANG_BAO: '强保', DIBAO: '兜底',
-  NO_LINE: '无史线',
 };
 function tier8(group: any): string {
   // 无任何历史线的组(提前批新设定向组等): calcGradient 兜底值是 BAO,
@@ -25,8 +26,7 @@ function tier8(group: any): string {
   if (group?.dynamicGradient && group.dynamicGradient.baseMinRank == null) return 'NO_LINE';
   return group?.dynamicGradient?.tier ?? group?.suggestedGradient ?? 'WEN';
 }
-function tone8(tier: string): 'rush' | 'stable' | 'safe' | 'accent-soft' {
-  if (tier === 'NO_LINE') return 'accent-soft';
+function tone8(tier: string): 'rush' | 'stable' | 'safe' {
   if (['JI_CHONG', 'CHONG', 'XIAO_CHONG'].includes(tier)) return 'rush';
   if (['BAO', 'QIANG_BAO', 'DIBAO'].includes(tier)) return 'safe';
   return 'stable';
@@ -171,16 +171,16 @@ function MBar({ k, v, suffix = '', chg, title }: { k: string; v?: string | numbe
   );
 }
 
-// 距离虚线灰标(够不着 / 偏低 / 无史线) — 仅极端档/无史线显示
+// 距离虚线灰标(够不着 / 偏低) — 仅极端档显示;
+// 无史线信号不进 dist-flag, 由 RankRuler is-noline + 展开 banner 单独承担, 避免在 4 处重复。
 const DIST_FLAG: Record<string, { label: string; hint: string }> = {
   reach: { label: '够不着', hint: '该专业组录取门槛位次远好于学生, 差距过大、基本够不着, 仅供参考。老师可自主决策。' },
   toolow: { label: '分数偏低', hint: '学生位次远高于该专业组录取门槛, 报考可能浪费分数。老师可自主决策。' },
-  noline: { label: '无史线', hint: '无历史录取线的新设组, 梯度未知, 需人工判断。' },
 };
 function DistFlag({ distKey }: { distKey: string }) {
   const d = DIST_FLAG[distKey];
   if (!d) return null;
-  return <span className={`pgv2-dist-flag ${distKey === 'noline' ? 'noline' : ''}`} title={d.hint}>{d.label}</span>;
+  return <span className="pgv2-dist-flag" title={d.hint}>{d.label}</span>;
 }
 
 // 位次刻度尺: 冲 ←— 你的位次 —→ 保, marker 落在组门槛相对学生的位置
@@ -298,8 +298,9 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   const tooLow = typeof edge === 'number' && edge > 0.5;
   const mutedReason = regionMismatch ? '非意向地区' : reachFar ? '够不着(门槛远高于学生)' : tooLow ? '分数偏低(可能浪费分)' : '';
   // —— 二维编码: 距离(左色条 dist-*) + 状态(底色 status-*). 距离极端档/无史线 → is-muted 去饱和 ——
+  // 无史线不进 distKey: 灰显由 isMuted 维持, 距离色条按 wen/chong/bao 走以避免色条空白。
   const noLine = group?.dynamicGradient?.baseMinRank == null;
-  const distKey = reachFar ? 'reach' : tooLow ? 'toolow' : noLine ? 'noline'
+  const distKey = reachFar ? 'reach' : tooLow ? 'toolow'
     : tone === 'rush' ? 'chong' : tone === 'safe' ? 'bao' : 'wen';
   const isMuted = reachFar || tooLow || noLine;
 
@@ -413,14 +414,6 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 意向命中 {preferredHitCount}/{groupMajorCount}
               </span>
             ) : null}
-            {group?.supplementary && group.supplementary.totalPlanCount > 0 ? (
-              <span
-                className="pgv2-dchip tone-safe-soft"
-                title={`${group.supplementary.sourceYear} 年本组累计征集 ${group.supplementary.totalPlanCount} 人 / ${group.supplementary.totalRounds ?? 1} 轮。征集=没招满需补录, 常伴随降分, 是可达性的积极信号`}
-              >
-                征集 {group.supplementary.totalPlanCount}人/{group.supplementary.totalRounds ?? 1}轮
-              </span>
-            ) : null}
           </div>
           {/* —— 院校级标签 —— */}
           <div className="pgv2-card-tags">
@@ -439,11 +432,8 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 软科{String(uni.runningNature ?? '').includes('民办') ? '民办' : ''} #{uni.softRanking}
               </span>
             ) : null}
-            {/* 征集 chip 暂时撤下: 现有 supplementary 是"院校×批次"汇总且混了物理/历史双科类+多轮累加,
-                数字虚高(招2人专业被显示成征集100人)。征集数据正用已校验版按"科目+专业组+专业"重建,
-                重建后会以"本科类·本组·累计N人/M轮"的正确口径回来。详见 supplementary-data-rebuild 任务 */}
           </div>
-          {/* —— 专业组级标签 (与院校级分行) + 组内专业数 —— */}
+          {/* —— 专业组级标签 (与院校级分行): 仅保留组身份信息, 决策类信号(纯净度/意向/征集)统一走决策行 —— */}
           <div className="pgv2-card-tags" style={{ marginTop: 2 }}>
             {group?.groupCode || group?.groupName ? (
               <span
@@ -452,34 +442,6 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
               >
                 {group?.groupCode ? `[${group.groupCode}] ` : ''}{group?.groupName ?? '专业组'}
                 {groupMajorCount ? ` · ${groupMajorCount} 专业` : ''}
-              </span>
-            ) : null}
-            {group?.purity?.level ? (
-              <span
-                className={`pgv2-tag tone-${PURITY_META[group.purity.level]?.tone ?? 'muted'}`}
-                title={purityTitle(group.purity)}
-                style={{ fontSize: '0.95rem', fontWeight: 600, padding: '4px 10px' }}
-              >
-                {purityPercent(group.purity.score) || PURITY_META[group.purity.level]?.label || group.purity.level}
-              </span>
-            ) : null}
-            {/* 征集(本组·学生科类·累计各轮): 没录满=常伴随降分, 边缘/无史线组的可达性积极信号。
-                数据已按"科目+专业组"重建, 是这个组本科类自己的征集数(非全校汇总) */}
-            {group?.supplementary?.totalPlanCount > 0 ? (
-              <span
-                className="pgv2-tag tone-safe-soft"
-                title={`${group.supplementary.sourceYear ?? ''} 本组${group.supplementary.subject ? '·' + group.supplementary.subject + '类' : ''}累计征集 ${group.supplementary.totalPlanCount} 人 / ${group.supplementary.totalRounds ?? 1} 轮。征集=该组没招满需补录, 常伴随降分; 对位次边缘/无史线组是可达性的积极信号`}
-              >
-                征集 {group.supplementary.totalPlanCount} 人/{group.supplementary.totalRounds ?? 1} 轮
-              </span>
-            ) : null}
-            {/* 组内意向命中数 = 服从调剂落到非意向专业的风险参考(纯净度管"乱不乱", 这个管"是不是想读的") */}
-            {typeof preferredHitCount === 'number' && groupMajorCount ? (
-              <span
-                className={`pgv2-tag ${preferredHitCount > 0 ? 'tone-safe-soft' : 'tone-rush-soft'}`}
-                title={`组内 ${groupMajorCount} 个专业中 ${preferredHitCount} 个命中学生意向。命中越少, 服从调剂落到非意向专业的概率越高`}
-              >
-                意向 {preferredHitCount}/{groupMajorCount}
               </span>
             ) : null}
           </div>
@@ -504,11 +466,15 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
         </div>
 
         <div className="pgv2-card-r">
-          <div className={`pgv2-grade-badge tone-${tone}`}>
-            <span className="lbl">梯度</span>
-            <span className="val">{GRADIENT_LABEL_8[tier] ?? tier}</span>
-            <span className="note">{rankGapText(studentRankForDecision, adjustedRank, studentScoreForDecision, group?.groupMinScore)}</span>
-          </div>
+          {/* 无史线组不显示 grade-badge(没有历史录取线就没有有意义的梯度), 信号已由 RankRuler is-noline 承担。
+              非无史线组按正常 8 段梯度显示。 */}
+          {!noLine ? (
+            <div className={`pgv2-grade-badge tone-${tone}`}>
+              <span className="lbl">梯度</span>
+              <span className="val">{GRADIENT_LABEL_8[tier] ?? tier}</span>
+              <span className="note">{rankGapText(studentRankForDecision, adjustedRank, studentScoreForDecision, group?.groupMinScore)}</span>
+            </div>
+          ) : null}
           <div className="pgv2-card-actions" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"

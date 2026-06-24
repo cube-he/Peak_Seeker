@@ -2,7 +2,7 @@
 
 import styles from './styles.module.css';
 
-export type PrefKind = 'province' | 'tuition' | 'career' | 'subjects';
+export type PrefKind = 'province' | 'tuition' | 'career';
 
 interface Props {
   label: string;
@@ -27,7 +27,6 @@ export function PrefChip({ label, value, kind }: Props) {
   if (kind === 'province') tip = good ? '本省院校（学生倾向）' : bad ? '外省院校（与本省偏好冲突）' : '中性';
   if (kind === 'tuition') tip = good ? '学费在预算范围' : bad ? '部分专业学费超预算' : '中等';
   if (kind === 'career') tip = good ? '强匹配学生职业方向' : bad ? '与学生职业方向偏差' : '部分匹配';
-  if (kind === 'subjects') tip = good ? '选科完全匹配' : bad ? '选科要求不匹配' : '部分匹配';
 
   return (
     <span className={`${styles.prefChip} ${cls}`} title={tip}>

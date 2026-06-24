@@ -35,7 +35,6 @@ export interface ComparableGroup {
     province?: 'match' | 'mismatch';
     tuition?: 'within' | 'over';
     career?: 'strong' | 'weak';
-    subjects?: 'match';
   };
   history3y?: Array<{ year: number; score: number; rank: number }>;
 }
@@ -183,7 +182,6 @@ export function ComparePanel({ groups }: Props) {
             {g.prefMatch.province !== undefined && <Chip label="本省" ok={g.prefMatch.province === 'match'} />}
             {g.prefMatch.tuition !== undefined && <Chip label="学费" ok={g.prefMatch.tuition === 'within'} />}
             {g.prefMatch.career !== undefined && <Chip label="考研" ok={g.prefMatch.career === 'strong'} />}
-            {g.prefMatch.subjects !== undefined && <Chip label="选科" ok={g.prefMatch.subjects === 'match'} />}
           </div>
         );
       },

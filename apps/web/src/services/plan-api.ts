@@ -28,8 +28,7 @@ export type CandidateGroupSort =
   | 'MAJOR_MATCH'
   | 'SAFETY'
   | 'MAJOR_MIN_SCORE'
-  | 'UNIVERSITY_RANK'
-  | 'MAJOR_STRENGTH';
+  | 'UNIVERSITY_RANK';
 
 // 排序方向: DESC = 该轴默认(好的/分高/最稳在前), ASC = 翻转
 export type CandidateSortDir = 'ASC' | 'DESC';

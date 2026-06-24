@@ -6,7 +6,6 @@ export interface PrefMatch {
   province?: 'match' | 'mismatch';
   tuition?: 'within' | 'over';
   career?: 'strong' | 'weak' | 'none';
-  subjects?: 'match' | 'partial' | 'mismatch';
 }
 
 export interface YearPoint {
