@@ -436,6 +436,9 @@ const CANDIDATE_ENROLLMENT_PLAN_SELECT = {
       satisfactionCount: true,
       universityBackground: true, // 院校背景标签 (卓越教师/C9联盟/五院四系等, '/' 分隔)
       firstClassCategory: true, // 一流学科分类
+      level: true, // 院校层次 (本科/专科/职业本科)
+      runningLevel: true, // 办学层次
+      universityTier: true, // 院校档次标签
     },
   },
   major: {
@@ -473,6 +476,8 @@ const CANDIDATE_ADMISSION_RECORD_SELECT = {
   year: true,
   majorMinScore: true,
   majorMinRank: true,
+  majorAvgScore: true,
+  majorAvgRank: true,
   majorAdmissionCount: true,
   groupMinScore: true,
   groupMinRank: true,
@@ -1458,8 +1463,14 @@ export class PlanCandidateService {
     const eps = includeHardFails ? epsRaw : filterEpsBySubjectRequirement(epsRaw, student.reChoices);
     const hardRules = this.buildHardRules(restrictions);
     const softRules = this.buildSoftRules();
-    // 3 年历史：admissionBaselineYear / -1 / -2（录取线基准年, 可早于计划年; 前端 TrendChart 需要 3 点）
-    const years = [source.admissionBaselineYear, source.admissionBaselineYear - 1, source.admissionBaselineYear - 2];
+    // 4 年历史：admissionBaselineYear / -1 / -2 / -3（录取线基准年, 可早于计划年;
+    // 前端 TrendChart 用前 3 点, 专业优先模式 majorHistory4y 用全 4 点到 2022）
+    const years = [
+      source.admissionBaselineYear,
+      source.admissionBaselineYear - 1,
+      source.admissionBaselineYear - 2,
+      source.admissionBaselineYear - 3,
+    ];
     const adRecords = eps.length
       ? await this.prisma.admissionRecord.findMany({
           where: this.buildAdmissionRecordWhere(eps, province, years),
