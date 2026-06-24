@@ -800,8 +800,8 @@ function riskReviewItems(group: CandidateGroup, major: CandidateMajor | undefine
       title: '位次风险',
       tone: gap.tone === 'behind' ? 'danger' : gap.tone === 'ahead' ? 'ok' : 'warn',
       content: adjustedRank
-        ? `排序位次 ${formatRankValue(studentRank)}，修正位次 ${formatRankValue(adjustedRank)}，${gap.text}。`
-        : '暂无修正位次，不能只按分数判断风险。',
+        ? `排序位次 ${formatRankValue(studentRank)}，组门槛位次 ${formatRankValue(adjustedRank)}，${gap.text}。`
+        : '暂无组门槛位次，不能只按分数判断风险。',
     },
     {
       title: '招生计划变化',
@@ -3081,7 +3081,7 @@ export default function GeneratePlanPage() {
                   <h4>下一步建议</h4>
                   <div className="pgv2-hint tone-accent">
                     <span className="ic"><InfoCircleOutlined /></span>
-                    <span>优先补足稳 / 稳保,要求学生位次覆盖修正位次。</span>
+                    <span>优先补足稳 / 稳保,要求学生位次覆盖组门槛位次。</span>
                   </div>
                   <div className="pgv2-hint tone-rush">
                     <span className="ic"><WarningOutlined /></span>
@@ -3197,7 +3197,7 @@ export default function GeneratePlanPage() {
                 <div className="pgv3-decision">
                   <div className="dc"><span className="dl">锚定专业</span><span className="dv">{activeDetail.major.majorName}</span></div>
                   <div className="dc"><span className="dl">组最低 位次 / 分</span><span className="dv">{activeDetail.group.groupMinRank != null ? activeDetail.group.groupMinRank.toLocaleString() : '—'} <i>/ {activeDetail.group.groupMinScore ?? '—'}</i></span></div>
-                  <div className="dc"><span className="dl">修正后位次</span><span className="dv">{adj != null ? adj.toLocaleString() : '—'}</span></div>
+                  <div className="dc"><span className="dl">组门槛位次</span><span className="dv">{adj != null ? adj.toLocaleString() : '—'}</span></div>
                   <div className="dc"><span className="dl">距学生位次</span><span className="dv" style={{ color: gap.tone === 'ahead' ? 'var(--safe)' : gap.tone === 'behind' ? 'var(--rush)' : undefined }}>{gap.text || '—'}</span></div>
                 </div>
               );

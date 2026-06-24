@@ -29,7 +29,7 @@ interface Props {
 
 const fmt = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString() : '—');
 
-// 学生位次 vs 组(修正后)末位的差距 (末位数字越大=越容易进)
+// 学生位次 vs 组末位的差距 (末位数字越大=越容易进)
 function gapText(studentRank: number | null | undefined, minRank: unknown): { txt: string; ahead: boolean } | null {
   if (typeof studentRank !== 'number' || typeof minRank !== 'number') return null;
   const diff = minRank - studentRank; // 正 = 学生领先(更稳)
@@ -162,9 +162,8 @@ export default function UniversityCandidateCard({
                   <span
                     className={`gdiff ${gap.ahead ? 'ahead' : 'behind'}`}
                     style={{ display: 'block' }}
-                    title={adjusted ? `2026 修正位次约 ${fmt(adjusted)}（按招生计划/竞争变化校正历史末位）` : undefined}
                   >
-                    ({adjusted ? '修正后' : ''}{gap.txt})
+                    ({gap.txt})
                   </span>
                 ) : null}
               </span>
