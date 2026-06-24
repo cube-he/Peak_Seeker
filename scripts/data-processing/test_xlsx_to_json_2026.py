@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pytest
 
-from xlsx_to_json_2026 import build_header_index, REQUIRED_COLS
+from xlsx_to_json_2026 import build_header_index, REQUIRED_COLS, convert_majors
 
 # 86-column header of 四川-2026-专家版数据_批次标准化.xlsx (Sheet1), in order.
 HEADER = [
@@ -38,3 +38,20 @@ def test_missing_required_column_raises():
     bad = [c for c in HEADER if c != "院校代码"]
     with pytest.raises(ValueError, match="院校代码"):
         build_header_index(tuple(bad))
+
+
+def test_majors_dedupe_and_level():
+    rows = [
+        {"专业名称": "环境科学", "专业代码": "41", "门类": "工学", "专业类": "环境科学与工程类",
+         "本科/专科": "本科", "专业备注": "x", "专业水平": "A+", "软科评级": "A"},
+        {"专业名称": "环境科学", "专业代码": "41", "门类": "工学", "专业类": "环境科学与工程类",
+         "本科/专科": "本科", "专业备注": "x", "专业水平": "A+", "软科评级": "A"},
+        {"专业名称": "护理", "专业代码": "50", "门类": "医学", "专业类": "护理学类",
+         "本科/专科": "职业本科", "专业备注": None, "专业水平": None, "软科评级": None},
+    ]
+    majors = convert_majors(rows)
+    assert len(majors) == 2  # 环境科学 去重
+    huli = [m for m in majors if m["name"] == "护理"][0]
+    assert huli["level"] == "本科"  # 职业本科 → 本科
+    assert huli["discipline"] == "护理学类"
+    assert huli["category"] == "医学"
