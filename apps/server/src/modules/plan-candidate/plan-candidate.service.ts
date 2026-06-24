@@ -434,6 +434,8 @@ const CANDIDATE_ENROLLMENT_PLAN_SELECT = {
   isNationalFeature: true,
   majorRanking: true,
   majorHonor: true,
+  groupChangeType: true,
+  oldGroupMajors2025: true,
   university: {
     select: {
       id: true,
@@ -1881,6 +1883,14 @@ export class PlanCandidateService {
       const groupScore = this.pickGroupScore(groupRecords, source.admissionBaselineYear);
       const groupHistory = this.pickGroupHistory(groupRecords, source.admissionBaselineYear);
       const first = rows[0];
+      // 2025 老组专业构成: 行级字段, 重组组各行可能源自不同 2025 老组 → 去重保留所有非空值
+      const oldGroupMajors2025List = Array.from(
+        new Set(
+          (rows as any[])
+            .map((r) => r.oldGroupMajors2025)
+            .filter((s: any): s is string => typeof s === 'string' && s.trim().length > 0),
+        ),
+      );
       const currentPlanCount = this.planCountForGroup(rows);
       // 年度对比只信 group_plan_count(组级整组计划)。2024/2023 导入未填该字段、且把组级计划数
       // 复制进了 plan_count 每行 → 逐行求和会把组总数放大约「专业数」倍(实查 245→5769),
@@ -2117,6 +2127,8 @@ export class PlanCandidateService {
         scoreSource: groupScore.scoreSource,
         predictedMinRank: predictionMap.get(groupKey) ?? null,
         purity: purityMap.get(groupPurityKeyOf(first)) ?? null,
+        groupChangeType: first.groupChangeType ?? null,
+        oldGroupMajors2025: oldGroupMajors2025List,
         dynamicGradient,
         competition: batchCompetition,
         selectionCompetition,
