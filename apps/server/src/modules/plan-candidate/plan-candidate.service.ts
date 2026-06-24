@@ -76,8 +76,6 @@ type CandidateGroupSort =
 type SortDir = 'ASC' | 'DESC';
 type CandidateGroupScoreSource = 'GROUP' | 'FILING' | 'MAJOR' | 'NONE';
 type StudentRankSource = 'PROFILE' | 'SCORE_SEGMENT' | 'MISSING';
-type FirstChoice = 'PHYSICS' | 'HISTORY';
-type SecondarySubject = 'CHEMISTRY' | 'BIOLOGY' | 'GEOGRAPHY' | 'POLITICS';
 type CandidateMajorDisplaySection = 'RECOMMENDED' | 'BACKUP' | 'RISK';
 
 interface EnrollmentPlanSourceInput {
@@ -274,12 +272,6 @@ function rankingNumber(value: unknown) {
 
 function compareRankingAsc(a: unknown, b: unknown) {
   return rankingNumber(a) - rankingNumber(b);
-}
-
-function supplementaryForGroupRisk(supplementary: any) {
-  // GROUP_SUBJECT 是真正的"本组本科类"征集(2025 起按专业组代码+科目重建), 可喂给梯度引擎;
-  // 旧的院校×批次汇总(会让全批次每组都显安全)不再使用。
-  return (supplementary?.scope === 'GROUP_SUBJECT' || supplementary?.scope === 'GROUP') ? supplementary : null;
 }
 
 function universityTagScore(group: any) {
@@ -511,42 +503,6 @@ const EXAM_TYPE_TO_SUBJECTS: Record<string, string> = {
 };
 
 const SICHUAN = '\u56db\u5ddd';
-const PHYSICS = '\u7269\u7406';
-const HISTORY = '\u5386\u53f2';
-const SCIENCE = '\u7406\u79d1';
-const LIBERAL = '\u6587\u79d1';
-const CHEMISTRY = '\u5316\u5b66';
-const BIOLOGY = '\u751f\u7269';
-const GEOGRAPHY = '\u5730\u7406';
-const POLITICS = '\u601d\u60f3\u653f\u6cbb';
-
-const SICHUAN_2025_SELECTION_POOLS: Record<FirstChoice, {
-  total: number;
-  combinations: Array<{ subjects: SecondarySubject[]; count: number }>;
-}> = {
-  PHYSICS: {
-    total: 327018,
-    combinations: [
-      { subjects: ['CHEMISTRY', 'BIOLOGY'], count: 224560 },
-      { subjects: ['CHEMISTRY', 'GEOGRAPHY'], count: 52826 },
-      { subjects: ['CHEMISTRY', 'POLITICS'], count: 30624 },
-      { subjects: ['GEOGRAPHY', 'BIOLOGY'], count: 14224 },
-      { subjects: ['POLITICS', 'BIOLOGY'], count: 4297 },
-      { subjects: ['POLITICS', 'GEOGRAPHY'], count: 487 },
-    ],
-  },
-  HISTORY: {
-    total: 233352,
-    combinations: [
-      { subjects: ['POLITICS', 'GEOGRAPHY'], count: 192118 },
-      { subjects: ['POLITICS', 'BIOLOGY'], count: 35758 },
-      { subjects: ['GEOGRAPHY', 'BIOLOGY'], count: 4358 },
-      { subjects: ['POLITICS', 'CHEMISTRY'], count: 466 },
-      { subjects: ['CHEMISTRY', 'BIOLOGY'], count: 504 },
-      { subjects: ['CHEMISTRY', 'GEOGRAPHY'], count: 148 },
-    ],
-  },
-};
 
 @Injectable()
 export class PlanCandidateService {
@@ -772,155 +728,6 @@ export class PlanCandidateService {
       values.push(SICHUAN, 'Sichuan');
     }
     return uniqueValues(values);
-  }
-
-  private normalizeFirstChoice(value?: string | null): FirstChoice | null {
-    const text = String(value ?? '').toLowerCase();
-    if (text.includes('physics') || text.includes(PHYSICS) || text.includes(SCIENCE)) {
-      return 'PHYSICS';
-    }
-    if (text.includes('history') || text.includes(HISTORY) || text.includes(LIBERAL)) {
-      return 'HISTORY';
-    }
-    return null;
-  }
-
-  private examTypeCandidates(subjects: string, year: number) {
-    const firstChoice = this.normalizeFirstChoice(subjects);
-    if (firstChoice === 'PHYSICS') {
-      return year >= 2025
-        ? uniqueValues([subjects, PHYSICS, `${PHYSICS}\u7c7b`, 'Physics'])
-        : uniqueValues([SCIENCE, 'Science']);
-    }
-    if (firstChoice === 'HISTORY') {
-      return year >= 2025
-        ? uniqueValues([subjects, HISTORY, `${HISTORY}\u7c7b`, 'History'])
-        : uniqueValues([LIBERAL, 'Liberal']);
-    }
-    return uniqueValues([subjects]);
-  }
-
-  private batchCandidates(batchName: string, year: number) {
-    const text = String(batchName ?? '');
-    const candidates = [batchName];
-    if (year >= 2025) {
-      if (text.includes('\u7279\u6b8a') || text.includes('\u9ad8\u6821\u4e13\u9879')) {
-        candidates.push('\u7279\u6b8a\u7c7b\u578b\u62db\u751f\u63a7\u5236\u7ebf', '\u7279\u6b8a\u7c7b\u578b');
-      } else if (text.includes('\u4e13\u79d1') || text.toLowerCase().includes('specialty')) {
-        candidates.push('\u9ad8\u804c\uff08\u4e13\u79d1\uff09\u6279\u6b21', '\u4e13\u79d1');
-      } else if (text.includes('\u672c\u79d1') || text.toLowerCase().includes('batch')) {
-        candidates.push('\u672c\u79d1\u6279\u6b21', '\u672c\u79d1B');
-      }
-    } else {
-      if (text.includes('\u4e13\u79d1') || text.toLowerCase().includes('specialty')) {
-        candidates.push('\u4e13\u79d1\u6279', '\u4e13\u79d1');
-      } else if (text.includes('\u4e00') || text.toLowerCase().includes('first')) {
-        candidates.push('\u672c\u79d1\u7b2c\u4e00\u6279', '\u672c\u4e00');
-      } else {
-        candidates.push('\u672c\u79d1\u7b2c\u4e8c\u6279', '\u672c\u4e8c');
-      }
-    }
-    return uniqueValues(candidates);
-  }
-
-  private async lookupBatchCompetition(province: string, subjects: string, batchName: string, year: number) {
-    const examTypes = this.examTypeCandidates(subjects, year);
-    const batchNames = this.batchCandidates(batchName, year);
-    if (!examTypes.length || !batchNames.length || !(this.prisma as any).batchLine?.findFirst) {
-      return null;
-    }
-
-    const line = await (this.prisma as any).batchLine.findFirst({
-      where: {
-        year,
-        province: { in: this.provinceAliases(province) },
-        batch: { in: batchNames },
-        examType: { in: examTypes },
-      },
-      orderBy: { score: 'desc' },
-    });
-    if (!line || !(this.prisma as any).scoreSegment?.findFirst) return null;
-
-    const segment = await (this.prisma as any).scoreSegment.findFirst({
-      where: {
-        year,
-        province: { in: this.provinceAliases(province) },
-        examType: { in: examTypes },
-        score: line.score,
-      },
-    });
-
-    return {
-      year,
-      batch: line.batch,
-      examType: line.examType,
-      batchLineScore: line.score,
-      count: segment?.cumulativeCount ?? null,
-    };
-  }
-
-  private async resolveBatchCompetition(province: string, subjects: string, batchName: string, currentYear: number) {
-    const previousYear = currentYear - 1;
-    const [current, previous] = await Promise.all([
-      this.lookupBatchCompetition(province, subjects, batchName, currentYear),
-      this.lookupBatchCompetition(province, subjects, batchName, previousYear),
-    ]);
-    return {
-      currentYear,
-      previousYear,
-      currentCount: current?.count ?? null,
-      previousCount: previous?.count ?? null,
-      currentBatchLineScore: current?.batchLineScore ?? null,
-      previousBatchLineScore: previous?.batchLineScore ?? null,
-      currentBatch: current?.batch ?? null,
-      previousBatch: previous?.batch ?? null,
-      currentExamType: current?.examType ?? null,
-      previousExamType: previous?.examType ?? null,
-    };
-  }
-
-  private requiredSecondarySubjects(text?: string | null): SecondarySubject[] {
-    const value = String(text ?? '').toLowerCase();
-    const subjects: SecondarySubject[] = [];
-    if (value.includes('chemistry') || value.includes(CHEMISTRY)) subjects.push('CHEMISTRY');
-    if (value.includes('biology') || value.includes(BIOLOGY)) subjects.push('BIOLOGY');
-    if (value.includes('geography') || value.includes(GEOGRAPHY)) subjects.push('GEOGRAPHY');
-    if (value.includes('politics') || value.includes(POLITICS) || value.includes('\u653f\u6cbb')) subjects.push('POLITICS');
-    return uniqueValues(subjects);
-  }
-
-  private estimateSelectionCompetition(rows: any[], subjects: string) {
-    const firstChoice = this.normalizeFirstChoice(subjects);
-    if (!firstChoice) {
-      return {
-        sourceYear: null,
-        sourceType: 'MISSING',
-        firstChoice: null,
-        requiredSubjects: [],
-        eligibleCount: null,
-        subjectCount: null,
-      };
-    }
-
-    const requirementText = rows
-      .map((row) => row.subjectRequirements)
-      .find((value) => typeof value === 'string' && value.trim().length > 0) ?? '';
-    const requiredSubjects = this.requiredSecondarySubjects(requirementText);
-    const pool = SICHUAN_2025_SELECTION_POOLS[firstChoice];
-    const eligibleCount = requiredSubjects.length
-      ? pool.combinations
-        .filter((combo) => requiredSubjects.every((required) => combo.subjects.includes(required)))
-        .reduce((sum, combo) => sum + combo.count, 0)
-      : pool.total;
-
-    return {
-      sourceYear: 2025,
-      sourceType: 'PUBLIC_ESTIMATE',
-      firstChoice,
-      requiredSubjects,
-      eligibleCount,
-      subjectCount: pool.total,
-    };
   }
 
   // 征集(已校验版 2025 起重建): supplementary_records 含 subject(物理/历史)+ groupCode + majorCode。
@@ -1844,14 +1651,12 @@ export class PlanCandidateService {
     const [
       previousPlans,
       predictionMap,
-      batchCompetition,
       supplementaryByGroup,
       studentRankInfo,
       purityMap,
     ] = await Promise.all([
       previousPlansPromise,
       predictionMapPromise,
-      this.resolveBatchCompetition(province, subjects, plan.batchName, source.admissionBaselineYear),
       this.loadSupplementaryByGroup(groups, province, source.admissionBaselineYear, subjects),
       this.resolveStudentRank(student, source.scoreSegmentYear),
       purityMapPromise,
@@ -1894,14 +1699,12 @@ export class PlanCandidateService {
       const currentPlanCount = this.planCountForGroup(rows);
       // 年度对比只信 group_plan_count(组级整组计划)。2024/2023 导入未填该字段、且把组级计划数
       // 复制进了 plan_count 每行 → 逐行求和会把组总数放大约「专业数」倍(实查 245→5769),
-      // 既污染卡片"招生计划变动",又误导 calcDynamicGradient 把整组判为"计划腰斩"下调风险。
+      // 污染卡片"招生计划变动"显示(planCountChange)。
       // 故缺 group_plan_count 即视为去年计划不可比 → null(不走 planCountForGroup 的求和兜底)。
       const previousPlanCount =
         (previousByGroup.get(groupKey) ?? []).find((r: any) => typeof r.groupPlanCount === 'number')
           ?.groupPlanCount ?? null;
-      const selectionCompetition = this.estimateSelectionCompetition(rows, first.subjects ?? subjects);
       const supplementary = supplementaryByGroup.get(groupKey) ?? null;
-      const riskSupplementary = supplementaryForGroupRisk(supplementary);
 
       const majorsRaw = await Promise.all(rows.map(async (ep) => {
         // 硬过滤: 性别/健康/户籍/民族 + 再选不符 = 客观资格不符(投档资格不符, 真填会退档)。
@@ -1954,14 +1757,6 @@ export class PlanCandidateService {
         const dynamicGradient = calcDynamicGradient({
           studentRank,
           historyMinRank: historyMin,
-          currentPlanCount,
-          previousPlanCount,
-          currentCompetitionCount: batchCompetition.currentCount,
-          previousCompetitionCount: batchCompetition.previousCount,
-          selectionCompetitionCount: selectionCompetition.eligibleCount,
-          subjectCompetitionCount: selectionCompetition.subjectCount,
-          selectionDataConfidence: selectionCompetition.sourceType === 'PUBLIC_ESTIMATE' ? 'PUBLIC_ESTIMATE' : 'MISSING',
-          supplementary: riskSupplementary,
         });
         return {
           enrollmentPlanId: ep.id,
@@ -2064,14 +1859,6 @@ export class PlanCandidateService {
       const dynamicGradient = calcDynamicGradient({
         studentRank,
         historyMinRank: groupHistoryMin,
-        currentPlanCount,
-        previousPlanCount,
-        currentCompetitionCount: batchCompetition.currentCount,
-        previousCompetitionCount: batchCompetition.previousCount,
-        selectionCompetitionCount: selectionCompetition.eligibleCount,
-        subjectCompetitionCount: selectionCompetition.subjectCount,
-        selectionDataConfidence: selectionCompetition.sourceType === 'PUBLIC_ESTIMATE' ? 'PUBLIC_ESTIMATE' : 'MISSING',
-        supplementary: riskSupplementary,
       });
       return {
         groupKey,
@@ -2130,8 +1917,6 @@ export class PlanCandidateService {
         groupChangeType: first.groupChangeType ?? null,
         oldGroupMajors2025: oldGroupMajors2025List,
         dynamicGradient,
-        competition: batchCompetition,
-        selectionCompetition,
         // 组级·学生科类·多轮累计征集(byMajorCode/byMajorName 是 Map, 不外泄, 只出干净字段)
         supplementary: supplementary
           ? {

@@ -56,60 +56,6 @@ describe('calcDynamicGradient', () => {
     }
   });
 
-  it('loosens the expected rank when plan supply grows and the batch competition pool shrinks', () => {
-    const result = calcDynamicGradient({
-      studentRank: 11200,
-      historyMinRank: 10000,
-      currentPlanCount: 36,
-      previousPlanCount: 30,
-      currentCompetitionCount: 190000,
-      previousCompetitionCount: 210000,
-    });
-
-    expect(result.adjustedMinRank).toBeGreaterThan(10000);
-    expect(result.gradient).toBe('WEN');
-    expect(result.tier).toBe('WEN');
-    expect(result.reasons).toEqual(expect.arrayContaining([
-      expect.stringContaining('plan increased'),
-      expect.stringContaining('competition pool decreased'),
-    ]));
-  });
-
-  it('tightens the expected rank and downgrades safety when plan supply drops sharply', () => {
-    const result = calcDynamicGradient({
-      studentRank: 9000,
-      historyMinRank: 12000,
-      currentPlanCount: 18,
-      previousPlanCount: 30,
-    });
-
-    expect(result.adjustedMinRank).toBeLessThan(12000);
-    expect(result.tier).toBe('WEN_BAO');
-    expect(result.gradient).toBe('WEN');
-    expect(result.reasons).toEqual(expect.arrayContaining([
-      expect.stringContaining('plan decreased sharply'),
-      expect.stringContaining('risk level downgraded'),
-    ]));
-  });
-
-  it('uses supplementary vacancies as an accessibility signal', () => {
-    const result = calcDynamicGradient({
-      studentRank: 11300,
-      historyMinRank: 10000,
-      supplementary: {
-        totalPlanCount: 8,
-        totalRounds: 2,
-        supplementaryRate: 0.18,
-      },
-    });
-
-    expect(result.adjustedMinRank).toBeGreaterThan(10000);
-    expect(result.gradient).toBe('WEN');
-    expect(result.reasons).toEqual(expect.arrayContaining([
-      expect.stringContaining('supplementary vacancies'),
-    ]));
-  });
-
   it('keeps BAO compatibility while exposing a DIBAO tier for very strong safety margins', () => {
     const result = calcDynamicGradient({
       studentRank: 7000,

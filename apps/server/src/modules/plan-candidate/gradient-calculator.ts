@@ -17,24 +17,18 @@ export interface GradientThreshold {
 
 const DEFAULT_THRESHOLD: GradientThreshold = { chong: 0.9, bao: 1.1 };
 
+// 输入收窄到只剩"学生位次"和"历史最低位次"。
+// 旧版的 plan/competition/selection/supplementary 四因子调整已下线 (评估后无证据支撑、却把整组档位推偏),
+// 字段从接口里直接删除, 让调用方编译期暴露遗留。
 export interface DynamicGradientInput {
   studentRank: number;
   historyMinRank: number | null | undefined;
-  currentPlanCount?: number | null;
-  previousPlanCount?: number | null;
-  currentCompetitionCount?: number | null;
-  previousCompetitionCount?: number | null;
-  selectionCompetitionCount?: number | null;
-  subjectCompetitionCount?: number | null;
-  selectionDataConfidence?: 'OFFICIAL' | 'PUBLIC_ESTIMATE' | 'LOW' | 'MISSING';
-  majorGroupChanged?: boolean;
-  supplementary?: {
-    totalPlanCount?: number | null;
-    totalRounds?: number | null;
-    supplementaryRate?: number | string | null;
-  } | null;
 }
 
+// 返回结构保留所有字段, 向后兼容前端和持久化的 selection_reason 文案:
+//   adjustedMinRank === baseMinRank (不再修正)
+//   factors 全 1
+//   reasons 恒为空
 export interface DynamicGradientResult {
   gradient: Gradient;
   tier: DynamicGradientTier;
@@ -51,34 +45,8 @@ export interface DynamicGradientResult {
   reasons: string[];
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
 function positive(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
-}
-
-function toRate(value: number | string | null | undefined) {
-  if (value === null || value === undefined || value === '') return 0;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
-  return numeric > 1 ? numeric / 100 : numeric;
-}
-
-function downgradeTier(tier: DynamicGradientTier): DynamicGradientTier {
-  const order: DynamicGradientTier[] = [
-    'JI_CHONG',
-    'CHONG',
-    'XIAO_CHONG',
-    'WEN',
-    'WEN_BAO',
-    'BAO',
-    'QIANG_BAO',
-    'DIBAO',
-  ];
-  const index = order.indexOf(tier);
-  return order[Math.max(0, index - 1)] ?? 'JI_CHONG';
 }
 
 function tierToGradient(tier: DynamicGradientTier): Gradient {
@@ -112,7 +80,6 @@ export function calcGradient(
 }
 
 export function calcDynamicGradient(input: DynamicGradientInput): DynamicGradientResult {
-  const reasons: string[] = [];
   const baseMinRank = positive(input.historyMinRank) ? input.historyMinRank : null;
   const emptyFactors = {
     plan: 1,
@@ -130,94 +97,19 @@ export function calcDynamicGradient(input: DynamicGradientInput): DynamicGradien
       adjustedMinRank: baseMinRank,
       rankGapRatio: null,
       factors: emptyFactors,
-      reasons: ['missing historical rank, using conservative fallback'],
+      reasons: [],
     };
   }
 
-  let planFactor = 1;
-  let competitionFactor = 1;
-  let selectionFactor = 1;
-  let supplementaryFactor = 1;
-  let riskDowngrades = 0;
-
-  if (positive(input.currentPlanCount) && positive(input.previousPlanCount)) {
-    const ratio = input.currentPlanCount / input.previousPlanCount;
-    if (ratio >= 1) {
-      planFactor = 1 + clamp((ratio - 1) * 0.5, 0, 0.25);
-      if (ratio >= 1.05) reasons.push(`plan increased ${(ratio * 100 - 100).toFixed(1)}%`);
-    } else {
-      planFactor = 1 - clamp((1 - ratio) * 0.3, 0, 0.22);
-      reasons.push(`plan decreased ${(100 - ratio * 100).toFixed(1)}%`);
-      if (ratio < 0.7) {
-        riskDowngrades += 1;
-        reasons.push('plan decreased sharply, risk level downgraded');
-      }
-    }
-  }
-
-  if (positive(input.currentCompetitionCount) && positive(input.previousCompetitionCount)) {
-    const ratio = input.currentCompetitionCount / input.previousCompetitionCount;
-    competitionFactor = 1 - clamp((ratio - 1) * 0.6, -0.18, 0.18);
-    if (ratio >= 1.03) {
-      reasons.push(`competition pool increased ${(ratio * 100 - 100).toFixed(1)}%`);
-    } else if (ratio <= 0.97) {
-      reasons.push(`competition pool decreased ${(100 - ratio * 100).toFixed(1)}%`);
-    }
-  }
-
-  if (positive(input.selectionCompetitionCount) && positive(input.subjectCompetitionCount)) {
-    const ratio = clamp(input.selectionCompetitionCount / input.subjectCompetitionCount, 0, 1);
-    selectionFactor = 1 + clamp((0.85 - ratio) * 0.2, 0, 0.18);
-    if (selectionFactor > 1) {
-      reasons.push(`selection pool is ${(ratio * 100).toFixed(1)}% of the subject pool`);
-    }
-    if (input.selectionDataConfidence === 'LOW') {
-      riskDowngrades += 1;
-      reasons.push('selection data confidence is low, risk level downgraded');
-    }
-  }
-
-  const supplementaryRate = toRate(input.supplementary?.supplementaryRate);
-  const supplementaryRounds = input.supplementary?.totalRounds ?? 0;
-  const supplementaryPlans = input.supplementary?.totalPlanCount ?? 0;
-  if (supplementaryRate > 0 || supplementaryRounds > 0 || supplementaryPlans > 0) {
-    supplementaryFactor = 1 + clamp(
-      supplementaryRate * 0.55 + Math.min(supplementaryRounds, 4) * 0.025,
-      0.03,
-      0.22,
-    );
-    reasons.push(`supplementary vacancies ${supplementaryPlans || '-'} seats across ${supplementaryRounds || '-'} rounds`);
-  }
-
-  if (input.majorGroupChanged) {
-    riskDowngrades += 1;
-    reasons.push('major group changed, risk level downgraded');
-  }
-
-  const combined = clamp(
-    planFactor * competitionFactor * selectionFactor * supplementaryFactor,
-    0.65,
-    1.45,
-  );
-  const adjustedMinRank = Math.max(1, Math.round(baseMinRank * combined));
-  let tier = classifyDynamicTier(input.studentRank, adjustedMinRank);
-  for (let i = 0; i < riskDowngrades; i += 1) {
-    tier = downgradeTier(tier);
-  }
-
+  // 直接用 baseMinRank 喂分桶, 不再做计划/竞争/选科/征集四因子修正。
+  const tier = classifyDynamicTier(input.studentRank, baseMinRank);
   return {
     gradient: tierToGradient(tier),
     tier,
     baseMinRank,
-    adjustedMinRank,
-    rankGapRatio: adjustedMinRank / input.studentRank - 1,
-    factors: {
-      plan: Number(planFactor.toFixed(4)),
-      competition: Number(competitionFactor.toFixed(4)),
-      selection: Number(selectionFactor.toFixed(4)),
-      supplementary: Number(supplementaryFactor.toFixed(4)),
-      combined: Number(combined.toFixed(4)),
-    },
-    reasons,
+    adjustedMinRank: baseMinRank,
+    rankGapRatio: baseMinRank / input.studentRank - 1,
+    factors: emptyFactors,
+    reasons: [],
   };
 }

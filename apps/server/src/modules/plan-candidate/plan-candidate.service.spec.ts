@@ -514,8 +514,7 @@ describe('PlanCandidateService', () => {
   it('去年缺 group_plan_count 时不逐行求和, previousPlanCount/planCountChange 置空', async () => {
     // 复现生产数据形态: 当前年 group_plan_count 齐全(每行=组总数 245);
     // 去年 group_plan_count 全 NULL 且 plan_count 存的是组级数(187/228)复制到每行。
-    // 旧逻辑会把去年逐行求和(187+228=415)当组总数 → 卡片显示假"计划变动",
-    // 还误导 calcDynamicGradient 把整组判为"计划腰斩"下调风险。
+    // 旧逻辑会把去年逐行求和(187+228=415)当组总数 → 卡片显示假"计划变动"(planCountChange 错位)。
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
     });
@@ -1509,7 +1508,7 @@ describe('PlanCandidateService', () => {
     expect(result.groups[0].anchorTuition).toBe(6800);
   });
 
-  it('adds dynamic gradient details from competition and selection pool while exposing supplementary summaries', async () => {
+  it('exposes supplementary summary alongside base-rank gradient', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
     });
@@ -1546,12 +1545,6 @@ describe('PlanCandidateService', () => {
         majorMinRank: 10000, majorMinScore: 590, majorAdmissionCount: 30,
       },
     ]);
-    prisma.batchLine.findFirst
-      .mockResolvedValueOnce({ score: 438 })
-      .mockResolvedValueOnce({ score: 459 });
-    prisma.scoreSegment.findFirst
-      .mockResolvedValueOnce({ cumulativeCount: 190000 })
-      .mockResolvedValueOnce({ cumulativeCount: 210000 });
     prisma.supplementaryRecord.findMany.mockResolvedValue([
       { universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: 'Chemistry Engineering', planCount: 5, roundNumber: 1 },
       { universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: 'Chemistry Engineering', planCount: 3, roundNumber: 2 },
@@ -1560,17 +1553,13 @@ describe('PlanCandidateService', () => {
     const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
 
     const group = result.groups[0];
+    // baseMinRank=10000, studentRank=13000 → 历史线远好于学生位次, 落入 CHONG 档
     expect(group.suggestedGradient).toBe('CHONG');
-    expect(group.dynamicGradient.adjustedMinRank).toBeGreaterThan(10000);
-    // 组级·科类级征集现在可信, 纳入梯度(征集多=可达性积极信号)
-    expect(group.dynamicGradient.reasons).toEqual(expect.arrayContaining([
-      expect.stringContaining('plan increased'),
-      expect.stringContaining('competition pool decreased'),
-      expect.stringContaining('supplementary'),
-    ]));
-    expect(group.competition.currentCount).toBe(190000);
-    expect(group.competition.previousCount).toBe(210000);
-    expect(group.selectionCompetition.eligibleCount).toBe(308010);
+    // 四因子调整已下线, adjustedMinRank === baseMinRank, reasons 恒空
+    expect(group.dynamicGradient.adjustedMinRank).toBe(group.dynamicGradient.baseMinRank);
+    expect(group.dynamicGradient.adjustedMinRank).toBe(10000);
+    expect(group.dynamicGradient.reasons).toEqual([]);
+    // 征集字段仍按原口径暴露(组级·科类级·多轮累计), 不再喂梯度
     expect(group.supplementary.totalPlanCount).toBe(8);
     expect(group.supplementary.scope).toBe('GROUP_SUBJECT');
   });
