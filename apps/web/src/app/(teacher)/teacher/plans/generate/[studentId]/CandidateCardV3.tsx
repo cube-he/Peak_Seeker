@@ -420,13 +420,17 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
               const cur = group.currentPlanCount as number;
               const prev = group.previousMajorsAdmissionSum2025 as number;
               const delta = cur - prev;
-              const sign = delta >= 0 ? '+' : '';
+              // delta=0 走 tone-muted + "与 2025 持平" 文案, 避免「+0」绿色误读为扩招
+              const tone = delta === 0 ? 'muted' : delta > 0 ? 'safe' : 'rush';
+              const label = delta === 0
+                ? `招生 ${cur} 人 (与 2025 持平)`
+                : `招生 ${cur} 人 (${delta > 0 ? '+' : ''}${delta} vs 2025 同专业)`;
               return (
                 <span
-                  className={`pgv2-dchip ${delta >= 0 ? 'tone-safe' : 'tone-rush'}`}
-                  title={`2026 招 ${cur} 人 vs 2025 同专业录取 ${prev} 人 (差 ${sign}${delta})。口径: 取本组 2026 包含的专业, 在 2025 各自的录取人数求和`}
+                  className={`pgv2-dchip tone-${tone}`}
+                  title={`2026 招 ${cur} 人 vs 2025 同专业录取 ${prev} 人。口径: 取本组 2026 包含的专业, 在 2025 各自的录取人数求和`}
                 >
-                  招生 {cur} 人 ({sign}{delta} vs 2025 同专业)
+                  {label}
                 </span>
               );
             })() : null}

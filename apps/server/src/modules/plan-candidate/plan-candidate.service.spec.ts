@@ -512,23 +512,23 @@ describe('PlanCandidateService', () => {
     }));
 
     // ---- 专业优先模式: 每个 CandidateMajor 暴露 4 年历史(min/avg score+rank + planCount)
-    // years = [admissionBaselineYear, -1, -2, -3] = [2025, 2024, 2023, 2022] (按年降序).
+    // years = [-3, -2, -1, admissionBaselineYear] = [2022, 2023, 2024, 2025] (按年升序, 与 history3y 一致).
     // fixture 有 2025/2024 majorCode='080901' record, 2023/2022 缺 → null. Automation 全缺 → 4 个 null record.
     const csMajor = result.groups[0].majors.find((m: any) => m.majorCode === '080901');
     expect(csMajor.majorHistory4y).toHaveLength(4);
-    expect(csMajor.majorHistory4y.map((h: any) => h.year)).toEqual([2025, 2024, 2023, 2022]);
-    expect(csMajor.majorHistory4y[0]).toEqual({
-      year: 2025, minScore: 615, minRank: 9500,
-      avgScore: null, avgRank: null, // fixture 未 mock avg* → null
-      planCount: 10, // 当前年 EP.planCount(2025 计划记录里 080901=10)
-    });
-    expect(csMajor.majorHistory4y[1]).toEqual({
+    expect(csMajor.majorHistory4y.map((h: any) => h.year)).toEqual([2022, 2023, 2024, 2025]);
+    expect(csMajor.majorHistory4y[0].minScore).toBeNull();
+    expect(csMajor.majorHistory4y[1].minScore).toBeNull();
+    expect(csMajor.majorHistory4y[2]).toEqual({
       year: 2024, minScore: 605, minRank: 9800,
       avgScore: null, avgRank: null,
       planCount: 9, // 去年 EP.planCount(2024 previousPlans 里 080901=9)
     });
-    expect(csMajor.majorHistory4y[2].minScore).toBeNull();
-    expect(csMajor.majorHistory4y[3].minScore).toBeNull();
+    expect(csMajor.majorHistory4y[3]).toEqual({
+      year: 2025, minScore: 615, minRank: 9500,
+      avgScore: null, avgRank: null, // fixture 未 mock avg* → null
+      planCount: 10, // 当前年 EP.planCount(2025 计划记录里 080901=10)
+    });
 
     // ---- 组级 previousMajorsAdmissionSum2025: 用本组 majorCode 列表回查 sourceYear-1 录取数和.
     // sourceYear=2025 → 取 2024 录取: 080901 majorAdmissionCount=8; 080801 无 record → sum=8.

@@ -1465,11 +1465,12 @@ export class PlanCandidateService {
     const softRules = this.buildSoftRules();
     // 4 年历史：admissionBaselineYear / -1 / -2 / -3（录取线基准年, 可早于计划年;
     // 前端 TrendChart 用前 3 点, 专业优先模式 majorHistory4y 用全 4 点到 2022）
+    // years 按升序 (老→新), 与 history3y 口径一致, 前端 4 年子表自然按时间顺序展示
     const years = [
-      source.admissionBaselineYear,
-      source.admissionBaselineYear - 1,
-      source.admissionBaselineYear - 2,
       source.admissionBaselineYear - 3,
+      source.admissionBaselineYear - 2,
+      source.admissionBaselineYear - 1,
+      source.admissionBaselineYear,
     ];
     const adRecords = eps.length
       ? await this.prisma.admissionRecord.findMany({
