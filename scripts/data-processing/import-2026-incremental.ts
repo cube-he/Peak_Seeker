@@ -18,6 +18,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as readline from 'readline';
 import { config } from 'dotenv';
 
 config({ path: path.resolve(__dirname, '..', '..', 'apps', 'server', '.env') });
@@ -47,9 +48,7 @@ async function run() {
 
   const universities = loadJSON<any[]>('universities_enriched.json');
   const majors = loadJSON<any[]>('majors_enriched.json');
-  const plans = loadJSON<any[]>('enrollment_plans_enriched.json');
-  const records = loadJSON<any[]>('admission_records_filled.json');
-  console.log(`Loaded: uni=${universities.length} major=${majors.length} plans=${plans.length} admissions=${records.length}`);
+  console.log(`Loaded: uni=${universities.length} major=${majors.length} (plans/admissions 流式处理)`);
 
   // —— universities: upsert by code (build codeToId) ——
   const codeToId = new Map<string, number>();
@@ -138,40 +137,35 @@ async function run() {
       majorName: toStr(r.majorName) || '', subjects: toStr(r.subjects) || '',
     };
   };
-  const planRows = plans.map(buildPlan).filter(Boolean) as any[];
-  const admRows = records.map(buildAdm).filter(Boolean) as any[];
-  console.log(`resolved: plans ${planRows.length}/${plans.length} (skipped ${plans.length - planRows.length}), admissions ${admRows.length}/${records.length} (skipped ${records.length - admRows.length})`);
-
-  if (DRY) {
-    const before = await prisma.enrollmentPlan.groupBy({ by: ['year'], _count: { _all: true }, where: { year: { in: PLAN_YEARS } } });
-    console.log('enrollment_plans 现状(将被替换的年):', before.map(b => `${b.year}=${b._count._all}`).join(' '));
-    console.log('DRY-RUN done — 不写库。');
-    await prisma.$disconnect();
-    return;
+  // 流式读 NDJSON(逐行解析+攒批插入), 内存恒定, 避免整文件入堆 OOM。
+  // 大表 .ndjson 由服务器端 python 从 *_enriched.json 转出(每行一条 compact JSON)。
+  async function processTable(ndjsonFile: string, model: any, years: number[], builder: (r: any) => any, label: string) {
+    let delCount = 0;
+    if (!DRY) delCount = (await model.deleteMany({ where: { year: { in: years } } })).count;
+    let total = 0, skip = 0;
+    let batch: any[] = [];
+    const rl = readline.createInterface({
+      input: fs.createReadStream(path.join(DATA_DIR, ndjsonFile), 'utf-8'),
+      crlfDelay: Infinity,
+    });
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      const m = builder(JSON.parse(line));
+      if (!m) { skip++; continue; }
+      if (DRY) { total++; continue; }
+      batch.push(m);
+      if (batch.length >= 500) {
+        total += (await model.createMany({ data: batch, skipDuplicates: true })).count;
+        batch = [];
+      }
+    }
+    if (!DRY && batch.length) total += (await model.createMany({ data: batch, skipDuplicates: true })).count;
+    console.log(`${label}: ${DRY ? `将替换年 ${years.join(',')}; resolved` : `deleted ${delCount}, inserted`} ${total} (skipped ${skip})`);
   }
 
-  // —— enrollment_plans: year-scoped replace ——
-  const delP = await prisma.enrollmentPlan.deleteMany({ where: { year: { in: PLAN_YEARS } } });
-  console.log(`enrollment_plans: deleted ${delP.count} (years ${PLAN_YEARS.join(',')})`);
-  let insP = 0;
-  for (let i = 0; i < planRows.length; i += 500) {
-    const b = planRows.slice(i, i + 500);
-    const res = await prisma.enrollmentPlan.createMany({ data: b, skipDuplicates: true });
-    insP += res.count;
-  }
-  console.log(`enrollment_plans: inserted ${insP}`);
-
-  // —— admission_records: year-scoped replace ——
-  const delA = await prisma.admissionRecord.deleteMany({ where: { year: { in: ADMISSION_YEARS } } });
-  console.log(`admission_records: deleted ${delA.count} (years ${ADMISSION_YEARS.join(',')})`);
-  let insA = 0;
-  for (let i = 0; i < admRows.length; i += 500) {
-    const b = admRows.slice(i, i + 500);
-    const res = await prisma.admissionRecord.createMany({ data: b, skipDuplicates: true });
-    insA += res.count;
-  }
-  console.log(`admission_records: inserted ${insA}`);
-  console.log('WRITE done. 征集/score_segments/batch_lines 未触碰。');
+  await processTable('enrollment_plans_enriched.ndjson', prisma.enrollmentPlan, PLAN_YEARS, buildPlan, 'enrollment_plans');
+  await processTable('admission_records_filled.ndjson', prisma.admissionRecord, ADMISSION_YEARS, buildAdm, 'admission_records');
+  if (!DRY) console.log('WRITE done. 征集/score_segments/batch_lines 未触碰。');
   await prisma.$disconnect();
 }
 
