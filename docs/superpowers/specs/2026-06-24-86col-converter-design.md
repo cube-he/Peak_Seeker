@@ -20,7 +20,7 @@
 - 院校 enriched：仍走 `院校信息表.xlsx → universities_enriched.json`（富集字段全：满意度/章程/logo/QS 等，新主表没有），**不动**。
 - score_segments / batch_lines / supplementary / health_restrictions：各自独立来源，不在 B。
 - sourceYear 解耦（A 已完成）、征集 importer 修字段（C）、收尾编排（D）、UI 标注（E）。
-- 院校代码标准化（10.6% 序号、无国标码）属 P2 欠债，B 只做"匹配不上就报告"，不重构编码体系。
+- 院校代码：实测主表 100% 为 4 位文本码（带前置 0，北大=`0001`）；import_to_db.ts 已 `padStart(4,'0')` 补零匹配。B 仅"匹配不上就报告未命中清单"，不重构编码体系（国标码缺失属 P2 欠债）。
 
 ## 关键设计决定
 
@@ -32,7 +32,7 @@
 6. **planNotes = 专业备注**（中外合作标记在此，1070 行；喂 backfill-sino-foreign.sql）。
 7. **level = 本科/专科 列**，`职业本科 → 本科`（与下游本/专二分一致；Major.level 与 plan.level 同源）。
 8. **不可得字段置空**：isNationalFeature / majorRanking / majorHonor（新表无 国家特色专业/专业排名/专业荣誉 列）→ False/None。
-9. **groupName/groupMajors**：保留旧行为（None），不从"组内专业"长描述硬解析（避免引入脏 groupName）；上线前用 SELECT 对比生产现有 groupName 来源，若 2026 需要再单列任务。
+9. **专业组身份 = 院校代码(4位补零) + 组代码(3位)**，进 8 字段唯一键，组身份完整、无需 prose 名（四川院校专业组模型；实测主表组代码 100% 为 3 位码、无组名列；生产 group_name 2023/24 全空、2025 也 96.1% 空，佐证）。**groupName 仅对定向/专项组填充**：从 专业备注 best-effort 抽取定向县/专项标识（如"(凉山州)(区域教育均衡发展专项计划)"），让生成页"搜定向县"对 2026 仍有效；其余留空（= 生产现状）。**不**把"组内专业"长描述（带分数）塞进 groupName。groupMajors 留空。抽取格式上线前对比生产 group_name 样式校准。
 10. **省份硬编码 '四川'**（与旧一致）。
 
 ## 86 列 → JSON 字段映射（按列名）
@@ -71,7 +71,8 @@
 | localDoctoralPoint | 本专业博士点 |
 | softRating | 软科评级 |
 | planNotes | 专业备注 |
-| groupName / groupMajors | null（决定 9） |
+| groupName | 定向/专项组：从 专业备注 抽定向县/专项标识；否则 null（决定 9） |
+| groupMajors | null |
 
 enrollment_plans — 按年追加：
 - **2026**：year=2026, planCount=计划人数, groupPlanCount=专业组计划人数, tuition=学费, duration=学制
@@ -111,7 +112,7 @@ enrollment_plans — 按年追加：
 ## 端到端验证（产出后，未入库前）
 
 - 产出 JSON 后断言计数：enrollment_plans 的 year=2026 行数 ≈ 51878（每主表行 1 条 2026 plan）；2025/2024/2023 行数 ≈ 36772/30746/28823（= 计划人数结果1/2/3 填充数）；admission 2025 ≈ 录取人数1 填充数。
-- 院校代码覆盖：master 中 distinct 院校代码 全部能在 universities_enriched 命中；打印未命中清单（10.6% 序号码风险）。
+- 院校代码覆盖：master 中 distinct 院校代码（4 位补零）全部能在 universities_enriched 命中；打印未命中清单。
 - 入库后（生产/测试库）：`SELECT year,COUNT(*),SUM(group_plan_count IS NULL) FROM enrollment_plans GROUP BY year` 确认 2026 行存在、group_plan_count 非空；`admission_records` 按年计数；再跑 backfill-sino-foreign.sql 后 `SUM(is_sino_foreign)` ≈ 1070 组对应行数。
 
 ## 关键引用
