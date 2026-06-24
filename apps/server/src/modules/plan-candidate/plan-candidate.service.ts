@@ -17,6 +17,14 @@ import { NatureRule } from './filters/soft-rules/nature.rule';
 import { filterGroupsBySinoForeign, filterUniversitiesBySinoForeign } from './sino-foreign-filter';
 import { filterGroupsByRecruitType, collectRecruitTypes } from './recruit-type-filter';
 import {
+  filterGroupsByNature,
+  filterGroupsByTags,
+  filterGroupsByBackgrounds,
+  filterGroupsByUniversityProvinces,
+  filterGroupsByUniversityCities,
+  filterGroupsByIsNewItem,
+} from './major-mode-filters';
+import {
   filterGroupsByRankWindow,
   filterUniversitiesByRankWindow,
   poolRankBounds,
@@ -143,6 +151,27 @@ function countTiers(groups: any[]): { rush: number; stable: number; safe: number
     else counts.stable += 1;
   }
   return counts;
+}
+
+// 把 GetCandidatesQuery 里的 7 项 chip 字段拍成 paginateCandidateGroups 接受的子对象。
+// 6 项 chip 走 majorMode (nature/tags/backgrounds/省/市/isNewItem); 第 7 项 (recruitType) 是
+// 旧字段已单独传, 不重复打包。空对象即可 - 6 个 filter 内部都会"空字段同引用返回"短路。
+function pickMajorMode(q: GetCandidatesQuery): {
+  nature?: string;
+  tags?: string;
+  backgrounds?: string;
+  universityProvinces?: string;
+  universityCities?: string;
+  isNewItem?: string;
+} {
+  return {
+    nature: q.nature,
+    tags: q.tags,
+    backgrounds: q.backgrounds,
+    universityProvinces: q.universityProvinces,
+    universityCities: q.universityCities,
+    isNewItem: q.isNewItem,
+  };
 }
 
 function addInFilter(where: Record<string, unknown>, field: string, values: Array<string | number | null | undefined>) {
@@ -562,10 +591,32 @@ export class PlanCandidateService {
     rankWindow?: RankWindow | null,
     includeRegionMismatch = false,
     recruitType?: string,
+    // 专业优先模式 7 项 chip 筛选 (DTO 同名字段透传); 全部在分页层应用, 不进缓存键,
+    // 与 recruitType / purity / sinoForeign 模式一致 - 同一批 cache 切不同 filter 不重建。
+    // 内部 chain 顺序: recruitType → nature → tags → backgrounds → 省 → 市 → isNewItem → band → sino → rank → region。
+    // 7 项纯过滤无副作用, 顺序不影响最终集合; band/sino/rank/region 在 7 项之后保持原序。
+    majorMode?: {
+      nature?: string;
+      tags?: string;
+      backgrounds?: string;
+      universityProvinces?: string;
+      universityCities?: string;
+      isNewItem?: string;
+    },
   ) {
     // 招生类型过滤(分页层): 先把全量池收窄成工作集, 让 band/sino/rank/region/tierCounts 全部基于它,
     // 否则冲/稳/保 chip 计数会大于列表 total(同非意向地区折叠的已有教训)。空选择 = 全部。
-    const baseGroups = filterGroupsByRecruitType(value.groups, recruitType);
+    let baseGroups = filterGroupsByRecruitType(value.groups, recruitType);
+    // 专业优先模式 7 项 chip (与 recruitType 同层): 在 band/sino/rank/region 之前应用,
+    // 保证 tierCounts (冲/稳/保 chip 计数) 与列表 total 同口径 (基于收窄后的 baseGroups)。
+    if (majorMode) {
+      baseGroups = filterGroupsByNature(baseGroups, majorMode.nature);
+      baseGroups = filterGroupsByTags(baseGroups, majorMode.tags);
+      baseGroups = filterGroupsByBackgrounds(baseGroups, majorMode.backgrounds);
+      baseGroups = filterGroupsByUniversityProvinces(baseGroups, majorMode.universityProvinces);
+      baseGroups = filterGroupsByUniversityCities(baseGroups, majorMode.universityCities);
+      baseGroups = filterGroupsByIsNewItem(baseGroups, majorMode.isNewItem);
+    }
     // 档位过滤在缓存后的分页层做: 切换冲/稳/保/无史线 chip 不触发全量重算,
     // total 改为档内数量(驱动分页), tierCounts 保持(收窄后)全池口径(驱动 chip 计数)
     const validBand = gradientBand && ['RUSH', 'STABLE', 'SAFE', 'NO_LINE'].includes(gradientBand)
@@ -1356,7 +1407,7 @@ export class PlanCandidateService {
       if (q.groupBy === 'UNIVERSITY') {
         return this.paginateAsUniversities(cached, q, student, page, pageSize, rankWindow);
       }
-      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType);
+      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType, pickMajorMode(q));
     }
 
     // 拆分搜索: 院校 / 专业各自独立; 同时填则 AND 组合 (院校的特定专业)
@@ -1442,7 +1493,7 @@ export class PlanCandidateService {
           predictedScoreRange: null,
         };
         this.setCandidateGroupCache(cacheKey, emptyResult);
-        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType);
+        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType, pickMajorMode(q));
       }
       (where as any).OR = matchedGroups.map((g) => ({
         universityId: g.universityId,
@@ -1584,6 +1635,32 @@ export class PlanCandidateService {
       return predictionMap;
     })();
 
+    // "新增院校" 判定: 该院校在 sourceYear-1..-3 的同省 EnrollmentPlan 是否出现过, 一次性 distinct 查询.
+    // 没出现 ⇒ isNewUniversity = true (历史 3 年首次在川招生). 用一次 SELECT DISTINCT 避免 N+1.
+    // 候选规模通常 ~几百院校, IN 列表配 (province, year, universityId) 索引扫描小, 性能可接受。
+    // 候选集为空 → 跳过查询返回空 Set。
+    const isNewUniversityMapPromise = (async () => {
+      const map = new Map<number, boolean>();
+      const candidateUniIds = Array.from(new Set(eps.map((e) => e.universityId)));
+      if (candidateUniIds.length === 0) return map;
+      // mock 友好: 测试通常只 stub 前 1-2 次 findMany, 第 N 次会返回 undefined → ?? [] 兜底,
+      // 保证不抛错; 真实环境 prisma 不会返回 undefined。
+      const historicalUnis = (await this.prisma.enrollmentPlan.findMany({
+        where: {
+          province,
+          year: { in: [source.sourceYear - 1, source.sourceYear - 2, source.sourceYear - 3] },
+          universityId: { in: candidateUniIds },
+        },
+        distinct: ['universityId'],
+        select: { universityId: true },
+      })) ?? [];
+      const historicalSet = new Set(historicalUnis.map((r) => r.universityId));
+      for (const id of candidateUniIds) {
+        map.set(id, !historicalSet.has(id));
+      }
+      return map;
+    })();
+
     // GroupPurity 客观纯净度（S/A/B/C）— 预计算好直接读，N+1 安全：批量 IN 查询
     const purityMapPromise = (async () => {
       const purityMap = new Map<string, any>();
@@ -1641,12 +1718,14 @@ export class PlanCandidateService {
       supplementaryByGroup,
       studentRankInfo,
       purityMap,
+      isNewUniversityMap,
     ] = await Promise.all([
       previousPlansPromise,
       predictionMapPromise,
       this.loadSupplementaryByGroup(groups, province, source.admissionBaselineYear, subjects),
       this.resolveStudentRank(student, source.scoreSegmentYear),
       purityMapPromise,
+      isNewUniversityMapPromise,
     ]);
     const previousByGroup = new Map<string, any[]>();
     for (const row of previousPlans) {
@@ -1900,6 +1979,10 @@ export class PlanCandidateService {
           student.preferredProvinces,
           student.preferredCities,
         ),
+        // 新增院校 (历史 sourceYear-1..-3 三年同省未现) / 新增专业 (组内任一 ep.isNew=true).
+        // 由 filterGroupsByIsNewItem 消费; 前端也可拿来打 chip。两者独立, 互不依赖。
+        isNewUniversity: isNewUniversityMap.get(first.universityId) ?? false,
+        isNewMajor: rows.some((r: any) => r.isNew === true),
         university: {
           id: first.universityId,
           name: first.university?.name ?? '',
@@ -2147,7 +2230,7 @@ export class PlanCandidateService {
     if (q.groupBy === 'UNIVERSITY') {
       return this.paginateAsUniversities(fullResult, q, student, page, pageSize, rankWindow);
     }
-    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType);
+    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType, pickMajorMode(q));
   }
 
   async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {
