@@ -1773,7 +1773,7 @@ describe('PlanCandidateService', () => {
     ]);
   });
 
-  it('candidate group 含 prefMatch 偏好对比（本省 985 + 学费 + 考研方向 + 选科）', async () => {
+  it('candidate group 含 prefMatch 偏好对比（本省 985 + 学费 + 考研方向）', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
     });
@@ -1838,7 +1838,6 @@ describe('PlanCandidateService', () => {
       province: 'match',
       tuition: 'within',
       career: 'strong',
-      subjects: 'match',
     });
   });
 

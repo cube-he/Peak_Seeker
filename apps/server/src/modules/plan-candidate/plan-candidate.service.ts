@@ -71,8 +71,7 @@ type CandidateGroupSort =
   | 'MAJOR_MATCH'
   | 'SAFETY'
   | 'MAJOR_MIN_SCORE'
-  | 'UNIVERSITY_RANK'
-  | 'MAJOR_STRENGTH';
+  | 'UNIVERSITY_RANK';
 type SortDir = 'ASC' | 'DESC';
 type CandidateGroupScoreSource = 'GROUP' | 'FILING' | 'MAJOR' | 'NONE';
 type StudentRankSource = 'PROFILE' | 'SCORE_SEGMENT' | 'MISSING';
@@ -282,15 +281,6 @@ function universityTagScore(group: any) {
   );
 }
 
-function extractRankingScore(value: unknown) {
-  const text = String(value ?? '');
-  const match = text.match(/\d+/);
-  if (!match) return 0;
-  const rank = Number(match[0]);
-  if (!Number.isFinite(rank) || rank <= 0) return 0;
-  return Math.max(0, 100 - rank);
-}
-
 // 学生 tuitionBudget 枚举 → 学费上限（元/年）
 const TUITION_CAP: Record<string, number> = {
   LOW: 6000,
@@ -303,7 +293,6 @@ interface PrefMatchResult {
   province?: 'match' | 'mismatch';
   tuition?: 'within' | 'over';
   career?: 'strong' | 'weak';
-  subjects?: 'match';
 }
 
 // 学生偏好对比：candidate group 与 student preferences 的 4 维匹配
@@ -338,9 +327,6 @@ function buildPrefMatch(params: {
     result.career =
       params.anchorEmploymentRate != null && params.anchorEmploymentRate >= 90 ? 'strong' : 'weak';
   }
-
-  // 4. 选科：候选池已按选科过滤，全部 match
-  result.subjects = 'match';
 
   return result;
 }
@@ -929,29 +915,6 @@ export class PlanCandidateService {
     return { score, reasons };
   }
 
-  private gradeScore(value: unknown) {
-    const text = String(value ?? '').trim().toUpperCase();
-    if (!text) return 0;
-    if (text.startsWith('A+')) return 100;
-    if (text.startsWith('A-')) return 88;
-    if (text.startsWith('A')) return 94;
-    if (text.startsWith('B+')) return 78;
-    if (text.startsWith('B-')) return 66;
-    if (text.startsWith('B')) return 72;
-    if (text.startsWith('C+')) return 58;
-    if (text.startsWith('C-')) return 46;
-    if (text.startsWith('C')) return 52;
-    return 0;
-  }
-
-  private majorStrengthScore(ep: any) {
-    const evalScore = this.gradeScore(ep.disciplineEval);
-    const softScore = this.gradeScore(ep.major?.softRating);
-    const rankingScore = extractRankingScore(ep.majorRanking);
-    const featureScore = ep.isNationalFeature ? 8 : 0;
-    return Number((evalScore * 0.48 + softScore * 0.32 + rankingScore * 0.12 + featureScore).toFixed(2));
-  }
-
   private compareCandidateGroupFallback(a: any, b: any, studentRank: number, includeMatchScore = true) {
     const soft = (a.softFailCount ?? 0) - (b.softFailCount ?? 0);
     if (soft !== 0) return soft;
@@ -998,13 +961,6 @@ export class PlanCandidateService {
         // 院校层次轴: 默认好校在前(软科排名升序; 同名次按 985/211 标签分); 翻转 = 普通校在前。
         const prim = compareRankingAsc(a.universityRank ?? a.university?.softRanking, b.universityRank ?? b.university?.softRanking) ||
           compareDesc(universityTagScore(a), universityTagScore(b));
-        if (prim !== 0) return prim * sign;
-        return this.compareCandidateGroupFallback(a, b, studentRank, false);
-      }
-
-      if (sort === 'MAJOR_STRENGTH') {
-        // 专业实力轴: 默认强在前; 翻转 = 弱在前。
-        const prim = compareDesc(a.majorStrengthScore, b.majorStrengthScore);
         if (prim !== 0) return prim * sign;
         return this.compareCandidateGroupFallback(a, b, studentRank, false);
       }
@@ -1789,7 +1745,6 @@ export class PlanCandidateService {
           isNationalFeature: ep.isNationalFeature,
           majorRanking: ep.majorRanking,
           majorHonor: ep.majorHonor,
-          majorStrengthScore: this.majorStrengthScore(ep),
           // 专业级征集数(本科类·累计各轮): 展开态专业行显示, 比组级更精确到"这个专业没录满多少"
           supplementaryCount: supplementary
             ? (supplementary.byMajorCode?.get(ep.majorCode) ?? supplementary.byMajorName?.get(ep.majorName) ?? null)
@@ -1854,7 +1809,6 @@ export class PlanCandidateService {
       if (orderedMajors[0]) orderedMajors[0].isRecommendedAnchor = true;
 
       const recommendedAnchor = orderedMajors[0];
-      const majorStrengthScore = bestNumber(orderedMajors.map((major) => major.majorStrengthScore), 'max');
       const groupHistoryMin = groupScore.groupMinRank ?? recommendedAnchor?.majorMinRank ?? null;
       const dynamicGradient = calcDynamicGradient({
         studentRank,
@@ -1935,7 +1889,6 @@ export class PlanCandidateService {
         anchorEmploymentRate: recommendedAnchor?.employmentRate ?? null,
         anchorAvgSalary: recommendedAnchor?.avgSalary ?? null,
         anchorTuition: recommendedAnchor?.tuition ?? null,
-        majorStrengthScore,
         majorCount: rows.length,
         selectableMajorCount: majorSections.recommended.length + majorSections.backup.length,
         softFailCount: majorSections.risk.filter((major) => major.matchStatus === 'SOFT_FAIL').length,
