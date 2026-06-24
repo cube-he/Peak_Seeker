@@ -46,6 +46,30 @@ function purityPercent(score: number | null | undefined): string {
   return `${Math.round(score * 100)}%`;
 }
 
+// 2026 vs 2025 专业组变动 chip 元数据。'未变' 不渲染 chip(用户决策, 仅有变动时提示老师对照)。
+const CHANGE_META: Record<string, { tone: string; label: string }> = {
+  '原组+新增':   { tone: 'safe-soft', label: '原组+新增' },
+  '变干净(拆分)': { tone: 'safe',      label: '拆分' },
+  '重组(合并)':  { tone: 'rush-soft', label: '重组' },
+  '新组无对应':   { tone: 'rush',      label: '新组' },
+};
+
+// tooltip: 列出 2025 老组的专业构成(重组组多串各一行,逐顿点呈现)
+function changeTitle(group: any): string {
+  const ct = group?.groupChangeType;
+  if (!ct || ct === '未变') return '';
+  const olds = (group.oldGroupMajors2025 as string[] | undefined) ?? [];
+  const parts: string[] = [`相对 2025: ${ct}`];
+  if (olds.length === 0) {
+    if (ct === '新组无对应') parts.push('2025 年无对应组, 2026 新设');
+  } else if (olds.length === 1) {
+    parts.push(`2025 老组专业: ${olds[0]}`);
+  } else {
+    olds.forEach((s, i) => parts.push(`2025 老组 ${i + 1}: ${s}`));
+  }
+  return parts.join(' · ');
+}
+
 function purityTitle(purity: any): string {
   if (!purity) return '';
   const m = PURITY_META[purity.level] ?? { desc: '' };
@@ -371,6 +395,14 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
             {group?.purity?.level && PURITY_META[group.purity.level] ? (
               <span className={`pgv2-dchip tone-${PURITY_META[group.purity.level].tone}`} title={purityTitle(group.purity)}>
                 纯净度 {purityPercent(group.purity.score) || PURITY_META[group.purity.level].label}
+              </span>
+            ) : null}
+            {group?.groupChangeType && group.groupChangeType !== '未变' && CHANGE_META[group.groupChangeType] ? (
+              <span
+                className={`pgv2-dchip tone-${CHANGE_META[group.groupChangeType].tone}`}
+                title={changeTitle(group)}
+              >
+                {CHANGE_META[group.groupChangeType].label}
               </span>
             ) : null}
             {typeof preferredHitCount === 'number' ? (
