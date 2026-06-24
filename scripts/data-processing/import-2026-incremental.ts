@@ -122,6 +122,8 @@ async function run() {
       majorRanking: toStr(p.majorRanking), majorHonor: toStr(p.majorHonor),
       localMasterPoint: toStr(p.localMasterPoint), localDoctoralPoint: toStr(p.localDoctoralPoint),
       groupPurityScore: toFloat(p.groupPurityScore),
+      groupChangeType: toStr(p.groupChangeType),
+      oldGroupMajors2025: toStr(p.oldGroupMajors2025),
     };
   };
   const buildAdm = (r: any) => {
