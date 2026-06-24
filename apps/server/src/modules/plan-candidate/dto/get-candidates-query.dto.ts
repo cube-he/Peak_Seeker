@@ -49,8 +49,24 @@ export class GetCandidatesQueryDto {
   @IsOptional() @IsIn(['ASC', 'DESC']) sortDir?: 'ASC' | 'DESC';
   // 视图模式: GROUP=院校专业组卡(默认, 专业优先); UNIVERSITY=院校卡上卷(院校优先)
   @IsOptional() @IsIn(['GROUP', 'UNIVERSITY']) groupBy?: 'GROUP' | 'UNIVERSITY';
-  // 办学性质过滤 (仅院校优先视图): public=只看公办, private=只看民办, 空=全部
-  @IsOptional() @IsIn(['public', 'private']) nature?: 'public' | 'private';
+  // 办学性质过滤 (两视图均生效, 分页层应用): public=公办, private=民办, sinoForeign=中外合作,
+  // hkMacau=港澳合作办学, independent=独立学院; 空=全部。
+  // 历史只支持 public/private (院校优先视图), 2026-06-25 起扩枚举 + 接到 GROUP 视图分页层。
+  // 注: sinoForeign 与下面的 `sinoForeign` 字段语义不同 — `nature='sinoForeign'` 看 university.runningNature
+  // 含"中外合作"(校属性), `sinoForeign='only'/'exclude'` 看组内专业 isSinoForeign(组级)。UI 分两个 chip 用。
+  @IsOptional() @IsIn(['public', 'private', 'sinoForeign', 'hkMacau', 'independent']) nature?: string;
+  // 院校标签 CSV: 985 / 211 / doubleFirstClass; 多选 AND 语义("同时是 985 + 211"); 空=不过滤。分页层。
+  @IsOptional() @IsString() tags?: string;
+  // 院校背景 CSV: 九校联盟 / 卓越大学联盟 / 国防七子 / ...
+  // P1 用 university.universityBackground String LIKE 模糊匹配, 多选 OR 语义。空=不过滤。分页层。
+  @IsOptional() @IsString() backgrounds?: string;
+  // 院校所在省 CSV (university.province IN); 空=不过滤。分页层。
+  @IsOptional() @IsString() universityProvinces?: string;
+  // 院校所在市 CSV (university.city IN); 空=不过滤。分页层。
+  @IsOptional() @IsString() universityCities?: string;
+  // 新增院校/专业过滤: major=组含 isNew 专业, university=院校首次在川招生(历史 3 年未现),
+  // either=任一即可; 空=不过滤。分页层。
+  @IsOptional() @IsIn(['major', 'university', 'either']) isNewItem?: string;
   // 意向梯队过滤: 0 / undefined = 不过滤 (全部); 1+ = 只显示含该梯队任一专业的院校组
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) tier?: number;
   // 是否隐藏已加入当前 plan 的院校组. 默认 true (老师只看未加入的)

@@ -57,8 +57,15 @@ interface GetCandidatesQuery {
   purity?: string; // csv 'S,A,B,C'; 空 = 不过滤
   recruitType?: string; // 招生类型 CSV 多选; 空 = 不过滤; 分页层应用(同 sinoForeign)
   groupBy?: 'GROUP' | 'UNIVERSITY'; // 视图模式; UNIVERSITY=院校卡上卷
-  nature?: 'public' | 'private'; // 院校优先视图: 办学性质过滤
+  // 办学性质过滤 (两视图均生效): public/private/sinoForeign/hkMacau/independent; 空=全部。
+  // 历史只 public/private + 仅 UNIVERSITY 视图, 2026-06-25 起 GROUP 视图也接, 字符串透传至 filterGroupsByNature。
+  nature?: string;
   sinoForeign?: 'only' | 'exclude'; // 中外合作过滤: only/exclude/空; 两视图均生效
+  tags?: string; // 院校标签 CSV: 985/211/doubleFirstClass; 多选 AND; 空=不过滤。分页层。
+  backgrounds?: string; // 院校背景 CSV (LIKE universityBackground); 多选 OR; 空=不过滤。分页层。
+  universityProvinces?: string; // 院校所在省 CSV (university.province IN); 空=不过滤。
+  universityCities?: string; // 院校所在市 CSV (university.city IN); 空=不过滤。
+  isNewItem?: string; // 新增过滤: major / university / either; 空=不过滤。需 isNewMajor/isNewUniversity 字段
   includeRegionMismatch?: boolean | string; // 是否展开"非意向地区"院校组(默认 false=折叠); 仅 GROUP 视图
   minScore?: number; // 分数条下界(今年预估分)
   maxScore?: number; // 分数条上界
