@@ -66,6 +66,21 @@ function downgrade(level: GroupPurityLevel): GroupPurityLevel {
 
 @Injectable()
 export class GroupPurityService {
+  /**
+   * 按专家版分数切档。阈值(2026-06-24 拍板,全量分布参考):
+   *   S ≥ 0.85  (~50%, 接近全单一专业类)
+   *   A 0.60~0.85 (~11%)
+   *   B 0.40~0.60 (~22%)
+   *   C < 0.40    (~17%)
+   */
+  static bandFromScore(score: number | null | undefined): 'S' | 'A' | 'B' | 'C' | null {
+    if (score === null || score === undefined || Number.isNaN(score)) return null;
+    if (score >= 0.85) return 'S';
+    if (score >= 0.60) return 'A';
+    if (score >= 0.40) return 'B';
+    return 'C';
+  }
+
   assess(input: GroupPurityInput): GroupPurityResult {
     const majors = input.majors ?? [];
     const N = majors.length;

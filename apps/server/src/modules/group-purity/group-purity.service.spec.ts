@@ -256,3 +256,23 @@ describe('GroupPurityService', () => {
     });
   });
 });
+
+describe('GroupPurityService.bandFromScore', () => {
+  it.each([
+    [1.0,  'S'], [0.95, 'S'], [0.85, 'S'],   // S ≥ 0.85
+    [0.84, 'A'], [0.70, 'A'], [0.60, 'A'],   // A 0.60~0.85
+    [0.59, 'B'], [0.50, 'B'], [0.40, 'B'],   // B 0.40~0.60
+    [0.39, 'C'], [0.10, 'C'], [0.00, 'C'],   // C < 0.40
+  ])('score=%s → %s', (score, expected) => {
+    expect(GroupPurityService.bandFromScore(score)).toBe(expected);
+  });
+
+  it('null/undefined → null (调用方决定怎么处理)', () => {
+    expect(GroupPurityService.bandFromScore(null)).toBeNull();
+    expect(GroupPurityService.bandFromScore(undefined as any)).toBeNull();
+  });
+
+  it('NaN → null', () => {
+    expect(GroupPurityService.bandFromScore(Number.NaN)).toBeNull();
+  });
+});
