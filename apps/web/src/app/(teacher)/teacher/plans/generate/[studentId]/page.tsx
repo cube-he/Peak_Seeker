@@ -157,6 +157,16 @@ interface CandidateMajor {
   previousMajorMinScore?: number | null;
   previousMajorMinRank?: number | null;
   previousMajorAdmissionCount?: number | null;
+  // 专业 4 年录取序列 (后端按 source.admissionBaselineYear 倒推 4 年 = 2025-2022):
+  // min/avg score+rank 来自 AdmissionRecord, planCount 来自 EnrollmentPlan (2022 无 EP)。
+  majorHistory4y?: Array<{
+    year: number;
+    minScore: number | null;
+    minRank: number | null;
+    avgScore: number | null;
+    avgRank: number | null;
+    planCount: number | null;
+  }> | null;
   matchScore?: number | null;
   matchReasons?: string[];
   matchReason?: string | null;
@@ -215,6 +225,9 @@ interface CandidateGroup {
   currentPlanCount?: number | null;
   previousPlanCount?: number | null;
   planCountChange?: number | null;
+  // 2026 组的专业 (majorCode 列表) 在 2025 同专业的 AdmissionRecord.majorAdmissionCount 求和。
+  // 组重组后唯一可比的"同专业池"口径; null = 该组所有专业 2025 均无录取数据。
+  previousMajorsAdmissionSum2025?: number | null;
   groupMinScore?: number | null;
   groupMinRank?: number | null;
   groupAdmissionCount?: number | null;
@@ -752,6 +765,36 @@ function CandidateMajorSection({
                   </span>
                 )}
               </span>
+              {/* 9 专业 4 年最低/平均分位 + 计划子表 (后端 majorHistory4y, baseline 倒推 4 年): */}
+              {/* 视觉粗糙占位, 等 claude-design 美化; 此处仅打通数据穿透 + null 容错。 */}
+              {major.majorHistory4y && major.majorHistory4y.length > 0 ? (
+                <div style={{ gridColumn: '1 / -1', marginTop: 4, fontSize: 12 }}>
+                  <table style={{ width: '100%', textAlign: 'center', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#fafafa' }}>
+                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>年份</th>
+                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>最低分</th>
+                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>最低位次</th>
+                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>平均分</th>
+                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>平均位次</th>
+                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>计划</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {major.majorHistory4y.map((h) => (
+                        <tr key={h.year}>
+                          <td style={{ padding: '2px 4px' }}>{h.year}</td>
+                          <td style={{ padding: '2px 4px' }}>{h.minScore ?? '—'}</td>
+                          <td style={{ padding: '2px 4px' }}>{h.minRank != null ? h.minRank.toLocaleString() : '—'}</td>
+                          <td style={{ padding: '2px 4px' }}>{h.avgScore ?? '—'}</td>
+                          <td style={{ padding: '2px 4px' }}>{h.avgRank != null ? h.avgRank.toLocaleString() : '—'}</td>
+                          <td style={{ padding: '2px 4px' }}>{h.planCount ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -1070,7 +1113,9 @@ export default function GeneratePlanPage() {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(STICKY_BAR_STORAGE_KEY) === '1';
   });
-  const candidatePageSize = 20;
+  // MAJOR 视图 15 (从 20 降): 卡片新增 4 年最低/平均分位+计划子表后高度增加,
+  // 15 张卡更易扫读且不增分页负担; UNIVERSITY 视图仍 10 (每条 rollup 院校已含多组)。
+  const candidatePageSize = 15;
   const universityPageSize = 10;
   // 当前生效的分页大小 / 排序 (随视图模式切换)
   const effectivePageSize = viewMode === 'UNIVERSITY' ? universityPageSize : candidatePageSize;

@@ -415,6 +415,21 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 意向命中 {preferredHitCount}/{groupMajorCount}
               </span>
             ) : null}
+            {/* 2026 招生 vs 2025 同专业录取数 chip — 组重组后唯一可比口径(后端按 majorCode 列表回算 2025) */}
+            {group?.currentPlanCount != null && group?.previousMajorsAdmissionSum2025 != null ? (() => {
+              const cur = group.currentPlanCount as number;
+              const prev = group.previousMajorsAdmissionSum2025 as number;
+              const delta = cur - prev;
+              const sign = delta >= 0 ? '+' : '';
+              return (
+                <span
+                  className={`pgv2-dchip ${delta >= 0 ? 'tone-safe' : 'tone-rush'}`}
+                  title={`2026 招 ${cur} 人 vs 2025 同专业录取 ${prev} 人 (差 ${sign}${delta})。口径: 取本组 2026 包含的专业, 在 2025 各自的录取人数求和`}
+                >
+                  招生 {cur} 人 ({sign}{delta} vs 2025 同专业)
+                </span>
+              );
+            })() : null}
           </div>
           {/* —— 院校级标签 —— */}
           <div className="pgv2-card-tags">
