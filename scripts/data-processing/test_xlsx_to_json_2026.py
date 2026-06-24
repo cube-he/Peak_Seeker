@@ -14,6 +14,7 @@ from xlsx_to_json_2026 import (
     extract_group_name,
     convert_plans_row,
     convert_admissions_row,
+    derive_universities_from_master,
 )
 
 # 86-column header of 四川-2026-专家版数据_批次标准化.xlsx (Sheet1), in order.
@@ -136,3 +137,25 @@ def test_admissions_skip_all_empty_year():
     recs = convert_admissions_row(_adm_row(
         录取人数2=None, 最低分2=None, 最低位次2=None, 平均分2=None, 平均位次2=None))
     assert sorted(r["year"] for r in recs) == [2025]
+
+
+def test_derive_missing_universities_from_master():
+    rows = [
+        {"院校代码": "0001", "院校名称": "北京大学", "所在省": "北京", "城市": "海淀",
+         "院校水平": "本科", "公私性质": "公办", "隶属单位": "教育部", "院校标签": "985/211/双一流",
+         "全校硕士专业数": 79, "全校博士专业数": 60, "软科排名": 2, "学科评估": "A+"},
+        # 同一缺失校多行(多专业) → 应只派生一条
+        {"院校代码": "5999", "院校名称": "新设职业学院", "所在省": "四川", "城市": "成都",
+         "院校水平": "专科", "公私性质": "民办", "院校标签": ""},
+        {"院校代码": "5999", "院校名称": "新设职业学院", "所在省": "四川", "城市": "成都",
+         "院校水平": "专科", "公私性质": "民办", "院校标签": ""},
+    ]
+    existing = {"0001"}  # 北大已在院校信息表 → 不重复派生
+    derived = derive_universities_from_master(rows, existing)
+    assert len(derived) == 1  # 只派生缺失的 5999, 且去重
+    u = derived[0]
+    assert u["enrollCode"] == "5999"
+    assert u["name"] == "新设职业学院"
+    assert u["province"] == "四川"
+    assert u["runningNature"] == "民办"
+    assert u["is985"] is False and u["is211"] is False

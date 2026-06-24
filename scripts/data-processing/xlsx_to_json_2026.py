@@ -238,6 +238,57 @@ def convert_admissions_row(r) -> list:
     return records
 
 
+# --- universities derived from master (for codes absent in 院校信息表) -------
+
+def derive_universities_from_master(rows, existing_codes) -> list:
+    """为 master 里存在、但 existing_codes(院校信息表) 缺失的院校, 从 master 自带院校列派生 university 记录。
+
+    富集字段(满意度/章程细则/QS/logo)主表没有 → 缺省 None；核心字段(省市/层次/性质/硕博点/标签)从主表取。
+    按 院校代码 去重。
+    """
+    seen, out = set(), []
+    for r in rows:
+        code = _str(r.get("院校代码"))
+        name = _str(r.get("院校名称"))
+        if not code or not name or code in existing_codes or code in seen:
+            continue
+        seen.add(code)
+        tags = [t.strip() for t in (_str(r.get("院校标签")) or "").split("/") if t.strip()]
+        master_cnt = _int(r.get("全校硕士专业数"))
+        doctoral_cnt = _int(r.get("全校博士专业数"))
+        out.append({
+            "enrollCode": code,
+            "code": None,                       # 主表无国标码
+            "name": name,
+            "province": _str(r.get("所在省")),
+            "city": _str(r.get("城市")),
+            "grade": _str(r.get("城市水平标签")),
+            "type": _str(r.get("类型")),
+            "level": _str(r.get("院校水平")),
+            "runningNature": _str(r.get("公私性质")),
+            "department": _str(r.get("隶属单位")),
+            "tags": tags,
+            "is985": "985" in tags,
+            "is211": "211" in tags,
+            "isDoubleFirstClass": any("双一流" in t for t in tags),
+            "ranking": _str(r.get("院校排名")),
+            "admissionGuide": _str(r.get("招生章程")),
+            "renameHistory": _str(r.get("更名合并转设")),
+            "transferDifficulty": _str(r.get("转专业情况")),
+            "postgradRate": _str(r.get("保研率")),
+            "disciplineEvaluationLevel": _str(r.get("学科评估")),
+            "softRating": _str(r.get("软科评级")),
+            "softRanking": _int(r.get("软科排名")),
+            "masterProgramCount": master_cnt,
+            "doctoralProgramCount": doctoral_cnt,
+            "hasMasterProgram": (master_cnt or 0) > 0,
+            "hasDoctoralProgram": (doctoral_cnt or 0) > 0,
+            "masterPrograms": _str(r.get("全校硕士专业")),
+            "doctoralPrograms": _str(r.get("全校博士专业")),
+        })
+    return out
+
+
 # --- main ------------------------------------------------------------------
 
 def _read_master_rows(xlsx_path: str):
@@ -296,6 +347,13 @@ def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from xlsx_to_json import convert_universities
     universities = convert_universities(str(uni_xlsx))
+
+    # 主表里存在但院校信息表缺失的院校 → 从主表派生, 否则其专业行入库被 skip
+    existing_codes = {str(u.get("enrollCode")).zfill(4) for u in universities}
+    derived = derive_universities_from_master(rows, existing_codes)
+    if derived:
+        print(f"  + {len(derived)} universities derived from master (院校信息表 缺失)")
+        universities = universities + derived
 
     _write_json(universities, str(out_dir / "universities_enriched.json"))
     _write_json(majors, str(out_dir / "majors_enriched.json"))
