@@ -204,6 +204,23 @@ describe('PlanCandidateService', () => {
     expect(r.scoreSegmentYear).toBe(2025);
   });
 
+  it('keystone: 2026 计划入库、录取止于 2025 时，组仍读 2025 线与梯度（不塌成无史线）', async () => {
+    mockCandidateGroupRequest({
+      plans: [makeGroupEnrollmentPlan()],
+      records: [makeGroupAdmissionRecord({ year: 2025 })],
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2026, _count: { _all: 1 } }]);
+    prisma.admissionRecord.groupBy.mockResolvedValue([{ year: 2025 }]);
+
+    const r: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
+
+    // 解耦前：sourceYear=2026 严格取 2026 录取 → 空 → 全组 baseMinRank=null → 进 noLine 桶
+    // 解耦后：录取线读 admissionBaselineYear=2025 → 有 baseMinRank、不进 noLine
+    expect(r.groups).toHaveLength(1);
+    expect(r.tierCounts.noLine).toBe(0);
+    expect(r.groups[0].dynamicGradient.baseMinRank).not.toBeNull();
+  });
+
   it('使用紧凑条件查询历史记录，避免为大量候选生成巨大 OR', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: '本科批B段', batchConfigId: 22, year: 2026,
@@ -919,6 +936,8 @@ describe('PlanCandidateService', () => {
       isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
       acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
     });
+    // 本用例录取数据在 2026，让录取线基准年与之一致（否则解耦后默认基线 2025 取不到这批记录）
+    prisma.admissionRecord.groupBy.mockResolvedValue([{ year: 2026 }]);
     prisma.enrollmentPlan.findMany
       .mockResolvedValueOnce([
         {

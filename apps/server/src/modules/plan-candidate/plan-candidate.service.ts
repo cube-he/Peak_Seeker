@@ -1676,8 +1676,8 @@ export class PlanCandidateService {
     const eps = includeHardFails ? epsRaw : filterEpsBySubjectRequirement(epsRaw, student.reChoices);
     const hardRules = this.buildHardRules(restrictions);
     const softRules = this.buildSoftRules();
-    // 3 年历史：sourceYear / -1 / -2（前端 TrendChart 需要 3 点）
-    const years = [source.sourceYear, source.sourceYear - 1, source.sourceYear - 2];
+    // 3 年历史：admissionBaselineYear / -1 / -2（录取线基准年, 可早于计划年; 前端 TrendChart 需要 3 点）
+    const years = [source.admissionBaselineYear, source.admissionBaselineYear - 1, source.admissionBaselineYear - 2];
     const adRecords = eps.length
       ? await this.prisma.admissionRecord.findMany({
           where: this.buildAdmissionRecordWhere(eps, province, years),
@@ -1855,12 +1855,12 @@ export class PlanCandidateService {
       }
 
       const groupRecords = [
-        ...(adByGroupYear.get(`${groupKey}|${source.sourceYear}`) ?? []),
-        ...(adByGroupYear.get(`${groupKey}|${source.sourceYear - 1}`) ?? []),
-        ...(adByGroupYear.get(`${groupKey}|${source.sourceYear - 2}`) ?? []),
+        ...(adByGroupYear.get(`${groupKey}|${source.admissionBaselineYear}`) ?? []),
+        ...(adByGroupYear.get(`${groupKey}|${source.admissionBaselineYear - 1}`) ?? []),
+        ...(adByGroupYear.get(`${groupKey}|${source.admissionBaselineYear - 2}`) ?? []),
       ];
-      const groupScore = this.pickGroupScore(groupRecords, source.sourceYear);
-      const groupHistory = this.pickGroupHistory(groupRecords, source.sourceYear);
+      const groupScore = this.pickGroupScore(groupRecords, source.admissionBaselineYear);
+      const groupHistory = this.pickGroupHistory(groupRecords, source.admissionBaselineYear);
       const first = rows[0];
       const currentPlanCount = this.planCountForGroup(rows);
       // 年度对比只信 group_plan_count(组级整组计划)。2024/2023 导入未填该字段、且把组级计划数
@@ -1900,8 +1900,8 @@ export class PlanCandidateService {
           } as any;
         }
 
-        const currentRecord = adIndex.get(recordKeyOf({ ...ep, year: source.sourceYear }));
-        const previousRecord = adIndex.get(recordKeyOf({ ...ep, year: source.sourceYear - 1 }));
+        const currentRecord = adIndex.get(recordKeyOf({ ...ep, year: source.admissionBaselineYear }));
+        const previousRecord = adIndex.get(recordKeyOf({ ...ep, year: source.admissionBaselineYear - 1 }));
         // 软规则: 学费/办学性质 — 不符合时进 SOFT_FAIL, 由 includeSoftFails 控制
         const failReasons = this.checkSoftFails(student, ep, softRules);
         const match = this.scoreMajorMatch(student, ep);
@@ -1917,7 +1917,7 @@ export class PlanCandidateService {
           province,
           examType: student.examType,
           batch: plan.batchName,
-          sourceAdmissionYear: source.sourceYear,
+          sourceAdmissionYear: source.admissionBaselineYear,
         });
         const display = this.classifyMajorDisplay(student, ep, failReasons, rankStrategy, tierMajors);
         const historyMin = groupScore.groupMinRank ?? currentRecord?.majorMinRank ?? null;
@@ -2184,7 +2184,7 @@ export class PlanCandidateService {
     if (hasNoLineGroup) {
       const bandWhere: Record<string, unknown> = {
         province,
-        year: source.sourceYear,
+        year: source.admissionBaselineYear,
         groupMinScore: { not: null },
       };
       addInFilter(bandWhere, 'subjects', eps.map((ep) => ep.subjects));
