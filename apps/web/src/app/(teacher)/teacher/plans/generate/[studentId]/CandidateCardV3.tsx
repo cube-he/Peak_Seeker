@@ -531,8 +531,7 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
             {(
               [
                 { k: 'majors' as const, label: '专业列表', n: sectionTotal },
-                { k: 'evidence' as const, label: '数据依据', n: null },
-                { k: 'school' as const, label: '院校详情', n: null },
+                // 2026-06-25 删除「数据依据」「院校详情」tab — 简化候选卡, 减少决策干扰
               ]
             ).map((t) => (
               <button

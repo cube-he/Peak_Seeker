@@ -2935,7 +2935,8 @@ export default function GeneratePlanPage() {
                 </div>
 
                 {/* 方案体检 (#5): pgv3-health 进度条 + 目标线 + 检查项 (25/42/33 经验比例) */}
-                {planHealth ? (() => {
+                {/* 2026-06-25 专业优先模式下隐藏体检卡 — 减少决策干扰, 院校优先模式保留 */}
+                {viewMode !== 'MAJOR' && planHealth ? (() => {
                   const hTotal = tierStats.rush + tierStats.stable + tierStats.safe || 1;
                   const pct = {
                     rush: Math.round((tierStats.rush / hTotal) * 100),
@@ -3068,39 +3069,47 @@ export default function GeneratePlanPage() {
                   )}
                 </div>
 
-                <div className="pgv2-rail-tip">
-                  <strong>服从调剂规则:</strong>
-                  少于等于 6 个专业时全部带入,超过 6 个时优先学生意向专业
-                </div>
+                {/* 2026-06-25 专业优先模式下隐藏「服从调剂规则」提示 */}
+                {viewMode !== 'MAJOR' ? (
+                  <div className="pgv2-rail-tip">
+                    <strong>服从调剂规则:</strong>
+                    少于等于 6 个专业时全部带入,超过 6 个时优先学生意向专业
+                  </div>
+                ) : null}
 
                 <div className="pgv2-hints">
-                  <h4>下一步建议</h4>
-                  <div className="pgv2-hint tone-accent">
-                    <span className="ic"><InfoCircleOutlined /></span>
-                    <span>优先补足稳 / 稳保,要求学生位次覆盖组门槛位次。</span>
-                  </div>
-                  <div className="pgv2-hint tone-rush">
-                    <span className="ic"><WarningOutlined /></span>
-                    <span>极冲只做备选,不占正式推荐名额。</span>
-                  </div>
-                  <div className="pgv2-hint tone-safe">
-                    <span className="ic"><CheckOutlined /></span>
-                    <span>软性风险专业先复核限制,再加入方案。</span>
-                  </div>
-                  {!submitReadiness.ok && plan?.status === 'DRAFT' && planItems.length > 0 ? (
-                    <div
-                      style={{
-                        marginTop: 12,
-                        padding: '6px 10px',
-                        borderRadius: 6,
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        background: 'rgba(251, 191, 36, 0.14)',
-                        border: '1px solid rgba(251, 191, 36, 0.45)',
-                      }}
-                    >
-                      ⚠ 还不能提交:{submitReadiness.reason}
-                    </div>
+                  {/* 2026-06-25 专业优先模式下隐藏「下一步建议」+「还不能提交」横幅 — 保留下方提交按钮 */}
+                  {viewMode !== 'MAJOR' ? (
+                    <>
+                      <h4>下一步建议</h4>
+                      <div className="pgv2-hint tone-accent">
+                        <span className="ic"><InfoCircleOutlined /></span>
+                        <span>优先补足稳 / 稳保,要求学生位次覆盖组门槛位次。</span>
+                      </div>
+                      <div className="pgv2-hint tone-rush">
+                        <span className="ic"><WarningOutlined /></span>
+                        <span>极冲只做备选,不占正式推荐名额。</span>
+                      </div>
+                      <div className="pgv2-hint tone-safe">
+                        <span className="ic"><CheckOutlined /></span>
+                        <span>软性风险专业先复核限制,再加入方案。</span>
+                      </div>
+                      {!submitReadiness.ok && plan?.status === 'DRAFT' && planItems.length > 0 ? (
+                        <div
+                          style={{
+                            marginTop: 12,
+                            padding: '6px 10px',
+                            borderRadius: 6,
+                            fontSize: 12,
+                            lineHeight: 1.5,
+                            background: 'rgba(251, 191, 36, 0.14)',
+                            border: '1px solid rgba(251, 191, 36, 0.45)',
+                          }}
+                        >
+                          ⚠ 还不能提交:{submitReadiness.reason}
+                        </div>
+                      ) : null}
+                    </>
                   ) : null}
                   {plan?.status === 'PENDING_REVIEW' ? (
                     <Button
