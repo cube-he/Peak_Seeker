@@ -139,6 +139,40 @@ def test_admissions_skip_all_empty_year():
     assert sorted(r["year"] for r in recs) == [2025]
 
 
+def test_convert_plans_row_attaches_purity_score_to_2026_only():
+    """干净度只挂 2026 行;2025/2024/2023 历史行不带 (组成不同, 复用 2026 分数是错的)"""
+    from xlsx_to_json_2026 import convert_plans_row
+    row = {
+        "院校代码": "5196", "专业名称": "广播电视编导", "专业代码": "01",
+        "专业组代码": "101", "科类": "历史", "批次": "本科批B段",
+        "招生类型": "普通类本科", "选科要求": "不限",
+        "本科/专科": "本科", "计划人数": 30, "专业组计划人数": 210,
+        "计划人数结果1": 28, "计划人数结果2": 25, "计划人数结果3": 22,
+        "专业组干净度": "0.26",
+    }
+    plans = convert_plans_row(row)
+    assert len(plans) == 4   # 2026 + 2025 + 2024 + 2023
+    p2026 = next(p for p in plans if p["year"] == 2026)
+    assert p2026["groupPurityScore"] == 0.26
+    for yr in (2025, 2024, 2023):
+        p = next(p for p in plans if p["year"] == yr)
+        assert "groupPurityScore" not in p or p["groupPurityScore"] is None
+
+
+def test_convert_plans_row_purity_score_missing_yields_none():
+    from xlsx_to_json_2026 import convert_plans_row
+    row = {
+        "院校代码": "5196", "专业名称": "X", "专业代码": "01",
+        "专业组代码": "101", "科类": "历史", "批次": "本科批B段",
+        "招生类型": "普通类本科", "选科要求": "不限",
+        "本科/专科": "本科", "计划人数": 30, "专业组计划人数": 210,
+        # 没有 专业组干净度 列
+    }
+    plans = convert_plans_row(row)
+    p2026 = next(p for p in plans if p["year"] == 2026)
+    assert p2026.get("groupPurityScore") is None
+
+
 def test_derive_missing_universities_from_master():
     rows = [
         {"院校代码": "0001", "院校名称": "北京大学", "所在省": "北京", "城市": "海淀",

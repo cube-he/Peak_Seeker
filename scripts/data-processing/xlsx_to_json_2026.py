@@ -62,6 +62,15 @@ def _int(val):
         return None
 
 
+def _float(val):
+    if val is None:
+        return None
+    try:
+        return float(str(val))
+    except (ValueError, TypeError):
+        return None
+
+
 def _bool_from_str(val) -> bool:
     return _str(val) == "是"
 
@@ -158,6 +167,7 @@ def convert_plans_row(r) -> list:
         "groupPlanCount": _int(r.get("专业组计划人数")),
         "tuition": _int(r.get("学费")),
         "duration": _str(r.get("学制")),
+        "groupPurityScore": _float(r.get("专业组干净度")),  # 仅 2026；历史年组成不同，复用此值有误
     }]
 
     # 历史计划：per-major planCount 来自 计划人数结果1/2/3；缺即跳过该年。groupPlanCount/tuition/duration 不可得。
