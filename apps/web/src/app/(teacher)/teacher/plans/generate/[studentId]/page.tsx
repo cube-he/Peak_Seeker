@@ -93,24 +93,6 @@ interface DynamicGradientDetail {
   reasons?: string[];
 }
 
-interface CompetitionDetail {
-  currentYear?: number | null;
-  previousYear?: number | null;
-  currentCount?: number | null;
-  previousCount?: number | null;
-  currentBatchLineScore?: number | null;
-  previousBatchLineScore?: number | null;
-}
-
-interface SelectionCompetitionDetail {
-  sourceYear?: number | null;
-  sourceType?: string | null;
-  firstChoice?: string | null;
-  requiredSubjects?: string[];
-  eligibleCount?: number | null;
-  subjectCount?: number | null;
-}
-
 interface SupplementaryDetail {
   sourceYear?: number | null;
   scope?: 'UNIVERSITY_BATCH' | 'GROUP' | string | null;
@@ -246,8 +228,6 @@ interface CandidateGroup {
     targetYear?: number | null;
   } | null;
   dynamicGradient?: DynamicGradientDetail | null;
-  competition?: CompetitionDetail | null;
-  selectionCompetition?: SelectionCompetitionDetail | null;
   supplementary?: SupplementaryDetail | null;
   suggestedGradient: Gradient;
   majorCount: number;

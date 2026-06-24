@@ -114,7 +114,7 @@ export default function UniversityCandidateCard({
         {groups.map((g) => {
           const added = isGroupAdded(g);
           const grad = g.suggestedGradient ?? g.dynamicGradient?.gradient ?? 'WEN';
-          // 冲稳保之外再分两档(按修正后位次差 rankGapRatio): 够不着 / 分数偏低 → 整行灰显
+          // 冲稳保之外再分两档(按组门槛位次差 rankGapRatio): 够不着 / 分数偏低 → 整行灰显
           const edge = g.dynamicGradient?.rankGapRatio;
           const reachFar = typeof edge === 'number' && edge < -0.45;
           const tooLow = typeof edge === 'number' && edge > 0.5;

@@ -217,7 +217,7 @@ function RankRuler({ studentRank, groupMinRank, adjusted, ratio, noLine, gapText
         <span className="rk-r">保</span>
       </div>
       <div className={`rk-note ${ahead ? 'ahead' : 'behind'}`}>
-        组门槛 <b>{basis.toLocaleString()}</b>{adjusted != null ? '(修正)' : ''} · {gapText || (ahead ? '学生领先' : '学生落后')}
+        组门槛 <b>{basis.toLocaleString()}</b> · {gapText || (ahead ? '学生领先' : '学生落后')}
       </div>
     </div>
   );
@@ -291,7 +291,7 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   const tuitionText = tuition == null ? null : tuition === 0 ? '免费' : tuition.toLocaleString();
 
   // 灰显区分(不替老师藏): 非意向地区 / 够不着(门槛位次远好于学生) / 分数偏低(学生远高于门槛)。
-  // 阈值与院校卡一致(rankGapRatio = 修正后门槛位次/学生位次 - 1)。
+  // 阈值与院校卡一致(rankGapRatio = 组门槛位次/学生位次 - 1)。
   const regionMismatch = !!group?.regionMismatch;
   const edge = group?.dynamicGradient?.rankGapRatio;
   const reachFar = typeof edge === 'number' && edge < -0.45;
