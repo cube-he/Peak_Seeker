@@ -1685,6 +1685,23 @@ export class PlanCandidateService {
         (previousByGroup.get(groupKey) ?? [])
           .find((r: any) => r.year === source.sourceYear - 1 && typeof r.groupPlanCount === 'number')
           ?.groupPlanCount ?? null;
+      // 用 2026 组的 majorCode 列表回查 sourceYear-1 (2025) AdmissionRecord.majorAdmissionCount 求和.
+      // 专业组重组后的唯一可比口径 (用户拍板 Q1): 把本组 2026 包含的专业, 在 2025 各自录取人数加起来,
+      // 与 currentPlanCount 对比看"招生人数 vs 去年同专业实际录取"是否扩/缩.
+      // 全组无任何 2025 record 时返回 null (不返回 0, 避免误导).
+      const previousYearForCompare = source.sourceYear - 1;
+      let previousMajorsAdmissionSum = 0;
+      let previousMajorsHasAnyRecord = false;
+      for (const ep of rows) {
+        const ar = adIndex.get(recordKeyOf({ ...ep, year: previousYearForCompare }));
+        if (ar?.majorAdmissionCount != null) {
+          previousMajorsAdmissionSum += ar.majorAdmissionCount;
+          previousMajorsHasAnyRecord = true;
+        }
+      }
+      const previousMajorsAdmissionSum2025: number | null = previousMajorsHasAnyRecord
+        ? previousMajorsAdmissionSum
+        : null;
       const supplementary = supplementaryByGroup.get(groupKey) ?? null;
 
       const majorsRaw = await Promise.all(rows.map(async (ep) => {
@@ -1912,6 +1929,9 @@ export class PlanCandidateService {
         scoreSource: groupScore.scoreSource,
         predictedMinRank: predictionMap.get(groupKey) ?? null,
         purity: purityMap.get(groupPurityKeyOf(first)) ?? null,
+        // 2026 vs 2025 同专业录取数比较: currentPlanCount vs Σ 本组各专业 sourceYear-1 录取人数.
+        // 专业组重组后唯一可比口径 (用户拍板 Q1). null = 该组所有专业 2025 均无录取数据.
+        previousMajorsAdmissionSum2025,
         groupChangeType: first.groupChangeType ?? null,
         oldGroupMajors2025: oldGroupMajors2025List,
         dynamicGradient,
