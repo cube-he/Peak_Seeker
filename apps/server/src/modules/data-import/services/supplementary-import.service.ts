@@ -10,7 +10,10 @@ export interface SupplementaryImportRow {
   roundNumber?: number;
   universityId: number;
   universityName: string;
+  subject?: string;        // 科类 物理/历史 — 候选卡按学生科类过滤征集
+  groupCode?: string;      // 专业组代码 — loadSupplementaryByGroup 按组聚合(groupCode 非空才可见)
   majorId?: number;
+  majorCode?: string;      // 专业代码 — 组内专业级征集
   majorName?: string;
   planCount?: number;
   requirements?: string;
@@ -65,7 +68,10 @@ export class SupplementaryImportService {
               roundNumber: row.roundNumber ?? 1,
               universityId: row.universityId,
               universityName: row.universityName,
+              subject: row.subject ?? null,
+              groupCode: row.groupCode ?? null,
               majorId: row.majorId ?? null,
+              majorCode: row.majorCode ?? null,
               majorName: row.majorName ?? null,
               planCount: row.planCount ?? null,
               requirements: row.requirements ?? null,

@@ -18,6 +18,9 @@ interface ParsedSupplementaryRecord {
   roundNumber: number;
   universityId: number;
   universityName: string;
+  subject: string | null;
+  groupCode: string | null;
+  majorCode: string | null;
   majorName: string | null;
   planCount: number | null;
   requirements: string | null;
@@ -164,6 +167,10 @@ async function parseWorkbook(
     const universityCode = toText(getCell(row, indexes, '院校代码'));
     const universityName = toText(getCell(row, indexes, '院校名称'));
     const majorName = toText(getCell(row, indexes, '专业名称')) || null;
+    // 候选卡可见性依赖这三列(loadSupplementaryByGroup 按 groupCode 聚合 + subject 过滤); 源缺列时 getCell→null
+    const subject = toText(getCell(row, indexes, '科类')) || toText(getCell(row, indexes, '首选科目')) || null;
+    const groupCode = toText(getCell(row, indexes, '专业组代码')) || null;
+    const majorCode = toText(getCell(row, indexes, '专业代码')) || null;
     if (!year || !rawBatch || !universityName) {
       skippedInvalid++;
       continue;
@@ -200,6 +207,9 @@ async function parseWorkbook(
         roundNumber: index + 1,
         universityId: university.id,
         universityName: university.name,
+        subject,
+        groupCode,
+        majorCode,
         majorName,
         planCount,
         requirements,
