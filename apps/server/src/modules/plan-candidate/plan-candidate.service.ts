@@ -1241,8 +1241,25 @@ export class PlanCandidateService {
     return { history3y, historyFiling3y };
   }
 
-  private pickGroupScore(records: any[], sourceYear: number) {
-    const current = records.filter((record) => record.year === sourceYear);
+  private pickGroupScore(records: any[], baselineYear: number) {
+    // 就近年回退: 基线年无线时, 落到 ≤基线年的最近一个有线年(避免个别组无谓塌成 NO_LINE)。
+    // 基线年有线时, years 降序第一个即基线年, 命中即停 → 行为与"只取基线年"一致。
+    const years = Array.from(
+      new Set(records.map((r) => r.year).filter((y) => typeof y === 'number' && y <= baselineYear)),
+    ).sort((a, b) => b - a);
+    let current: any[] = [];
+    for (const y of years) {
+      const yearRecords = records.filter((record) => record.year === y);
+      const hasLine =
+        bestNumber(yearRecords.map((r) => r.groupMinScore)) !== null ||
+        bestNumber(yearRecords.map((r) => r.groupMinRank), 'max') !== null ||
+        bestNumber(yearRecords.map((r) => r.filingMinScore)) !== null ||
+        bestNumber(yearRecords.map((r) => r.filingMinRank), 'max') !== null ||
+        bestNumber(yearRecords.map((r) => r.majorMinScore)) !== null ||
+        bestNumber(yearRecords.map((r) => r.majorMinRank), 'max') !== null;
+      current = yearRecords;
+      if (hasLine) break;
+    }
     const groupScore = bestNumber(current.map((record) => record.groupMinScore));
     const groupRank = bestNumber(current.map((record) => record.groupMinRank), 'max');
     if (groupScore !== null || groupRank !== null) {

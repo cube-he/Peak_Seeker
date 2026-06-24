@@ -253,6 +253,14 @@ describe('PlanCandidateService', () => {
     }
   });
 
+  it('pickGroupScore: 基线年无记录时回退到 ≤基线年的最近有线年份', async () => {
+    // 组只有 2024 录取，基线年 2025 无记录 → 应回退取 2024 线
+    const records = [makeGroupAdmissionRecord({ year: 2024, groupMinRank: 99000, groupMinScore: 540 })];
+    const res = (service as any).pickGroupScore(records, 2025);
+    expect(res.groupMinRank).toBe(99000);
+    expect(res.scoreSource).toBe('GROUP');
+  });
+
   it('使用紧凑条件查询历史记录，避免为大量候选生成巨大 OR', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: '本科批B段', batchConfigId: 22, year: 2026,
