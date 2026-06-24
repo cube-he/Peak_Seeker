@@ -14,6 +14,14 @@ silently mis-read columns). See design:
   docs/superpowers/specs/2026-06-24-86col-converter-design.md
 """
 
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+import openpyxl
+
 # Columns that MUST exist; absence means the input is not the expected 86-col master.
 REQUIRED_COLS = [
     "科类", "批次", "招生类型", "院校代码", "专业组代码", "专业代码", "专业名称",
@@ -228,3 +236,91 @@ def convert_admissions_row(r) -> list:
         records.append({**shared, "year": 2023, **vals_23})
 
     return records
+
+
+# --- main ------------------------------------------------------------------
+
+def _read_master_rows(xlsx_path: str):
+    """Read the 86-col master; return (list[dict] rows, header index H)."""
+    wb = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
+    ws = wb["Sheet1"] if "Sheet1" in wb.sheetnames else wb.active
+    it = ws.iter_rows(values_only=True)
+    header = next(it)
+    H = build_header_index(header)  # fail-fast
+    rows = []
+    for row in it:
+        # skip fully empty rows (first few identity cols all None)
+        if not any(row[H[c]] is not None for c in ("院校代码", "专业组代码", "专业名称")):
+            continue
+        rows.append(row_to_dict(row, H))
+    wb.close()
+    return rows, H
+
+
+def _write_json(data, out_path):
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    print(f"  written {len(data):>7} → {out_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Convert 2026 86-col master xlsx to import JSON")
+    parser.add_argument("--xlsx", default=None, help="86-col master xlsx path")
+    parser.add_argument("--uni-xlsx", default=None, help="院校信息表.xlsx path (universities)")
+    parser.add_argument("--out-dir", default=None, help="output dir for JSON files")
+    args = parser.parse_args()
+
+    root = Path(__file__).resolve().parent.parent.parent
+    xlsx = Path(args.xlsx) if args.xlsx else root / "data" / "03_专家版主表" / "output" / "四川-2026-专家版数据_批次标准化.xlsx"
+    uni_xlsx = Path(args.uni_xlsx) if args.uni_xlsx else root / "data" / "03_专家版主表" / "output" / "院校信息表.xlsx"
+    out_dir = Path(args.out_dir) if args.out_dir else Path(__file__).resolve().parent / "output_2026"
+
+    if not xlsx.exists():
+        print(f"ERROR: {xlsx} not found", file=sys.stderr); sys.exit(1)
+    if not uni_xlsx.exists():
+        print(f"ERROR: {uni_xlsx} not found", file=sys.stderr); sys.exit(1)
+
+    print("=" * 60)
+    print("86-col master → JSON (2026)")
+    print("=" * 60)
+    print(f"Reading {xlsx} ...")
+    rows, _H = _read_master_rows(str(xlsx))
+    print(f"  → {len(rows)} data rows")
+
+    majors = convert_majors(rows)
+    plans = [p for r in rows for p in convert_plans_row(r)]
+    records = [a for r in rows for a in convert_admissions_row(r)]
+
+    # universities: reuse the existing converter on 院校信息表.xlsx (unchanged)
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from xlsx_to_json import convert_universities
+    universities = convert_universities(str(uni_xlsx))
+
+    _write_json(universities, str(out_dir / "universities_enriched.json"))
+    _write_json(majors, str(out_dir / "majors_enriched.json"))
+    _write_json(plans, str(out_dir / "enrollment_plans_enriched.json"))
+    _write_json(records, str(out_dir / "admission_records_filled.json"))
+
+    # --- validation / report ---
+    def _by_year(items):
+        c = {}
+        for it in items:
+            c[it["year"]] = c.get(it["year"], 0) + 1
+        return dict(sorted(c.items()))
+
+    uni_codes = {str(u.get("enrollCode")).zfill(4) for u in universities}
+    master_codes = {str(r.get("院校代码")).zfill(4) for r in rows if r.get("院校代码") is not None}
+    unmatched = sorted(master_codes - uni_codes)
+
+    print("\n" + "=" * 60)
+    print(f"majors:            {len(majors)}")
+    print(f"enrollment_plans:  {len(plans)}  by year={_by_year(plans)}")
+    print(f"admission_records: {len(records)}  by year={_by_year(records)}")
+    print(f"universities:      {len(universities)}")
+    print(f"院校代码 未命中 universities 的: {len(unmatched)}  {unmatched[:20]}")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()
