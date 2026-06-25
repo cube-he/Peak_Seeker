@@ -124,6 +124,7 @@ async function run() {
       groupPurityScore: toFloat(p.groupPurityScore),
       groupChangeType: toStr(p.groupChangeType),
       oldGroupMajors2025: toStr(p.oldGroupMajors2025),
+      bookPageNumber: toInt(p.bookPageNumber),
     };
   };
   const buildAdm = (r: any) => {
