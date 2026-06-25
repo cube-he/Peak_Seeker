@@ -628,6 +628,7 @@ model EnrollmentPlan {
   groupPurityScore   Float?  @map("group_purity_score") // 2026 起从专家版主表直接读 0~1, 历史年 null
   groupChangeType    String? @map("group_change_type") @db.VarChar(20)  // 未变 / 原组+新增 / 变干净(拆分) / 重组(合并) / 新组无对应
   oldGroupMajors2025 String? @map("old_group_majors_2025") @db.Text     // 2025老组的专业名串 (顿号分隔), 行级
+  bookPageNumber     Int?    @map("book_page_number")  // 2026 招生考试报页码 (xlsx col 16, 专业级)
 
   // 招生属性
   isNew    Boolean @default(false) @map("is_new")
