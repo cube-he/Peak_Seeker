@@ -43,18 +43,23 @@ describe('major-mode-filters', () => {
     });
   });
 
-  describe('filterGroupsByTags: 985/211/双一流 多选 AND', () => {
+  describe('filterGroupsByTags: 985/211/双一流 多选 OR', () => {
     const groups = [
       g({ is985: true,  is211: true,  isDoubleFirstClass: true  }),  // 0 三冠
       g({ is985: false, is211: true,  isDoubleFirstClass: false }),  // 1 仅 211
       g({ is985: true,  is211: false, isDoubleFirstClass: false }),  // 2 仅 985
-      g({ is985: false, is211: false, isDoubleFirstClass: true  }),  // 3 仅双一流
+      g({ is985: false, is211: false, isDoubleFirstClass: true  }),  // 3 仅双一流 (河南大学/宁夏大学型)
       g({ is985: null,  is211: null,  isDoubleFirstClass: null  }),  // 4 全 null
     ];
 
-    it('tags=985,211 AND 语义: 只留同时 985+211', () => {
+    it('tags=985,211 OR 语义: 是 985 或 是 211 任一即过', () => {
       const r = filterGroupsByTags(groups, '985,211');
-      expect(r).toEqual([groups[0]]);
+      expect(r).toEqual([groups[0], groups[1], groups[2]]);
+    });
+
+    it('tags=985,doubleFirstClass OR 语义: 是 985 或 是双一流 任一即过 (含仅双一流的非 985)', () => {
+      const r = filterGroupsByTags(groups, '985,doubleFirstClass');
+      expect(r).toEqual([groups[0], groups[2], groups[3]]);
     });
 
     it('tags=doubleFirstClass: 双一流匹配', () => {

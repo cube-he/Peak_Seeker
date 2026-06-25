@@ -48,8 +48,9 @@ export function filterGroupsByNature<T extends GroupWithUniversity>(
 }
 
 /**
- * 院校标签 (985/211/双一流) 多选 AND 语义.
- * 用户期望: "985,211" = 同时是 985 和 211, 不是 985 或 211.
+ * 院校标签 (985/211/双一流) 多选 OR 语义 (985 或 211 或 双一流 任一即过).
+ * 用户心智模型: 勾"985+双一流"=想看任一名校, 不是必须同时挂两标签.
+ * AND 会砍掉非 985 的双一流 (如河南大学/宁夏大学), 与"勾越多看越多"直觉相反.
  * 空 csv=不过滤同引用返回.
  */
 export function filterGroupsByTags<T extends GroupWithUniversity>(
@@ -60,11 +61,11 @@ export function filterGroupsByTags<T extends GroupWithUniversity>(
   if (tags.length === 0) return groups;
   return groups.filter((g) => {
     const u = g.university;
-    return tags.every((t) => {
+    return tags.some((t) => {
       if (t === '985') return !!u?.is985;
       if (t === '211') return !!u?.is211;
       if (t === 'doubleFirstClass') return !!u?.isDoubleFirstClass;
-      return true; // 未知 tag 视为通过, 不误杀
+      return false; // 未知 tag 不贡献命中
     });
   });
 }
