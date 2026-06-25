@@ -26,6 +26,7 @@ export const CANDIDATE_GROUP_SORTS = [
   'SAFETY', // 录取概率: 偏保(DESC) / 偏冲(ASC)
   'MAJOR_MIN_SCORE', // 专业最低分: 分高(DESC) / 分低(ASC)
   'UNIVERSITY_RANK', // 院校层次: 好校(DESC) / 普通(ASC)
+  'PLAN_COUNT_CHANGE', // 招生计划变更(今年vs去年): 扩招多(DESC) / 缩招多(ASC)
 ] as const;
 
 export type CandidateGroupSort = typeof CANDIDATE_GROUP_SORTS[number];

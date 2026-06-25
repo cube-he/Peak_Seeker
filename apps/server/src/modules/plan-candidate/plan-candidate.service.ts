@@ -86,7 +86,8 @@ type CandidateGroupSort =
   | 'MAJOR_MATCH'
   | 'SAFETY'
   | 'MAJOR_MIN_SCORE'
-  | 'UNIVERSITY_RANK';
+  | 'UNIVERSITY_RANK'
+  | 'PLAN_COUNT_CHANGE';
 type SortDir = 'ASC' | 'DESC';
 type CandidateGroupScoreSource = 'GROUP' | 'FILING' | 'MAJOR' | 'NONE';
 type StudentRankSource = 'PROFILE' | 'SCORE_SEGMENT' | 'MISSING';
@@ -1140,6 +1141,13 @@ export class PlanCandidateService {
         // 院校层次轴: 默认好校在前(软科排名升序; 同名次按 985/211 标签分); 翻转 = 普通校在前。
         const prim = compareRankingAsc(a.universityRank ?? a.university?.softRanking, b.universityRank ?? b.university?.softRanking) ||
           compareDesc(universityTagScore(a), universityTagScore(b));
+        if (prim !== 0) return prim * sign;
+        return this.compareCandidateGroupFallback(a, b, studentRank, false);
+      }
+
+      if (sort === 'PLAN_COUNT_CHANGE') {
+        // 招生计划变更轴: 默认扩招多在前(planCountChange 降序, 今年-去年); 翻转 = 缩招多在前。无对比数据沉底。
+        const prim = compareDesc(a.planCountChange, b.planCountChange);
         if (prim !== 0) return prim * sign;
         return this.compareCandidateGroupFallback(a, b, studentRank, false);
       }
