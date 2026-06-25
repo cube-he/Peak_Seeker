@@ -562,6 +562,14 @@ export class PlanCandidateService {
       // "只看中外合作"会保留纯中外的全风险组(否则学生不接受时整组被丢→筛完为空),
       // 该保留发生在建池阶段, 故必须进缓存键(同 keyword/tier 的道理), 否则命中无中外组的旧池。
       sinoOnly: q.sinoForeign === 'only',
+      // 客观纯净度过滤在建池阶段对 resultGroups splice(见下方 #4), 故必须进缓存键,
+      // 否则首次(无纯净度)建好的全档池被缓存, 之后切"干净/较纯"等命中旧池→筛选不生效。
+      // 归一: 排序去重 + 全选4档/空 视同不过滤(=''), 避免 'S,A'/'A,S' 各占一份缓存。
+      purity: (() => {
+        const wl = (q.purity ?? '').split(',').map((s) => s.trim().toUpperCase())
+          .filter((s) => ['S', 'A', 'B', 'C'].includes(s));
+        return wl.length > 0 && wl.length < 4 ? Array.from(new Set(wl)).sort().join(',') : '';
+      })(),
     });
   }
 
