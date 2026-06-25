@@ -154,21 +154,36 @@ export function Sparkline({ data }: { data?: Array<{ year: number; score: number
   );
 }
 
-export function MBar({ k, v, suffix = '', chg, title }: { k: string; v?: string | number | null; suffix?: string; chg?: number | null; title?: string }) {
+// 设计稿 MBar: 标签(mb-k) + 值(mb-v, 后缀走 <i>) + 可选环比(mb-chg) + 可选进度条(mb-track/mb-fill)。
+// pct = 进度条填充百分比(0~100); 无数据时不渲染进度条。
+export function MBar({ k, v, suffix = '', chg, pct, title }: { k: string; v?: string | number | null; suffix?: string; chg?: number | null; pct?: number | null; title?: string }) {
   // 数据源用 "/" 表示无数据, 视同空值, 否则会显示成裸 "/"
   const isEmpty = v == null || v === '' || String(v).trim() === '/';
-  const show = isEmpty ? '—' : `${v}${suffix}`;
   return (
     <div className="pgv2-mbar" title={title}>
-      <span className="lbl">{k}</span>
-      <span className="val">
-        {show}
+      <span className="mb-k">{k}</span>
+      <span className="mb-v">
+        {isEmpty ? '—' : v}
+        {!isEmpty && suffix ? <i>{suffix}</i> : null}
         {chg != null && chg !== 0 ? (
-          <span className={`chg ${chg > 0 ? 'up' : 'down'}`}>{chg > 0 ? '+' : ''}{chg}</span>
+          <span className={`mb-chg ${chg > 0 ? 'up' : 'down'}`}>{chg > 0 ? '+' : ''}{chg}</span>
         ) : null}
       </span>
+      {pct != null ? (
+        <span className="mb-track">
+          <span className="mb-fill" style={{ width: `${Math.max(3, Math.min(100, pct))}%` }} />
+        </span>
+      ) : null}
     </div>
   );
+}
+
+// 把可能带 '%'/'¥'/逗号的字符串/数字字段解析为纯数字, 供 MBar 值与进度条 pct 用。无法解析 → null(不渲染条)
+function ratePct(v?: number | string | null): number | null {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : null;
 }
 
 // 距离虚线灰标(够不着 / 偏低) — 仅极端档显示;
@@ -283,12 +298,21 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   const confCls = confidence ? `c-${String(confidence).toLowerCase()}` : '';
   // 预测位次区间(乐观~保守): 区间宽窄=预测确定性, 比单点更不易误导
   const predBand = rankBand(group?.predictedMinRank?.optimistic, group?.predictedMinRank?.conservative);
-  // 就业/薪资优先取锚定专业级(院校级 employmentRate/avgSalary 常空), 学费=锚定专业 EnrollmentPlan.tuition
+  // —— 指标条带(设计稿 6 项 MBar, 带进度条)——
+  // 就业/薪资优先取锚定专业级(院校级 employmentRate/avgSalary 常空)
   const empRate = group?.anchorEmploymentRate ?? uni.employmentRate;
+  const empPct = ratePct(empRate);
+  // 注: postgradRate 字段实为「保研率」, 但设计稿条带标「考研率」; furtherStudyRate 实为「升学率」标「深造率」 — 沿用设计稿标签
+  const postgradPct = ratePct(uni.postgradRate);
+  const furtherPct = ratePct(uni.furtherStudyRate);
+  // 平均薪资: 设计稿以「k」展示(/1000), 进度条 pct = min(100, 薪资/200)(¥20000 封顶)
   const avgSalaryRaw = group?.anchorAvgSalary ?? uni.avgSalary;
-  const avgSalary = avgSalaryRaw != null ? `¥${Number(avgSalaryRaw).toLocaleString()}` : null;
-  const tuition = group?.anchorTuition;
-  const tuitionText = tuition == null ? null : tuition === 0 ? '免费' : tuition.toLocaleString();
+  const avgSalaryNum = ratePct(avgSalaryRaw); // 复用解析(去 ¥/逗号外的纯数字场景); 失败 → null
+  const avgSalaryK = avgSalaryNum != null ? (avgSalaryNum / 1000).toFixed(1) : null;
+  const avgSalaryPct = avgSalaryNum != null ? Math.min(100, avgSalaryNum / 200) : null;
+  // 满意度: 5 分制 → 进度条 pct = 分/5*100
+  const satOverall = uni.satisfactionOverall;
+  const satPct = typeof satOverall === 'number' && satOverall > 0 ? (satOverall / 5) * 100 : null;
 
   // 灰显区分(不替老师藏): 非意向地区 / 够不着(门槛位次远好于学生) / 分数偏低(学生远高于门槛)。
   // 阈值与院校卡一致(rankGapRatio = 组门槛位次/学生位次 - 1)。
@@ -521,27 +545,21 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
         </div>
       </div>
 
-      {/* —— MetricStrip ——
-           折叠: 高频决策项(最低位次/招生计划/学费/就业率) — 就业率优先专业级、学费=锚定专业
-           展开追加: 保研率/升学率/平均薪资/满意度
-           注: postgradRate 字段实为「保研率」, furtherStudyRate 实为「升学率」(导入时如此映射) */}
+      {/* —— MetricStrip(设计稿 6 项, 带进度条)——
+           招生 / 考研率 / 深造率 / 就业率 / 平均薪资 / 满意度
+           注: postgradRate 字段实为「保研率」, furtherStudyRate 实为「升学率」(导入时如此映射), 此处沿用设计稿标签 */}
       <div className="pgv2-metric-bar" onClick={onToggleExpand}>
-        <MBar k="最低位次" v={group?.groupMinRank != null ? group.groupMinRank.toLocaleString() : null} />
-        <MBar k="招生总计划" v={group?.currentPlanCount} suffix=" 人" chg={group?.planCountChange} />
-        <MBar k="学费" v={tuitionText} suffix={tuition && tuition > 0 ? ' 元/年' : ''} />
-        <MBar k="平均薪资" v={avgSalary} suffix="" />
-        {isExpanded ? (
-          <>
-            <MBar k="就业率" v={empRate} suffix={empRate != null && !String(empRate).includes('%') ? '%' : ''} />
-            <MBar k="保研率" v={uni.postgradRate} suffix="" />
-            <MBar k="升学率" v={uni.furtherStudyRate} suffix={uni.furtherStudyRate != null && !String(uni.furtherStudyRate).includes('%') ? '%' : ''} />
-            <MBar
-              k="满意度"
-              v={uni.satisfactionOverall}
-              suffix={uni.satisfactionCount ? ` / ${uni.satisfactionCount} 人` : ''}
-            />
-          </>
-        ) : null}
+        <MBar k="招生" v={group?.currentPlanCount} suffix=" 人" chg={group?.planCountChange} />
+        <MBar k="考研率" v={postgradPct} suffix="%" pct={postgradPct} />
+        <MBar k="深造率" v={furtherPct} suffix="%" pct={furtherPct} />
+        <MBar k="就业率" v={empPct} suffix="%" pct={empPct} />
+        <MBar k="平均薪资" v={avgSalaryK} suffix="k" pct={avgSalaryPct} />
+        <MBar
+          k="满意度"
+          v={satOverall}
+          suffix={uni.satisfactionCount ? `/5 · ${uni.satisfactionCount}人` : '/5'}
+          pct={satPct}
+        />
       </div>
 
       {/* —— 展开态: 3 Tab 框架 + 由父组件提供内容 —— */}
