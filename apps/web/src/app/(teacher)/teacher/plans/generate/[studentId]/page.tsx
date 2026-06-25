@@ -184,6 +184,8 @@ interface CandidateMajor {
   // 意向梯队命中: true 表示该专业属于当前选中的意向梯队 (后端返回)。
   // 用于分区内排前 + 加绿色"🎯 梯队意向"chip。
   matchesPreferredTier?: boolean;
+  // 2026 招生考试报页码: 老师对照纸质刊物时用; null 表示未匹配, UI 不显示。
+  bookPageNumber?: number | null;
 }
 
 interface CandidateMajorSections {
@@ -713,6 +715,14 @@ function CandidateMajorSection({
                 {major.matchesPreferredTier ? <span className="pgv2-mt-tag" style={{ background: '#f6ffed', color: '#389e0d', borderColor: '#b7eb8f' }}>🎯 梯队意向</span> : null}
                 {major.planNotes ? <NotesChip notes={major.planNotes} /> : null}
                 {major.isRecommendedAnchor ? <span className="pgv2-mt-tag anchor">推荐锚定</span> : null}
+                {major.bookPageNumber != null ? (
+                  <span
+                    title="2026 招生考试报页码"
+                    style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 6 }}
+                  >
+                    P.{major.bookPageNumber}
+                  </span>
+                ) : null}
               </span>
               {/* 3 当年最低分 / 位次 */}
               <span className="sc">
