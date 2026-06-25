@@ -26,4 +26,12 @@ export class PlanCandidateController {
   ) {
     return this.service.getCandidateGroups(planId, q, req.user.id);
   }
+
+  @Get(':planId/export-rows')
+  getExportRows(
+    @Param('planId', ParseIntPipe) planId: number,
+    @Req() req: any,
+  ) {
+    return this.service.getExportRows(planId, req.user.id);
+  }
 }

@@ -44,6 +44,7 @@ import {
   listTiers,
   type PreferredMajorTier,
 } from '../../utils/preferred-majors';
+import { buildExportSheet, ExportSheet } from './plan-export-rows.builder';
 
 interface GetCandidatesQuery {
   page: number;
@@ -2447,6 +2448,51 @@ export class PlanCandidateService {
       return this.paginateAsUniversities(fullResult, q, student, page, pageSize, rankWindow);
     }
     return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType, pickMajorMode(q));
+  }
+
+  // 家长版 A3 数据表数据源: 复用 getCandidateGroups 富化 plan 各组, 缺组用快照兜底。
+  async getExportRows(planId: number, userId?: number): Promise<ExportSheet> {
+    const plan = await this.prisma.volunteerPlan.findUnique({
+      where: { id: planId },
+      include: {
+        planItems: { orderBy: { sequence: 'asc' } },
+        student: { include: { user: true } },
+      },
+    });
+    if (!plan) throw new NotFoundException('方案不存在');
+    // 归属校验(与 getCandidateGroups 同口径), 必须在 try 外, 不可被富化兜底绕过。
+    if (userId && plan.createdById !== userId && plan.student?.userId !== userId) {
+      throw new ForbiddenException('无权查看此方案');
+    }
+
+    // 富化基准年: 默认 plan.year-1(高考年的上一年=最新录取年), 富化成功则用真实 admissionBaselineYear。
+    let baselineYear = (plan.year ?? new Date().getFullYear()) - 1;
+    let enrichedGroups: any[] = [];
+    try {
+      const res = await this.getCandidateGroups(
+        planId,
+        {
+          page: 1,
+          pageSize: 500,
+          excludeAdded: false,
+          includeSoftFails: true,
+          includeHardFails: true,
+          includeRegionMismatch: true,
+          groupBy: 'GROUP',
+        } as any,
+        userId,
+      );
+      enrichedGroups = (res as any)?.groups ?? [];
+      if (typeof (res as any)?.admissionBaselineYear === 'number') {
+        baselineYear = (res as any).admissionBaselineYear;
+      }
+    } catch (e) {
+      // 富化失败(如方案缺批次)不致命: 退回全快照渲染, 不让打印页空白。
+      console.warn('[export-rows] 富化失败, 退回快照:', (e as Error)?.message);
+    }
+
+    const years = [baselineYear - 2, baselineYear - 1, baselineYear];
+    return buildExportSheet({ plan, enrichedGroups, years });
   }
 
   async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {
