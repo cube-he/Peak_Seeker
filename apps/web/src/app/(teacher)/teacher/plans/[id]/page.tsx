@@ -237,6 +237,46 @@ export default function PlanDetailPage() {
   const plan = unwrap<Record<string, any>>(data);
   const items: any[] = plan?.items ?? [];
 
+  // —— 志愿行段内拖拽排序 (与生成页同口径: 仅 DRAFT 可拖; 持久化到 sequence) ——
+  const [localItems, setLocalItems] = useState<any[]>([]);
+  useEffect(() => {
+    // mutation 持有本地, 成功后 query 重拉再同步回来; 失败回滚也用它。
+    setLocalItems(plan?.items ?? []);
+  }, [plan?.id, (plan?.items ?? []).map((it: any) => `${it.id}:${it.sequence}`).join(',')]);
+  const [dragRow, setDragRow] = useState<{ tier: string; pos: number } | null>(null);
+  const [overRow, setOverRow] = useState<{ tier: string; pos: number } | null>(null);
+  const reorderMutation = useMutation({
+    mutationFn: (ids: number[]) => planApi.reorderItems(String(planId), ids),
+    onSuccess: () => {
+      void message.success('志愿顺序已保存');
+      queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+    },
+    onError: (e: any) => {
+      void message.error(e?.response?.data?.message ?? '顺序保存失败');
+      setLocalItems(plan?.items ?? []); // 回滚到服务端顺序
+    },
+  });
+  // 段内重排 → 重建整体顺序(冲→稳→保, 各段内序保留)→ 持久化全量 itemId 顺序
+  const commitRowReorder = (tier: string, from: number, to: number) => {
+    if (from === to) return;
+    const byTier: Record<string, any[]> = { rush: [], stable: [], safe: [] };
+    for (const it of localItems) byTier[GRADIENT_TIER[it.gradient] ?? 'rush'].push(it);
+    const arr = byTier[tier];
+    if (!arr || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return;
+    const [moved] = arr.splice(from, 1);
+    arr.splice(to, 0, moved);
+    const next = [...byTier.rush, ...byTier.stable, ...byTier.safe];
+    setLocalItems(next);
+    reorderMutation.mutate(next.map((it) => it.id));
+  };
+  const handleRowDragEnd = () => {
+    if (dragRow && overRow && dragRow.tier === overRow.tier) {
+      commitRowReorder(dragRow.tier, dragRow.pos, overRow.pos);
+    }
+    setDragRow(null);
+    setOverRow(null);
+  };
+
   // 拉同学生同批次的所有版本(用于切换器)
   const { data: versionsData } = useQuery({
     queryKey: ['plan-versions', planId],
@@ -869,14 +909,15 @@ export default function PlanDetailPage() {
           <span>{isReviewing ? '批注' : ''}</span>
         </div>
 
-        {items.length === 0 ? (
+        {localItems.length === 0 ? (
           <div style={{ padding: '32px 22px' }}>
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无志愿明细" />
           </div>
         ) : (
           TIER_META.map((meta) => {
-            const tierItems = items.filter((it) => GRADIENT_TIER[it.gradient] === meta.tier);
+            const tierItems = localItems.filter((it) => GRADIENT_TIER[it.gradient] === meta.tier);
             if (tierItems.length === 0) return null;
+            const canDragRows = status === 'DRAFT' && !reorderMutation.isPending;
             return (
               <div key={meta.tier}>
                 <div className={`pl-section t-${meta.tier}`}>
@@ -887,12 +928,18 @@ export default function PlanDetailPage() {
                     {meta.en} · 本段 {tierItems.length} 条
                   </span>
                 </div>
-                {tierItems.map((item) => (
+                {tierItems.map((item, pos) => (
                   <PlanRow
                     key={item.id}
                     item={item}
                     studentRank={summary.studentRank}
                     reviewMode={isReviewing}
+                    canDrag={canDragRows}
+                    isDragging={dragRow?.tier === meta.tier && dragRow?.pos === pos}
+                    isDragOver={overRow?.tier === meta.tier && overRow?.pos === pos && !(dragRow?.tier === meta.tier && dragRow?.pos === pos)}
+                    onDragStartRow={() => setDragRow({ tier: meta.tier, pos })}
+                    onDragOverRow={() => { if (dragRow && dragRow.tier === meta.tier) setOverRow({ tier: meta.tier, pos }); }}
+                    onDragEndRow={handleRowDragEnd}
                     annotation={annotations[item.sequence] ?? ''}
                     hasAnnotation={!!annotations[item.sequence]?.trim()}
                     onAnnotationChange={(val) => {
@@ -1049,6 +1096,12 @@ function PlanRow({
   editable,
   saving,
   onSaveMajors,
+  canDrag,
+  isDragging,
+  isDragOver,
+  onDragStartRow,
+  onDragOverRow,
+  onDragEndRow,
 }: {
   item: any;
   studentRank: number | null;
@@ -1060,6 +1113,12 @@ function PlanRow({
   editable: boolean;
   saving?: boolean;
   onSaveMajors?: (payload: { selectedMajors: unknown[]; candidateMajorRanking: unknown[] }) => void;
+  canDrag?: boolean;
+  isDragging?: boolean;
+  isDragOver?: boolean;
+  onDragStartRow?: () => void;
+  onDragOverRow?: () => void;
+  onDragEndRow?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [annotateOpen, setAnnotateOpen] = useState(false);
@@ -1097,7 +1156,19 @@ function PlanRow({
   return (
     <>
       <div
-        className={`pl-row ${expanded ? 'is-expanded' : ''}`}
+        className={`pl-row ${expanded ? 'is-expanded' : ''} ${canDrag ? 'can-drag' : ''} ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-dragover' : ''}`}
+        draggable={canDrag}
+        onDragStart={(e) => {
+          if (!canDrag) return;
+          onDragStartRow?.();
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+        onDragOver={(e) => {
+          if (!canDrag) return;
+          e.preventDefault();
+          onDragOverRow?.();
+        }}
+        onDragEnd={() => onDragEndRow?.()}
         onClick={(e) => {
           // 批注按钮单独处理, 不触发展开
           if ((e.target as HTMLElement).closest('.pd2-annotate-btn')) return;
@@ -1105,7 +1176,10 @@ function PlanRow({
         }}
       >
         <span className="idx">
-          <span className="pl-grip" title="顺位">⋮⋮</span>
+          <span
+            className="pl-grip"
+            title={canDrag ? '拖动调整顺位' : (planStatus === 'PENDING_REVIEW' ? '审核中 — 点「撤回修改」退回草稿后可调序' : '仅草稿状态可调序')}
+          >⋮⋮</span>
           {String(item.sequence).padStart(2, '0')}
         </span>
         <span className={`tier-dot t-${tier}`}>{GRADIENT_LABEL[item.gradient] ?? '-'}</span>

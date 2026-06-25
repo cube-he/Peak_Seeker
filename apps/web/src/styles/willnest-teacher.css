@@ -2171,6 +2171,11 @@
   transition: background var(--dur) var(--ease);
 }
 .wn-teacher-scope .pl-row:hover { background: var(--bg); }
+/* 拖拽排序态(仅 DRAFT 可拖) */
+.wn-teacher-scope .pl-row.can-drag .pl-grip { cursor: grab; }
+.wn-teacher-scope .pl-row.can-drag .pl-grip:active { cursor: grabbing; }
+.wn-teacher-scope .pl-row.is-dragging { opacity: 0.45; }
+.wn-teacher-scope .pl-row.is-dragover { box-shadow: inset 3px 0 0 var(--primary); background: var(--bg); }
 .wn-teacher-scope .pl-row .idx {
   font-family: var(--font-heading);
   font-weight: 600;
