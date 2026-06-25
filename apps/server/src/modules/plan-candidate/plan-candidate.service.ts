@@ -697,16 +697,17 @@ export class PlanCandidateService {
     rankWindow?: RankWindow | null,
   ) {
     const ctx = this.buildRollupContext(student);
-    const baseGroups = filterGroupsByRecruitType(value.groups, q.recruitType);
-    let universities = rollupByUniversity(baseGroups, ctx);
-    // 办学性质过滤 (公办/民办), 在排序+分页前
-    if (q.nature === 'public' || q.nature === 'private') {
-      universities = universities.filter((u) => {
-        const isPub = String(u.university?.runningNature ?? '').includes('公办') ||
-          String(u.university?.runningNature ?? '').includes('公立');
-        return q.nature === 'public' ? isPub : !isPub;
-      });
-    }
+    // UNIVERSITY 视图与 GROUP 视图同口径 7 项 chip 筛选: 先在 group 层 chain 完所有
+    // 专业模式 chip (recruitType / nature 5项 / tags / backgrounds / 省 / 市 / isNewItem),
+    // 再上卷成院校. 历史只接 public|private 的 if 块已被 filterGroupsByNature (5 项识别) 取代.
+    let filteredGroups = filterGroupsByRecruitType(value.groups, q.recruitType);
+    filteredGroups = filterGroupsByNature(filteredGroups, q.nature);
+    filteredGroups = filterGroupsByTags(filteredGroups, q.tags);
+    filteredGroups = filterGroupsByBackgrounds(filteredGroups, q.backgrounds);
+    filteredGroups = filterGroupsByUniversityProvinces(filteredGroups, q.universityProvinces);
+    filteredGroups = filterGroupsByUniversityCities(filteredGroups, q.universityCities);
+    filteredGroups = filterGroupsByIsNewItem(filteredGroups, q.isNewItem);
+    let universities = rollupByUniversity(filteredGroups, ctx);
     // 中外合作过滤 (校内任一组含中外), 在排序+分页前
     universities = filterUniversitiesBySinoForeign(universities, q.sinoForeign);
     // 分数条过滤 (校内任一组命中位次窗口), 在排序+分页前

@@ -2029,4 +2029,33 @@ describe('PlanCandidateService', () => {
     expect(Array.from(types)).toEqual(['普通类本科']);
     expect(res.availableRecruitTypes).toEqual(expect.arrayContaining(['普通类本科', '民族班']));
   });
+
+  // 回归: UNIVERSITY 视图必须接 nature 的 5 项识别 (sinoForeign/hkMacau/independent), 不只 public|private。
+  // 修复前 paginateAsUniversities 只有一个 if (q.nature==='public'||==='private') 的硬编码块,
+  // 选 nature=sinoForeign 时不过滤 → 两所院校都返回。修复后改为 chain filterGroupsByNature 5 项识别。
+  it('getCandidateGroups: nature=sinoForeign 过滤(院校优先视图, 5 项识别)', async () => {
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({
+          id: 901, universityId: 91, groupCode: 'G91',
+          university: { id: 91, name: '中外校', code: 'SF', runningNature: '公办 中外合作办学' },
+          majorName: 'M91', majorCode: '0001',
+          major: { id: 911, name: 'M91', code: '0001', category: 'Science' },
+        }),
+        makeGroupEnrollmentPlan({
+          id: 902, universityId: 92, groupCode: 'G92',
+          university: { id: 92, name: '普通校', code: 'PU', runningNature: '公办' },
+          majorName: 'M92', majorCode: '0002',
+          major: { id: 922, name: 'M92', code: '0002', category: 'Science' },
+        }),
+      ],
+      records: [],
+    });
+    const res: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true,
+      groupBy: 'UNIVERSITY', nature: 'sinoForeign',
+    });
+    expect(res.universities).toHaveLength(1);
+    expect(res.universities[0].universityId).toBe(91);
+  });
 });
