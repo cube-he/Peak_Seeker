@@ -33,7 +33,7 @@ import {
 import { filterEpsBySubjectRequirement, studentMeetsSubjectRequirement } from './subject-requirement-filter';
 import { isRegionMismatch, normalizeRegion } from './region-match';
 import { SoftRule, SoftFailReason } from './filters/soft-rule.interface';
-import { calcDynamicGradient, calcGradient } from './gradient-calculator';
+import { calcDynamicGradient, calcGradient, sanitizeTierThresholds, DEFAULT_TIER_THRESHOLDS, type TierThresholds } from './gradient-calculator';
 import { confirmedBonusPoints } from '../policy/bonus-points.util';
 import { resolveBatchQueryShape } from './batch-alias';
 import type { RankStrategyResult } from '../recommend/interfaces/recommend.types';
@@ -545,8 +545,10 @@ export class PlanCandidateService {
     @Optional() private readonly rankStrategyService?: RankStrategyService,
   ) {}
 
-  private candidateGroupCacheKey(plan: any, q: GetCandidatesQuery) {
+  private candidateGroupCacheKey(plan: any, q: GetCandidatesQuery, tierThresholds?: TierThresholds) {
     return JSON.stringify({
+      // 老师改了 8 段梯度阈值 → 分档(冲稳保/tierCounts)在建池阶段算 → 必须进缓存键, 否则改了命中旧池不生效。
+      tierThresholds: tierThresholds ?? null,
       planId: plan.id,
       planUpdatedAt: plan.updatedAt instanceof Date ? plan.updatedAt.getTime() : plan.updatedAt,
       studentUpdatedAt: plan.student?.updatedAt instanceof Date ? plan.student.updatedAt.getTime() : plan.student?.updatedAt,
@@ -1477,9 +1479,12 @@ export class PlanCandidateService {
 
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: plan.studentId },
-      include: { user: true },
+      include: { user: true, teacher: { select: { gradientThresholds: true } } },
     });
     if (!student) throw new NotFoundException('学生不存在');
+    // 8 段动态梯度分界: 用该生所属老师的自定义阈值(老师级偏好, 全局生效), 没设/非法则系统默认。
+    const tierThresholds: TierThresholds =
+      sanitizeTierThresholds((student as any).teacher?.gradientThresholds) ?? DEFAULT_TIER_THRESHOLDS;
 
     // 商业化流程: plan 批次必须在学生 preferredBatches 中
     // 见 docs/superpowers/specs/2026-06-02-batch-selection-at-intake-design.md § 十
@@ -1535,7 +1540,7 @@ export class PlanCandidateService {
     // 分数条按"历史录取年(admissionBaselineYear, 通常 2025)"的一分一段换算 → 与卡片"历史最低分/位次"同口径,
     // 而非考生当年(scoreSegmentYear/2026)。否则选 500-550 出来的组历史最低分会不在区间(见 rank-window-filter 注释)。
     const rankWindow = await this.resolveRankWindow(q.minScore, q.maxScore, source.admissionBaselineYear, subjects);
-    const cacheKey = this.candidateGroupCacheKey(plan, q);
+    const cacheKey = this.candidateGroupCacheKey(plan, q, tierThresholds);
     const cached = this.getCandidateGroupCache(cacheKey);
     if (cached) {
       if (q.groupBy === 'UNIVERSITY') {
@@ -2002,6 +2007,7 @@ export class PlanCandidateService {
         const dynamicGradient = calcDynamicGradient({
           studentRank,
           historyMinRank: historyMin,
+          thresholds: tierThresholds,
         });
         return {
           enrollmentPlanId: ep.id,
@@ -2124,6 +2130,7 @@ export class PlanCandidateService {
       const dynamicGradient = calcDynamicGradient({
         studentRank,
         historyMinRank: groupHistoryMin,
+        thresholds: tierThresholds,
       });
       return {
         groupKey,

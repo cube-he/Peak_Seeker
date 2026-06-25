@@ -34,6 +34,21 @@ export class TeacherController {
     return this.teacherService.getStudentStats(user.teacherProfileId!);
   }
 
+  @Get('me/gradient-config')
+  @ApiOperation({ summary: '获取当前教师的 8 段动态梯度阈值(未设则返回系统默认)' })
+  async getMyGradientConfig(@CurrentUser() user: JwtPayloadUser) {
+    return this.teacherService.getGradientConfig(user.teacherProfileId!);
+  }
+
+  @Put('me/gradient-config')
+  @ApiOperation({ summary: '保存当前教师的 8 段动态梯度阈值(老师级偏好, 全局生效)' })
+  async updateMyGradientConfig(
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: Record<string, number>,
+  ) {
+    return this.teacherService.updateGradientConfig(user.teacherProfileId!, body);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: '获取教师详情' })
   @CheckPolicies((ability) => ability.can('read', 'TeacherProfile'))

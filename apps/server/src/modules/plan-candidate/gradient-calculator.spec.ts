@@ -1,5 +1,32 @@
 // gradient-calculator.spec.ts
-import { calcDynamicGradient, calcGradient } from './gradient-calculator';
+import { calcDynamicGradient, calcGradient, sanitizeTierThresholds, DEFAULT_TIER_THRESHOLDS } from './gradient-calculator';
+
+describe('sanitizeTierThresholds', () => {
+  it('合法(7项齐全+严格递增)→ 归一返回', () => {
+    expect(sanitizeTierThresholds(DEFAULT_TIER_THRESHOLDS)).toEqual(DEFAULT_TIER_THRESHOLDS);
+  });
+  it('非严格递增 → null', () => {
+    expect(sanitizeTierThresholds({ ...DEFAULT_TIER_THRESHOLDS, chong: -0.20 })).toBeNull(); // chong==jiChong
+  });
+  it('缺项/非数字/空 → null', () => {
+    const { qiangBao: _omit, ...missing } = DEFAULT_TIER_THRESHOLDS;
+    expect(sanitizeTierThresholds(missing)).toBeNull();
+    expect(sanitizeTierThresholds({ ...DEFAULT_TIER_THRESHOLDS, wen: 'x' })).toBeNull();
+    expect(sanitizeTierThresholds(null)).toBeNull();
+  });
+});
+
+describe('calcDynamicGradient 自定义阈值', () => {
+  it('老师把"稳"区间放宽 → 同一组从冲变稳', () => {
+    // edge = 9000/10000 - 1 = -0.10。默认 chong=-0.12 → edge>=-0.12 落 XIAO_CHONG(< -0.02);
+    // 自定义把 xiaoChong 收紧到 -0.15 → edge(-0.10) 不再 < -0.15, 落 WEN(<= wen)。
+    const custom = { ...DEFAULT_TIER_THRESHOLDS, jiChong: -0.30, chong: -0.20, xiaoChong: -0.15, wen: 0.0 };
+    const def = calcDynamicGradient({ studentRank: 10000, historyMinRank: 9000 });
+    const cus = calcDynamicGradient({ studentRank: 10000, historyMinRank: 9000, thresholds: custom });
+    expect(def.tier).toBe('XIAO_CHONG');
+    expect(cus.tier).toBe('WEN');
+  });
+});
 
 describe('calcGradient', () => {
   it('returns CHONG when the historical admission rank is much better than the student rank', () => {

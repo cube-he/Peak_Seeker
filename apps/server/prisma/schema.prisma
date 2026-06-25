@@ -806,6 +806,10 @@ model TeacherProfile {
   school       String? @db.VarChar(200)
   isSupervisor Boolean @default(false) @map("is_supervisor")
 
+  // 老师自定义"8段动态梯度"分界阈值(edge% 的 7 个分界, 单调递增); null=用系统默认。
+  // 老师级偏好, 全局应用到该老师名下所有方案的冲稳保分档(非方案级)。
+  gradientThresholds Json? @map("gradient_thresholds")
+
   // 关联学生
   students                 StudentProfile[]
   consultationAppointments ConsultationAppointment[]

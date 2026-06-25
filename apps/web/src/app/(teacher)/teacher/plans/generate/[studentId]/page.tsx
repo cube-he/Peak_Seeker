@@ -11,6 +11,7 @@ import {
   Descriptions,
   Drawer,
   Input,
+  InputNumber,
   Modal,
   Pagination,
   Select,
@@ -42,6 +43,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type EligibleBatch } from '@/services/student-api';
 import { planApi, type CandidateGroupSort, type CandidateSortDir } from '@/services/plan-api';
+import { teacherApi, type TierThresholds, DEFAULT_TIER_THRESHOLDS, TIER_THRESHOLD_KEYS } from '@/services/teacher-api';
 import { CandidateCardV3, RankRuler } from './CandidateCardV3';
 import UniversityCandidateCard from './UniversityCandidateCard';
 import CandidateMajorSection from './candidate-major-section';
@@ -357,17 +359,34 @@ const GRADIENT_COLOR: Record<DynamicGradientTier, string> = {
   DIBAO: 'lime',
 };
 
-// pgv2 设计稿: 8 段动态梯度文字说明 (drawer 内 legend 使用)
-const GRAD_DESC: Record<DynamicGradientTier, string> = {
-  JI_CHONG: '位次差 > 50%,极有挑战,仅做参考',
-  CHONG: '位次差 20-50%,需要发挥',
-  XIAO_CHONG: '位次差 < 20%,有机会',
-  WEN: '位次基本匹配 ±10%',
-  WEN_BAO: '比学生位次稍低,较稳',
-  BAO: '位次差 30-50%,大概率录取',
-  QIANG_BAO: '位次差 > 50%,基本无虞',
-  DIBAO: '位次差 > 70%,兜底保命',
-};
+// 8 段动态梯度文字说明 —— 由老师当前阈值动态生成(不再写死, 与实际分档口径一致)。
+// 位次差 edge = 组门槛位次 ÷ 学生位次 - 1; 负=组录取更靠前(偏冲), 正=更靠后(偏保)。
+function fmtEdgePct(v: number): string {
+  const p = Math.round(v * 100);
+  return `${p > 0 ? '+' : ''}${p}%`;
+}
+function gradDescFromThresholds(t: TierThresholds): Record<DynamicGradientTier, string> {
+  return {
+    JI_CHONG: `位次差 < ${fmtEdgePct(t.jiChong)} · 极有挑战,仅做参考`,
+    CHONG: `${fmtEdgePct(t.jiChong)} ~ ${fmtEdgePct(t.chong)} · 需要发挥`,
+    XIAO_CHONG: `${fmtEdgePct(t.chong)} ~ ${fmtEdgePct(t.xiaoChong)} · 有机会`,
+    WEN: `${fmtEdgePct(t.xiaoChong)} ~ ${fmtEdgePct(t.wen)} · 基本匹配`,
+    WEN_BAO: `${fmtEdgePct(t.wen)} ~ ${fmtEdgePct(t.wenBao)} · 较稳`,
+    BAO: `${fmtEdgePct(t.wenBao)} ~ ${fmtEdgePct(t.bao)} · 大概率录取`,
+    QIANG_BAO: `${fmtEdgePct(t.bao)} ~ ${fmtEdgePct(t.qiangBao)} · 基本无虞`,
+    DIBAO: `位次差 > ${fmtEdgePct(t.qiangBao)} · 兜底保命`,
+  };
+}
+// 编辑器: 7 个分界的中文标签(每个值=该段与下一段的分界 edge%)。
+const TIER_EDIT_LABELS: Array<{ key: keyof TierThresholds; label: string }> = [
+  { key: 'jiChong', label: '极冲 / 冲 分界' },
+  { key: 'chong', label: '冲 / 小冲 分界' },
+  { key: 'xiaoChong', label: '小冲 / 稳 分界' },
+  { key: 'wen', label: '稳 / 稳保 分界' },
+  { key: 'wenBao', label: '稳保 / 保 分界' },
+  { key: 'bao', label: '保 / 强保 分界' },
+  { key: 'qiangBao', label: '强保 / 兜底 分界' },
+];
 
 // pgv2 设计稿: 4 chip 梯度过滤
 type GradientFilterValue = 'all' | 'RUSH' | 'STABLE' | 'SAFE' | 'NO_LINE';
@@ -870,6 +889,57 @@ export default function GeneratePlanPage() {
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MIN_SCORE');
   // 排序方向 (GROUP 视图): DESC=轴默认(分高在前), ASC=翻转; 切轴时重置回 DESC
   const [candidateSortDir, setCandidateSortDir] = useState<CandidateSortDir>('DESC');
+
+  // —— 8 段动态梯度阈值 (老师级偏好, 全局生效) ——
+  const { data: gradConfig } = useQuery({
+    queryKey: ['teacher-gradient-config'],
+    queryFn: () => teacherApi.getGradientConfig(),
+    staleTime: 5 * 60_000,
+  });
+  const effectiveThresholds: TierThresholds = gradConfig?.thresholds ?? DEFAULT_TIER_THRESHOLDS;
+  const [gradEditing, setGradEditing] = useState(false);
+  // 草稿用"百分比整数"存(更直观), 保存时 /100 转回小数。
+  const [gradDraftPct, setGradDraftPct] = useState<Record<keyof TierThresholds, number | null>>(
+    () => Object.fromEntries(TIER_THRESHOLD_KEYS.map((k) => [k, Math.round(DEFAULT_TIER_THRESHOLDS[k] * 100)])) as any,
+  );
+  const openGradEdit = () => {
+    setGradDraftPct(
+      Object.fromEntries(TIER_THRESHOLD_KEYS.map((k) => [k, Math.round(effectiveThresholds[k] * 100)])) as any,
+    );
+    setGradEditing(true);
+  };
+  const gradDraftValid = (() => {
+    let prev = -Infinity;
+    for (const k of TIER_THRESHOLD_KEYS) {
+      const v = gradDraftPct[k];
+      if (typeof v !== 'number' || !Number.isFinite(v) || v <= prev) return false;
+      prev = v;
+    }
+    return true;
+  })();
+  const saveGradMutation = useMutation({
+    mutationFn: (t: TierThresholds) => teacherApi.updateGradientConfig(t),
+    onSuccess: () => {
+      void message.success('梯度阈值已保存,候选分档已按新阈值刷新');
+      setGradEditing(false);
+      queryClient.invalidateQueries({ queryKey: ['teacher-gradient-config'] });
+      // 阈值变了 → 后端候选池按新阈值重算, 强制刷新候选列表(前端 queryKey 不含阈值, 需手动失效)
+      queryClient.invalidateQueries({ queryKey: ['plan-candidate-groups'] });
+    },
+    onError: (e: any) => { void message.error(e?.response?.data?.message ?? '保存失败,请检查阈值是否单调递增'); },
+  });
+  const submitGradEdit = () => {
+    if (!gradDraftValid) { void message.warning('7 个分界必须从上到下严格递增'); return; }
+    const t = Object.fromEntries(
+      TIER_THRESHOLD_KEYS.map((k) => [k, (gradDraftPct[k] as number) / 100]),
+    ) as unknown as TierThresholds;
+    saveGradMutation.mutate(t);
+  };
+  const resetGradDraftToDefault = () => {
+    setGradDraftPct(
+      Object.fromEntries(TIER_THRESHOLD_KEYS.map((k) => [k, Math.round((gradConfig?.default ?? DEFAULT_TIER_THRESHOLDS)[k] * 100)])) as any,
+    );
+  };
   // 视图模式: MAJOR=专业组卡(专业优先); UNIVERSITY=院校卡(院校优先).
   // 默认读 URL ?view=, 否则后续 effect 跟随 plan/student.priorityMode 自动定一次.
   const [viewMode, setViewMode] = useState<'MAJOR' | 'UNIVERSITY'>(
@@ -3644,15 +3714,71 @@ export default function GeneratePlanPage() {
               </div>
 
               <div className="pgv2-drawer-sect">
-                <h4>8 段动态梯度说明</h4>
-                <div className="pgv2-grad-legend">
-                  {(Object.keys(GRADIENT_LABEL) as DynamicGradientTier[]).map((k) => (
-                    <div className="gl" key={k}>
-                      <span className={`pgv2-tier-tag tone-${gradientTone(k)}`}>{GRADIENT_LABEL[k]}</span>
-                      <span className="desc">{GRAD_DESC[k]}</span>
-                    </div>
-                  ))}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <h4 style={{ margin: 0 }}>
+                    8 段动态梯度说明
+                    {gradConfig && !gradConfig.isDefault ? (
+                      <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--accent, #b8860b)' }}>· 已自定义</span>
+                    ) : null}
+                  </h4>
+                  {!gradEditing ? (
+                    <Button size="small" onClick={openGradEdit}>编辑阈值</Button>
+                  ) : null}
                 </div>
+
+                {!gradEditing ? (
+                  <div className="pgv2-grad-legend">
+                    {(Object.keys(GRADIENT_LABEL) as DynamicGradientTier[]).map((k) => {
+                      const desc = gradDescFromThresholds(effectiveThresholds);
+                      return (
+                        <div className="gl" key={k}>
+                          <span className={`pgv2-tier-tag tone-${gradientTone(k)}`}>{GRADIENT_LABEL[k]}</span>
+                          <span className="desc">{desc[k]}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 10, lineHeight: 1.6 }}>
+                      位次差 = 组门槛位次 ÷ 学生位次 − 1(%)。<strong>负</strong>=组录取更靠前(偏冲),<strong>正</strong>=更靠后(偏保)。
+                      7 个分界须<strong>从上到下严格递增</strong>。改完保存对你名下所有学生方案生效。
+                    </div>
+                    {TIER_EDIT_LABELS.map(({ key, label }) => (
+                      <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                        <span style={{ width: 130, fontSize: 13 }}>{label}</span>
+                        <InputNumber
+                          value={gradDraftPct[key]}
+                          onChange={(v) => setGradDraftPct((prev) => ({ ...prev, [key]: typeof v === 'number' ? v : null }))}
+                          step={1}
+                          min={-90}
+                          max={300}
+                          formatter={(v) => `${v}%`}
+                          parser={(v) => (v ? Number(v.replace('%', '')) : 0) as any}
+                          style={{ width: 110 }}
+                        />
+                      </div>
+                    ))}
+                    {!gradDraftValid ? (
+                      <div style={{ color: 'var(--rush, #c53030)', fontSize: 12, marginBottom: 8 }}>
+                        分界必须从上到下严格递增(极冲分界 &lt; 冲分界 &lt; … &lt; 强保分界)。
+                      </div>
+                    ) : null}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                      <Button
+                        type="primary"
+                        size="small"
+                        loading={saveGradMutation.isPending}
+                        disabled={!gradDraftValid}
+                        onClick={submitGradEdit}
+                      >
+                        保存
+                      </Button>
+                      <Button size="small" onClick={resetGradDraftToDefault}>恢复默认</Button>
+                      <Button size="small" type="text" onClick={() => setGradEditing(false)}>取消</Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pgv2-drawer-tip">
