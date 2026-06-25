@@ -1,0 +1,98 @@
+.sheet {
+  background: #fff;
+  color: #1a1a19;
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.meta {
+  font-size: 11px;
+  color: #4d4c48;
+  margin-bottom: 8px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 9px;
+}
+
+.table th,
+.table td {
+  border: 0.5px solid #b8b6ad;
+  padding: 2px 3px;
+  text-align: center;
+  vertical-align: middle;
+  word-break: break-all;
+}
+
+.table thead th {
+  background: #e8e6dc;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.merge {
+  vertical-align: middle;
+}
+
+.uniName {
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.gradeCell {
+  font-weight: 700;
+}
+
+.majorName {
+  text-align: left;
+}
+
+.groupPlan {
+  font-size: 8px;
+  color: #6b6962;
+  margin-top: 1px;
+}
+
+.supp {
+  color: #b8860b;
+  font-size: 8px;
+}
+
+.fallback {
+  color: #c53030;
+  font-size: 8px;
+}
+
+.notesHead {
+  width: 18%;
+}
+.notes {
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.rush td { background: #fdf2e9; }
+.stable td { background: #eafaf3; }
+.safe td { background: #eef4fb; }
+.rush td.merge,
+.stable td.merge,
+.safe td.merge { background: inherit; }
+
+@media print {
+  .table { font-size: 8px; }
+  .rush td, .stable td, .safe td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .table thead { display: table-header-group; }
+}
