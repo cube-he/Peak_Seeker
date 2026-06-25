@@ -3026,10 +3026,18 @@ export default function GeneratePlanPage() {
 
             {/* —— Region 7: pgv2-rail 右侧 sticky 当前方案 (最大重写) —— */}
             {railCollapsed ? (
-              <button type="button" className="pgv2-rail-reopen" onClick={toggleRail} title="展开当前方案">
-                <DoubleLeftOutlined />
-                <span className="pgv2-rail-reopen-txt">当前方案</span>
-              </button>
+              <aside className="pgv2-rail is-collapsed">
+                <button type="button" className="pgv2-rail-stub" onClick={toggleRail} title="展开当前方案">
+                  <span className="stub-ic"><DoubleLeftOutlined /></span>
+                  <span className="stub-label">当前方案</span>
+                  <span className="stub-total">{planItems.length}</span>
+                  <span className="stub-tiers">
+                    <span className="st rush"><i>冲</i>{tierStats.rush}</span>
+                    <span className="st stable"><i>稳</i>{tierStats.stable}</span>
+                    <span className="st safe"><i>保</i>{tierStats.safe}</span>
+                  </span>
+                </button>
+              </aside>
             ) : (
             <aside className="pgv2-rail">
               <div className="pgv2-rail-card">
