@@ -85,19 +85,25 @@ const EXAM_TYPE_LABEL: Record<string, string> = {
 
 // DTO 字段名 → 所在子页 key。保存校验失败(后端回传 fields)时据此定位到出错字段的子页。
 // 只需覆盖"有格式/范围约束、会 400"的字段; 其余未列字段不跳转(仅提示)。
+// 子页改成 2 个(required/optional)后, 此映射同步重写 —— 否则保存后端 400 时
+// jumpToSection 会切到已不存在的旧 key(basic/exam...)导致表单空白(2026-06-25 修)。
 const FIELD_TO_SUBTAB: Record<string, string> = {
-  realName: 'basic', phone: 'basic', parentPhone: 'basic', birthDate: 'basic',
-  gender: 'basic', ethnicity: 'basic', politicalStatus: 'basic', highSchool: 'basic', classInfo: 'basic',
-  province: 'household', city: 'household', county: 'household', isRural: 'household',
-  examLocationProvince: 'household', examLocationCity: 'household', examLocationCounty: 'household',
-  examType: 'exam', firstChoice: 'exam', reChoices: 'exam', examYear: 'exam', examSource: 'exam',
-  scoreChinese: 'exam', scoreMath: 'exam', scoreEnglish: 'exam',
-  scoreFirstChoice: 'exam', scoreSub1: 'exam', scoreSub2: 'exam',
-  totalScore: 'exam', provincialRank: 'exam',
-  bonusPolicyStatus: 'bonus', bonusItems: 'bonus',
-  height: 'health', weight: 'health', visionLeft: 'health', visionRight: 'health',
-  visionLeftCorrected: 'health', visionRightCorrected: 'health', colorBlind: 'health', colorWeak: 'health',
-  physicalLimits: 'health', medicalHistory: 'health',
+  // 必填子页: 基本身份 / 户籍 / 考试成绩 / 色觉
+  realName: 'required', phone: 'required',
+  gender: 'required', ethnicity: 'required', politicalStatus: 'required', highSchool: 'required', classInfo: 'required',
+  province: 'required', city: 'required', county: 'required', isRural: 'required',
+  examLocationProvince: 'required', examLocationCity: 'required', examLocationCounty: 'required',
+  examType: 'required', firstChoice: 'required', reChoices: 'required', examYear: 'required', examSource: 'required',
+  scoreChinese: 'required', scoreMath: 'required', scoreEnglish: 'required',
+  scoreFirstChoice: 'required', scoreSub1: 'required', scoreSub2: 'required',
+  totalScore: 'required', provincialRank: 'required',
+  colorBlind: 'required', colorWeak: 'required',
+  // 选填子页: 出生日期 / 政治面貌与加分 / 健康与体检 / 偏好与规划
+  birthDate: 'optional',
+  bonusPolicyStatus: 'optional', bonusItems: 'optional',
+  height: 'optional', weight: 'optional', visionLeft: 'optional', visionRight: 'optional',
+  visionLeftCorrected: 'optional', visionRightCorrected: 'optional',
+  physicalLimits: 'optional', medicalHistory: 'optional',
 };
 
 // 字段 key → 中文 label 映射(与后端 student-change-log.config.ts 保持一致)
@@ -1246,9 +1252,22 @@ export default function StudentDetailPage() {
                       </OptionalSection>
                       <OptionalSection
                         title="健康与体检"
-                        desc="身高 / 体重 / 视力 / 体检受限 / 既往病史 · 军警航海等专业资格判定用"
+                        desc="出生日期 / 身高 / 体重 / 视力 / 体检受限 / 既往病史 · 军警航海等专业资格判定用"
                         defaultOn={false}
                       >
+                        <div className="sd-form-grid" style={{ marginBottom: 12 }}>
+                          <div className="field">
+                            <label>出生日期<span className="sc-hint"> 批次年龄校验用(军校/飞行员等有年龄上限)</span></label>
+                            <Form.Item name="birthDate" noStyle>
+                              <DatePicker
+                                style={{ width: '100%' }}
+                                format="YYYY-MM-DD"
+                                placeholder="选择出生日期"
+                                disabledDate={(d) => d && d.isAfter(dayjs())}
+                              />
+                            </Form.Item>
+                          </div>
+                        </div>
                         <HealthFields />
                       </OptionalSection>
                       <OptionalSection
@@ -1546,17 +1565,8 @@ function BasicFields() {
       <div className="field">
         <label>手机号<span className="req">*</span></label>
         <Form.Item name="phone" rules={[{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的 11 位手机号' }]}>
-          <Input placeholder="手机号" />
+          <Input placeholder="学生或家长手机号,沟通用" />
         </Form.Item>
-      </div>
-      <div className="field">
-        <label>家长手机号<span className="req">*</span></label>
-        <Form.Item name="parentPhone" rules={[{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的 11 位手机号' }]}>
-          <Input placeholder="家长手机号" />
-        </Form.Item>
-      </div>
-      <div className="field full">
-        <div className="live-hint">手机号、家长手机号 至少填一个即可（保证能联系上）</div>
       </div>
       <div className="field">
         <label>性别<span className="req">*</span></label>
@@ -1566,17 +1576,6 @@ function BasicFields() {
               { value: 'MALE', label: '男' },
               { value: 'FEMALE', label: '女' },
             ]}
-          />
-        </Form.Item>
-      </div>
-      <div className="field">
-        <label>出生日期<span className="req">*</span><span className="sc-hint"> 批次年龄校验用</span></label>
-        <Form.Item name="birthDate" noStyle>
-          <DatePicker
-            style={{ width: '100%' }}
-            format="YYYY-MM-DD"
-            placeholder="选择出生日期"
-            disabledDate={(d) => d && d.isAfter(dayjs())}
           />
         </Form.Item>
       </div>
