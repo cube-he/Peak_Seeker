@@ -1,10 +1,12 @@
 import { SoftRule, StudentContext, CandidateRow, SoftRuleResult } from '../soft-rule.interface';
+import { isSinoForeignFromNotes } from '../../sino-foreign-filter';
 
 export class NatureRule implements SoftRule {
   readonly name = 'nature';
 
   check(student: StudentContext, candidate: CandidateRow): SoftRuleResult {
-    if (candidate.isSinoForeign && student.acceptSinoForeign === false) {
+    // 中外合作直接读专业备注判定(与候选展示/筛选同口径), 不读 is_sino_foreign 物化列。
+    if (isSinoForeignFromNotes(candidate.planNotes) && student.acceptSinoForeign === false) {
       return {
         pass: false,
         reason: {
