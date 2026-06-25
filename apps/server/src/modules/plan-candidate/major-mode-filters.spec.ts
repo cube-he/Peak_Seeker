@@ -20,7 +20,7 @@ describe('major-mode-filters', () => {
       g({ runningNature: '民办' }),                 // 1
       g({ runningNature: '公办 中外合作办学' }),     // 2 (公办+中外, 两个 chip 都该命中)
       g({ runningNature: '港澳台合作办学' }),        // 3
-      g({ runningNature: '独立学院' }),              // 4
+      g({ runningNature: '境外高校独立办学' }),      // 4 (库里真实值; 无"独立学院", independent chip 实筛此类)
       g({ runningNature: null }),                    // 5 (字段空, 无 chip 时通过, 有 chip 时排除)
     ];
 
@@ -35,6 +35,10 @@ describe('major-mode-filters', () => {
 
     it('hkMacau 命中"港澳"子串', () => {
       expect(filterGroupsByNature(groups, 'hkMacau')).toEqual([groups[3]]);
+    });
+
+    it('independent 命中"境外"子串(境外高校独立办学), 不再误匹配假"独立学院"', () => {
+      expect(filterGroupsByNature(groups, 'independent')).toEqual([groups[4]]);
     });
 
     it('空 nature 原样返回同引用(不过滤)', () => {
@@ -113,6 +117,16 @@ describe('major-mode-filters', () => {
     it('universityCities=成都,北京 只留两市', () => {
       const r = filterGroupsByUniversityCities(groups, '成都,北京');
       expect(r).toEqual([groups[0], groups[2]]);
+    });
+
+    it('城市去后缀归一: 输入"成都市"也命中库里的"成都"', () => {
+      const r = filterGroupsByUniversityCities(groups, '成都市');
+      expect(r).toEqual([groups[2]]);
+    });
+
+    it('城市去后缀归一: 库里"璧山区"被输入"璧山"命中', () => {
+      const bishan = [g({ province: '重庆', city: '璧山区' })];
+      expect(filterGroupsByUniversityCities(bishan, '璧山')).toEqual([bishan[0]]);
     });
 
     it('空 csv 原样返回同引用 (两函数都验)', () => {

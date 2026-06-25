@@ -42,7 +42,9 @@ export function filterGroupsByNature<T extends GroupWithUniversity>(
     if (nature === 'private') return rn.includes('民办');
     if (nature === 'sinoForeign') return rn.includes('中外合作');
     if (nature === 'hkMacau') return rn.includes('港澳');
-    if (nature === 'independent') return rn.includes('独立');
+    // 库里无"独立学院"(已全国转设); running_nature 的"独立"类只有"境外高校独立办学"。
+    // 故 independent 实际筛的是境外办学(前端 chip 标签同步改为"境外办学")。用"境外"精确匹配。
+    if (nature === 'independent') return rn.includes('境外');
     return true;
   });
 }
@@ -102,17 +104,27 @@ export function filterGroupsByUniversityProvinces<T extends GroupWithUniversity>
   });
 }
 
-/** 院校所在市 CSV (university.city IN). 空 csv=不过滤同引用返回; 院校 city 空 → 排除. */
+/**
+ * 城市名归一: 去掉行政级别后缀再比, 让老师输入"成都市"也能命中库里的"成都",
+ * "璧山区"="璧山"(库里两种写法都有)。
+ * 直辖市(北京/重庆/上海/天津)库里存的是城区(如"海淀区"), 这里去后缀后是"海淀" —
+ * 老师想筛整个直辖市应该用「省份」chip, 城市框只解决"同名 + 行政后缀"的错配。
+ */
+function normalizeCity(s: string): string {
+  return s.replace(/(特别行政区|自治州|自治县|地区|市辖区|市|区|县|盟|州|旗)$/u, '');
+}
+
+/** 院校所在市 CSV. 空 csv=不过滤同引用返回; 院校 city 空 → 排除. 去后缀归一后比对(成都市=成都). */
 export function filterGroupsByUniversityCities<T extends GroupWithUniversity>(
   groups: T[],
   csv?: string | null,
 ): T[] {
   const cs = parseCsv(csv);
   if (cs.length === 0) return groups;
-  const allow = new Set(cs);
+  const allow = new Set(cs.map(normalizeCity));
   return groups.filter((g) => {
     const c = g.university?.city ?? '';
-    return c ? allow.has(c) : false;
+    return c ? allow.has(normalizeCity(c)) : false;
   });
 }
 

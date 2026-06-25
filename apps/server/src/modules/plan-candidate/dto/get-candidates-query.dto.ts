@@ -50,12 +50,12 @@ export class GetCandidatesQueryDto {
   // 视图模式: GROUP=院校专业组卡(默认, 专业优先); UNIVERSITY=院校卡上卷(院校优先)
   @IsOptional() @IsIn(['GROUP', 'UNIVERSITY']) groupBy?: 'GROUP' | 'UNIVERSITY';
   // 办学性质过滤 (两视图均生效, 分页层应用): public=公办, private=民办, sinoForeign=中外合作,
-  // hkMacau=港澳合作办学, independent=独立学院; 空=全部。
+  // hkMacau=港澳合作办学, independent=境外办学(库里无独立学院, running_nature 只有"境外高校独立办学"); 空=全部。
   // 历史只支持 public/private (院校优先视图), 2026-06-25 起扩枚举 + 接到 GROUP 视图分页层。
   // 注: sinoForeign 与下面的 `sinoForeign` 字段语义不同 — `nature='sinoForeign'` 看 university.runningNature
   // 含"中外合作"(校属性), `sinoForeign='only'/'exclude'` 看组内专业 isSinoForeign(组级)。UI 分两个 chip 用。
   @IsOptional() @IsIn(['public', 'private', 'sinoForeign', 'hkMacau', 'independent']) nature?: string;
-  // 院校标签 CSV: 985 / 211 / doubleFirstClass; 多选 AND 语义("同时是 985 + 211"); 空=不过滤。分页层。
+  // 院校标签 CSV: 985 / 211 / doubleFirstClass; 多选 OR 语义(命中任一即过, 见 filterGroupsByTags); 空=不过滤。分页层。
   @IsOptional() @IsString() tags?: string;
   // 院校背景 CSV: 九校联盟 / 卓越大学联盟 / 国防七子 / ...
   // P1 用 university.universityBackground String LIKE 模糊匹配, 多选 OR 语义。空=不过滤。分页层。

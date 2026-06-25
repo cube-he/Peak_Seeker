@@ -908,7 +908,7 @@ export default function GeneratePlanPage() {
   const toggleRecruitType = (rt: string) =>
     setRecruitTypeFilter((prev) => (prev.includes(rt) ? prev.filter((x) => x !== rt) : [...prev, rt]));
   // Task 4 7 项筛选 (服务端分页层应用, 不进缓存键):
-  // 院校标签 985/211/双一流 多选 AND
+  // 院校标签 985/211/双一流 多选 OR (命中任一即显示)
   const [tagsFilter, setTagsFilter] = useState<string[]>([]);
   const toggleTag = (t: string) =>
     setTagsFilter((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
@@ -2444,7 +2444,7 @@ export default function GeneratePlanPage() {
                       { v: 'private' as const, label: '民办' },
                       { v: 'sinoForeign' as const, label: '中外合作' },
                       { v: 'hkMacau' as const, label: '港澳合作' },
-                      { v: 'independent' as const, label: '独立学院' },
+                      { v: 'independent' as const, label: '境外办学' },
                     ]).map((opt) => (
                       <button
                         key={opt.label}
@@ -2457,7 +2457,7 @@ export default function GeneratePlanPage() {
                     ))}
                   </div>
 
-                  {/* 院校标签 (985 / 211 / 双一流; 多选 AND) + 院校背景 (多选 OR) */}
+                  {/* 院校标签 (985 / 211 / 双一流; 多选 OR — 命中任一即显示) + 院校背景 (多选 OR) */}
                   <div className="pgv3-frow">
                     <span className="flbl">院校标签</span>
                     {([
@@ -2472,7 +2472,7 @@ export default function GeneratePlanPage() {
                           type="button"
                           className={`pgv3-fchip ${active ? 'on' : ''}`}
                           onClick={() => toggleTag(opt.v)}
-                          title="多选 AND: 同时满足所选标签"
+                          title="多选 OR: 命中任一标签即显示（勾越多看越多）"
                         >
                           {opt.label}
                         </button>
@@ -2571,7 +2571,7 @@ export default function GeneratePlanPage() {
                           addCity();
                         }
                       }}
-                      placeholder="输入城市名,回车添加"
+                      placeholder="城市名回车添加(直辖市用省份)"
                       style={{
                         border: '1px solid #d9d9d9',
                         borderRadius: 4,
