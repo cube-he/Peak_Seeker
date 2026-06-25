@@ -114,7 +114,7 @@ describe('field-policy REQUIRED/RECOMMENDED contracts', () => {
     expect(REQUIRED_FIELDS.length).toBe(23);
   });
 
-  it('REQUIRED_FIELDS 含 22 项核心 + colorWeak (色觉单 enum 拆出)', () => {
+  it('REQUIRED_FIELDS 含 21 项核心 + 色觉 2 列 (colorBlind + colorWeak, DB 仍双布尔)', () => {
     expect(new Set(REQUIRED_FIELDS)).toEqual(new Set([
       'realName', 'gender', 'phone', 'ethnicity',
       'province', 'city', 'county', 'isRural',

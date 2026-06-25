@@ -262,7 +262,8 @@ export const REQUIRED_FIELDS = [
 
 /**
  * 推荐填写 (影响完整度评分, 不阻塞"生成方案"按钮):
- * 学生端可见 STAGE_1/2/3 字段集去掉 REQUIRED_FIELDS 之后的余下集.
+ * REQUIRED_FIELDS 之外的常见选填字段集合.
+ * 注: 不严格等于"学生可编辑字段集 - REQUIRED" - 个别学生端字段 (如 parentSignedAt 签字时间戳) 不属于完整度计算口径, 不在本集合内.
  */
 export const RECOMMENDED_FIELDS = [
   'parentPhone',
