@@ -7,8 +7,12 @@
  * 二维编码: 距离(gbar 左色条 + 够不着/偏低灰显) + 状态(软不符暖色 / 全员资格不符锁定不可填)。
  *
  * 加入: 子行「加入」→ onAddGroup(group), 走现有 addCandidateGroup 流程, 产物与专业优先一致。
- * 详情: 「详情」→ onOpenDetail(group), 开页面现有的专业组复核 Drawer。
+ * 详情: 「详情」→ 卡内内联展开(匹配环 + 偏好 + 趋势 + 就业指标 + 专业行), 复用候选卡组件, 不再开 Drawer。
  */
+
+import { useState } from 'react';
+import { MatchRing, MBar, PrefDot, Sparkline } from './CandidateCardV3';
+import CandidateMajorSection from './candidate-major-section';
 
 const GRAD_LABEL: Record<string, string> = { CHONG: '冲', WEN: '稳', BAO: '保' };
 const GRAD_TONE: Record<string, string> = { CHONG: 'rush', WEN: 'stable', BAO: 'safe' };
@@ -24,10 +28,12 @@ interface Props {
   studentRank?: number | null; // 学生位次, 用于显示组末位差距
   isGroupAdded: (group: any) => boolean;
   onAddGroup: (group: any) => void;
-  onOpenDetail: (group: any) => void;
 }
 
 const fmt = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString() : '—');
+
+// rate 字段是字符串, 部分已自带 '%'(如 '96.4%')。已带则不再补, 避免 '12%%'。
+const pctSuffix = (v: unknown) => (v != null && v !== '' && !String(v).includes('%') ? '%' : '');
 
 // 学生位次 vs 组末位的差距 (末位数字越大=越容易进)
 function gapText(studentRank: number | null | undefined, minRank: unknown): { txt: string; ahead: boolean } | null {
@@ -44,8 +50,9 @@ export default function UniversityCandidateCard({
   studentRank,
   isGroupAdded,
   onAddGroup,
-  onOpenDetail,
 }: Props) {
+  // 卡内内联展开: 同时只展开一个专业组 (点同组再次切换收起), 复刻候选卡(专业优先)的展开交互
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const u = university.university ?? {};
   const s = university.summary ?? {};
   const spread = s.gradientSpread ?? { chong: 0, wen: 0, bao: 0 };
@@ -137,10 +144,16 @@ export default function UniversityCandidateCard({
           const planPrev = typeof g.previousPlanCount === 'number' ? g.previousPlanCount : null;
           const planDelta = planNow != null && planPrev != null ? planNow - planPrev : null;
           const recruit = g.recruitType ? String(g.recruitType) : null;
+          const isExpanded = openKey === g.groupKey;
+          // 趋势线: 院校组用 g.history3y (近 3 年录取), 缺则显"无历史录取线/需人工判断"
+          const trend = Array.isArray(g.history3y) && g.history3y.length >= 2 ? g.history3y : null;
+          const predConf = String(g.predictedMinRank?.confidence ?? '');
+          const predConfLabel = ({ HIGH: '高', MEDIUM: '中', LOW: '低' } as Record<string, string>)[predConf] || '—';
+          const sections = g.majorSections ?? { recommended: g.majors ?? [], backup: [], risk: [] };
           return (
+            <div className="pgv3-grow-wrap" key={g.groupKey}>
             <div
               className={`pgv3-grow ${muted ? 'is-muted' : ''} ${isSoft ? 'status-soft' : ''}`}
-              key={g.groupKey}
               title={reachFar ? '该专业组录取门槛位次远好于学生, 差距过大、基本够不着, 仅供参考。老师可自主决策。'
                 : tooLow ? '学生位次远高于该专业组录取门槛, 报考可能浪费分数。老师可自主决策。' : undefined}
             >
@@ -178,7 +191,13 @@ export default function UniversityCandidateCard({
                 {anchor ?? `${cnt} 专业`}{anchor && cnt > 1 ? ` 等${cnt}专业` : ''}
               </span>
               <span className="gacts">
-                <button className="pgv3-grow-detail" type="button" onClick={() => onOpenDetail(g)}>详情</button>
+                <button
+                  className="pgv3-grow-detail"
+                  type="button"
+                  onClick={() => setOpenKey((k) => (k === g.groupKey ? null : g.groupKey))}
+                >
+                  {openKey === g.groupKey ? '收起' : '详情'}
+                </button>
                 {added ? (
                   <span className="pgv3-grow-added">✓ 已加入</span>
                 ) : isHard ? (
@@ -210,6 +229,59 @@ export default function UniversityCandidateCard({
                   {recruit ? <span className="pgv2-dchip tone-neutral">{recruit}</span> : null}
                 </span>
               ) : null}
+            </div>
+
+            {/* —— 卡内内联展开: 匹配环 + 偏好 + 趋势 + 6 项就业指标 + 专业行 —— */}
+            {isExpanded && (
+              <div className="pgv3-grow-expand">
+                <div className="pgv2-match-header">
+                  <MatchRing score={g.matchScore} />
+                  <div className="pgv2-match-body">
+                    <div className="pgv2-match-reason">{g.matchReason ?? '—'}</div>
+                    <div className="pgv2-pref-row">
+                      <PrefDot ok={g.prefMatch?.province === 'match'} label="地域" />
+                      <PrefDot ok={g.prefMatch?.tuition === 'within'} label="学费" />
+                      <PrefDot ok={g.prefMatch?.career === 'strong'} label="职业" />
+                    </div>
+                  </div>
+                  {trend ? (
+                    <div className="pgv2-trend-mini">
+                      <Sparkline data={trend} />
+                      <div className="pgv2-trend-meta">
+                        <span className="t-range">{trend[0].score} → {trend[trend.length - 1].score}</span>
+                        <span className="t-pred">
+                          ◇ 预测 ~{g.predictedMinRank?.point?.toLocaleString() || '—'} 位
+                          <span className={`t-conf c-${predConf.toLowerCase()}`}>{predConfLabel}</span>
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="pgv2-trend-mini">
+                      <div className="pgv2-trend-meta" style={{ textAlign: 'right' }}>
+                        <span className="t-range" style={{ color: 'var(--text-muted)' }}>无历史录取线</span>
+                        <span className="t-pred" style={{ color: 'var(--text-muted)' }}>需人工判断</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* —— 6 项就业指标 ——
+                     rate 字段是已带 '%' 的字符串(如 '96.4%'), 故仅在缺 '%' 时补, 避免 '%%' */}
+                <div className="pgv2-metric-bar">
+                  <MBar k="招生" v={g.currentPlanCount} suffix=" 人" chg={g.planCountChange} />
+                  <MBar k="考研率" v={g.university?.postgradRate} suffix={pctSuffix(g.university?.postgradRate)} />
+                  <MBar k="深造率" v={g.university?.furtherStudyRate} suffix={pctSuffix(g.university?.furtherStudyRate)} />
+                  <MBar k="就业率" v={g.university?.employmentRate} suffix={pctSuffix(g.university?.employmentRate)} />
+                  <MBar k="平均薪资" v={g.university?.avgSalary} suffix="" />
+                  <MBar k="满意度" v={g.university?.satisfactionOverall} suffix={g.university?.satisfactionOverall != null ? `/5 · ${g.university?.satisfactionCount ?? 0}人` : ''} />
+                </div>
+
+                {/* —— 专业行(复用候选卡组件, onAdd 加入整组) —— */}
+                <CandidateMajorSection title="推荐填写" section="RECOMMENDED" majors={sections.recommended ?? []} group={g} onAdd={() => onAddGroup(g)} />
+                <CandidateMajorSection title="可备选" section="BACKUP" majors={sections.backup ?? []} group={g} onAdd={() => onAddGroup(g)} />
+                <CandidateMajorSection title="风险/不建议" section="RISK" majors={sections.risk ?? []} group={g} onAdd={() => onAddGroup(g)} />
+              </div>
+            )}
             </div>
           );
         })}
