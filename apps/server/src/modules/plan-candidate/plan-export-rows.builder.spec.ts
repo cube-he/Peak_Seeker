@@ -107,6 +107,16 @@ describe('buildExportSheet', () => {
     expect(m.suppByYear[2025]).toBeNull();
   });
 
+  it('schoolTags 缺快照时由院校 985/211/双一流 标志合成', () => {
+    const itemNoTags = { ...plan.planItems[0], schoolTags: undefined };
+    const sheet = buildExportSheet({
+      plan: { ...plan, planItems: [itemNoTags] },
+      enrichedGroups: [enrichedGroup],
+      years: YEARS,
+    });
+    expect(sheet.groups[0].schoolTags).toBe('985/211/双一流');
+  });
+
   it('多条目按 planItems 顺序输出', () => {
     const twoItemPlan = {
       ...plan,

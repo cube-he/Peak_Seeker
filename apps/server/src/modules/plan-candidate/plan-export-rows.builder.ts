@@ -125,10 +125,9 @@ function buildEnrichedGroup(item: any, g: any, years: number[]): ExportGroup {
 function buildFallbackGroup(item: any, years: number[]): ExportGroup {
   const minScoreByYear: Record<number, number | null> = {};
   for (const y of years) minScoreByYear[y] = null;
-  // 快照里 25/24 专业线可能有
-  const [, y2, y3] = years; // years = [b-2, b-1, b]
-  if (typeof item.score24Major === 'number') minScoreByYear[y2] = item.score24Major;
-  if (typeof item.score25Major === 'number') minScoreByYear[y3] = item.score25Major;
+  // 快照线字段名锁定 2024/2025 两年, 按真实年份映射(而非数组位置), years 平移也不会错位。
+  if (typeof item.score24Major === 'number' && years.includes(2024)) minScoreByYear[2024] = item.score24Major;
+  if (typeof item.score25Major === 'number' && years.includes(2025)) minScoreByYear[2025] = item.score25Major;
   const planByYear: Record<number, number | null> = {};
   const suppByYear: Record<number, { count: number; rounds: number } | null> = {};
   for (const y of years) { planByYear[y] = null; suppByYear[y] = null; }
