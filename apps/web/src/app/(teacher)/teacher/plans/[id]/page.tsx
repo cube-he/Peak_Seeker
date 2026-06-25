@@ -7,18 +7,15 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   Alert,
   Button,
-  Card,
   Collapse,
   Dropdown,
   Empty,
   Input,
   Modal,
-  Radio,
   Select,
   Space,
   Spin,
   Tag,
-  Tooltip,
   message,
 } from 'antd';
 import {
@@ -137,13 +134,6 @@ function getHistoricalRank(item: any): number | null {
   return item?.rank25Major ?? item?.rank25Group ?? item?.lastYearMinRank ?? null;
 }
 
-function isItemRisky(item: any): boolean {
-  if (item?.overrideSoftFail) return true;
-  if (Array.isArray(item?.softFailReasons) && item.softFailReasons.length > 0) return true;
-  if (item?.riskWarning && String(item.riskWarning).trim()) return true;
-  return false;
-}
-
 type DiffKind = 'same' | 'modified' | 'added' | 'removed' | 'reordered';
 
 interface DiffRow {
@@ -235,8 +225,6 @@ export default function PlanDetailPage() {
   const [now, setNow] = useState<Date | null>(null);
   // 对比模式:选另一版本对比当前版本
   const [compareVersionId, setCompareVersionId] = useState<number | null>(null);
-  // 风险处理弹窗:要处理的 riskId 列表(单条点「处理」传 1 个, 「批量处理」传全部未解决)
-  const [resolveRiskIds, setResolveRiskIds] = useState<number[] | null>(null);
 
   useEffect(() => {
     setNow(new Date());
@@ -519,14 +507,12 @@ export default function PlanDetailPage() {
     const avgMargin = margins.length
       ? Math.round((margins.reduce((a, b) => a + b, 0) / margins.length) * 10) / 10
       : null;
-    const riskCount = items.filter(isItemRisky).length;
     return {
       studentScore,
       studentRank,
       examType,
       gradientCounts,
       avgMargin,
-      riskCount,
     };
   }, [plan, items]);
 
@@ -819,12 +805,6 @@ export default function PlanDetailPage() {
         </div>
       </div>
 
-      {/* —— 风险摘要面板 (有风险时才显示, 保留 antd 业务逻辑) —— */}
-      <RiskSummaryPanel
-        planId={planId}
-        onRowClick={(id) => setResolveRiskIds([id])}
-        onBatchResolve={(ids) => setResolveRiskIds(ids)}
-      />
 
       {/* —— 主管审核 panel (REVIEWING/PENDING_REVIEW + 主管; 设计稿 pd2-review-panel) —— */}
       {isReviewing ? (
@@ -1050,16 +1030,6 @@ export default function PlanDetailPage() {
           )}
         </div>
       ) : null}
-
-      <RiskResolveModal
-        riskIds={resolveRiskIds}
-        open={resolveRiskIds !== null}
-        onCancel={() => setResolveRiskIds(null)}
-        onSuccess={() => {
-          setResolveRiskIds(null);
-          queryClient.invalidateQueries({ queryKey: ['plan-risks', planId] });
-        }}
-      />
     </div>
   );
 }
@@ -1348,168 +1318,3 @@ function ComparePanelRow({ row }: { row: DiffRow }) {
   );
 }
 
-const SEVERITY_LABEL: Record<string, string> = {
-  critical: '严重',
-  moderate: '中度',
-  minor: '轻微',
-};
-
-const SEVERITY_TONE: Record<string, string> = {
-  critical: 'bg-rush text-white',
-  moderate: 'bg-amber-500 text-white',
-  minor: 'bg-text-muted text-white',
-};
-
-function RiskSummaryPanel({
-  planId,
-  onRowClick,
-  onBatchResolve,
-}: {
-  planId: string | number;
-  onRowClick: (riskId: number) => void;
-  onBatchResolve: (riskIds: number[]) => void;
-}) {
-  const { data: risks = [] } = useQuery({
-    queryKey: ['plan-risks', planId],
-    queryFn: () => planApi.getRisks(planId),
-  });
-
-  if (risks.length === 0) return null;
-
-  // getRisks 返回全部风险(含已处理)。计数只算未处理 —— 否则处理完刷新仍显示
-  // "严重 2", 与后端提交闸 (只数未解决) 口径不一致, 老师以为没生效反复点。
-  const counts = risks.reduce(
-    (acc: Record<string, number>, r) => {
-      if (!r.resolvedAt) acc[r.severity] = (acc[r.severity] ?? 0) + 1;
-      return acc;
-    },
-    { critical: 0, moderate: 0, minor: 0 } as Record<string, number>,
-  );
-  // 未处理排前面, 已处理沉底
-  const sortedRisks = [...risks].sort(
-    (a, b) => (a.resolvedAt ? 1 : 0) - (b.resolvedAt ? 1 : 0),
-  );
-  // 批量只放行"分差类"(gradient): 冲段策略是老师的统一判断, 可一次接受;
-  // 选科不符/资格类必须逐条核实 —— 实测批量会把"该专业要求化学"这种必不投档的硬伤糊过去
-  const unresolved = risks.filter((r) => !r.resolvedAt);
-  const batchableIds = unresolved.filter((r) => r.category === 'gradient').map((r) => r.id);
-  const nonBatchableCount = unresolved.length - batchableIds.length;
-
-  return (
-    <Card
-      title={
-        <span>
-          风险摘要
-          {counts.critical > 0 ? (
-            <span className="ml-2 text-rush">严重 {counts.critical}</span>
-          ) : null}
-          {counts.moderate > 0 ? (
-            <span className="ml-2 text-amber-600">中度 {counts.moderate}</span>
-          ) : null}
-          {counts.minor > 0 ? (
-            <span className="ml-2 text-text-muted">轻微 {counts.minor}</span>
-          ) : null}
-        </span>
-      }
-      extra={
-        batchableIds.length > 1 ? (
-          <Tooltip title={nonBatchableCount > 0 ? `另有 ${nonBatchableCount} 条资格/选科类风险须逐条核实, 不参与批量` : ''}>
-            <Button size="small" onClick={() => onBatchResolve(batchableIds)}>
-              批量处理 {batchableIds.length} 条分差风险
-            </Button>
-          </Tooltip>
-        ) : null
-      }
-      size="small"
-    >
-      <ol className="m-0 list-none space-y-1 p-0">
-        {sortedRisks.map((r) => {
-          const resolved = Boolean(r.resolvedAt);
-          return (
-            <li
-              key={r.id}
-              className={`flex items-center justify-between rounded-md border border-border-subtle px-3 py-2 ${
-                resolved ? 'opacity-55' : 'cursor-pointer hover:border-primary'
-              }`}
-              onClick={resolved ? undefined : () => onRowClick(r.id)}
-            >
-              <div className="min-w-0 flex-1">
-                <p className="m-0 text-sm">
-                  <span className={`mr-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${SEVERITY_TONE[r.severity]}`}>
-                    {SEVERITY_LABEL[r.severity]}
-                  </span>
-                  #{r.planItem.sequence} {r.planItem.universityName} · {r.planItem.majorName}
-                </p>
-                <p className="m-0 text-xs text-text-muted">{r.message}</p>
-              </div>
-              {resolved ? (
-                <Tag color="success">已处理</Tag>
-              ) : (
-                <Button size="small" type="text">处理</Button>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </Card>
-  );
-}
-
-function RiskResolveModal({
-  riskIds,
-  open,
-  onCancel,
-  onSuccess,
-}: {
-  riskIds: number[] | null;
-  open: boolean;
-  onCancel: () => void;
-  onSuccess: () => void;
-}) {
-  const [resolution, setResolution] = useState<'accepted' | 'replaced' | 'ignored'>('accepted');
-  const [note, setNote] = useState('');
-  const count = riskIds?.length ?? 0;
-
-  const resolveMutation = useMutation({
-    // 后端无批量端点, 逐条调用; 批量来自老师对同一冲段策略的统一判断, 共用处理方式与备注
-    mutationFn: () => Promise.all(
-      (riskIds ?? []).map((id) => planApi.resolveRisk(id, resolution, note || undefined)),
-    ),
-    onSuccess: () => {
-      message.success(count > 1 ? `已处理 ${count} 条风险` : '已处理');
-      setNote('');
-      onSuccess();
-    },
-    onError: (e: any) => message.error(e?.response?.data?.message ?? '处理失败'),
-  });
-
-  return (
-    <Modal
-      title={count > 1 ? `批量处理 ${count} 条风险` : '处理风险'}
-      open={open}
-      onCancel={onCancel}
-      onOk={() => resolveMutation.mutate()}
-      confirmLoading={resolveMutation.isPending}
-    >
-      <div className="space-y-3">
-        <div>
-          <p className="m-0 mb-1 text-sm font-medium">处理方式:</p>
-          <Radio.Group value={resolution} onChange={(e) => setResolution(e.target.value)}>
-            <Radio value="accepted">接受风险(综合判断可承受)</Radio>
-            <Radio value="replaced">已替换志愿</Radio>
-            <Radio value="ignored">暂时忽略</Radio>
-          </Radio.Group>
-        </div>
-        <div>
-          <p className="m-0 mb-1 text-sm font-medium">备注(可选):</p>
-          <Input.TextArea
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="例:学生家长有特殊背景 / 已和家长沟通"
-          />
-        </div>
-      </div>
-    </Modal>
-  );
-}
