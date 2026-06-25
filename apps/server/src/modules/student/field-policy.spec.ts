@@ -110,17 +110,17 @@ describe('FIELD_TO_PROVENANCE_GROUP', () => {
 });
 
 describe('field-policy REQUIRED/RECOMMENDED contracts', () => {
-  it('REQUIRED_FIELDS 恰为 23 项', () => {
-    expect(REQUIRED_FIELDS.length).toBe(23);
+  it('REQUIRED_FIELDS 恰为 21 项', () => {
+    expect(REQUIRED_FIELDS.length).toBe(21);
   });
 
-  it('REQUIRED_FIELDS 含 21 项核心 + 色觉 2 列 (colorBlind + colorWeak, DB 仍双布尔)', () => {
+  it('REQUIRED_FIELDS 含 19 项核心 + 色觉 2 列; 不含 examYear/examSource(选择器已删/隐藏)', () => {
     expect(new Set(REQUIRED_FIELDS)).toEqual(new Set([
       'realName', 'gender', 'phone', 'ethnicity',
       'province', 'city', 'county', 'isRural',
       'examLocationProvince', 'examLocationCity', 'examLocationCounty',
       'colorBlind', 'colorWeak',
-      'examYear', 'examSource', 'firstChoice', 'reChoices',
+      'firstChoice', 'reChoices',
       'scoreChinese', 'scoreMath', 'scoreEnglish',
       'scoreFirstChoice', 'scoreSub1', 'scoreSub2',
     ]));
@@ -137,7 +137,8 @@ describe('field-policy REQUIRED/RECOMMENDED contracts', () => {
     const reqSet = new Set<string>(REQUIRED_FIELDS);
     for (const f of ['height', 'weight', 'visionLeft', 'visionRight',
                      'totalScore', 'birthDate', 'politicalStatus', 'bonusPolicyStatus',
-                     'preferredMajors', 'priorityMode', 'parentPhone']) {
+                     'preferredMajors', 'priorityMode', 'parentPhone',
+                     'examYear', 'examSource']) {
       expect(reqSet.has(f)).toBe(false);
     }
   });

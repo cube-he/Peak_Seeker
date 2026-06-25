@@ -223,8 +223,9 @@ export type TeacherOnlyField = typeof TEACHER_ONLY_FIELDS[number];
 export const USER_LEVEL_FIELDS = ['realName', 'phone', 'gender', 'ethnicity', 'birthDate'] as const;
 
 /**
- * 2026-06-25 业务定调收窄: 生成方案唯一硬约束 = 这 23 项
+ * 2026-06-25 业务定调收窄: 生成方案唯一硬约束 = 这 21 项
  * (色觉 UI 单 enum, 但 DB 保留 colorBlind+colorWeak 两列, 这里两列都必填).
+ * (原含 examYear/examSource 共 23 项; 这俩选择器删除/隐藏后移出必填门, 见下方注释.)
  *
  * 替代 (但暂保留旧导出): CORE_FOR_RECOMMEND + CORE_FOR_ELIGIBILITY + PHYSICAL_REQUIRED.
  * 旧导出仍可用但不再被 progress.service 引用; 第三方调用方迁移完后再删.
@@ -248,8 +249,9 @@ export const REQUIRED_FIELDS = [
   'colorBlind',
   'colorWeak',
   // 考试成绩 (整张「考试成绩」卡)
-  'examYear',
-  'examSource',
+  // 注: examYear(隐藏, 固定2026)/examSource(已删选择器) 不再是教师可填字段, 故移出必填门,
+  //     否则旧档值为空时"可推荐"判定永远卡"还缺 examYear/examSource"且无处可填(2026-06-25)。
+  //     examYear 的值仍由后端 `?? 2026` 兜底供取数用, 不受影响。
   'firstChoice',
   'reChoices',
   'scoreChinese',

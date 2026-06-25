@@ -19,7 +19,7 @@ describe('ProgressService — single-layer REQUIRED_FIELDS', () => {
     svc = m.get(ProgressService);
   });
 
-  it('22 个必填全填 (色觉 2 列都给) → isRecommendable=true, missing 为空', () => {
+  it('21 个必填全填 (色觉 2 列都给) → isRecommendable=true, missing 为空', () => {
     const p = svc.compute(FULL_REQUIRED);
     expect(p.isRecommendable).toBe(true);
     expect(p.missingFieldsForRecommend).toEqual([]);
@@ -39,11 +39,12 @@ describe('ProgressService — single-layer REQUIRED_FIELDS', () => {
     expect(p.missingFieldsForRecommend).not.toContain('height');
   });
 
-  it('缺 examYear → isRecommendable=false, missing 含 examYear', () => {
-    const { examYear: _omit, ...rest } = FULL_REQUIRED;
+  it('缺 examYear/examSource 不再阻塞 (选择器已删/隐藏, 移出必填门) → isRecommendable 仍 true', () => {
+    const { examYear: _y, examSource: _s, ...rest } = FULL_REQUIRED;
     const p = svc.compute(rest);
-    expect(p.isRecommendable).toBe(false);
-    expect(p.missingFieldsForRecommend).toContain('examYear');
+    expect(p.isRecommendable).toBe(true);
+    expect(p.missingFieldsForRecommend).not.toContain('examYear');
+    expect(p.missingFieldsForRecommend).not.toContain('examSource');
   });
 
   it('缺 colorBlind → isRecommendable=false (色觉必填)', () => {
