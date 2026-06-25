@@ -297,6 +297,10 @@ export const planApi = {
     )) as unknown as Blob;
   },
 
+  getExportRows(planId: number | string): Promise<any> {
+    return api.get(`/plans/${planId}/export-rows`) as any;
+  },
+
   async getRisks(planId: number | string) {
     return (await api.get(`/plans/${planId}/risks`)) as unknown as Array<{
       id: number;
