@@ -667,13 +667,6 @@ function getAddActionLabel(group: CandidateGroup, major?: CandidateMajor, added?
   return '加入并补满专业';
 }
 
-function selectedMajorSectionLabel(section?: string | null) {
-  if (section === 'RECOMMENDED' || section === 'BACKUP' || section === 'RISK') {
-    return MAJOR_SECTION_LABEL[section];
-  }
-  return '专业';
-}
-
 function getDecisionText(group: CandidateGroup, major: CandidateMajor | undefined, studentRank?: number | null) {
   const gap = formatRankGap(studentRank, getAdjustedRank(group, major));
   if (gap.tone === 'behind') return `${gap.text}，建议只作冲档或备选，加入前必须复核风险。`;
@@ -1691,44 +1684,13 @@ export default function GeneratePlanPage() {
       .filter((item) => selectedIds.has(item.enrollmentPlanId))
       .flatMap((item) => item.failReasons ?? []);
 
-    Modal.confirm({
-      title: '确认加入专业组',
-      content: (
-        <div className="space-y-3">
-          <Alert
-            type="info"
-            showIcon
-            message="将按服从调剂口径补满专业"
-            description="系统只新增一条院校专业组志愿，并保存下面的专业填写顺序。"
-          />
-          <div className="space-y-2">
-            {selection.selectedMajors.map((item) => (
-              <div key={item.enrollmentPlanId} className="rounded-md bg-gray-50 px-3 py-2 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="min-w-0 truncate">{item.order}. {item.majorName}</span>
-                  <Tag color={item.displaySection === 'RISK' ? 'warning' : item.displaySection === 'BACKUP' ? 'default' : 'success'}>
-                    {selectedMajorSectionLabel(item.displaySection)}
-                  </Tag>
-                </div>
-                {/* 「风险/不建议」必须给原因, 否则老师无从判断是分差还是选科/体检问题 */}
-                {item.displaySection === 'RISK' && item.displayReason ? (
-                  <div className="mt-1 text-xs text-text-tertiary">{item.displayReason}</div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-          <div className="text-xs text-text-tertiary">服从调剂：是。少于等于 6 个专业时全部带入，超过 6 个时优先学生意向专业。</div>
-        </div>
-      ),
-      okText: '确认加入',
-      cancelText: '取消',
-      onOk: () => addMutation.mutate({
-        group,
-        major: anchorMajor,
-        selectedMajors: selection.selectedMajors,
-        candidateMajorRanking: selection.candidateMajorRanking,
-        softFailReasons,
-      }),
+    // 轻量化: 不再弹"确认加入"对话框, 点「加入」直接按服从调剂口径补满并新增一条志愿。
+    addMutation.mutate({
+      group,
+      major: anchorMajor,
+      selectedMajors: selection.selectedMajors,
+      candidateMajorRanking: selection.candidateMajorRanking,
+      softFailReasons,
     });
   };
 

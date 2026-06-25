@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import PrerequisiteCheckModal, { hasRankedPreferredMajors } from '@/components/plan/PrerequisiteCheckModal';
+import { hasRankedPreferredMajors } from '@/components/plan/PrerequisiteCheckModal';
 import { Alert, Cascader, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Spin, message } from 'antd';
 import dayjs from 'dayjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -433,7 +433,6 @@ export default function StudentDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
-  const [showPrereqModal, setShowPrereqModal] = useState(false);
   // 整档保存用: 累积"访问过的子页里注册过的表单字段名"。子页是条件渲染(切走即卸载),
   // 保存时只能从 store 取全量, 但 store 被 initialValues 灌入了非表单字段(id/rankCheck/…),
   // 后端 forbidNonWhitelisted 见到就 400 → 用这份白名单只挑真正的表单字段。
@@ -959,7 +958,8 @@ export default function StudentDetailPage() {
               }
               onClick={() => {
                 if (canGenerate) {
-                  setShowPrereqModal(true);
+                  // 轻量化: 不再弹"生成方案前置检查"弹窗, 直接进生成工作台
+                  router.push(`/teacher/plans/generate/${studentId}`);
                   return;
                 }
                 if (intakeStatus !== 'VERIFIED') {
@@ -1349,13 +1349,6 @@ export default function StudentDetailPage() {
       </div>
 
       {/* 原 antd Tabs + 副区 grid 已替换成 sd-tabs + Tab content 直接展开 */}
-      {showPrereqModal && student ? (
-        <PrerequisiteCheckModal
-          open={showPrereqModal}
-          student={student}
-          onCancel={() => setShowPrereqModal(false)}
-        />
-      ) : null}
     </div>
   );
 }
