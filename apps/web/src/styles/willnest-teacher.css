@@ -6466,6 +6466,11 @@
    Plan Generate Workspace v2 (与 production 对齐)
    ========================================================================== */
 .wn-teacher-scope .pgv2-page { padding: 0; position: relative; }
+/* 右侧 rail 是 fixed 浮层(top:88 right:24 w:380), 仅当方案存在(has-rail)时在 page 级统一预留
+   右内边距, 使顶部栏/学生卡/指标条/候选池整页内容都让出浮层宽度 → 浮于上层且不与任何内容碰撞。
+   收起态(rail-collapsed)只剩细 stub, 收回大部分留白让池子变宽; 无方案时不留白避免空白槽。 */
+.wn-teacher-scope .pgv2-page.has-rail { padding-right: 404px; }
+.wn-teacher-scope .pgv2-page.has-rail.rail-collapsed { padding-right: 76px; }
 
 /* Top bar */
 .wn-teacher-scope .pgv2-top {
@@ -6875,13 +6880,14 @@
 .wn-teacher-scope .pgv2-metric .sub { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
 
 /* Workbench layout */
+/* rail 改为右侧 fixed 浮层后退出网格流, 故 workbench 单列(右侧留白由 .pgv2-page 统一预留) */
 .wn-teacher-scope .pgv2-workbench {
   display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   align-items: flex-start;
 }
-@media (max-width: 1280px) { .wn-teacher-scope .pgv2-workbench { grid-template-columns: 1fr; } }
+@media (max-width: 1280px) { .wn-teacher-scope .pgv2-workbench { grid-template-columns: minmax(0, 1fr); } }
 
 .wn-teacher-scope .pgv2-pool {
   background: var(--surface);
@@ -7656,15 +7662,19 @@
 }
 .wn-teacher-scope .pgv2-hist-tbl td b { font-family: var(--font-heading); font-weight: 700; color: var(--text); }
 
-/* Rail (right sticky) */
-.wn-teacher-scope .pgv2-rail { position: sticky; top: 24px; }
+/* Rail (right floating overlay) — 对齐设计稿 pgv2-rail: position:fixed, 悬浮于全局 sticky
+   header(top-0 z-40 h-14=56px) 之上 (z-45), 贴 88px 在 header 下方; 而非 sticky ——
+   sticky 会随候选列表滚动滑到 header 底下被遮挡(这就是「当前方案」头被盖住的根因)。
+   收起态(.is-collapsed)早已是 fixed, 这里把展开态也统一成 fixed。 */
+.wn-teacher-scope .pgv2-rail { position: fixed; top: 88px; right: 24px; z-index: 45; width: 380px; }
 .wn-teacher-scope .pgv2-rail-card {
   background: var(--surface);
   border-radius: 14px;
-  box-shadow: var(--shadow-card);
+  /* 浮层用更强投影, 与下方候选卡区分层次 (对齐设计稿) */
+  box-shadow: 0 18px 48px rgba(26, 26, 25, .18), 0 2px 8px rgba(26, 26, 25, .06);
   padding: 22px 22px 20px;
   display: flex; flex-direction: column;
-  max-height: calc(100vh - 48px);
+  max-height: calc(100vh - 112px);
   overflow: hidden;
 }
 .wn-teacher-scope .pgv2-rail-card h3 {
@@ -8696,7 +8706,7 @@
 .wn-teacher-scope .pgv3-fact-grid .fv.tone-safe { color: var(--safe); }
 
 /* —— 当前方案右栏折叠 (功能层; 把手/箭头精修交 claude-design) —— */
-.wn-teacher-scope .pgv2-workbench.is-rail-collapsed { grid-template-columns: 1fr; }
+.wn-teacher-scope .pgv2-workbench.is-rail-collapsed { grid-template-columns: minmax(0, 1fr); }
 .wn-teacher-scope .pgv2-rail-collapse {
   margin-left: auto;
   display: inline-flex; align-items: center; justify-content: center;

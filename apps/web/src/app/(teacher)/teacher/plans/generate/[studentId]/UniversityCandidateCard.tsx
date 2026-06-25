@@ -215,8 +215,8 @@ export default function UniversityCandidateCard({
                   </button>
                 )}
               </span>
-              {/* grow-signals: 纯净度 / 招生类别 / 招生计划增减 —— 对齐设计稿 dchip 行, 数据全真 */}
-              {(pur || recruit || planNow != null) ? (
+              {/* grow-signals: 纯净度 / 招生类别 / 招生计划增减 / 征集 —— 对齐设计稿 dchip 行, 数据全真 */}
+              {(pur || recruit || planNow != null || (g.supplementary?.totalPlanCount ?? 0) > 0) ? (
                 <span className="grow-signals">
                   {pur ? (
                     <span className={`pgv2-dchip tone-${pur.tone}`} title={pur.desc}>纯净度 {pur.label}</span>
@@ -227,6 +227,15 @@ export default function UniversityCandidateCard({
                     </span>
                   ) : null}
                   {recruit ? <span className="pgv2-dchip tone-neutral">{recruit}</span> : null}
+                  {g.supplementary && g.supplementary.totalPlanCount > 0 ? (() => {
+                    // 组级征集 (院校优先视图同样透出, 与专业优先 CandidateCardV3 口径一致)
+                    const sy = g.supplementary.sourceYear;
+                    const rounds = g.supplementary.byYear?.[sy]?.rounds;
+                    const perRound = Array.isArray(rounds) && rounds.length ? rounds.map((r: any) => r.count).join('/') : null;
+                    return (
+                      <span className="pgv2-dchip tone-safe-soft" title={`${sy} 年本组累计征集 ${g.supplementary.totalPlanCount} 人 / ${g.supplementary.totalRounds} 轮${perRound ? ` (分轮 ${rounds.map((r: any) => `第${r.round}轮 ${r.count}人`).join(' / ')})` : ''}。征集=没招满需补录, 常伴随降分, 是可达性的积极信号`}>征集 {g.supplementary.totalPlanCount}人{perRound ? ` (${perRound})` : `/${g.supplementary.totalRounds}轮`}</span>
+                    );
+                  })() : null}
                 </span>
               ) : null}
             </div>

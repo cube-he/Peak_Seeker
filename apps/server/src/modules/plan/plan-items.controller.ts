@@ -38,6 +38,15 @@ export class PlanItemsController {
     return this.service.remove(planId, itemId, req.user.id);
   }
 
+  // 清空全部志愿 (DELETE /plans/:planId/items, 无 itemId — 与上面单删路由不冲突)
+  @Delete()
+  removeAll(
+    @Param('planId', ParseIntPipe) planId: number,
+    @Req() req: any,
+  ) {
+    return this.service.removeAll(planId, req.user.id);
+  }
+
   @Post('reorder')
   reorder(
     @Param('planId', ParseIntPipe) planId: number,

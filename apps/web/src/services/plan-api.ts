@@ -195,8 +195,13 @@ export const planApi = {
     return api.delete(`/plans/${id}`) as any;
   },
 
-  deleteItem(planId: string, itemId: number): Promise<any> {
+  deleteItem(planId: string | number, itemId: number): Promise<any> {
     return api.delete(`/plans/${planId}/items/${itemId}`) as any;
+  },
+
+  /** 清空该方案全部志愿项 (DELETE /plans/:planId/items) */
+  clearItems(planId: string | number): Promise<any> {
+    return api.delete(`/plans/${planId}/items`) as any;
   },
 
   /**

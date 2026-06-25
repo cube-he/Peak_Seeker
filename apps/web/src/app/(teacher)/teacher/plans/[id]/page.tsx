@@ -12,6 +12,7 @@ import {
   Empty,
   Input,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Spin,
@@ -255,6 +256,24 @@ export default function PlanDetailPage() {
       void message.error(e?.response?.data?.message ?? '顺序保存失败');
       setLocalItems(plan?.items ?? []); // 回滚到服务端顺序
     },
+  });
+  // 单条删除志愿 (仅 DRAFT, 后端 canEditItems 兜底)
+  const deleteItemMutation = useMutation({
+    mutationFn: (itemId: number) => planApi.deleteItem(planId, itemId),
+    onSuccess: () => {
+      void message.success('已删除该院校专业组');
+      queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+    },
+    onError: (e: any) => message.error(e?.response?.data?.message ?? '删除失败'),
+  });
+  // 清空全部志愿
+  const clearItemsMutation = useMutation({
+    mutationFn: () => planApi.clearItems(planId),
+    onSuccess: (res: any) => {
+      void message.success(`已清空 ${unwrap<any>(res)?.count ?? ''} 条志愿`);
+      queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+    },
+    onError: (e: any) => message.error(e?.response?.data?.message ?? '清空失败'),
   });
   // 段内重排 → 重建整体顺序(冲→稳→保, 各段内序保留)→ 持久化全量 itemId 顺序
   const commitRowReorder = (tier: string, from: number, to: number) => {
@@ -902,6 +921,27 @@ export default function PlanDetailPage() {
               草稿已保存 {draftSavedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
             </span>
           ) : null}
+          {status === 'DRAFT' && localItems.length > 0 ? (
+            <Popconfirm
+              title="清空全部志愿"
+              description={`确认删除当前方案的全部 ${localItems.length} 条院校专业组？此操作不可恢复。`}
+              okText="清空"
+              okButtonProps={{ danger: true }}
+              cancelText="取消"
+              onConfirm={() => clearItemsMutation.mutate()}
+            >
+              <Button
+                size="small"
+                danger
+                type="text"
+                icon={<DeleteOutlined />}
+                loading={clearItemsMutation.isPending}
+                style={{ marginLeft: draftSavedAt ? 8 : 'auto' }}
+              >
+                清空
+              </Button>
+            </Popconfirm>
+          ) : null}
         </div>
         <div className="pl-tbl-head">
           <span>顺位</span>
@@ -961,6 +1001,9 @@ export default function PlanDetailPage() {
                     onSaveMajors={(payload) =>
                       updateMajorSelectionMutation.mutate({ itemId: item.id, ...payload })
                     }
+                    canDelete={status === 'DRAFT'}
+                    deleting={deleteItemMutation.isPending && deleteItemMutation.variables === item.id}
+                    onDelete={() => deleteItemMutation.mutate(item.id)}
                   />
                 ))}
               </div>
@@ -1108,6 +1151,9 @@ function PlanRow({
   onDragStartRow,
   onDragOverRow,
   onDragEndRow,
+  canDelete,
+  deleting,
+  onDelete,
 }: {
   item: any;
   studentRank: number | null;
@@ -1125,6 +1171,9 @@ function PlanRow({
   onDragStartRow?: () => void;
   onDragOverRow?: () => void;
   onDragEndRow?: () => void;
+  canDelete?: boolean;
+  deleting?: boolean;
+  onDelete?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [annotateOpen, setAnnotateOpen] = useState(false);
@@ -1240,8 +1289,32 @@ function PlanRow({
               {hasAnnotation ? '已写' : '+'}
             </button>
           ) : (
-            <span className={`pl-row-chev ${expanded ? 'is-open' : ''}`} title={expanded ? '收起' : '查看组内专业'}>
-              <DownOutlined />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {canDelete && onDelete ? (
+                // 阻止冒泡: 否则点击会触发整行展开
+                <span onClick={(e) => e.stopPropagation()}>
+                  <Popconfirm
+                    title="删除该院校专业组"
+                    description={`确认从方案中删除「${item.universityName}${item.groupCode ? ' · ' + item.groupCode : ''}」？`}
+                    okText="删除"
+                    okButtonProps={{ danger: true }}
+                    cancelText="取消"
+                    onConfirm={onDelete}
+                  >
+                    <Button
+                      size="small"
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      loading={deleting}
+                      title="从方案中删除此院校专业组"
+                    />
+                  </Popconfirm>
+                </span>
+              ) : null}
+              <span className={`pl-row-chev ${expanded ? 'is-open' : ''}`} title={expanded ? '收起' : '查看组内专业'}>
+                <DownOutlined />
+              </span>
             </span>
           )}
         </span>

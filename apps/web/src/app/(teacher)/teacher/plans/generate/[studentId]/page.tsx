@@ -14,6 +14,7 @@ import {
   InputNumber,
   Modal,
   Pagination,
+  Popconfirm,
   Select,
   Slider,
   Space,
@@ -1164,32 +1165,6 @@ export default function GeneratePlanPage() {
     return acc;
   }, [planItems]);
 
-  // 方案体检（#5）: 按行业经验 25/42/33 比例算偏差，输出待改进项
-  const planHealth = useMemo(() => {
-    const total = planItems.length;
-    if (total === 0) return null;
-    const expectedRush = Math.round(total * 0.25);
-    const expectedStable = Math.round(total * 0.42);
-    const expectedSafe = Math.max(0, total - expectedRush - expectedStable);
-    const rushDelta = tierStats.rush - expectedRush;
-    const stableDelta = tierStats.stable - expectedStable;
-    const safeDelta = tierStats.safe - expectedSafe;
-    const issues: string[] = [];
-    if (rushDelta < -1) issues.push(`冲档少 ${-rushDelta} 个（建议 ${expectedRush}，当前 ${tierStats.rush}）`);
-    if (rushDelta > 3) issues.push(`冲档过多 ${rushDelta} 个，落榜风险高`);
-    if (stableDelta < -2) issues.push(`稳档少 ${-stableDelta} 个（建议 ${expectedStable}，当前 ${tierStats.stable}）`);
-    if (safeDelta < -1) issues.push(`保底少 ${-safeDelta} 个（建议 ${expectedSafe}），录取无兜底`);
-    // 同校组数集中度: 一所学校占 4 组以上多半是误操作(2026-06-12 演练实测一口气加了同校 7 组无任何提示)
-    const uniCount = new Map<string, number>();
-    planItems.forEach((it: any) => {
-      const name = it.universityName ?? String(it.universityId ?? '');
-      if (name) uniCount.set(name, (uniCount.get(name) ?? 0) + 1);
-    });
-    uniCount.forEach((n, name) => {
-      if (n >= 4) issues.push(`「${name}」已占 ${n} 组，过于集中，建议分散院校`);
-    });
-    return { total, expectedRush, expectedStable, expectedSafe, rushDelta, stableDelta, safeDelta, issues };
-  }, [planItems, tierStats]);
   // 提交就绪度: 后端要求"志愿数 === 批次上限 且 无未解决严重风险"才放行,
   // 否则点了才撞 400/409。这里把门槛前置成可见信息 + 禁用按钮。
   // 上限优先取 plan 详情的 batchConfig.maxGroupCount, 退化到批次列表里的同名字段。
@@ -1546,6 +1521,19 @@ export default function GeneratePlanPage() {
     },
   });
 
+  // 清空当前方案全部志愿
+  const clearItemsMutation = useMutation({
+    mutationFn: () => planApi.clearItems(String(planId)),
+    onSuccess: () => {
+      void message.success('已清空当前方案志愿');
+      queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+      refreshRisks();
+    },
+    onError: (error: any) => {
+      void message.error(error?.response?.data?.message ?? '清空失败');
+    },
+  });
+
   // 导出 PDF（#10）
   const exportMutation = useMutation({
     mutationFn: () => planApi.exportPlan(String(planId)),
@@ -1787,7 +1775,7 @@ export default function GeneratePlanPage() {
     : '综合推荐';
   const intakeReady = student?.intakeStatus === 'VERIFIED';
   return (
-    <div className="view-transition pgv2-page">
+    <div className={`view-transition pgv2-page ${planId ? 'has-rail' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
       {/* —— Region 1: pgv2-top 返回 + eyebrow + 标题 + 学生 + 批次 + 操作 —— */}
       <div className="pgv2-top">
         <div className="pgv2-top-l">
@@ -3122,6 +3110,27 @@ export default function GeneratePlanPage() {
                     <span className="pgv2-tag tone-accent">V{selectedBatchPlan.versionNo ?? 1}</span>
                   ) : null}
                   {planFetching ? <Spin size="small" style={{ marginLeft: 8 }} /> : null}
+                  {plan?.status === 'DRAFT' && planItems.length > 0 ? (
+                    <Popconfirm
+                      title="清空全部志愿"
+                      description={`确认删除当前方案的全部 ${planItems.length} 条院校专业组？此操作不可恢复。`}
+                      okText="清空"
+                      okButtonProps={{ danger: true }}
+                      cancelText="取消"
+                      onConfirm={() => clearItemsMutation.mutate()}
+                    >
+                      <Button
+                        size="small"
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        loading={clearItemsMutation.isPending}
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        清空
+                      </Button>
+                    </Popconfirm>
+                  ) : null}
                   <button type="button" className="pgv2-rail-collapse" onClick={toggleRail} title="收起当前方案">
                     <DoubleRightOutlined />
                   </button>
@@ -3146,50 +3155,6 @@ export default function GeneratePlanPage() {
                     <span className="num">{planItems.length}{maxGroupCount != null ? ` / ${maxGroupCount}` : ''}</span>
                   </div>
                 </div>
-
-                {/* 方案体检 (#5): pgv3-health 进度条 + 目标线 + 检查项 (25/42/33 经验比例) */}
-                {/* 2026-06-25 专业优先模式下隐藏体检卡 — 减少决策干扰, 院校优先模式保留 */}
-                {viewMode !== 'MAJOR' && planHealth ? (() => {
-                  const hTotal = tierStats.rush + tierStats.stable + tierStats.safe || 1;
-                  const pct = {
-                    rush: Math.round((tierStats.rush / hTotal) * 100),
-                    stable: Math.round((tierStats.stable / hTotal) * 100),
-                    safe: Math.round((tierStats.safe / hTotal) * 100),
-                  };
-                  const checks: Array<{ ok: boolean; text: string }> = planHealth.issues.length === 0
-                    ? [{ ok: true, text: `梯度结构均衡 · 冲 ${pct.rush}% / 稳 ${pct.stable}% / 保 ${pct.safe}%, 接近经验 25/42/33` }]
-                    : planHealth.issues.map((t) => ({ ok: false, text: t }));
-                  if (tierStats.safe >= 4) {
-                    checks.unshift({ ok: true, text: `保底充足 · 当前 ${tierStats.safe} 条, ≥4 条确保有学上` });
-                  }
-                  return (
-                    <div className="pgv3-health">
-                      <h4>🛡 方案体检 <span className="ratio">经验比例 冲25 / 稳42 / 保33</span></h4>
-                      <div className="pgv3-health-bar">
-                        <div className="seg-rush" style={{ width: pct.rush + '%' }} />
-                        <div className="seg-stable" style={{ width: pct.stable + '%' }} />
-                        <div className="seg-safe" style={{ width: pct.safe + '%' }} />
-                      </div>
-                      <div className="pgv3-health-target">
-                        <span className="tick" data-l="25" style={{ left: '25%' }} />
-                        <span className="tick" data-l="67" style={{ left: '67%' }} />
-                      </div>
-                      <div className="pgv3-health-legend">
-                        <span className="hl"><span className="dot rush" />冲 {pct.rush}%</span>
-                        <span className="hl"><span className="dot stable" />稳 {pct.stable}%</span>
-                        <span className="hl"><span className="dot safe" />保 {pct.safe}%</span>
-                      </div>
-                      <div className="pgv3-health-items">
-                        {checks.map((c, i) => (
-                          <div className={`pgv3-hcheck ${c.ok ? 'ok' : 'warn'}`} key={i}>
-                            <span className="ic">{c.ok ? '✓' : '⚠'}</span>
-                            <span>{c.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })() : null}
 
                 {/* 已选志愿列表 (HTML5 drag-and-drop 排序, onDragEnd 调 reorderItems 持久化) */}
                 <div className="pgv2-rail-list">
@@ -3282,48 +3247,7 @@ export default function GeneratePlanPage() {
                   )}
                 </div>
 
-                {/* 2026-06-25 专业优先模式下隐藏「服从调剂规则」提示 */}
-                {viewMode !== 'MAJOR' ? (
-                  <div className="pgv2-rail-tip">
-                    <strong>服从调剂规则:</strong>
-                    少于等于 6 个专业时全部带入,超过 6 个时优先学生意向专业
-                  </div>
-                ) : null}
-
                 <div className="pgv2-hints">
-                  {/* 2026-06-25 专业优先模式下隐藏「下一步建议」+「还不能提交」横幅 — 保留下方提交按钮 */}
-                  {viewMode !== 'MAJOR' ? (
-                    <>
-                      <h4>下一步建议</h4>
-                      <div className="pgv2-hint tone-accent">
-                        <span className="ic"><InfoCircleOutlined /></span>
-                        <span>优先补足稳 / 稳保,要求学生位次覆盖组门槛位次。</span>
-                      </div>
-                      <div className="pgv2-hint tone-rush">
-                        <span className="ic"><WarningOutlined /></span>
-                        <span>极冲只做备选,不占正式推荐名额。</span>
-                      </div>
-                      <div className="pgv2-hint tone-safe">
-                        <span className="ic"><CheckOutlined /></span>
-                        <span>软性风险专业先复核限制,再加入方案。</span>
-                      </div>
-                      {!submitReadiness.ok && plan?.status === 'DRAFT' && planItems.length > 0 ? (
-                        <div
-                          style={{
-                            marginTop: 12,
-                            padding: '6px 10px',
-                            borderRadius: 6,
-                            fontSize: 12,
-                            lineHeight: 1.5,
-                            background: 'rgba(251, 191, 36, 0.14)',
-                            border: '1px solid rgba(251, 191, 36, 0.45)',
-                          }}
-                        >
-                          ⚠ 还不能提交:{submitReadiness.reason}
-                        </div>
-                      ) : null}
-                    </>
-                  ) : null}
                   {plan?.status === 'PENDING_REVIEW' ? (
                     <Button
                       danger
