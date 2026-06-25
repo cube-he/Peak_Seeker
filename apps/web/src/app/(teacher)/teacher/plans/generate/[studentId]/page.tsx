@@ -42,7 +42,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type EligibleBatch } from '@/services/student-api';
 import { planApi, type CandidateGroupSort, type CandidateSortDir } from '@/services/plan-api';
-import { CandidateCardV3 } from './CandidateCardV3';
+import { CandidateCardV3, RankRuler } from './CandidateCardV3';
 import UniversityCandidateCard from './UniversityCandidateCard';
 import PlanMajorSelectionEditor from '../../components/PlanMajorSelectionEditor';
 import {
@@ -3453,7 +3453,7 @@ export default function GeneratePlanPage() {
       {/* —— 专业组复核 Drawer (保留现有 antd Drawer 实现) —— */}
       <Drawer
         width={880}
-        rootClassName={styles.drawerRoot}
+        rootClassName={cx('wn-teacher-scope', styles.drawerRoot)}
         title={activeDetail ? (
           <div>
             <div className={styles.drawerTitle}>
@@ -3517,6 +3517,49 @@ export default function GeneratePlanPage() {
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '4px 0 14px' }}>
               {getDecisionText(activeDetail.group, activeDetail.major, studentRankForDecision)}
             </div>
+
+            {viewMode === 'UNIVERSITY' ? (
+              (() => {
+                const g = activeDetail.group;
+                const adj = getAdjustedRank(g, activeDetail.major);
+                const gap = formatRankGap(studentRankForDecision, adj);
+                const tone = groupHasNoHistoryLine(g) ? 'muted' : gradientTone(gradientTier(g));
+                const purityLabel = g.purity
+                  ? ({ S: '干净', A: '较纯', B: '较乱', C: '混乱' } as Record<string, string>)[g.purity.level] ?? g.purity.level
+                  : null;
+                return (
+                  <>
+                    {/* 位次定位 */}
+                    <div className="pgv2-drawer-sect">
+                      <h4>位次定位</h4>
+                      <RankRuler
+                        studentRank={studentRankForDecision}
+                        groupMinRank={g.groupMinRank}
+                        adjusted={adj}
+                        noLine={groupHasNoHistoryLine(g)}
+                        gapText={gap.text}
+                      />
+                    </div>
+
+                    {/* 关键事实 */}
+                    <div className="pgv2-drawer-sect">
+                      <h4>关键事实</h4>
+                      <div className="pgv3-fact-grid">
+                        <div className="fct"><span className="fl">梯度</span><span className={`fv tone-${tone}`}>{groupGradientLabel(g)}</span></div>
+                        <div className="fct"><span className="fl">专业组纯净度</span><span className="fv">{purityLabel ?? '—'}</span></div>
+                        <div className="fct"><span className="fl">组最低位次 / 分</span><span className="fv">{g.groupMinRank != null ? g.groupMinRank.toLocaleString() : '—'} <i>/ {g.groupMinScore ?? '—'}</i></span></div>
+                        <div className="fct"><span className="fl">修正后位次</span><span className="fv">{adj != null ? adj.toLocaleString() : '—'}</span></div>
+                        <div className="fct"><span className="fl">招生计划</span><span className="fv">{g.currentPlanCount ?? '—'} <i>人</i></span></div>
+                        <div className="fct"><span className="fl">代表专业</span><span className="fv">{g.groupName || '—'}</span></div>
+                      </div>
+                    </div>
+
+                    <div className="pgv2-source-note"><InfoCircleOutlined />院校优先为汇总口径。完整专业明细、数据依据与风险复核，请切到「专业优先」视图查看该组卡片。</div>
+                  </>
+                );
+              })()
+            ) : (
+            <>
 
             <section className={styles.drawerSection}>
               <h3>专业列表</h3>
@@ -3622,6 +3665,8 @@ export default function GeneratePlanPage() {
                 </div>
               </div>
             </section>
+            </>
+            )}
           </div>
         ) : null}
       </Drawer>

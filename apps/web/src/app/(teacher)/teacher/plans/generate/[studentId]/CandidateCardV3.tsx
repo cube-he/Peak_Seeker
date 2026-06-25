@@ -184,7 +184,7 @@ function DistFlag({ distKey }: { distKey: string }) {
 }
 
 // 位次刻度尺: 冲 ←— 你的位次 —→ 保, marker 落在组门槛相对学生的位置
-function RankRuler({ studentRank, groupMinRank, adjusted, ratio, noLine, gapText }: {
+export function RankRuler({ studentRank, groupMinRank, adjusted, ratio, noLine, gapText }: {
   studentRank?: number; groupMinRank?: number | null; adjusted?: number | null; ratio?: number; noLine?: boolean; gapText?: string;
 }) {
   if (noLine || groupMinRank == null) {
