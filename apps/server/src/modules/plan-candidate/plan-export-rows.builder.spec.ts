@@ -67,6 +67,7 @@ describe('buildExportSheet', () => {
     const sheet = buildExportSheet({ plan, enrichedGroups: [enrichedGroup], years: YEARS });
 
     expect(sheet.student).toEqual({ name: '张三', examTypeLabel: '物理类', score: 670, rank: 1000 });
+    expect(sheet.plan).toEqual({ id: 7, name: 'v1 方案', year: 2026, batchName: '本科批', version: 1 });
     expect(sheet.years).toEqual([2023, 2024, 2025]);
     expect(sheet.groups).toHaveLength(1);
 

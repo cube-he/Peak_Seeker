@@ -188,7 +188,7 @@ export function buildExportSheet(input: {
       name: plan.name,
       year: plan.year,
       batchName: plan.batchName ?? null,
-      version: plan.version ?? null,
+      version: plan.versionNo ?? plan.version ?? null,
     },
     years,
     groups,
