@@ -2062,9 +2062,10 @@ function EstimatedRankHint() {
     ? '历史'
     : null;
 
-  // 2026 一分一段表通常 6 月底才出, 早期用 2025 代理 (与 RankInput.tsx 同步)
+  // 2026 一分一段已入库(2026-06-25), 直接按考试年份查, 不再强制回退 2025 代理。
+  // (旧逻辑 cap 到 2025 → 即便 2026 有数据也只查 2025, 与后端 rankCheck(已用2026)对不上, 报"相差N位"。)
   const requestedYear = typeof examYear === 'number' ? examYear : null;
-  const effectiveYear = requestedYear && requestedYear <= 2025 ? requestedYear : 2025;
+  const effectiveYear = requestedYear ?? 2026;
 
   const debouncedTotal = useDebounceValue(total, 500);
   const debouncedYear = useDebounceValue(effectiveYear, 500);
