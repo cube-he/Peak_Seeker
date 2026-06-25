@@ -865,8 +865,9 @@ export default function GeneratePlanPage() {
   const [includeRegionMismatch, setIncludeRegionMismatch] = useState(false);
   // 是否带出"硬规则不符"(选科/再选/性别/健康/户籍/民族)放各组 hardFailMajors 桶: 灰显+禁加入。默认关。
   const [includeHardFails, setIncludeHardFails] = useState(false);
-  const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MATCH');
-  // 排序方向 (GROUP 视图): DESC=轴默认, ASC=翻转; 切轴时重置回 DESC
+  // 默认按"专业最低分·分高"排(专业组从分高至分低), 而非综合推荐 (老师要求 2026-06-25)。
+  const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MIN_SCORE');
+  // 排序方向 (GROUP 视图): DESC=轴默认(分高在前), ASC=翻转; 切轴时重置回 DESC
   const [candidateSortDir, setCandidateSortDir] = useState<CandidateSortDir>('DESC');
   // 视图模式: MAJOR=专业组卡(专业优先); UNIVERSITY=院校卡(院校优先).
   // 默认读 URL ?view=, 否则后续 effect 跟随 plan/student.priorityMode 自动定一次.
