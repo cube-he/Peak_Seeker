@@ -7123,15 +7123,16 @@
   /* 无史线卡 grade-badge 不渲染时, actions 用 auto 顶到列底, 与其他卡 actions 对齐 */
   margin-top: auto;
 }
-/* 小图标行(对比 / 隐藏)—— 右上角横排 */
+/* 小图标行(对比 / 移除)—— 位于加入按钮上方,平分其宽度 */
 .wn-teacher-scope .pgv2-card-iconcol {
-  display: flex; flex-direction: row; gap: 6px; justify-content: flex-end;
+  display: flex; flex-direction: row; gap: 7px;
 }
-/* 主 CTA:占满右栏剩余高度 */
-.wn-teacher-scope .pgv2-card-cta { display: flex; flex: 1 1 auto; }
+.wn-teacher-scope .pgv2-card-iconcol .pgv2-action-btn { flex: 1; width: auto; height: 34px; }
+/* 主 CTA:填满图标行下方的剩余高度(填满但限高以保美观) */
+.wn-teacher-scope .pgv2-card-cta { display: flex; flex: 1 1 auto; min-height: 52px; max-height: 124px; }
 .wn-teacher-scope .pgv2-add-btn.tall {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; min-height: 64px; padding: 12px 14px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; height: 100%; min-height: 52px; padding: 12px 14px;
   border-radius: 12px; border: 0; cursor: pointer;
   font-family: var(--font-body); font-size: 15px; font-weight: 700; line-height: 1.25;
   background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: #fff;
@@ -7139,8 +7140,8 @@
   transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 .wn-teacher-scope .pgv2-add-btn.tall:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,58,95,.32); color: #fff; }
-.wn-teacher-scope .pgv2-add-btn.tall .ic { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; }
-.wn-teacher-scope .pgv2-add-btn.tall .ic svg { width: 22px; height: 22px; }
+.wn-teacher-scope .pgv2-add-btn.tall .ic { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
+.wn-teacher-scope .pgv2-add-btn.tall .ic svg { width: 20px; height: 20px; }
 .wn-teacher-scope .pgv2-add-btn.tall span:last-child { text-align: center; }
 .wn-teacher-scope .pgv2-add-btn.tall.soft {
   background: linear-gradient(135deg, var(--accent), var(--accent-light)); box-shadow: 0 2px 10px rgba(184,134,11,.28);
@@ -7148,8 +7149,14 @@
 }
 .wn-teacher-scope .pgv2-add-btn.tall.soft .ic, .wn-teacher-scope .pgv2-add-btn.tall.soft .ic svg { width: 18px; height: 18px; }
 .wn-teacher-scope .pgv2-add-btn.tall.added {
-  background: var(--safe-fixed); color: var(--safe); border: 1.5px solid var(--safe); box-shadow: none;
+  background: var(--safe-fixed); color: var(--safe); border: 1px solid rgba(39,103,73,.28); box-shadow: none;
+  font-weight: 600;
 }
+.wn-teacher-scope .pgv2-add-btn.tall.added .ic {
+  width: 24px; height: 24px; border-radius: 999px;
+  background: var(--safe); color: #fff; flex: 0 0 auto;
+}
+.wn-teacher-scope .pgv2-add-btn.tall.added .ic svg { width: 14px; height: 14px; }
 .wn-teacher-scope .pgv2-add-btn.tall.added:hover { transform: none; box-shadow: none; color: var(--safe); }
 .wn-teacher-scope .pgv2-add-btn.tall.locked {
   background: var(--surface-dim); color: var(--text-faint); border: 1.5px solid var(--border);
@@ -7169,7 +7176,7 @@
 .wn-teacher-scope .pgv2-tag.tone-neutral.strong { color: var(--text-secondary); font-weight: 600; }
 
 /* #2 位次刻度尺 */
-.wn-teacher-scope .pgv2-ruler { margin: 9px 0 4px; max-width: 460px; }
+.wn-teacher-scope .pgv2-ruler { margin: 9px 0 4px; max-width: none; }
 .wn-teacher-scope .pgv2-ruler .rk-track {
   position: relative; height: 10px; border-radius: 999px; overflow: hidden;
   background: var(--surface-dim);
@@ -7222,8 +7229,8 @@
 .wn-teacher-scope .pgv2-mbar .mb-track { display: block; height: 3px; border-radius: 999px; background: var(--surface-dim); margin-top: 5px; overflow: hidden; }
 .wn-teacher-scope .pgv2-mbar .mb-fill { display: block; height: 100%; border-radius: 999px; background: var(--primary); opacity: .55; }
 .wn-teacher-scope .pgv2-action-btn {
-  width: 26px; height: 26px;
-  border-radius: 6px;
+  width: 30px; height: 28px;
+  border-radius: 7px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-muted);
