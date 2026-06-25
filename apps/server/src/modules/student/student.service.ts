@@ -451,6 +451,7 @@ export class StudentService {
     examType: string | null;
     examYear: number | null;
     province: string | null;
+    examLocationProvince?: string | null;
   }): Promise<'本科' | '专科' | null> {
     if (profile.totalScore == null) return null;
     const examTypeAliases =
@@ -458,7 +459,8 @@ export class StudentService {
       : profile.examType === 'HISTORY' ? ['历史', '历史类']
       : null;
     if (!examTypeAliases) return null;
-    const province = profile.province ?? '四川';
+    // 本科线按"高考报名省"查(随迁子女户籍≠报名省, 用户籍会查不到线→eligibleLevel 误判 null)
+    const province = profile.examLocationProvince ?? profile.province ?? '四川';
     const examYear = profile.examYear ?? 2026;
     const batchAliases = ['本科批次', '本科批', '本科'];
     const findLine = async (year: number) => {
@@ -983,7 +985,8 @@ export class StudentService {
     const validBatchRows = await this.prisma.batchConfig.findMany({
       where: {
         year: student.examYear ?? 2026,
-        province: student.province ?? '四川',
+        // 批次结构按"高考报名省"查(随迁子女户籍≠报名省, 用户籍会查不到→批次全判"未知")
+        province: student.examLocationProvince ?? student.province ?? '四川',
         examType: examTypeLabel,
       },
       select: { batch: true },
