@@ -1518,7 +1518,9 @@ export class PlanCandidateService {
     });
     const page = q.page ?? 1;
     const pageSize = q.pageSize ?? 20;
-    const rankWindow = await this.resolveRankWindow(q.minScore, q.maxScore, source.scoreSegmentYear, subjects);
+    // 分数条按"历史录取年(admissionBaselineYear, 通常 2025)"的一分一段换算 → 与卡片"历史最低分/位次"同口径,
+    // 而非考生当年(scoreSegmentYear/2026)。否则选 500-550 出来的组历史最低分会不在区间(见 rank-window-filter 注释)。
+    const rankWindow = await this.resolveRankWindow(q.minScore, q.maxScore, source.admissionBaselineYear, subjects);
     const cacheKey = this.candidateGroupCacheKey(plan, q);
     const cached = this.getCandidateGroupCache(cacheKey);
     if (cached) {
@@ -2369,7 +2371,7 @@ export class PlanCandidateService {
       groups: resultGroups,
       availableTiers,
       appliedTier: q.tier ?? 0,
-      predictedScoreRange: await this.computePredictedScoreRange(resultGroups, source.scoreSegmentYear, subjects),
+      predictedScoreRange: await this.computePredictedScoreRange(resultGroups, source.admissionBaselineYear, subjects),
     };
     this.setCandidateGroupCache(cacheKey, fullResult);
     if (q.groupBy === 'UNIVERSITY') {

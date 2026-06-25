@@ -5,7 +5,7 @@ import {
   poolRankBounds,
 } from './rank-window-filter';
 
-const grp = (point: number | null) => ({ predictedMinRank: point == null ? null : { point } });
+const grp = (point: number | null) => ({ groupMinRank: point });
 
 describe('groupInRankWindow', () => {
   const w = { minRank: 5000, maxRank: 12000 };
