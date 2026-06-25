@@ -80,6 +80,9 @@ export const STAGE_1_REQUIRED = [
 ] as const;
 
 /**
+ * @deprecated 2026-06-25 业务收窄后由 REQUIRED_FIELDS (单层) 替代.
+ * 保留导出供未迁移的旧调用方 (短期), 全部迁完后删除.
+ *
  * 推荐算法的硬约束字段 — 生成方案的最小集合.
  * 业务定义 (2026-05-28): 只要这些字段填齐 + provincialRank 算好, 就可生成方案.
  */
@@ -104,6 +107,9 @@ export const CORE_FOR_RECOMMEND = [
 ] as const;
 
 /**
+ * @deprecated 2026-06-25 业务收窄后由 REQUIRED_FIELDS (单层) 替代.
+ * 保留导出供未迁移的旧调用方 (短期), 全部迁完后删除.
+ *
  * 批次资格判定必填 (2026-06-10 业务定调: 与 CORE_FOR_RECOMMEND 同为生成方案硬门槛).
  * 缺任一字段时, 地域专项 (国家专项/省级师范/地方优师/乡村振兴/区域均衡/少民预科)、
  * 农村类 (地方专项/高校专项/农村医学)、年龄类 (军校/公安/军士)、民族类批次
@@ -127,6 +133,9 @@ export const CORE_FOR_ELIGIBILITY = [
 ] as const;
 
 /**
+ * @deprecated 2026-06-25 业务收窄后由 REQUIRED_FIELDS (单层) 替代.
+ * 保留导出供未迁移的旧调用方 (短期), 全部迁完后删除.
+ *
  * 体检必填 (2026-06-10 业务定调: 同为生成方案硬门槛).
  * 军队/公安/司法/航海/消防/定向军士的体检硬规则输入.
  */
@@ -212,3 +221,94 @@ export type TeacherOnlyField = typeof TEACHER_ONLY_FIELDS[number];
 
 /** 注：realName/phone/gender/ethnicity 在 User 模型上，余字段在 StudentProfile 模型上 */
 export const USER_LEVEL_FIELDS = ['realName', 'phone', 'gender', 'ethnicity', 'birthDate'] as const;
+
+/**
+ * 2026-06-25 业务定调收窄: 生成方案唯一硬约束 = 这 23 项
+ * (色觉 UI 单 enum, 但 DB 保留 colorBlind+colorWeak 两列, 这里两列都必填).
+ *
+ * 替代 (但暂保留旧导出): CORE_FOR_RECOMMEND + CORE_FOR_ELIGIBILITY + PHYSICAL_REQUIRED.
+ * 旧导出仍可用但不再被 progress.service 引用; 第三方调用方迁移完后再删.
+ */
+export const REQUIRED_FIELDS = [
+  // 基础 (User 表)
+  'realName',
+  'gender',
+  'phone',
+  'ethnicity',
+  // 户籍 (StudentProfile)
+  'province',
+  'city',
+  'county',
+  'isRural',
+  // 高考报名地
+  'examLocationProvince',
+  'examLocationCity',
+  'examLocationCounty',
+  // 色觉 (UI 单 enum, DB 双布尔: 正常=两个 false, 色盲=colorBlind=true, 色弱=colorWeak=true)
+  'colorBlind',
+  'colorWeak',
+  // 考试成绩 (整张「考试成绩」卡)
+  'examYear',
+  'examSource',
+  'firstChoice',
+  'reChoices',
+  'scoreChinese',
+  'scoreMath',
+  'scoreEnglish',
+  'scoreFirstChoice',
+  'scoreSub1',
+  'scoreSub2',
+] as const;
+
+/**
+ * 推荐填写 (影响完整度评分, 不阻塞"生成方案"按钮):
+ * 学生端可见 STAGE_1/2/3 字段集去掉 REQUIRED_FIELDS 之后的余下集.
+ */
+export const RECOMMENDED_FIELDS = [
+  'parentPhone',
+  'politicalStatus',
+  'birthDate',
+  'examType',
+  'formFiller',
+  'totalScore',
+  'bonusPolicyStatus',
+  'bonusItems',
+  'height',
+  'weight',
+  'visionLeft',
+  'visionRight',
+  'visionLeftCorrected',
+  'visionRightCorrected',
+  'medicalHistory',
+  'physicalLimits',
+  'preferredProvinces',
+  'preferredCities',
+  'preferredMajors',
+  'preferredUniversities',
+  'preferredMajorCategories',
+  'priorityMode',
+  'careerPlan',
+  'careerDirection',
+  'preferredBatches',
+  'remoteAreaAcceptance',
+  'coldMajorAcceptance',
+  'stayPreference',
+  'preferredTags',
+  'excludedProvinces',
+  'excludedCities',
+  'excludedUniversities',
+  'excludedMajors',
+  'excludedMajorCategories',
+  'interests',
+  'personalityType',
+  'selfDescription',
+  'militaryInterest',
+  'teacherInterest',
+  'tuitionBudget',
+  'acceptSinoForeign',
+  'acceptPrivate',
+  'acceptCooperation',
+  'otherRequirements',
+  'highSchool',
+  'classInfo',
+] as const;

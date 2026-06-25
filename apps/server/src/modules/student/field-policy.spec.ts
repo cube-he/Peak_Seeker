@@ -7,6 +7,8 @@ import {
   STAGE_2_FIELDS,
   STAGE_3_FIELDS,
   ALL_STUDENT_EDITABLE_FIELDS,
+  REQUIRED_FIELDS,
+  RECOMMENDED_FIELDS,
 } from './field-policy';
 
 describe('field-policy', () => {
@@ -104,5 +106,39 @@ describe('FIELD_TO_PROVENANCE_GROUP', () => {
     expect(FIELD_TO_PROVENANCE_GROUP.city).toBe('hukou');
     expect(FIELD_TO_PROVENANCE_GROUP.county).toBe('hukou');
     expect(FIELD_TO_PROVENANCE_GROUP.isRural).toBe('hukou');
+  });
+});
+
+describe('field-policy REQUIRED/RECOMMENDED contracts', () => {
+  it('REQUIRED_FIELDS 恰为 23 项', () => {
+    expect(REQUIRED_FIELDS.length).toBe(23);
+  });
+
+  it('REQUIRED_FIELDS 含 22 项核心 + colorWeak (色觉单 enum 拆出)', () => {
+    expect(new Set(REQUIRED_FIELDS)).toEqual(new Set([
+      'realName', 'gender', 'phone', 'ethnicity',
+      'province', 'city', 'county', 'isRural',
+      'examLocationProvince', 'examLocationCity', 'examLocationCounty',
+      'colorBlind', 'colorWeak',
+      'examYear', 'examSource', 'firstChoice', 'reChoices',
+      'scoreChinese', 'scoreMath', 'scoreEnglish',
+      'scoreFirstChoice', 'scoreSub1', 'scoreSub2',
+    ]));
+  });
+
+  it('REQUIRED_FIELDS 与 RECOMMENDED_FIELDS 无重叠', () => {
+    const reqSet = new Set<string>(REQUIRED_FIELDS);
+    for (const f of RECOMMENDED_FIELDS) {
+      expect(reqSet.has(f)).toBe(false);
+    }
+  });
+
+  it('REQUIRED 不再包含历史必填 (height/weight/visionLeft/...)', () => {
+    const reqSet = new Set<string>(REQUIRED_FIELDS);
+    for (const f of ['height', 'weight', 'visionLeft', 'visionRight',
+                     'totalScore', 'birthDate', 'politicalStatus', 'bonusPolicyStatus',
+                     'preferredMajors', 'priorityMode', 'parentPhone']) {
+      expect(reqSet.has(f)).toBe(false);
+    }
   });
 });
