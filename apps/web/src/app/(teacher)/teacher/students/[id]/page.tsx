@@ -93,7 +93,7 @@ const FIELD_TO_SUBTAB: Record<string, string> = {
   gender: 'required', ethnicity: 'required', politicalStatus: 'required', highSchool: 'required', classInfo: 'required',
   province: 'required', city: 'required', county: 'required', isRural: 'required',
   examLocationProvince: 'required', examLocationCity: 'required', examLocationCounty: 'required',
-  examType: 'required', firstChoice: 'required', reChoices: 'required', examYear: 'required', examSource: 'required',
+  examType: 'required', firstChoice: 'required', reChoices: 'required', examYear: 'required',
   scoreChinese: 'required', scoreMath: 'required', scoreEnglish: 'required',
   scoreFirstChoice: 'required', scoreSub1: 'required', scoreSub2: 'required',
   totalScore: 'required', provincialRank: 'required',
@@ -1183,6 +1183,8 @@ export default function StudentDetailPage() {
                   student.provincialRank ??
                   student.rankCheck?.calculatedRank ??
                   undefined,
+                // 高考年份选择器已删除, 固定 2026(隐藏 field) → 新建学生也带上年份
+                examYear: student.examYear ?? 2026,
               }}
             >
               <div className="form-body">
@@ -1779,35 +1781,10 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
       {/* examType / firstChoice 靠 setFieldsValue 写入, 必须注册成 field entity, 否则 useWatch 读不到 → chip 高亮/科类/首选列全失效 */}
       <Form.Item name="examType" hidden><Input /></Form.Item>
       <Form.Item name="firstChoice" hidden><Input /></Form.Item>
-      {/* 顶部: 年份 / 来源 */}
-      <div className="sd-form-grid" style={{ marginBottom: 0 }}>
-        <div className="field">
-          <label>高考年份</label>
-          <Form.Item name="examYear" noStyle>
-            <Select
-              placeholder="年份"
-              options={[
-                { value: 2026, label: '2026' },
-                { value: 2025, label: '2025' },
-                { value: 2024, label: '2024' },
-              ]}
-            />
-          </Form.Item>
-        </div>
-        <div className="field">
-          <label>成绩来源</label>
-          <Form.Item name="examSource" noStyle>
-            <Select
-              placeholder="来源"
-              options={[
-                { value: 'REAL_EXAM', label: '高考实考' },
-                { value: 'MOCK_EXAM', label: '模考' },
-                { value: 'ESTIMATED', label: '估分' },
-              ]}
-            />
-          </Form.Item>
-        </div>
-      </div>
+      {/* 高考年份固定 2026(单届产品, 选择器多余) — 仍注册为隐藏 field, 让值随档案落库,
+          避免新建学生 examYear 为空导致按年份取批次/分数线时查不到。
+          "成绩来源" 选择器(REAL_EXAM/MOCK_EXAM/ESTIMATED)与后端 ExamSource 枚举不匹配且非必填, 已删除。 */}
+      <Form.Item name="examYear" hidden><Input /></Form.Item>
 
       {/* ① 选科组合 — 勾选 / 复选框, 不录分 */}
       <div className="exam-block">
