@@ -685,6 +685,12 @@ export default function PlanDetailPage() {
   // ── 次动作（折叠到 Dropdown） ──
   const moreMenuItems = [
     {
+      key: 'parent-sheet',
+      icon: <ExportOutlined />,
+      label: '家长版数据表',
+      onClick: () => window.open(`/plan-sheet/${planId}`, '_blank', 'noopener'),
+    },
+    {
       key: 'export',
       icon: <ExportOutlined />,
       label: '导出 PDF',
