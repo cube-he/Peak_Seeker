@@ -686,8 +686,8 @@ export default function StudentDetailPage() {
   const initialTab = (searchParams.get('tab') as DetailTab) || 'profile';
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
 
-  // sd-subtabs 单选: 初值 basic; 缺字段定位时切到对应子页 (key 与 CHECK_TO_SECTION 对齐)
-  const [subTab, setSubTab] = useState<string>('basic');
+  // sd-subtabs 单选: 初值 required; 缺字段定位时切到对应子页 (key 与 CHECK_TO_SECTION 对齐)
+  const [subTab, setSubTab] = useState<string>('required');
   const jumpToSection = (sectionKey: string | null) => {
     if (!sectionKey) return;
     setActiveTab('profile');
@@ -1129,22 +1129,20 @@ export default function StudentDetailPage() {
       {/* —— Tab content (antd Form / Card / 子组件保留 ) —— */}
       <div className="fade-up d4">
         {activeTab === 'profile' && (() => {
-          // —— 资料 tab: 6 子页 sd-subtabs + pf-sechead + sd-savebar (复刻 student-detail.jsx) ——
+          // —— 资料 tab: 2 子页 (必填 / 选填) sd-subtabs + pf-sechead + sd-savebar (复刻 student-detail.jsx) ——
           const SUBTABS = [
-            { key: 'basic', label: '基础信息' },
-            { key: 'household', label: '户籍信息' },
-            { key: 'exam', label: '考试成绩' },
-            { key: 'bonus', label: '加分政策' },
-            { key: 'health', label: '健康条件' },
-            { key: 'preference', label: '偏好与规划' },
+            { key: 'required', label: '必填资料' },
+            { key: 'optional', label: '选填资料' },
           ] as const;
           const SECHEAD: Record<string, [string, string]> = {
-            basic: ['基础信息', '学生身份与联系方式 · 仅姓名为强校验项'],
-            household: ['户籍与高考报名地', '决定一分一段与三州十七县两区加分适用 · 学生可共填'],
-            exam: ['考试成绩', '先定选科组合，再录各科分数，总分自动累加'],
-            bonus: ['加分政策', '关系投档有效分 · 老师核验材料后维护'],
-            health: ['健康条件', '军警 / 航海 / 消防等特殊类专业的体检硬门槛'],
-            preference: ['偏好与规划', 'AI 推荐强约束 · 意向专业按梯队，城市与院校偏好'],
+            required: [
+              '必填资料',
+              '出方案与资格判定的硬性字段 · 姓名 / 性别 / 手机号 / 民族 / 户籍 / 考试成绩 / 色觉',
+            ],
+            optional: [
+              '选填资料',
+              '按需采集 · 每类可由老师手动开启或跳过,缺失不影响基本出方案',
+            ],
           };
           // 每个子页未通过核对项数 → rush 角标; 考试页位次偏差 → accent ! 角标
           const missBySec: Record<string, number> = {};
@@ -1190,7 +1188,7 @@ export default function StudentDetailPage() {
                       {(missBySec[st.key] ?? 0) > 0 ? (
                         <span className="sd-subtab-badge rush">{missBySec[st.key]}</span>
                       ) : null}
-                      {st.key === 'exam' && examWarn ? (
+                      {st.key === 'required' && examWarn ? (
                         <span className="sd-subtab-badge accent">!</span>
                       ) : null}
                     </button>
@@ -1204,21 +1202,65 @@ export default function StudentDetailPage() {
                     <p>{head[1]}</p>
                   </div>
 
-                  {subTab === 'basic' && <BasicFields />}
-                  {subTab === 'household' && <HouseholdFields />}
-                  {subTab === 'exam' && <ExamFields rankCheck={student.rankCheck} />}
-                  {subTab === 'bonus' && (
-                    <div className="space-y-4">
-                      <BonusFields />
-                      <BonusCalcCard studentProfileId={Number(studentId)} />
+                  {subTab === 'required' && (
+                    <div className="req-form">
+                      <ReqGroup n="1" title="基本身份" desc="姓名 / 性别 / 手机号 / 民族">
+                        <BasicFields />
+                      </ReqGroup>
+                      <ReqGroup
+                        n="2"
+                        title="户籍"
+                        desc="户籍所在地 / 高考报名地 · 决定一分一段与三州十七县两区专项加分适用"
+                      >
+                        <HouseholdFields />
+                      </ReqGroup>
+                      <ReqGroup
+                        n="3"
+                        title="考试成绩"
+                        desc="先定选科组合,再录各科分数 · 总分自动累加"
+                      >
+                        <ExamFields rankCheck={student.rankCheck} />
+                      </ReqGroup>
+                      <ReqGroup
+                        n="4"
+                        title="色觉"
+                        desc="军警 / 航海 / 医学 / 化工等专业资格判定的硬门槛"
+                      >
+                        <ColorVisionFields />
+                      </ReqGroup>
                     </div>
                   )}
-                  {subTab === 'health' && <HealthFields />}
-                  {subTab === 'preference' && (
-                    <PreferenceFields
-                      eligibleLevel={student?.eligibleLevel ?? null}
-                      examType={student?.examType ?? null}
-                    />
+                  {subTab === 'optional' && (
+                    <div className="opt-form">
+                      <div className="opt-intro">
+                        以下均为选填。每一类可由老师手动「采集 / 跳过」——按学生实际需要筛选要录入的信息;采集得越全,资格判定与推荐越精准。
+                      </div>
+                      <OptionalSection
+                        title="政治面貌与加分"
+                        desc="退役 / 烈士子女 / 三州十七县两区等 · 直接影响投档有效分"
+                      >
+                        <div className="space-y-4">
+                          <BonusFields />
+                          <BonusCalcCard studentProfileId={Number(studentId)} />
+                        </div>
+                      </OptionalSection>
+                      <OptionalSection
+                        title="健康与体检"
+                        desc="身高 / 体重 / 视力 / 体检受限 / 既往病史 · 军警航海等专业资格判定用"
+                        defaultOn={false}
+                      >
+                        <HealthFields />
+                      </OptionalSection>
+                      <OptionalSection
+                        title="偏好与规划"
+                        desc="优先模式 / 意向专业梯队 / 城市院校偏好 / 排除项 · AI 推荐约束"
+                      >
+                        <PreferenceFields
+                          eligibleLevel={student?.eligibleLevel ?? null}
+                          examType={student?.examType ?? null}
+                        />
+                      </OptionalSection>
+                    </div>
                   )}
 
                   {progress && !progress.isRecommendable ? (
@@ -1290,6 +1332,72 @@ export default function StudentDetailPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+/* —— 必填资料分组卡片 (复刻 student-detail.jsx ReqGroup): 序号圆点 + 标题(带红*) + desc + body —— */
+function ReqGroup({
+  n,
+  title,
+  desc,
+  children,
+}: {
+  n: number | string;
+  title: string;
+  desc: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="req-grp">
+      <div className="req-grp-head">
+        <span className="req-grp-n">{n}</span>
+        <div className="req-grp-tt">
+          <h4>
+            {title}
+            <i className="req">*</i>
+          </h4>
+          <p>{desc}</p>
+        </div>
+      </div>
+      <div className="req-grp-body">{children}</div>
+    </section>
+  );
+}
+
+/* —— 选填资料可折叠区 (复刻 student-detail.jsx OptionalSection): 头部点击展开/收起 + 采集中/已跳过 toggle —— */
+function OptionalSection({
+  title,
+  desc,
+  defaultOn = true,
+  children,
+}: {
+  title: string;
+  desc: string;
+  defaultOn?: boolean;
+  children: React.ReactNode;
+}) {
+  const [on, setOn] = useState(defaultOn);
+  return (
+    <section className={`opt-sec ${on ? 'is-on' : 'is-off'}`}>
+      <div className="opt-sec-head" onClick={() => setOn(!on)}>
+        <div className="opt-sec-tt">
+          <h4>{title}</h4>
+          <p>{desc}</p>
+        </div>
+        <button
+          type="button"
+          className={`opt-sec-toggle ${on ? 'on' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOn(!on);
+          }}
+        >
+          <span className="dot" />
+          {on ? '采集中' : '已跳过'}
+        </button>
+      </div>
+      {on ? <div className="opt-sec-body">{children}</div> : null}
+    </section>
   );
 }
 
@@ -2077,6 +2185,41 @@ function BonusFields() {
   );
 }
 
+/* 色觉: 从 HealthFields 抽出 (必填资料组用). UI 三选一, 底层仍是 colorBlind/colorWeak 两布尔.
+   注意只能在一处渲染这两个 Form.Item, 避免 antd 同名字段双重注册导致数据错乱. */
+function ColorVisionFields() {
+  return (
+    <div className="pf-field">
+      <label>
+        色觉 <i className="req">*</i> <em>底层映射 colorBlind / colorWeak 两布尔</em>
+      </label>
+      <Form.Item name="colorBlind" hidden valuePropName="checked"><Checkbox /></Form.Item>
+      <Form.Item name="colorWeak" hidden valuePropName="checked"><Checkbox /></Form.Item>
+      <Form.Item
+        noStyle
+        shouldUpdate={(p, c) => p.colorBlind !== c.colorBlind || p.colorWeak !== c.colorWeak}
+      >
+        {({ getFieldValue, setFieldsValue }) => {
+          const blind = getFieldValue('colorBlind');
+          const weak = getFieldValue('colorWeak');
+          const val = blind ? 'BLIND' : weak ? 'WEAK' : (blind === false && weak === false ? 'NORMAL' : undefined);
+          return (
+            <PfSeg
+              value={val}
+              onChange={(v) => setFieldsValue({ colorBlind: v === 'BLIND', colorWeak: v === 'WEAK' })}
+              options={[
+                { value: 'NORMAL', label: '正常' },
+                { value: 'BLIND', label: '色盲' },
+                { value: 'WEAK', label: '色弱' },
+              ]}
+            />
+          );
+        }}
+      </Form.Item>
+    </div>
+  );
+}
+
 function HealthFields() {
   return (
     <div className="pf-form">
@@ -2115,35 +2258,6 @@ function HealthFields() {
             <PfUnitInput placeholder="1.0 – 5.3" step={0.1} min={1} max={5.3} />
           </Form.Item>
         </div>
-      </div>
-      <div className="pf-field">
-        <label>
-          色觉 <i className="req">*</i> <em>底层映射 colorBlind / colorWeak 两布尔</em>
-        </label>
-        {/* UI 三选一, 底层仍是 colorBlind/colorWeak 两个布尔 (后端资格引擎按布尔判定) */}
-        <Form.Item name="colorBlind" hidden valuePropName="checked"><Checkbox /></Form.Item>
-        <Form.Item name="colorWeak" hidden valuePropName="checked"><Checkbox /></Form.Item>
-        <Form.Item
-          noStyle
-          shouldUpdate={(p, c) => p.colorBlind !== c.colorBlind || p.colorWeak !== c.colorWeak}
-        >
-          {({ getFieldValue, setFieldsValue }) => {
-            const blind = getFieldValue('colorBlind');
-            const weak = getFieldValue('colorWeak');
-            const val = blind ? 'BLIND' : weak ? 'WEAK' : (blind === false && weak === false ? 'NORMAL' : undefined);
-            return (
-              <PfSeg
-                value={val}
-                onChange={(v) => setFieldsValue({ colorBlind: v === 'BLIND', colorWeak: v === 'WEAK' })}
-                options={[
-                  { value: 'NORMAL', label: '正常' },
-                  { value: 'BLIND', label: '色盲' },
-                  { value: 'WEAK', label: '色弱' },
-                ]}
-              />
-            );
-          }}
-        </Form.Item>
       </div>
       <div className="pf-field">
         <label>

@@ -130,12 +130,14 @@ jest.mock('@/components/student/picker/options/useMajorCategoryOptions', () => (
   }),
 }));
 
-// sd-subtabs: 子表单只在对应子页激活时渲染, 点子 tab 按钮切换
+// sd-subtabs: 资料 tab 现为 2 子页 (必填资料 / 选填资料), 各子页内含多个字段分组.
+// required 子页: 基本身份 / 户籍 / 考试成绩 / 色觉 (同时渲染).
+// optional 子页: 政治面貌与加分 / 健康与体检 / 偏好与规划 (OptionalSection, 默认展开除健康外).
 async function gotoSubtab(
   user: ReturnType<typeof userEvent.setup>,
   name: RegExp,
 ) {
-  // 缺失项 mchip 也是 role=button (如 bonusStatus 标签"加分政策" 与子 tab 同名), 精确取 .sd-subtab
+  // 缺失项 mchip 也是 role=button, 精确取 .sd-subtab
   const subtab = screen
     .getAllByRole('button', { name })
     .find((b) => b.classList.contains('sd-subtab'));
@@ -161,7 +163,8 @@ describe('StudentDetailPage', () => {
     const user = userEvent.setup();
     const { container } = render(<StudentDetailPage />);
 
-    await gotoSubtab(user, /偏好与规划/);
+    // 偏好与加分均在「选填资料」子页 (OptionalSection 默认展开)
+    await gotoSubtab(user, /选填资料/);
 
     await openSelect(container, user, 'preferredProvinces');
     expect((await screen.findAllByText('四川省')).length).toBeGreaterThan(0);
@@ -172,7 +175,6 @@ describe('StudentDetailPage', () => {
     await openSelect(container, user, 'preferredUniversities');
     expect((await screen.findAllByText('四川大学')).length).toBeGreaterThan(0);
 
-    await gotoSubtab(user, /加分政策/);
     await openSelect(container, user, 'bonusItems');
     expect((await screen.findAllByText('烈士子女 +20')).length).toBeGreaterThan(0);
   });
@@ -181,7 +183,8 @@ describe('StudentDetailPage', () => {
     const user = userEvent.setup();
     render(<StudentDetailPage />);
 
-    await gotoSubtab(user, /考试成绩/);
+    // 考试成绩在「必填资料」子页 (默认激活, 显式点一次更稳)
+    await gotoSubtab(user, /必填资料/);
 
     expect(
       screen.getByText((text) => text.includes('28,500') && text.includes('1')),
@@ -207,7 +210,8 @@ describe('StudentDetailPage', () => {
     const user = userEvent.setup();
     render(<StudentDetailPage />);
 
-    await gotoSubtab(user, /考试成绩/);
+    // 考试成绩在「必填资料」子页
+    await gotoSubtab(user, /必填资料/);
 
     expect(
       screen.getByText((text) => text.includes('按 2025 一分一段估算') && text.includes('156,000')),
@@ -218,9 +222,10 @@ describe('StudentDetailPage', () => {
     const user = userEvent.setup();
     render(<StudentDetailPage />);
 
-    await gotoSubtab(user, /户籍信息/);
+    // 户籍在「必填资料」子页 (与考试成绩同子页)
+    await gotoSubtab(user, /必填资料/);
 
-    // 户籍/报名地字段标签都在 (sd-subtabs 户籍子页已渲染)
+    // 户籍/报名地字段标签都在 (required 子页户籍组已渲染)
     expect(screen.getAllByText('户籍所在地').length).toBeGreaterThan(0);
     expect(screen.getAllByText('高考报名地').length).toBeGreaterThan(0);
 
@@ -246,12 +251,12 @@ describe('StudentDetailPage', () => {
     const user = userEvent.setup();
     render(<StudentDetailPage />);
 
-    // 在「户籍信息」子页做一处编辑: 把户籍地复制到高考报名地
-    await gotoSubtab(user, /户籍信息/);
+    // 在「必填资料」子页的户籍组做一处编辑: 把户籍地复制到高考报名地
+    await gotoSubtab(user, /必填资料/);
     await user.click(screen.getByRole('button', { name: /同户籍所在地/ }));
 
-    // 切到「偏好与规划」子页 (户籍子页随之卸载), 在这里点保存
-    await gotoSubtab(user, /偏好与规划/);
+    // 切到「选填资料」子页 (必填子页随之卸载), 在这里点保存
+    await gotoSubtab(user, /选填资料/);
     await user.click(screen.getByRole('button', { name: /保存资料/ }));
 
     // 户籍子页那处编辑必须一并提交 (旧逻辑只收当前挂载子页 → 会漏掉)
