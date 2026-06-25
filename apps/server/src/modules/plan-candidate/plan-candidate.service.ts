@@ -450,6 +450,7 @@ const CANDIDATE_ENROLLMENT_PLAN_SELECT = {
   majorHonor: true,
   groupChangeType: true,
   oldGroupMajors2025: true,
+  bookPageNumber: true,
   university: {
     select: {
       id: true,
@@ -1896,6 +1897,8 @@ export class PlanCandidateService {
           isNationalFeature: ep.isNationalFeature,
           majorRanking: ep.majorRanking,
           majorHonor: ep.majorHonor,
+          // 2026 招生考试报页码 (整数), 历史年 null. 前端给老师做 P.XX 角标快查纸版页码.
+          bookPageNumber: ep.bookPageNumber ?? null,
           // 专业级征集数(本科类·累计各轮): 展开态专业行显示, 比组级更精确到"这个专业没录满多少"
           supplementaryCount: supplementary
             ? (supplementary.byMajorCode?.get(ep.majorCode) ?? supplementary.byMajorName?.get(ep.majorName) ?? null)

@@ -444,6 +444,7 @@ describe('PlanCandidateService', () => {
           majorCode: '080901', majorName: 'Computer Science', subjects: 'Physics', batch: 'Batch A',
           groupCode: 'G1', groupName: 'Physics group', groupPlanCount: 30, subjectRequirements: 'Physics required',
           planCount: 10, disciplineEval: 'A-', isNationalFeature: true, majorRanking: 'Top 10', majorHonor: 'National feature',
+          bookPageNumber: 42,
         },
         {
           id: 101, universityId: 1, majorId: 12, university: { id: 1, name: 'Alpha University', code: 'A01', is985: true, is211: true, isDoubleFirstClass: true },
@@ -510,6 +511,11 @@ describe('PlanCandidateService', () => {
       majorMinScore: 615,
       majorMinRank: 9500,
     }));
+    // 2026 招生考试报页码 透出: fixture EP.bookPageNumber=42 → CandidateMajor.bookPageNumber=42.
+    // Automation 行(id=101) fixture 未设 → null (历史年 EP 也是 null, 历史不挂规则)
+    expect(result.groups[0].majors[0].bookPageNumber).toBe(42);
+    const autoMajor = result.groups[0].majors.find((m: any) => m.majorCode === '080801');
+    expect(autoMajor.bookPageNumber).toBeNull();
 
     // ---- 专业优先模式: 每个 CandidateMajor 暴露 4 年历史(min/avg score+rank + planCount)
     // years = [-3, -2, -1, admissionBaselineYear] = [2022, 2023, 2024, 2025] (按年升序, 与 history3y 一致).
