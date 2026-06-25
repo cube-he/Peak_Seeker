@@ -1407,10 +1407,14 @@ export default function GeneratePlanPage() {
     window.localStorage.setItem(STICKY_BAR_STORAGE_KEY, stickyBarExpanded ? '1' : '0');
   }, [stickyBarExpanded]);
 
-  // 切批次/池变化 → 清掉当前已不在可选项里的招生类型选择, 避免空列表
+  // 切批次/池变化 → 清掉当前已不在可选项里的招生类型选择, 避免空列表。
+  // ⚠️ 必须等候选数据真正加载完(candidateGroups 非空)才比对: 否则每次切其它筛选(标签/省份等)
+  // 触发 refetch 时 candidateGroups 短暂为 undefined → avail=[] → 把已选招生类型误清空
+  //   (现象: 首次点"普通类"闪一下没生效 / 点 211 把已选的普通类重置)。
   useEffect(() => {
-    const avail = candidateGroups?.availableRecruitTypes ?? [];
+    if (!candidateGroups || !Array.isArray(candidateGroups.availableRecruitTypes)) return;
     if (recruitTypeFilter.length === 0) return;
+    const avail = candidateGroups.availableRecruitTypes;
     const kept = recruitTypeFilter.filter((rt) => avail.includes(rt));
     if (kept.length !== recruitTypeFilter.length) setRecruitTypeFilter(kept);
     // eslint-disable-next-line react-hooks/exhaustive-deps
