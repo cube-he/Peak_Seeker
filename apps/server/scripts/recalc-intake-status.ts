@@ -12,12 +12,14 @@
  *   npx tsx scripts/recalc-intake-status.ts
  */
 import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { ProgressService } from '../src/modules/student/progress.service';
 
 const DRY = process.argv.includes('--dry-run');
 
 async function run() {
-  const prisma = new PrismaClient();
+  const adapter = new PrismaMariaDb(process.env.DATABASE_URL!);
+  const prisma = new PrismaClient({ adapter });
   const svc = new ProgressService();
   await prisma.$connect();
 
