@@ -1134,7 +1134,10 @@ export class PlanCandidateService {
 
       if (sort === 'MAJOR_MIN_SCORE') {
         // 专业最低分轴: 默认分高在前; 翻转 = 分低(捡漏)。
-        const prim = compareDesc(a.anchorMajorMinScore ?? a.groupMinScore, b.anchorMajorMinScore ?? b.groupMinScore);
+        // 排序键对齐卡片展示的"组投档线 groupMinScore"(历史最低 X 分), 不再用锚定专业分,
+        // 否则锚定专业分≠组线时, 排序顺序与卡片显示的分对不上(老师反馈"个别例外")。
+        // 仅当组线缺失(无史线)才回退锚定专业分给个排序位。
+        const prim = compareDesc(a.groupMinScore ?? a.anchorMajorMinScore, b.groupMinScore ?? b.anchorMajorMinScore);
         if (prim !== 0) return prim * sign;
         return this.compareCandidateGroupFallback(a, b, studentRank, false);
       }
