@@ -58,6 +58,7 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
   const selectAll = () => { setSelected(new Set(eligibleForAll.map(b => b.batchName))); setSubmitError(null); };
   const clearAll = () => { setSelected(new Set()); setSubmitError(null); };
   const goBack = () => router.push(`/teacher/students/${studentId}`);
+  const goGenerate = () => router.push(`/teacher/plans/generate/${studentId}`);
 
   const handleSubmit = async () => {
     if (!data) return;
@@ -173,6 +174,10 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
               <div className="cmt">上次备注：{data.student.intakeReviewComment}</div>
             )}
           </div>
+          {/* 批次已锁定 → 老师下一步必然是出方案, 在锁定条直接给入口, 省去回详情页找按钮 */}
+          <button className="br-gen-btn" onClick={goGenerate}>
+            去生成方案 <TIcon.arrowRight/>
+          </button>
           <button className="br-unlock-btn" onClick={handleUnlock} disabled={submitting}>
             <TIcon.upload/> 重新打开
           </button>

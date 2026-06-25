@@ -110,6 +110,16 @@
 }
 .br-unlock-btn svg { width: 13px; height: 13px; }
 .br-unlock-btn:hover { border-color: var(--accent); color: var(--accent); }
+/* 锁定条主操作: 去生成方案 (主色填充, 比 unlock 更显眼, 引导下一步) */
+.br-gen-btn {
+  flex: 0 0 auto; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  border: 0; color: #fff; cursor: pointer;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  box-shadow: var(--shadow-glow-primary);
+  display: inline-flex; align-items: center; gap: 6px; transition: all var(--dur) var(--ease);
+}
+.br-gen-btn svg { width: 13px; height: 13px; }
+.br-gen-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-glow-primary-lg); }
 
 /* ── §7.3 标题行 + 说明条 ──────────────────────────────────────── */
 .br-titlerow {
