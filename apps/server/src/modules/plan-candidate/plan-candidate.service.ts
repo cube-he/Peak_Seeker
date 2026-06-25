@@ -827,7 +827,7 @@ export class PlanCandidateService {
     // 双口径聚合:
     //   newAgg[uni|batch|groupCode] → byYear[year]={ total, rounds:Map<round,count>, byCode:Map<majorCode, total>, byName:... }
     //   oldByUniBatchMajor[uni|batch|majorName] → byYear[year]={ rounds:Map<round,count>, total }
-    type YearBucket = { total: number; rounds: Map<number, number>; byCode: Map<string, number>; byName: Map<string, number> };
+    type YearBucket = { total: number; rounds: Map<number, number>; byCode: Map<string, number>; byName: Map<string, number>; byCodeRounds: Map<string, Map<number, number>>; byNameRounds: Map<string, Map<number, number>> };
     const newAgg = new Map<string, Map<number, YearBucket>>();
     const oldByMajor = new Map<string, Map<number, { total: number; rounds: Map<number, number> }>>();
 
@@ -835,7 +835,7 @@ export class PlanCandidateService {
       let m = newAgg.get(key);
       if (!m) { m = new Map(); newAgg.set(key, m); }
       let b = m.get(year);
-      if (!b) { b = { total: 0, rounds: new Map(), byCode: new Map(), byName: new Map() }; m.set(year, b); }
+      if (!b) { b = { total: 0, rounds: new Map(), byCode: new Map(), byName: new Map(), byCodeRounds: new Map(), byNameRounds: new Map() }; m.set(year, b); }
       return b;
     };
     const ensureOld = (key: string, year: number) => {
@@ -855,8 +855,18 @@ export class PlanCandidateService {
         const b = ensureNew(`${r.universityId}|${r.batch}|${r.groupCode}`, r.year);
         b.total += pc;
         b.rounds.set(round, (b.rounds.get(round) ?? 0) + pc);
-        if (r.majorCode) b.byCode.set(r.majorCode, (b.byCode.get(r.majorCode) ?? 0) + pc);
-        if (r.majorName) b.byName.set(r.majorName, (b.byName.get(r.majorName) ?? 0) + pc);
+        if (r.majorCode) {
+          b.byCode.set(r.majorCode, (b.byCode.get(r.majorCode) ?? 0) + pc);
+          let cr = b.byCodeRounds.get(r.majorCode);
+          if (!cr) { cr = new Map(); b.byCodeRounds.set(r.majorCode, cr); }
+          cr.set(round, (cr.get(round) ?? 0) + pc);
+        }
+        if (r.majorName) {
+          b.byName.set(r.majorName, (b.byName.get(r.majorName) ?? 0) + pc);
+          let nr = b.byNameRounds.get(r.majorName);
+          if (!nr) { nr = new Map(); b.byNameRounds.set(r.majorName, nr); }
+          nr.set(round, (nr.get(round) ?? 0) + pc);
+        }
       } else if (r.majorName) {
         // 旧高考 (2023/2024): 无 groupCode, 挂 (uni,batch,majorName) 给专业级兜底
         const b = ensureOld(`${r.universityId}|${r.batch}|${r.majorName}`, r.year);
@@ -950,6 +960,33 @@ export class PlanCandidateService {
       if (newB) v = newB.byCode?.get(ep.majorCode) ?? newB.byName?.get(ep.majorName) ?? null;
       if (v == null) v = oldMap?.get(oldKey)?.get(y)?.total ?? null;
       out[y] = v;
+    }
+    return out;
+  }
+
+  // 专业行各年「分轮」征集明细 — 供前端在该年计划数后展示 (1轮/2轮/3轮)。
+  // 2025+ 走 byMajorByYear[year].byCodeRounds 优先, byNameRounds 兜底;
+  // 2023/2024 (旧高考无 groupCode) 走 oldByMajor[uni|batch|majorName][year].rounds。
+  private extractMajorSupplementaryRoundsByYear(
+    supp: any,
+    ep: any,
+    years: number[],
+  ): Record<number, { round: number; count: number }[] | null> {
+    const out: Record<number, { round: number; count: number }[] | null> = {};
+    const newMap = supp?.byMajorByYear as Map<number, any> | undefined;
+    const oldMap = supp?.oldByMajor as Map<string, Map<number, any>> | undefined;
+    const oldKey = `${ep.universityId}|${ep.batch}|${ep.majorName}`;
+    const toArr = (rm: Map<number, number> | undefined | null) =>
+      rm && rm.size > 0
+        ? Array.from(rm.entries()).sort((a, b) => a[0] - b[0]).map(([round, count]) => ({ round, count }))
+        : null;
+    for (const y of years) {
+      const newB = newMap?.get(y);
+      let rounds: Map<number, number> | null = null;
+      if (newB) rounds = newB.byCodeRounds?.get(ep.majorCode) ?? newB.byNameRounds?.get(ep.majorName) ?? null;
+      let arr = toArr(rounds);
+      if (!arr) arr = toArr(oldMap?.get(oldKey)?.get(y)?.rounds);
+      out[y] = arr;
     }
     return out;
   }
@@ -2056,6 +2093,14 @@ export class PlanCandidateService {
             : null,
           supplementaryByYear: supplementary
             ? this.extractMajorSupplementaryByYear(
+                supplementary,
+                ep,
+                [source.admissionBaselineYear - 2, source.admissionBaselineYear - 1, source.admissionBaselineYear],
+              )
+            : null,
+          // 各年分轮征集明细: [{round,count}], 前端在该年计划数后渲染 (5/3)
+          supplementaryRoundsByYear: supplementary
+            ? this.extractMajorSupplementaryRoundsByYear(
                 supplementary,
                 ep,
                 [source.admissionBaselineYear - 2, source.admissionBaselineYear - 1, source.admissionBaselineYear],

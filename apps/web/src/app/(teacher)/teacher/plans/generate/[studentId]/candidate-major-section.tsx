@@ -162,9 +162,19 @@ export default function CandidateMajorSection({
                     ))}
 
                     <i className="mh-lbl">计划</i>
-                    {h4.map((h: any) => (
-                      <i className={`mh-cell plan ${h.year === 2025 ? 'cur' : ''}`} key={h.year}>{h.planCount != null ? <b>{h.planCount}</b> : <em className="nw">—</em>}</i>
-                    ))}
+                    {h4.map((h: any) => {
+                      // 该年分轮征集明细 (后端 supplementaryRoundsByYear), 在计划数后展示 (5/3)
+                      const sr = major.supplementaryRoundsByYear?.[h.year];
+                      const suppTxt = Array.isArray(sr) && sr.length ? sr.map((x: any) => x.count).join('/') : null;
+                      return (
+                        <i className={`mh-cell plan ${h.year === 2025 ? 'cur' : ''}`} key={h.year}>
+                          {h.planCount != null ? <b>{h.planCount}</b> : <em className="nw">—</em>}
+                          {suppTxt ? (
+                            <span className="supp" title={`${h.year} 年本专业征集: ${sr.map((x: any) => `第${x.round}轮 ${x.count}人`).join(' / ')}。征集=未招满需补录, 常伴降分`}>({suppTxt})</span>
+                          ) : null}
+                        </i>
+                      );
+                    })}
 
                     <i className="mh-lbl">平均</i>
                     {h4.map((h: any) => (
