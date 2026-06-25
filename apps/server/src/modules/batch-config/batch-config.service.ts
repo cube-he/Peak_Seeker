@@ -32,11 +32,12 @@ export interface IntakeDataGap {
   missing: Array<{ field: string; label: string }>;
 }
 
+// 与资料页"必填子页"对齐: 仅这些字段缺失才算"资料未完成"。
+// 出生日期(birthDate)2026-06-25 已挪入选填子页 → 不再列入, 否则学生填全必填仍无法确认批次。
 const BATCH_RECOMMENDATION_REQUIRED: Array<{ key: string; label: string; from: 'student' | 'user' }> = [
   { key: 'examType',  label: '选科',        from: 'student' },
   { key: 'county',    label: '户籍县',      from: 'student' },
   { key: 'isRural',   label: '城/乡户籍',   from: 'student' },
-  { key: 'birthDate', label: '出生日期',    from: 'user' },
   { key: 'ethnicity', label: '民族',        from: 'user' },
   { key: 'gender',    label: '性别',        from: 'user' },
 ];
