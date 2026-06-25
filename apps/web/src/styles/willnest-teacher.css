@@ -7657,14 +7657,16 @@
 .wn-teacher-scope .pgv2-hist-tbl td b { font-family: var(--font-heading); font-weight: 700; color: var(--text); }
 
 /* Rail (right sticky) */
-.wn-teacher-scope .pgv2-rail { position: sticky; top: 24px; }
+/* 浮于上层不碰撞: 顶部全局 sticky header 高 56px(top-0 z-40 h-14), rail 贴 72px(56+16 留白)
+   而非 24px, 否则「当前方案」头部会滑到全局 header 下被遮挡; z-index 让它独立成层悬浮于左侧候选列表之上 */
+.wn-teacher-scope .pgv2-rail { position: sticky; top: 72px; z-index: 10; }
 .wn-teacher-scope .pgv2-rail-card {
   background: var(--surface);
   border-radius: 14px;
   box-shadow: var(--shadow-card);
   padding: 22px 22px 20px;
   display: flex; flex-direction: column;
-  max-height: calc(100vh - 48px);
+  max-height: calc(100vh - 96px);
   overflow: hidden;
 }
 .wn-teacher-scope .pgv2-rail-card h3 {
