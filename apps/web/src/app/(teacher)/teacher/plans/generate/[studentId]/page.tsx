@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { pickerApi } from '@/services/picker';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -874,6 +875,9 @@ export default function GeneratePlanPage() {
   );
   const viewModeAutoApplied = useRef(false);
   const [railCollapsed, toggleRail] = usePersistentCollapse('vh.teacher.generate.railCollapsed');
+  // 收起态浮卡 portal 到 body — 否则 position:fixed 会被祖先 transform(view-transition 动画)圈住, 跟着页面滚
+  const [railMounted, setRailMounted] = useState(false);
+  useEffect(() => { setRailMounted(true); }, []);
   const [uniSort, setUniSort] = useState<UniversitySortValue>('UNIVERSITY_OVERALL');
   // 办学性质过滤 (两视图通用; null=全部):
   // public=公办 / private=民办 / sinoForeign=中外合作 / hkMacau=港澳合作办学 / independent=独立学院
@@ -3026,18 +3030,23 @@ export default function GeneratePlanPage() {
 
             {/* —— Region 7: pgv2-rail 右侧 sticky 当前方案 (最大重写) —— */}
             {railCollapsed ? (
-              <aside className="pgv2-rail is-collapsed">
-                <button type="button" className="pgv2-rail-stub" onClick={toggleRail} title="展开当前方案">
-                  <span className="stub-ic"><DoubleLeftOutlined /></span>
-                  <span className="stub-label">当前方案</span>
-                  <span className="stub-total">{planItems.length}</span>
-                  <span className="stub-tiers">
-                    <span className="st rush"><i>冲</i>{tierStats.rush}</span>
-                    <span className="st stable"><i>稳</i>{tierStats.stable}</span>
-                    <span className="st safe"><i>保</i>{tierStats.safe}</span>
-                  </span>
-                </button>
-              </aside>
+              railMounted ? createPortal(
+                <div className="wn-teacher-scope">
+                  <aside className="pgv2-rail is-collapsed">
+                    <button type="button" className="pgv2-rail-stub" onClick={toggleRail} title="展开当前方案">
+                      <span className="stub-ic"><DoubleLeftOutlined /></span>
+                      <span className="stub-label">当前方案</span>
+                      <span className="stub-total">{planItems.length}</span>
+                      <span className="stub-tiers">
+                        <span className="st rush"><i>冲</i>{tierStats.rush}</span>
+                        <span className="st stable"><i>稳</i>{tierStats.stable}</span>
+                        <span className="st safe"><i>保</i>{tierStats.safe}</span>
+                      </span>
+                    </button>
+                  </aside>
+                </div>,
+                document.body,
+              ) : null
             ) : (
             <aside className="pgv2-rail">
               <div className="pgv2-rail-card">
