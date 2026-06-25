@@ -2664,11 +2664,11 @@ export default function GeneratePlanPage() {
                   {sinoForeignFilter === 'only' && student?.acceptSinoForeign !== true ? (
                     <div className="pgv2-source-note">
                       <InfoCircleOutlined />
-                      该生资料「接受中外合作办学」为否，中外合作专业组默认不进候选，所以这里几乎为空。如要查看 / 推荐中外合作，请到{' '}
+                      该生资料「接受中外合作办学」为否，以下中外合作专业按「软不符」灰显(可见、待你决策，提示学生当前未接受)。若确认要正式推荐，请到{' '}
                       <a href={`/teacher/students/${studentId}`} target="_blank" rel="noreferrer" style={{ color: 'var(--primary, #1677ff)' }}>
                         学生资料页
                       </a>
-                      {' '}开启「接受中外合作」后再筛。
+                      {' '}开启「接受中外合作」。
                     </div>
                   ) : null}
 

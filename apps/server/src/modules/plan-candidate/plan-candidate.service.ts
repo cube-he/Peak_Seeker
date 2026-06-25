@@ -559,6 +559,9 @@ export class PlanCandidateService {
       sort: q.sort ?? 'MAJOR_MATCH',
       tier: q.tier ?? 0,
       excludeAdded: q.excludeAdded !== false,
+      // "只看中外合作"会保留纯中外的全风险组(否则学生不接受时整组被丢→筛完为空),
+      // 该保留发生在建池阶段, 故必须进缓存键(同 keyword/tier 的道理), 否则命中无中外组的旧池。
+      sinoOnly: q.sinoForeign === 'only',
     });
   }
 
@@ -2071,12 +2074,17 @@ export class PlanCandidateService {
       //   3. 全组 RISK 仅因位次原因 — REJECTED(位次明显高于学生)是极冲选项,
       //      INSUFFICIENT_DATA(新组无任何历史线)是"待人工判断"的真实库存;
       //      提前批/公费师范常降分录取且新设定向组无历史线, 灭掉会让无线机会组只能靠关键词搜出来
+      //   4. "只看中外合作"(sinoForeign='only') — 老师明确要看中外。纯中外组在学生
+      //      "不接受中外"时全软不符→全 RISK, 不豁免就会被丢→筛完为空(数据其实有)。
+      //      不替老师藏数据: 保留, 让中外组灰显待决策。
       const isAllRisk = majorSections.recommended.length === 0 && majorSections.backup.length === 0;
       const allRiskIsRankOnly = isAllRisk && visibleMajors.length > 0 &&
         visibleMajors.every((m) =>
           (m.rankStrategy?.eligibility === 'REJECTED' || m.rankStrategy?.eligibility === 'INSUFFICIENT_DATA') &&
           (m.failReasons ?? []).length === 0);
-      if (isAllRisk && !allRiskIsRankOnly && !hitsTier && !hasAnyKeyword) return null;
+      // 有可见(灰显)中外专业才保留, 否则(如关了 includeSoftFails)别留出空组卡。
+      const sinoOnlyIntent = q.sinoForeign === 'only' && visibleMajors.length > 0;
+      if (isAllRisk && !allRiskIsRankOnly && !hitsTier && !hasAnyKeyword && !sinoOnlyIntent) return null;
 
       const orderedMajors = [
         ...majorSections.recommended,
