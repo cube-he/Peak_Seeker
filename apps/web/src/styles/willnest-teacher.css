@@ -8587,9 +8587,9 @@
    ========================================================================== */
 /* 6 列:★ / 专业(代码·学费·学制·备注·招生报页码) / 2026计划 / 历年录取矩阵 / 硕博 / 操作 */
 .wn-teacher-scope .pgv3-major-head, .wn-teacher-scope .pgv3-major-row {
-  grid-template-columns: 16px minmax(110px, 1.4fr) 74px minmax(366px, 1.6fr) 40px 78px !important;
+  grid-template-columns: 16px minmax(110px, 1.4fr) 92px minmax(366px, 1.6fr) 40px 78px !important;
   align-items: center;
-  column-gap: 5px;
+  column-gap: 12px;
 }
 .wn-teacher-scope .pgv3-major-row { padding: 11px 0; }
 .wn-teacher-scope .pgv3-major-row .nm { align-items: flex-start; align-content: flex-start; }
@@ -8819,7 +8819,7 @@
 /* ——— pgv3-major-rows 横向滚动容器 ——— */
 .wn-teacher-scope .pgv3-major-rows { overflow-x: auto; }
 .wn-teacher-scope .pgv3-major-rows .pgv3-major-head,
-.wn-teacher-scope .pgv3-major-rows .pgv3-major-row { min-width: 715px; }
+.wn-teacher-scope .pgv3-major-rows .pgv3-major-row { min-width: 760px; }
 
 /* ——— 院校层级 / 专业组层级 分层结构 ——— */
 .wn-teacher-scope .pgv3-tier { display: flex; gap: 9px; align-items: flex-start; }
@@ -8944,13 +8944,14 @@
 /* 2026 招生计划 */
 .wn-teacher-scope .pgv3-major-row .m-plan {
   display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0;
-  padding: 1px 0 1px 10px;
+  padding: 1px 12px 1px 10px;
   border-left: 3px solid var(--accent);
   background: none; border-radius: 0;
+  white-space: nowrap;
 }
 .wn-teacher-scope .pgv3-major-row .m-plan .pl-y { font-style: normal; font-size: 9px; color: var(--text-muted); font-weight: 600; letter-spacing: .3px; }
 .wn-teacher-scope .pgv3-major-row .m-plan .pl-row { display: inline-flex; align-items: baseline; gap: 2px; }
-.wn-teacher-scope .pgv3-major-row .m-plan .pl-n { font-family: var(--font-heading); font-weight: 700; font-size: 24px; color: var(--accent); line-height: 1.05; font-variant-numeric: tabular-nums; }
+.wn-teacher-scope .pgv3-major-row .m-plan .pl-n { font-family: var(--font-heading); font-weight: 700; font-size: 21px; color: var(--accent); line-height: 1.05; font-variant-numeric: tabular-nums; }
 .wn-teacher-scope .pgv3-major-row .m-plan .pl-u { font-style: normal; font-size: 11px; color: var(--accent); }
 /* 专业备注 */
 .wn-teacher-scope .pgv3-major-row .nm .m-remark {
