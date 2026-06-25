@@ -2226,6 +2226,85 @@
   color: var(--text-faint);
 }
 
+/* —— 志愿表行: 工具提示 / 拖动握把 / 组内专业展开 (移植自设计稿) —— */
+.wn-teacher-scope .pl-tbl-toolhint {
+  display: flex; align-items: center; gap: 7px;
+  padding: 11px 22px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.wn-teacher-scope .pl-tbl-toolhint .ic { display: inline-flex; width: 13px; height: 13px; color: var(--accent); }
+.wn-teacher-scope .pl-tbl-toolhint .ic svg { width: 13px; height: 13px; }
+.wn-teacher-scope .pl-tbl-toolhint b { color: var(--text-secondary); font-weight: 600; }
+
+.wn-teacher-scope .pl-row { cursor: pointer; position: relative; }
+.wn-teacher-scope .pl-row .idx { display: inline-flex; align-items: center; gap: 6px; }
+.wn-teacher-scope .pl-grip {
+  color: var(--text-faint);
+  font-size: 12px; line-height: 1;
+  letter-spacing: -2px;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.wn-teacher-scope .pl-row:hover .pl-grip { opacity: 1; }
+.wn-teacher-scope .pl-grip:hover { color: var(--text-secondary); }
+
+.wn-teacher-scope .pl-row .majors { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.wn-teacher-scope .pl-major-chev {
+  display: inline-flex; width: 11px; height: 11px;
+  color: var(--text-muted);
+  transition: transform var(--dur) var(--ease);
+  align-self: center;
+}
+.wn-teacher-scope .pl-major-chev svg { width: 11px; height: 11px; }
+.wn-teacher-scope .pl-major-chev.is-open { transform: rotate(90deg); color: var(--primary); }
+.wn-teacher-scope .pl-major-txt { color: var(--text-tertiary); }
+.wn-teacher-scope .pl-major-count {
+  flex: 0 0 auto;
+  font-size: 10.5px; font-weight: 500;
+  color: var(--primary);
+  background: var(--primary-fixed);
+  padding: 1px 7px; border-radius: 999px;
+}
+.wn-teacher-scope .pl-major-chev + .pl-major-txt { margin-left: 0; }
+.wn-teacher-scope .pl-row.is-expanded { background: var(--bg); }
+
+.wn-teacher-scope .pl-row-chev {
+  display: inline-flex; width: 15px; height: 15px;
+  color: var(--text-muted);
+  transition: transform var(--dur) var(--ease);
+}
+.wn-teacher-scope .pl-row-chev svg { width: 15px; height: 15px; }
+.wn-teacher-scope .pl-row-chev.is-open { transform: rotate(180deg); color: var(--primary); }
+
+.wn-teacher-scope .pl-majors-panel {
+  padding: 14px 22px 18px 56px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-subtle);
+  animation: fadeUp .18s var(--ease) both;
+}
+.wn-teacher-scope .pl-majors-head {
+  font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+  font-weight: 600; color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+.wn-teacher-scope .pl-majors-head .sub {
+  margin-left: 8px;
+  font-weight: 400; letter-spacing: 0; text-transform: none;
+  font-size: 11.5px; color: var(--text-muted);
+}
+
+/* 头部选科 chip 独立版 (设计稿同款配色, 不依赖 .stu-card 上下文) */
+.wn-teacher-scope .pd2-header .subj-chip {
+  display: inline-flex; align-items: center;
+  padding: 1px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+}
+.wn-teacher-scope .pd2-header .subj-chip.physics { background: rgba(44,82,130,.10); color: var(--primary); }
+.wn-teacher-scope .pd2-header .subj-chip.history { background: rgba(184,134,11,.10); color: var(--accent); }
+
 /* ==========================================================================
    Plan Detail v2 (与 production 对齐:版本对比 + 审核 + 批注 + Timeline)
    ========================================================================== */

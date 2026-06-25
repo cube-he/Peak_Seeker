@@ -17,24 +17,22 @@ import {
   Select,
   Space,
   Spin,
-  Table,
   Tag,
-  Timeline,
   Tooltip,
   message,
 } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import {
-  ArrowLeftOutlined,
   ArrowRightOutlined,
   CheckCircleOutlined,
   DeleteOutlined,
+  DownOutlined,
   EditOutlined,
   ExportOutlined,
   FileDoneOutlined,
   FullscreenOutlined,
   MoreOutlined,
   PlayCircleOutlined,
+  RightOutlined,
   RollbackOutlined,
   SendOutlined,
   WarningOutlined,
@@ -45,6 +43,10 @@ import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
 import PlanMajorSelectionEditor from '../components/PlanMajorSelectionEditor';
 import PlanPreparationTable from '../components/PlanPreparationTable';
+import {
+  getPlanItemMajorSelection,
+  type PlanItemMajorSelectionLike,
+} from '../generate/[studentId]/plan-workbench-utils';
 
 const GRADIENT_LABEL: Record<string, string> = {
   CHONG: '冲',
@@ -52,11 +54,25 @@ const GRADIENT_LABEL: Record<string, string> = {
   BAO: '保',
 };
 
-const GRADIENT_COLOR: Record<string, string> = {
-  CHONG: 'red',
-  WEN: 'gold',
-  BAO: 'green',
+// 后端梯度枚举 → 设计稿 tier class (冲=rush / 稳=stable / 保=safe)
+const GRADIENT_TIER: Record<string, 'rush' | 'stable' | 'safe'> = {
+  CHONG: 'rush',
+  WEN: 'stable',
+  BAO: 'safe',
 };
+
+// 设计稿志愿表分段元信息 (顺序固定 冲→稳→保)
+const TIER_META: {
+  tier: 'rush' | 'stable' | 'safe';
+  gradient: string;
+  ch: string;
+  label: string;
+  en: string;
+}[] = [
+  { tier: 'rush', gradient: 'CHONG', ch: '冲', label: '冲一冲', en: 'REACH' },
+  { tier: 'stable', gradient: 'WEN', ch: '稳', label: '稳一稳', en: 'MATCH' },
+  { tier: 'safe', gradient: 'BAO', ch: '保', label: '保一保', en: 'SAFETY' },
+];
 
 const EXAM_TYPE_LABEL: Record<string, string> = {
   PHYSICS: '物理类',
@@ -70,6 +86,14 @@ const REVIEW_ACTION_LABEL: Record<string, { text: string; color: string }> = {
   REJECT: { text: '驳回', color: 'red' },
   REQUEST_CHANGE: { text: '退回修改', color: 'orange' },
   COMMENT: { text: '留言', color: 'default' },
+};
+
+// Timeline 圆点配色 (设计稿 pd2-tl-dot tone-*): 通过=safe / 驳回·退回=rush / 其余=muted
+const REVIEW_ACTION_TONE: Record<string, 'safe' | 'rush' | 'primary' | 'muted'> = {
+  APPROVE: 'safe',
+  REJECT: 'rush',
+  REQUEST_CHANGE: 'rush',
+  COMMENT: 'muted',
 };
 
 function unwrap<T>(value: any): T {
@@ -98,22 +122,6 @@ export interface HistoricalScoreResult {
   score: number;
   source: HistoricalScoreSource;
 }
-
-// 来源标签:在单元格小字和 tooltip 里显示哪档数据
-const SOURCE_LABEL: Record<HistoricalScoreSource, string> = {
-  major25: '25 年专业级',
-  group25: '25 年组级',
-  major24: '24 年专业级',
-  legacy: '旧字段(兼容)',
-};
-
-// 来源配色:让老师一眼区分数据质量; text-primary=navy(最优), text-safe=green(次优), muted=兜底
-const SOURCE_TONE: Record<HistoricalScoreSource, string> = {
-  major25: 'text-primary',       // 最优先,深蓝
-  group25: 'text-text-secondary', // 较粗,深灰
-  major24: 'text-safe',           // 较旧但精确,绿色
-  legacy: 'text-text-muted',      // 兜底,弱化
-};
 
 // 历史最低分:返回 { score, source } 让 UI 能告诉老师当前是哪个维度的数据
 // 优先级:25 年专业级 > 25 年专业组级 > 24 年专业级 > 旧字段
@@ -669,228 +677,53 @@ export default function PlanDetailPage() {
       : []),
   ];
 
-  // ── 志愿明细表 ──
-  const columns: ColumnsType<any> = [
-    { title: '#', dataIndex: 'sequence', width: 50, fixed: 'left' },
-    {
-      title: '院校 / 专业',
-      key: 'name',
-      render: (_, item) => (
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-text">{item.universityName}</div>
-          <div className="truncate text-xs text-text-muted">
-            {item.groupName ? `${item.groupName} · ` : ''}
-            {item.majorName}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: '梯度',
-      dataIndex: 'gradient',
-      width: 60,
-      render: (g: string) => (
-        <Tag color={GRADIENT_COLOR[g] || 'default'}>{GRADIENT_LABEL[g] || g || '-'}</Tag>
-      ),
-    },
-    {
-      title: '历史录取',
-      key: 'historical',
-      width: 110,
-      render: (_: unknown, item: any) => {
-        const active = getHistoricalScore(item);  // 当前算法用的那一档
-        const rank = getHistoricalRank(item);
-
-        // 收集所有可用档位用于 hover/tooltip
-        const all: { source: HistoricalScoreSource; score: number }[] = [];
-        if (item.score25Major != null) all.push({ source: 'major25', score: item.score25Major });
-        if (item.score25Group != null) all.push({ source: 'group25', score: item.score25Group });
-        if (item.score24Major != null) all.push({ source: 'major24', score: item.score24Major });
-        if (all.length === 0 && item.lastYearMinScore != null) {
-          all.push({ source: 'legacy', score: item.lastYearMinScore });
-        }
-
-        if (active == null && rank === null) {
-          return <span className="text-xs text-text-faint">--</span>;
-        }
-        return (
-          <div className="space-y-0.5">
-            {active != null ? (
-              <Tooltip
-                title={
-                  <div className="space-y-1 text-xs">
-                    <div className="font-medium">历史录取分(各维度)</div>
-                    {all.map((d) => (
-                      <div key={d.source} className={d.source === active.source ? 'font-medium' : 'opacity-70'}>
-                        {SOURCE_LABEL[d.source]}: {d.score}
-                        {d.source === active.source ? ' ← 当前算法' : ''}
-                      </div>
-                    ))}
-                    <div className="border-t border-white/20 pt-1 text-white/60">
-                      数据来源:四川省教育考试院历年录取数据
-                    </div>
-                  </div>
-                }
-              >
-                <div className="flex flex-col leading-tight cursor-default">
-                  <span className={`text-sm font-medium ${SOURCE_TONE[active.source]}`}>
-                    {active.score} 分
-                  </span>
-                  <span className="text-[10px] text-text-muted">{SOURCE_LABEL[active.source]}</span>
-                </div>
-              </Tooltip>
-            ) : null}
-            {rank !== null ? <div className="text-xs text-text-muted">{formatNumber(rank)} 位</div> : null}
-          </div>
-        );
-      },
-    },
-    {
-      title: '分差',
-      key: 'margin',
-      width: 80,
-      sorter: (a, b) => {
-        const histA = getHistoricalScore(a);
-        const histB = getHistoricalScore(b);
-        const sa = summary.studentScore != null && histA != null
-          ? summary.studentScore - histA.score
-          : Number.POSITIVE_INFINITY;
-        const sb = summary.studentScore != null && histB != null
-          ? summary.studentScore - histB.score
-          : Number.POSITIVE_INFINITY;
-        return sa - sb;
-      },
-      render: (_, item) => {
-        const hist = getHistoricalScore(item);
-        if (summary.studentScore == null || hist == null) {
-          return <span className="text-xs text-text-faint">--</span>;
-        }
-        const margin = summary.studentScore - hist.score;
-        const colorClass =
-          margin < 0 ? 'text-rush' : margin >= 20 ? 'text-safe' : 'text-accent';
-        return (
-          <span className={`text-sm font-semibold ${colorClass}`}>
-            {margin > 0 ? '+' : ''}
-            {margin}
-          </span>
-        );
-      },
-    },
-    {
-      title: '招生',
-      dataIndex: 'planCount',
-      width: 60,
-      render: (count: number | null | undefined) =>
-        count ? <span className="text-sm">{count}</span> : <span className="text-xs text-text-faint">--</span>,
-    },
-    {
-      title: '风险',
-      key: 'risk',
-      width: 80,
-      render: (_, item) => {
-        if (!isItemRisky(item)) return <Tag color="green">正常</Tag>;
-        const reasons: string[] = [];
-        if (item.overrideSoftFail) reasons.push('已覆盖灰色项');
-        if (Array.isArray(item.softFailReasons)) reasons.push(...item.softFailReasons.map(String));
-        if (item.riskWarning) reasons.push(String(item.riskWarning));
-        return (
-          <Tooltip title={<div className="text-xs">{reasons.join(' · ') || '存在风险'}</div>}>
-            <Tag color="orange" icon={<WarningOutlined />}>
-              风险
-            </Tag>
-          </Tooltip>
-        );
-      },
-    },
-    {
-      title: '批注',
-      key: 'annotation',
-      width: 60,
-      render: (_, item) => {
-        const hasAnnotation = !!annotations[item.sequence]?.trim();
-        return hasAnnotation ? <Tag color="blue">已写</Tag> : <span className="text-xs text-text-faint">--</span>;
-      },
-    },
-  ];
+  // 设计稿志愿表 4 个统计 (冲/稳/保 计数 + 招生计划合计)
+  const planSum = items.reduce((acc, it) => acc + (it.planCount ?? 0), 0);
 
   return (
-    <div className="space-y-5">
-      {/* A · sticky 顶部栏 (设计稿 ph 风格 eyebrow + serif 标题; 视觉对齐设计稿,
-          但保留 sticky + 对比版本 + 动作按钮区原有业务逻辑) */}
-      <div className="sticky top-14 z-20 -mx-4 border-b border-border bg-bg/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-        <Link
-          href="/teacher/plans"
-          className="inline-flex items-center gap-1 text-xs text-text-tertiary no-underline hover:text-primary"
-        >
-          <ArrowLeftOutlined /> 返回方案列表
-        </Link>
-        <span
-          className="eyebrow"
-          style={{ display: 'block', marginTop: 6, color: 'var(--accent)' }}
-        >
-          PLAN · 方案详情
-        </span>
-        <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <h1
-              className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xl"
-              style={{ fontFamily: 'var(--font-heading)', fontWeight: 600 }}
-            >
-              <Link
-                href={`/teacher/students/${plan.studentId}`}
-                className="font-semibold text-text no-underline hover:text-primary"
-              >
-                {studentName}
-              </Link>
-              {summary.studentScore != null ? (
-                <span className="text-sm text-text-muted">· {summary.studentScore} 分</span>
-              ) : null}
-              {summary.studentRank != null ? (
-                <span className="text-sm text-text-muted">/ {formatNumber(summary.studentRank)} 位</span>
-              ) : null}
-              {summary.examType ? (
-                <span className="text-sm text-text-muted">
-                  · {EXAM_TYPE_LABEL[summary.examType] ?? summary.examType}
+    <div className="pd2 view-transition">
+      {/* —— Header (设计稿 pd2-header: 面包屑 + 学生 link + 分数/位次/科类 + 批次/版本/状态) —— */}
+      <div className="pd2-header fade-up d1">
+        <div className="lhs">
+          <div className="crumb">
+            <Link href="/teacher/plans">方案管理</Link>
+            <span className="sep">/</span>
+            <Link href={`/teacher/students/${plan.studentId}`}>{studentName}</Link>
+            <span className="sep">/</span>
+            <span>v{plan.version} 方案</span>
+          </div>
+          <h1>
+            <Link className="stu-link" href={`/teacher/students/${plan.studentId}`}>
+              {studentName}
+            </Link>
+            <span className="meta">
+              {summary.examType === 'PHYSICS' || summary.examType === 'HISTORY' ? (
+                <span className={`subj-chip ${summary.examType === 'PHYSICS' ? 'physics' : 'history'}`}>
+                  {summary.examType === 'PHYSICS' ? '物理类' : '历史类'}
                 </span>
+              ) : summary.examType ? (
+                <span>{EXAM_TYPE_LABEL[summary.examType] ?? summary.examType}</span>
               ) : null}
-              <span className="text-text-faint">|</span>
-              <span className="text-sm text-text-muted">{plan.batch || '-'}</span>
-              <span className="text-sm text-text-muted">v{plan.version}</span>
-              <PlanStatusBadge status={status} />
-            </h1>
-            {versions.length > 1 ? (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border-subtle bg-bg/30 px-3 py-2">
-                <span className="text-sm text-text-muted">对比版本:</span>
-                <Select
-                  size="small"
-                  allowClear
-                  placeholder="选择另一版本对比"
-                  value={compareVersionId}
-                  onChange={(val) => setCompareVersionId(val ?? null)}
-                  style={{ minWidth: 220 }}
-                  options={versions
-                    .filter((v) => v.id !== Number(planId))
-                    .map((v) => ({
-                      label: `v${v.versionNo}${v.versionNote ? ` (${v.versionNote})` : ''} · ${v.status}`,
-                      value: v.id,
-                    }))}
-                />
-                {compareVersionId !== null ? (
-                  <Button size="small" onClick={() => setCompareVersionId(null)}>
-                    退出对比
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-            {compareVersionId !== null && compareItems.length > 0 ? (
-              <ComparePanel
-                currentItems={items}
-                compareItems={compareItems}
-                currentLabel={`v${plan?.versionNo ?? '?'}`}
-                compareLabel={`v${comparePlan?.versionNo ?? '?'}`}
-              />
+              {summary.studentScore != null ? <span>{summary.studentScore} 分</span> : null}
+              {summary.studentRank != null ? (
+                <>
+                  <span className="dot" />
+                  <span>位次 {formatNumber(summary.studentRank)}</span>
+                </>
+              ) : null}
+            </span>
+          </h1>
+          <div className="version-line">
+            <span className="batch">{plan.batch || '-'}</span>
+            <span className="ver">v{plan.version}</span>
+            <PlanStatusBadge status={status} />
+            {plan.updatedAt && now ? (
+              <span className="updated">更新于 {formatRelativeTime(new Date(plan.updatedAt), now)}</span>
             ) : null}
           </div>
+        </div>
+        <div className="actions">
+          {/* 主操作 / 次操作 保留原 antd 业务逻辑 (状态机 + 权限) */}
           <Space wrap>
             {renderPrimaryActions()}
             {moreMenuItems.length > 0 ? (
@@ -902,70 +735,17 @@ export default function PlanDetailPage() {
         </div>
       </div>
 
-      {/* B · 上下文摘要卡 — 设计稿 .stat-cluster + .scell 4 列 */}
-      <div className="stat-cluster fade-up d2" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        <div className="scell t-primary">
-          <div className="k">学生</div>
-          <div className="v">
-            {summary.studentScore != null ? summary.studentScore : '--'}
-            {summary.studentScore != null ? <span className="small">分</span> : null}
-          </div>
-          <div className="sub">
-            {summary.studentRank != null ? `${formatNumber(summary.studentRank)} 位` : '—'}
-          </div>
-        </div>
-        <div className="scell t-accent">
-          <div className="k">冲 / 稳 / 保</div>
-          <div className="v" style={{ fontSize: 28 }}>
-            <span style={{ color: 'var(--rush)' }}>{summary.gradientCounts.chong}</span>
-            <span style={{ color: 'var(--text-faint)', margin: '0 6px' }}>/</span>
-            <span style={{ color: 'var(--accent)' }}>{summary.gradientCounts.wen}</span>
-            <span style={{ color: 'var(--text-faint)', margin: '0 6px' }}>/</span>
-            <span style={{ color: 'var(--safe)' }}>{summary.gradientCounts.bao}</span>
-          </div>
-          <div className="sub">{items.length ? `共 ${items.length} 个志愿` : '—'}</div>
-        </div>
-        <div className="scell t-safe">
-          <div className="k">平均分差</div>
-          <div className="v">
-            {summary.avgMargin !== null ? (
-              <span
-                style={{
-                  color:
-                    summary.avgMargin < 0
-                      ? 'var(--rush)'
-                      : summary.avgMargin >= 20
-                      ? 'var(--safe)'
-                      : 'var(--accent)',
-                }}
-              >
-                {summary.avgMargin > 0 ? '+' : ''}
-                {summary.avgMargin}
-              </span>
-            ) : (
-              '--'
-            )}
-            <span className="small">分</span>
-          </div>
-          <div className="sub">学生分 - 历史最低分</div>
-        </div>
-        <div className="scell t-primary">
-          <div className="k">风险志愿</div>
-          <div className="v" style={{ color: summary.riskCount > 0 ? 'var(--rush)' : 'var(--safe)' }}>
-            {summary.riskCount}
-          </div>
-          <div className="sub">{summary.riskCount > 0 ? '见表格风险列' : '无风险标记'}</div>
-        </div>
-      </div>
-
-      {/* 家长退回意见或定稿提示 */}
+      {/* —— 家长退回 banner (设计稿 pd2-parent-banner) —— */}
       {plan.parentChangeRequest ? (
-        <Alert
-          type="warning"
-          showIcon
-          message="家长退回修改意见"
-          description={plan.parentChangeRequest}
-        />
+        <div className="pd2-parent-banner fade-up">
+          <span className="ic">
+            <WarningOutlined />
+          </span>
+          <div>
+            <strong>家长退回了 v{plan.version} 方案：</strong>
+            <div className="quote">“{plan.parentChangeRequest}”</div>
+          </div>
+        </div>
       ) : null}
       {status === 'APPROVED' ? (
         <Alert type="info" showIcon message="主管已通过，等待家长确认或退回修改。" />
@@ -974,83 +754,217 @@ export default function PlanDetailPage() {
         <Alert type="success" showIcon message="方案已定稿，后续修改请派生新版本。" />
       ) : null}
 
-      {/* C-0 · 风险摘要面板（有风险时才显示） */}
+      {/* —— 版本对比工具栏 (设计稿 pd2-compare-bar; antd Select 保留对比逻辑) —— */}
+      {versions.length > 1 ? (
+        <div className="pd2-compare-bar fade-up d2">
+          <div className="lhs">
+            <span className="pd2-lbl">版本对比：</span>
+            <Select
+              size="small"
+              allowClear
+              placeholder="选择另一版本对比"
+              value={compareVersionId}
+              onChange={(val) => setCompareVersionId(val ?? null)}
+              style={{ minWidth: 240 }}
+              options={versions
+                .filter((v) => v.id !== Number(planId))
+                .map((v) => ({
+                  label: `v${v.versionNo}${v.versionNote ? ` (${v.versionNote})` : ''} · ${v.status}`,
+                  value: v.id,
+                }))}
+            />
+            {compareVersionId !== null ? (
+              <Button size="small" onClick={() => setCompareVersionId(null)}>
+                退出对比
+              </Button>
+            ) : null}
+          </div>
+          <div className="rhs">
+            共 <strong>{versions.length}</strong> 个版本 · 当前 <strong>v{plan.version}</strong>
+          </div>
+        </div>
+      ) : null}
+
+      {/* —— 版本对比面板 —— */}
+      {compareVersionId !== null && compareItems.length > 0 ? (
+        <ComparePanel
+          currentItems={items}
+          compareItems={compareItems}
+          currentLabel={`v${plan?.versionNo ?? '?'}`}
+          compareLabel={`v${comparePlan?.versionNo ?? '?'}`}
+        />
+      ) : null}
+
+      {/* —— Summary (设计稿 pd-summary: 冲/稳/保/招生计划合计) —— */}
+      <div className="pd-summary fade-up d2">
+        <div className="pd-stat t-rush">
+          <div className="k">冲 · Reach</div>
+          <div className="v">{summary.gradientCounts.chong}</div>
+          <div className="sub">高于位次 · 冲刺院校</div>
+        </div>
+        <div className="pd-stat t-stable">
+          <div className="k">稳 · Match</div>
+          <div className="v">{summary.gradientCounts.wen}</div>
+          <div className="sub">持平位次 · 稳妥院校</div>
+        </div>
+        <div className="pd-stat t-safe">
+          <div className="k">保 · Safety</div>
+          <div className="v">{summary.gradientCounts.bao}</div>
+          <div className="sub">低于位次 · 保底院校</div>
+        </div>
+        <div className="pd-stat t-all">
+          <div className="k">招生计划合计</div>
+          <div className="v">{planSum || '--'}</div>
+          <div className="sub">所有专业组招生人数总和</div>
+        </div>
+      </div>
+
+      {/* —— 风险摘要面板 (有风险时才显示, 保留 antd 业务逻辑) —— */}
       <RiskSummaryPanel
         planId={planId}
         onRowClick={(id) => setResolveRiskIds([id])}
         onBatchResolve={(ids) => setResolveRiskIds(ids)}
       />
 
-      {/* C · 志愿明细 */}
-      <Card
-        title={
-          <span>
-            志愿明细
-            {draftSavedAt ? (
-              <span className="ml-2 text-xs text-text-muted">
-                · 草稿已保存 {draftSavedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            ) : null}
-          </span>
-        }
-        className="rounded-2xl shadow-card"
-      >
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={items}
-          pagination={false}
-          scroll={{ x: 820 }}
-          expandable={{
-            expandedRowRender: (item) => (
-              <ItemExpansion
-                item={item}
-                planStatus={status}
-                editable={status === 'DRAFT' || status === 'PENDING_REVIEW'}
-                annotation={annotations[item.sequence] ?? ''}
-                onAnnotationChange={(val) => {
-                  setAnnotations((prev) => {
-                    const next = { ...prev, [item.sequence]: val };
-                    // 同步触发草稿保存(取最新的 reviewComment 和 next annotations)
-                    debouncedSave(reviewComment, next);
-                    return next;
-                  });
-                }}
-                showAnnotationInput={isReviewing}
-                saving={updateMajorSelectionMutation.isPending}
-                onSaveMajors={(payload) =>
-                  updateMajorSelectionMutation.mutate({ itemId: item.id, ...payload })
-                }
-              />
-            ),
-          }}
-        />
-      </Card>
+      {/* —— 主管审核 panel (REVIEWING/PENDING_REVIEW + 主管; 设计稿 pd2-review-panel) —— */}
+      {isReviewing ? (
+        <div className="pd2-review-panel fade-up d2">
+          <div className="head">
+            <h3>
+              主管审核
+              <span className="status-pill">{status === 'REVIEWING' ? '审核中' : '待认领'}</span>
+            </h3>
+            <div className="meta">
+              {annotationCount > 0 ? (
+                <span>
+                  已对 <strong>{annotationCount}</strong> 个志愿填写逐项批注，将随审核动作一起提交
+                </span>
+              ) : (
+                <span>可对每条志愿单独批注，或填写总体审核意见后通过 / 退回</span>
+              )}
+              {draftSavedAt ? (
+                <span>
+                  {' '}· 草稿已保存{' '}
+                  {draftSavedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <textarea
+            className="pd2-reviewer-textarea"
+            placeholder="填写总体审核意见（可选），通过 / 退回 时一起提交"
+            value={reviewComment}
+            onChange={(e) => {
+              const val = e.target.value;
+              setReviewComment(val);
+              debouncedSave(val, annotations);
+            }}
+            rows={3}
+          />
+        </div>
+      ) : null}
 
-      {/* D · 审核记录 Timeline */}
-      <Card title="审核与确认记录" className="rounded-2xl shadow-card">
+      {/* —— 24 条志愿表 (设计稿 pl-tbl div-grid) —— */}
+      <div className="pl-tbl fade-up d3">
+        <div className="pl-tbl-toolhint">
+          <span className="ic">
+            <FileDoneOutlined />
+          </span>
+          点击任意行查看并编辑<b>组内专业</b>
+          {draftSavedAt ? (
+            <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
+              草稿已保存 {draftSavedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          ) : null}
+        </div>
+        <div className="pl-tbl-head">
+          <span>顺位</span>
+          <span>梯度</span>
+          <span>院校</span>
+          <span>专业组</span>
+          <span>专业</span>
+          <span style={{ textAlign: 'right' }}>计划</span>
+          <span style={{ textAlign: 'right' }}>最低分</span>
+          <span style={{ textAlign: 'right' }}>最低位次</span>
+          <span>{isReviewing ? '批注' : ''}</span>
+        </div>
+
+        {items.length === 0 ? (
+          <div style={{ padding: '32px 22px' }}>
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无志愿明细" />
+          </div>
+        ) : (
+          TIER_META.map((meta) => {
+            const tierItems = items.filter((it) => GRADIENT_TIER[it.gradient] === meta.tier);
+            if (tierItems.length === 0) return null;
+            return (
+              <div key={meta.tier}>
+                <div className={`pl-section t-${meta.tier}`}>
+                  <span className="lbl">
+                    ● {meta.ch} · {meta.label}
+                  </span>
+                  <span className="sub">
+                    {meta.en} · 本段 {tierItems.length} 条
+                  </span>
+                </div>
+                {tierItems.map((item) => (
+                  <PlanRow
+                    key={item.id}
+                    item={item}
+                    studentRank={summary.studentRank}
+                    reviewMode={isReviewing}
+                    annotation={annotations[item.sequence] ?? ''}
+                    hasAnnotation={!!annotations[item.sequence]?.trim()}
+                    onAnnotationChange={(val) => {
+                      setAnnotations((prev) => {
+                        const next = { ...prev, [item.sequence]: val };
+                        debouncedSave(reviewComment, next);
+                        return next;
+                      });
+                    }}
+                    planStatus={status}
+                    editable={status === 'DRAFT' || status === 'PENDING_REVIEW'}
+                    saving={updateMajorSelectionMutation.isPending}
+                    onSaveMajors={(payload) =>
+                      updateMajorSelectionMutation.mutate({ itemId: item.id, ...payload })
+                    }
+                  />
+                ))}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* —— 审核与确认记录 Timeline (设计稿 pd2-timeline) —— */}
+      <div className="pd2-timeline fade-up d4">
+        <h3>审核与确认记录</h3>
         {plan.reviews?.length ? (
-          <Timeline
-            items={plan.reviews.map((r: any) => {
+          <div className="pd2-tl-list">
+            {[...plan.reviews].reverse().map((r: any) => {
               const actionMeta = REVIEW_ACTION_LABEL[r.action] ?? { text: r.action, color: 'default' };
-              return {
-                children: (
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-text">
-                        {r.reviewer?.realName || r.reviewer?.username || '系统'}
-                      </span>
-                      {r.reviewerRole ? <Tag>{r.reviewerRole}</Tag> : null}
-                      <Tag color={actionMeta.color}>{actionMeta.text}</Tag>
-                      <span className="text-xs text-text-muted">
+              const tone = REVIEW_ACTION_TONE[r.action] ?? 'muted';
+              return (
+                <div className="pd2-tl-item" key={r.id ?? `${r.action}-${r.createdAt}`}>
+                  <span className={`pd2-tl-dot tone-${tone}`}>
+                    {tone === 'safe' ? (
+                      <CheckCircleOutlined />
+                    ) : tone === 'rush' ? (
+                      <WarningOutlined />
+                    ) : (
+                      <SendOutlined />
+                    )}
+                  </span>
+                  <div className="pd2-tl-body">
+                    <div className="pd2-tl-head">
+                      <strong>{r.reviewer?.realName || r.reviewer?.username || '系统'}</strong>
+                      {r.reviewerRole ? <span className="pd2-role-tag">{r.reviewerRole}</span> : null}
+                      <span className={`pd2-action-tag tone-${tone}`}>{actionMeta.text}</span>
+                      <span className="pd2-tl-time">
                         {now ? formatRelativeTime(new Date(r.createdAt), now) : ''}
                       </span>
                     </div>
-                    {r.comment ? (
-                      <div className="text-sm text-text-secondary">{r.comment}</div>
-                    ) : (
-                      <div className="text-xs text-text-faint">无备注</div>
-                    )}
+                    {r.comment ? <div className="pd2-tl-comment">{r.comment}</div> : null}
                     {Array.isArray(r.itemAnnotations) && r.itemAnnotations.length > 0 ? (
                       <details className="mt-1">
                         <summary className="cursor-pointer text-xs text-text-muted">
@@ -1066,16 +980,16 @@ export default function PlanDetailPage() {
                       </details>
                     ) : null}
                   </div>
-                ),
-              };
+                </div>
+              );
             })}
-          />
+          </div>
         ) : (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无审核记录" />
+          <div className="pd2-tl-empty">暂无审核记录</div>
         )}
-      </Card>
+      </div>
 
-      {/* 志愿填报预案一览表（默认折叠 · 主要用于打印 / 填报对照） */}
+      {/* —— 志愿填报预案一览表 (默认折叠 · 打印 / 填报对照, 保留 antd Collapse + Modal) —— */}
       <Collapse
         className="rounded-2xl bg-surface shadow-card"
         items={[
@@ -1116,7 +1030,7 @@ export default function PlanDetailPage() {
         <PlanPreparationTable plan={plan} items={items} />
       </Modal>
 
-      {/* E · 审下一份 */}
+      {/* —— 审下一份 (保留原业务逻辑) —— */}
       {isReviewing && reviewQueue.length > 0 ? (
         <div className="sticky bottom-4 flex flex-col items-stretch gap-2 rounded-xl border border-border bg-surface px-5 py-3 shadow-card sm:flex-row sm:items-center sm:justify-between">
           <span className="text-sm text-text-muted">
@@ -1153,70 +1067,184 @@ export default function PlanDetailPage() {
 // ── 摘要单元格 ──
 /* SummaryCell 已被设计稿 .stat-cluster + .scell 替换, 函数定义删除避免 unused. */
 
-// ── 展开行：推荐理由 + 风险 + 调剂建议 + 专业选择编辑器 + 教师批注 ──
-function ItemExpansion({
+// ── 志愿行 (设计稿 pl-row div-grid): 院校/专业组/专业/计划/历史分位次 + 点击展开组内专业编辑 ──
+function PlanRow({
   item,
+  studentRank,
+  reviewMode,
+  annotation,
+  hasAnnotation,
+  onAnnotationChange,
   planStatus,
   editable,
-  annotation,
-  onAnnotationChange,
-  showAnnotationInput,
   saving,
   onSaveMajors,
 }: {
   item: any;
+  studentRank: number | null;
+  reviewMode: boolean;
+  annotation: string;
+  hasAnnotation: boolean;
+  onAnnotationChange: (val: string) => void;
   planStatus: string;
   editable: boolean;
-  annotation: string;
-  onAnnotationChange: (val: string) => void;
-  showAnnotationInput: boolean;
   saving?: boolean;
   onSaveMajors?: (payload: { selectedMajors: unknown[]; candidateMajorRanking: unknown[] }) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const [annotateOpen, setAnnotateOpen] = useState(false);
+  const tier = GRADIENT_TIER[item.gradient] ?? 'rush';
+
+  // 已填报专业摘要 (设计稿 majors 列): 取已选专业名拼接, 回退到 majorName
+  const selection = getPlanItemMajorSelection(item as PlanItemMajorSelectionLike);
+  const selectedCount = selection.selectedMajors.length;
+  const poolCount = selection.candidateMajorRanking.length || selectedCount;
+  const fillTxt =
+    selectedCount > 0
+      ? selection.selectedMajors.map((m) => m.majorName).join(' / ')
+      : item.majorName || '—';
+
+  // 历史最低分 / 位次 (复用现有取数算法)
+  const hist = getHistoricalScore(item);
+  const histRank = getHistoricalRank(item);
+  // 最低位次相对学生位次差 (设计稿: 低 N=保险绿 / 高 N=偏险红)
+  let rankDiff: React.ReactNode = null;
+  if (histRank != null && studentRank != null) {
+    const diff = histRank - studentRank;
+    rankDiff =
+      diff > 0 ? (
+        <span style={{ color: 'var(--safe)' }}>低 {Math.abs(diff).toLocaleString()}</span>
+      ) : diff < 0 ? (
+        <span style={{ color: 'var(--rush)' }}>高 {Math.abs(diff).toLocaleString()}</span>
+      ) : (
+        <span>持平</span>
+      );
+  }
+
   const hasMetaInfo = item.selectionReason || item.riskWarning || item.adjustmentAdvice;
-  const hasMajorEditor =
-    item.fullMajorRanking || item.selectedMajors?.length || item.recommendedOrder;
+  const hasMajorEditor = item.fullMajorRanking || item.selectedMajors?.length || item.recommendedOrder;
 
   return (
-    <div className="space-y-4 py-2">
-      {hasMetaInfo ? (
-        <div className="grid gap-3 lg:grid-cols-3">
+    <>
+      <div
+        className={`pl-row ${expanded ? 'is-expanded' : ''}`}
+        onClick={(e) => {
+          // 批注按钮单独处理, 不触发展开
+          if ((e.target as HTMLElement).closest('.pd2-annotate-btn')) return;
+          setExpanded((v) => !v);
+        }}
+      >
+        <span className="idx">
+          <span className="pl-grip" title="顺位">⋮⋮</span>
+          {String(item.sequence).padStart(2, '0')}
+        </span>
+        <span className={`tier-dot t-${tier}`}>{GRADIENT_LABEL[item.gradient] ?? '-'}</span>
+        <div className="uni">
+          <div>
+            <div className="uname">{item.universityName}</div>
+            <div className="ucode">院校代码 {item.universityCode || '—'}</div>
+          </div>
+        </div>
+        <span className="grp">{item.groupCode || '—'}</span>
+        <div className="majors">
+          <span className={`pl-major-chev ${expanded ? 'is-open' : ''}`}>
+            <RightOutlined />
+          </span>
+          <span className="pl-major-txt">{fillTxt}</span>
+          <span className="pl-major-count">
+            已填 {selectedCount}/6 · 组内 {poolCount} 个
+          </span>
           {item.selectionReason ? (
-            <InfoBlock label="推荐理由" tone="info" content={String(item.selectionReason)} />
+            <div
+              style={{
+                fontSize: 10.5,
+                color: 'var(--text-faint)',
+                marginTop: 3,
+                fontStyle: 'italic',
+                flexBasis: '100%',
+              }}
+            >
+              理由 · {item.selectionReason}
+            </div>
           ) : null}
-          {item.riskWarning ? (
-            <InfoBlock label="风险提示" tone="warning" content={String(item.riskWarning)} />
+        </div>
+        <span className="plan">{item.planCount ?? '—'}</span>
+        <span className="score">{hist != null ? hist.score : '—'}</span>
+        <span className="rank">
+          {histRank != null ? histRank.toLocaleString() : '—'}
+          {rankDiff ? (
+            <>
+              <br />
+              <span style={{ fontSize: 10.5 }}>{rankDiff}</span>
+            </>
           ) : null}
-          {item.adjustmentAdvice ? (
-            <InfoBlock label="调剂建议" tone="info" content={String(item.adjustmentAdvice)} />
-          ) : null}
+        </span>
+        <span className="more">
+          {reviewMode ? (
+            <button
+              type="button"
+              className={`pd2-annotate-btn ${hasAnnotation ? 'has' : ''}`}
+              onClick={() => setAnnotateOpen((o) => !o)}
+              title={hasAnnotation ? '已批注' : '加批注'}
+            >
+              {hasAnnotation ? '已写' : '+'}
+            </button>
+          ) : (
+            <span className={`pl-row-chev ${expanded ? 'is-open' : ''}`} title={expanded ? '收起' : '查看组内专业'}>
+              <DownOutlined />
+            </span>
+          )}
+        </span>
+      </div>
+
+      {expanded ? (
+        <div className="pl-majors-panel">
+          <div className="pl-majors-head">
+            组内专业 · 选择并排序填报
+            <span className="sub">
+              [{item.groupCode || '—'}] {item.universityName} · 平行志愿每组最多填 6 个，顺序即调剂优先级
+            </span>
+          </div>
+          <div className="space-y-4">
+            {hasMetaInfo ? (
+              <div className="grid gap-3 lg:grid-cols-3">
+                {item.selectionReason ? (
+                  <InfoBlock label="推荐理由" tone="info" content={String(item.selectionReason)} />
+                ) : null}
+                {item.riskWarning ? (
+                  <InfoBlock label="风险提示" tone="warning" content={String(item.riskWarning)} />
+                ) : null}
+                {item.adjustmentAdvice ? (
+                  <InfoBlock label="调剂建议" tone="info" content={String(item.adjustmentAdvice)} />
+                ) : null}
+              </div>
+            ) : null}
+
+            {hasMajorEditor && onSaveMajors ? (
+              <PlanMajorSelectionEditor
+                item={item}
+                status={planStatus}
+                editable={editable}
+                saving={saving}
+                onSave={onSaveMajors}
+              />
+            ) : null}
+          </div>
         </div>
       ) : null}
 
-      {hasMajorEditor && onSaveMajors ? (
-        <PlanMajorSelectionEditor
-          item={item}
-          status={planStatus}
-          editable={editable}
-          saving={saving}
-          onSave={onSaveMajors}
-        />
-      ) : null}
-
-      {showAnnotationInput ? (
-        <div>
-          <p className="mb-1 text-xs font-medium text-text-muted">
-            教师逐项批注（仅本次审核携带）
-          </p>
-          <Input.TextArea
-            rows={2}
+      {reviewMode && annotateOpen ? (
+        <div className="pd2-annotate-row">
+          <span className="pd2-annotate-label">教师对第 {item.sequence} 顺位的批注</span>
+          <textarea
             value={annotation}
-            placeholder="对该志愿的具体意见，将随审核动作一起提交"
             onChange={(e) => onAnnotationChange(e.target.value)}
+            placeholder="对该志愿的具体意见，将随审核动作一起提交"
+            rows={2}
           />
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 
