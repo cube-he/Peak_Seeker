@@ -15,7 +15,7 @@ export default function HukouSection({ profile }: Props) {
     <Form layout="horizontal" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }} size="small">
       <Row gutter={[16, 0]}>
         <Col xs={24} md={12}>
-          <Form.Item label="户籍">
+          <Form.Item label="户籍" required>
             <AutoSaveCascader
               fieldKeys={['province', 'city', 'county']}
               defaultValue={[profile.province, profile.city, profile.county]}
@@ -25,7 +25,7 @@ export default function HukouSection({ profile }: Props) {
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item label="高考报名地">
+          <Form.Item label="高考报名地" required>
             <AutoSaveCascader
               fieldKeys={['examLocationProvince', 'examLocationCity', 'examLocationCounty']}
               defaultValue={[profile.examLocationProvince, profile.examLocationCity, profile.examLocationCounty]}
@@ -35,7 +35,7 @@ export default function HukouSection({ profile }: Props) {
           </Form.Item>
         </Col>
         <Col xs={12} md={6}>
-          <Form.Item label="农村户籍">
+          <Form.Item label="农村户籍" required>
             <AutoSaveSwitch fieldKey="isRural" defaultValue={profile.isRural} />
           </Form.Item>
         </Col>

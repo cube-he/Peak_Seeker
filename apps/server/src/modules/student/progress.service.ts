@@ -5,9 +5,8 @@ import {
   STAGE_2_FIELDS,
   STAGE_3_FIELDS,
   STUDENT_ONLY_FIELDS,
-  CORE_FOR_RECOMMEND,
-  CORE_FOR_ELIGIBILITY,
-  PHYSICAL_REQUIRED,
+  REQUIRED_FIELDS,
+  RECOMMENDED_FIELDS,
 } from './field-policy';
 import { flattenPreferredMajors } from '../../utils/preferred-majors';
 
@@ -86,31 +85,25 @@ export class ProgressService {
       },
     };
 
-    const overallCompleteness = Math.round(
-      teacherDataCompleteness * 0.4 + studentSelfCompleteness * 0.6,
-    );
+    // 2026-06-25 双档加权: 必填 (REQUIRED_FIELDS, 23 项) 70% + 推荐 (RECOMMENDED_FIELDS) 30%.
+    // preferredMajors 是梯队结构, 用 flattenPreferredMajors 判 "已填".
+    const requiredFilled = REQUIRED_FIELDS.filter((f) => this.isFilled(profile[f])).length;
+    const recommendedFilled = RECOMMENDED_FIELDS.filter((f) =>
+      f === 'preferredMajors'
+        ? flattenPreferredMajors(profile[f]).length > 0
+        : this.isFilled(profile[f]),
+    ).length;
+    const requiredPct = (requiredFilled / REQUIRED_FIELDS.length) * 100;
+    const recommendedPct = (recommendedFilled / RECOMMENDED_FIELDS.length) * 100;
+    const overallCompleteness = Math.round(requiredPct * 0.7 + recommendedPct * 0.3);
 
-    // 推荐硬约束 (2026-06-10 业务定调三层全必填):
-    //   ① CORE_FOR_RECOMMEND — 推荐算法输入 (选科/分数/联系方式)
-    //   ② CORE_FOR_ELIGIBILITY — 批次资格判定 (户籍/农村/性别/出生日期/民族/加分)
-    //   ③ PHYSICAL_REQUIRED — 体检字段 (军/警/司法/航海/消防/军士硬规则)
-    // 其余字段 (政治面貌/分科分数/偏好等) 仍计入完整度但不阻塞"生成方案"按钮.
-    const missingFieldsForRecommend: string[] = TEACHER_ONLY_FIELDS.filter(
+    // 2026-06-25 业务收窄: 推荐硬约束 = 单层 REQUIRED_FIELDS (23 项).
+    // 旧 3 层 (CORE_FOR_RECOMMEND + CORE_FOR_ELIGIBILITY + PHYSICAL_REQUIRED) 已废弃,
+    // 缺 totalScore/birthDate/preferredMajors/身高体重 等不再阻塞"生成方案".
+    // provincialRank (TEACHER_ONLY_FIELDS) 是自动计算字段, 不纳入阻塞判定.
+    const missingFieldsForRecommend: string[] = REQUIRED_FIELDS.filter(
       (f) => !this.isFilled(profile[f]),
     );
-    // 手机号 / 家长手机号 二选一: 只要其一填了就算"联系方式已满足"(业务: 保证能联系上).
-    const contactFilled =
-      this.isFilled(profile['phone']) || this.isFilled(profile['parentPhone']);
-    for (const f of [...CORE_FOR_RECOMMEND, ...CORE_FOR_ELIGIBILITY, ...PHYSICAL_REQUIRED]) {
-      // preferredMajors 是梯队结构: 只有意向池(tier=0)不算"已填", 池子专业不参与推荐
-      const filled =
-        f === 'phone' || f === 'parentPhone'
-          ? contactFilled
-          : f === 'preferredMajors'
-            ? flattenPreferredMajors(profile[f]).length > 0
-            : this.isFilled(profile[f]);
-      if (!filled) missingFieldsForRecommend.push(f);
-    }
     const isRecommendable = missingFieldsForRecommend.length === 0;
 
     return {

@@ -33,12 +33,12 @@ export default function BasicInfoSection({ profile }: Props) {
     <Form layout="horizontal" labelCol={{ span: 8 }} wrapperCol={{ span: 16 }} size="small">
       <Row gutter={[16, 0]}>
         <Col xs={24} sm={12} md={8}>
-          <Form.Item label="姓名">
+          <Form.Item label="姓名" required>
             <AutoSaveField fieldKey="realName" defaultValue={profile.realName ?? ''} />
           </Form.Item>
         </Col>
         <Col xs={24} sm={12} md={8}>
-          <Form.Item label="手机">
+          <Form.Item label="手机" required>
             <AutoSaveField fieldKey="phone" defaultValue={profile.phone ?? ''} />
           </Form.Item>
         </Col>
@@ -48,7 +48,7 @@ export default function BasicInfoSection({ profile }: Props) {
           </Form.Item>
         </Col>
         <Col xs={24} sm={12} md={8}>
-          <Form.Item label="性别">
+          <Form.Item label="性别" required>
             <AutoSaveRadio fieldKey="gender" options={GENDER} defaultValue={profile.gender ?? null} />
           </Form.Item>
         </Col>
@@ -63,7 +63,7 @@ export default function BasicInfoSection({ profile }: Props) {
           </Form.Item>
         </Col>
         <Col xs={24} sm={12} md={8}>
-          <Form.Item label="民族">
+          <Form.Item label="民族" required>
             <AutoSaveSelect
               fieldKey="ethnicity"
               mode="single"
