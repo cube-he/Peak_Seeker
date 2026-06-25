@@ -106,7 +106,7 @@ function rankGapText(
 
 // ============ 小组件 ============
 
-function MatchRing({ score }: { score?: number | null }) {
+export function MatchRing({ score }: { score?: number | null }) {
   const pct = Math.max(0, Math.min(100, Math.round(score ?? 0)));
   const tone = pct >= 90 ? 'safe' : pct >= 75 ? 'accent' : 'rush';
   return (
@@ -132,7 +132,7 @@ function rankBand(lo?: number | null, hi?: number | null): string | null {
   return lo === hi ? `${f(lo)}` : `${f(lo)}~${f(hi)}`;
 }
 
-function PrefDot({ ok, label }: { ok?: boolean; label: string }) {
+export function PrefDot({ ok, label }: { ok?: boolean; label: string }) {
   return (
     <span className={`pgv2-pref-dot ${ok ? 'ok' : 'no'}`}>
       <span className="ic">{ok ? '✓' : '✕'}</span>
@@ -141,7 +141,7 @@ function PrefDot({ ok, label }: { ok?: boolean; label: string }) {
   );
 }
 
-function Sparkline({ data }: { data?: Array<{ year: number; score: number; rank: number }> }) {
+export function Sparkline({ data }: { data?: Array<{ year: number; score: number; rank: number }> }) {
   if (!data || data.length < 2) return null;
   const ranks = data.map((d) => d.rank);
   const min = Math.min(...ranks), max = Math.max(...ranks);
@@ -154,7 +154,7 @@ function Sparkline({ data }: { data?: Array<{ year: number; score: number; rank:
   );
 }
 
-function MBar({ k, v, suffix = '', chg, title }: { k: string; v?: string | number | null; suffix?: string; chg?: number | null; title?: string }) {
+export function MBar({ k, v, suffix = '', chg, title }: { k: string; v?: string | number | null; suffix?: string; chg?: number | null; title?: string }) {
   // 数据源用 "/" 表示无数据, 视同空值, 否则会显示成裸 "/"
   const isEmpty = v == null || v === '' || String(v).trim() === '/';
   const show = isEmpty ? '—' : `${v}${suffix}`;

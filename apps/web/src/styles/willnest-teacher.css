@@ -8686,6 +8686,11 @@
 .wn-teacher-scope .pgv3-grow.is-open { background: var(--primary-fixed); }
 .wn-teacher-scope .pgv3-grow-detail.on { border-color: var(--primary); color: var(--primary); }
 
+/* 内联展开后每行包一层 wrap: 行底边线移到 wrap 上, 最后一行去边 (原 :last-child 选择器已不命中) */
+.wn-teacher-scope .pgv3-grow-wrap .pgv3-grow { border-bottom: 0; }
+.wn-teacher-scope .pgv3-grow-wrap { border-bottom: 1px solid var(--border-subtle); }
+.wn-teacher-scope .pgv3-grow-wrap:last-child { border-bottom: 0; }
+
 /* ——— pgv3-grow-expand 展开面板 ——— */
 /* animation: pgv2-rail-in 省略(keyframes 在 App 中不保证存在) */
 .wn-teacher-scope .pgv3-grow-expand {
