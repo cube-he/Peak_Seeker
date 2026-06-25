@@ -1146,8 +1146,14 @@ export class PlanCandidateService {
       }
 
       if (sort === 'PLAN_COUNT_CHANGE') {
-        // 招生计划变更轴: 默认扩招多在前(planCountChange 降序, 今年-去年); 翻转 = 缩招多在前。无对比数据沉底。
-        const prim = compareDesc(a.planCountChange, b.planCountChange);
+        // 招生计划变更轴: 按卡片展示的"今年招生计划 vs 2025 同专业录取"增减排(扩招多 DESC / 缩招多 ASC)。
+        // 用 currentPlanCount - previousMajorsAdmissionSum2025(与卡片"招生 N人 ±X vs 2025 同专业"同口径);
+        // 不用 planCountChange(那是 vs 去年招生计划, 但历史 group_plan_count 多为空 → 几乎全 null 排不动 → 老师反馈"没生效")。
+        const planVs2025 = (g: any) =>
+          g?.currentPlanCount != null && g?.previousMajorsAdmissionSum2025 != null
+            ? g.currentPlanCount - g.previousMajorsAdmissionSum2025
+            : null;
+        const prim = compareDesc(planVs2025(a), planVs2025(b));
         if (prim !== 0) return prim * sign;
         return this.compareCandidateGroupFallback(a, b, studentRank, false);
       }
