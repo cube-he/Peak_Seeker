@@ -111,7 +111,9 @@ export class BatchConfigService {
     };
     const examTypeLabel = examTypeMap[student.examType ?? 'PHYSICS'] || '物理';
     const planYear = student.examYear ?? 2026;
-    const province = student.province ?? '四川';
+    // 批次结构/批次线按"高考报名省"查(四川招生参照数据); 随迁子女户籍≠报名省 → 优先 examLocationProvince。
+    // 户籍 student.province 另用于 judgeBatchEligibility 的专项/民族判定, 不受影响。
+    const province = student.examLocationProvince ?? student.province ?? '四川';
 
     const list = await this.prisma.batchConfig.findMany({
       where: {

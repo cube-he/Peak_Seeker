@@ -124,6 +124,26 @@ describe('BatchConfigService', () => {
       expect(result.batches[0].admissionOrder).toBe(5);
     });
 
+    it('随迁子女(户籍≠报名省): 批次/批次线按高考报名省(四川)查, 不用户籍省(浙江)', async () => {
+      // 王润型: 户籍浙江、高考报名四川 → 参照数据必须按四川查, 否则查不到→批次0
+      prismaMock.studentProfile.findUnique.mockResolvedValue({
+        ...baseStudent,
+        province: '浙江',
+        examLocationProvince: '四川',
+      });
+      prismaMock.batchConfig.findMany.mockResolvedValue([]);
+      prismaMock.batchLine.findMany.mockResolvedValue([]);
+
+      await service.listEligibleForStudent(10, teacherUser);
+
+      expect(prismaMock.batchConfig.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ province: '四川' }) }),
+      );
+      expect(prismaMock.batchLine.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ province: '四川' }) }),
+      );
+    });
+
     it('SUBSET 硬资格不满足时 verdict=CONDITIONAL + HARD_SUBSET_FAIL', async () => {
       prismaMock.studentProfile.findUnique.mockResolvedValue({
         ...baseStudent,

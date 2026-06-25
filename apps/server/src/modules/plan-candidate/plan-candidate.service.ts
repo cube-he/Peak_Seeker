@@ -1495,7 +1495,9 @@ export class PlanCandidateService {
       }
     }
 
-    const province = student.province ?? '四川';
+    // 招生参照数据(计划/录取/分数段/批次)按"高考报名省"查; 随迁子女户籍≠报名省, 故优先 examLocationProvince。
+    // (户籍 student.province 仍用于专项/民族/地域偏好判定, 不走这里。)
+    const province = student.examLocationProvince ?? student.province ?? '四川';
     const subjects = EXAM_TYPE_TO_SUBJECTS[student.examType ?? 'PHYSICS'] || '物理';
     const source = await this.resolveEnrollmentPlanSource({
       planYear: plan.year,
@@ -2393,7 +2395,9 @@ export class PlanCandidateService {
     });
     if (!student) throw new NotFoundException('学生不存在');
 
-    const province = student.province ?? '四川';
+    // 招生参照数据(计划/录取/分数段/批次)按"高考报名省"查; 随迁子女户籍≠报名省, 故优先 examLocationProvince。
+    // (户籍 student.province 仍用于专项/民族/地域偏好判定, 不走这里。)
+    const province = student.examLocationProvince ?? student.province ?? '四川';
     const subjects = EXAM_TYPE_TO_SUBJECTS[student.examType ?? 'PHYSICS'] || '物理';
     const source = await this.resolveEnrollmentPlanSource({
       planYear: plan.year,
