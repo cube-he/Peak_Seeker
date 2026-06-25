@@ -782,59 +782,162 @@ export class PlanCandidateService {
   }
 
   // 征集(已校验版 2025 起重建): supplementary_records 含 subject(物理/历史)+ groupCode + majorCode。
-  // 按 (院校, 批次, 专业组代码) 聚合到组级, 用学生科类过滤(物理生只看物理征集), 多轮累计。
-  // 同时给出组内各专业的征集数(byMajorCode/byMajorName), 供展开态专业行显示。
+  // 按 (院校, 批次, 专业组代码) 聚合到组级, 用学生科类过滤, 多轮累计 + 跨年透出。
+  // 2025 新高考: 按 groupCode 严格聚合。
+  // 2023/2024 旧高考: subject/groupCode 全 null, 按 majorName 兜底进 byMajorName Map(只挂专业级, 不算组级 total)。
+  // 同时给出组内各专业的征集数(byMajor[year][majorCode|majorName]), 供展开态专业行按年显示。
   private async loadSupplementaryByGroup(
     groups: Map<string, any[]>,
     province: string,
-    year: number,
+    years: number[],
     studentSubject?: string,
   ) {
     const result = new Map<string, any>();
-    if (groups.size === 0 || !(this.prisma as any).supplementaryRecord?.findMany) return result;
+    if (groups.size === 0 || years.length === 0 || !(this.prisma as any).supplementaryRecord?.findMany) return result;
 
     const groupRows = Array.from(groups.entries()).map(([groupKey, rows]) => ({ groupKey, row: rows[0] }));
+    // 历史年 subject 为 null, 新高考 subject 严格匹配; 用 OR 容纳两套
     const records = await (this.prisma as any).supplementaryRecord.findMany({
       where: {
         province: { in: this.provinceAliases(province) },
-        year,
+        year: { in: years },
         universityId: { in: uniqueValues(groupRows.map(({ row }) => row.universityId)) },
-        groupCode: { not: null },
-        ...(studentSubject ? { subject: studentSubject } : {}),
+        ...(studentSubject ? { OR: [{ subject: studentSubject }, { subject: null }] } : {}),
       },
       select: {
-        universityId: true, batch: true, groupCode: true, subject: true,
+        year: true, universityId: true, batch: true, groupCode: true, subject: true,
         majorCode: true, majorName: true, planCount: true, roundNumber: true,
       },
     });
 
-    // 聚合: 院校|批次|组代码 → 累计计划数 + 轮次集合 + 组内各专业征集
-    const agg = new Map<string, { total: number; rounds: Set<number>; byCode: Map<string, number>; byName: Map<string, number> }>();
+    // 双口径聚合:
+    //   newAgg[uni|batch|groupCode] → byYear[year]={ total, rounds:Map<round,count>, byCode:Map<majorCode, total>, byName:... }
+    //   oldByUniBatchMajor[uni|batch|majorName] → byYear[year]={ rounds:Map<round,count>, total }
+    type YearBucket = { total: number; rounds: Map<number, number>; byCode: Map<string, number>; byName: Map<string, number> };
+    const newAgg = new Map<string, Map<number, YearBucket>>();
+    const oldByMajor = new Map<string, Map<number, { total: number; rounds: Map<number, number> }>>();
+
+    const ensureNew = (key: string, year: number) => {
+      let m = newAgg.get(key);
+      if (!m) { m = new Map(); newAgg.set(key, m); }
+      let b = m.get(year);
+      if (!b) { b = { total: 0, rounds: new Map(), byCode: new Map(), byName: new Map() }; m.set(year, b); }
+      return b;
+    };
+    const ensureOld = (key: string, year: number) => {
+      let m = oldByMajor.get(key);
+      if (!m) { m = new Map(); oldByMajor.set(key, m); }
+      let b = m.get(year);
+      if (!b) { b = { total: 0, rounds: new Map() }; m.set(year, b); }
+      return b;
+    };
+
     for (const r of records) {
-      const key = `${r.universityId}|${r.batch}|${r.groupCode}`;
-      let a = agg.get(key);
-      if (!a) { a = { total: 0, rounds: new Set(), byCode: new Map(), byName: new Map() }; agg.set(key, a); }
       const pc = r.planCount ?? 0;
-      a.total += pc;
-      if (r.roundNumber != null) a.rounds.add(r.roundNumber);
-      if (r.majorCode) a.byCode.set(r.majorCode, (a.byCode.get(r.majorCode) ?? 0) + pc);
-      if (r.majorName) a.byName.set(r.majorName, (a.byName.get(r.majorName) ?? 0) + pc);
+      if (pc <= 0 && r.roundNumber == null) continue;
+      const round = r.roundNumber ?? 0;
+      if (r.groupCode != null) {
+        // 新高考 (2025+): 严格组级
+        const b = ensureNew(`${r.universityId}|${r.batch}|${r.groupCode}`, r.year);
+        b.total += pc;
+        b.rounds.set(round, (b.rounds.get(round) ?? 0) + pc);
+        if (r.majorCode) b.byCode.set(r.majorCode, (b.byCode.get(r.majorCode) ?? 0) + pc);
+        if (r.majorName) b.byName.set(r.majorName, (b.byName.get(r.majorName) ?? 0) + pc);
+      } else if (r.majorName) {
+        // 旧高考 (2023/2024): 无 groupCode, 挂 (uni,batch,majorName) 给专业级兜底
+        const b = ensureOld(`${r.universityId}|${r.batch}|${r.majorName}`, r.year);
+        b.total += pc;
+        b.rounds.set(round, (b.rounds.get(round) ?? 0) + pc);
+      }
     }
 
+    const sortedYearsAsc = [...years].sort((a, b) => a - b);
+    const latestYear = sortedYearsAsc[sortedYearsAsc.length - 1];
+    const roundsArr = (rm: Map<number, number>) =>
+      Array.from(rm.entries()).sort((a, b) => a[0] - b[0]).map(([round, count]) => ({ round, count }));
+
     for (const { groupKey, row } of groupRows) {
-      const a = agg.get(`${row.universityId}|${row.batch}|${row.groupCode}`);
-      if (!a || a.total <= 0) continue;
+      const newKey = `${row.universityId}|${row.batch}|${row.groupCode}`;
+      const yearMap = newAgg.get(newKey);
+      // 旧高考兜底: 该组所有 EP 行的 majorName 在 oldByMajor 命中后, 按 (uni,batch) 合并
+      const groupEPRows = groups.get(groupKey) ?? [row];
+      const groupMajorNames = uniqueValues(groupEPRows.map((ep: any) => ep.majorName).filter(Boolean));
+
+      // 组装 byYear (3 年完整, 缺年填 null)
+      const byYear: Record<number, any> = {};
+      let hasAnySignal = false;
+      for (const y of sortedYearsAsc) {
+        const newB = yearMap?.get(y);
+        if (newB && newB.total > 0) {
+          byYear[y] = {
+            totalPlanCount: newB.total,
+            totalRounds: newB.rounds.size,
+            rounds: roundsArr(newB.rounds),
+          };
+          hasAnySignal = true;
+        } else {
+          // 旧高考兜底: 加总该组所有 majorName 在 (uni,batch,majorName) 命中
+          let oldTotal = 0;
+          const oldRoundsMerged = new Map<number, number>();
+          for (const mname of groupMajorNames) {
+            const ob = oldByMajor.get(`${row.universityId}|${row.batch}|${mname}`)?.get(y);
+            if (ob) {
+              oldTotal += ob.total;
+              for (const [rn, ct] of ob.rounds) oldRoundsMerged.set(rn, (oldRoundsMerged.get(rn) ?? 0) + ct);
+            }
+          }
+          if (oldTotal > 0) {
+            byYear[y] = {
+              totalPlanCount: oldTotal,
+              totalRounds: oldRoundsMerged.size,
+              rounds: roundsArr(oldRoundsMerged),
+            };
+            hasAnySignal = true;
+          } else {
+            byYear[y] = null;
+          }
+        }
+      }
+
+      if (!hasAnySignal) continue;
+
+      // 向后兼容: 取最新有数据年的 total 作为顶层 totalPlanCount/totalRounds, sourceYear 也按它取
+      let compatYear = latestYear;
+      for (let i = sortedYearsAsc.length - 1; i >= 0; i--) {
+        if (byYear[sortedYearsAsc[i]] != null) { compatYear = sortedYearsAsc[i]; break; }
+      }
+      const compat = byYear[compatYear];
       result.set(groupKey, {
         scope: 'GROUP_SUBJECT',
         subject: studentSubject ?? null,
-        sourceYear: year,
-        totalPlanCount: a.total,
-        totalRounds: a.rounds.size,
-        byMajorCode: a.byCode,
-        byMajorName: a.byName,
+        sourceYear: compatYear,
+        totalPlanCount: compat?.totalPlanCount ?? 0,
+        totalRounds: compat?.totalRounds ?? 0,
+        byYear,
+        // 内部用, 不外泄给前端
+        byMajorByYear: yearMap,  // newAgg 当年, 专业级精确
+        oldByMajor,  // 旧高考兜底
       });
     }
     return result;
+  }
+
+  // 取某专业行各年征集数(组聚合结果挂下来后, 按 majorCode/majorName 命中)
+  // 2025+ 走 byMajorByYear[year].byCode 优先 byName 兜底;
+  // 2023/2024 走 oldByMajor[uni|batch|majorName][year]
+  private extractMajorSupplementaryByYear(supp: any, ep: any, years: number[]): Record<number, number | null> {
+    const out: Record<number, number | null> = {};
+    const newMap = supp?.byMajorByYear as Map<number, any> | undefined;
+    const oldMap = supp?.oldByMajor as Map<string, Map<number, any>> | undefined;
+    const oldKey = `${ep.universityId}|${ep.batch}|${ep.majorName}`;
+    for (const y of years) {
+      const newB = newMap?.get(y);
+      let v: number | null = null;
+      if (newB) v = newB.byCode?.get(ep.majorCode) ?? newB.byName?.get(ep.majorName) ?? null;
+      if (v == null) v = oldMap?.get(oldKey)?.get(y)?.total ?? null;
+      out[y] = v;
+    }
+    return out;
   }
 
   private async resolveEnrollmentPlanSource(input: EnrollmentPlanSourceInput) {
@@ -1724,7 +1827,12 @@ export class PlanCandidateService {
     ] = await Promise.all([
       previousPlansPromise,
       predictionMapPromise,
-      this.loadSupplementaryByGroup(groups, province, source.admissionBaselineYear, subjects),
+      this.loadSupplementaryByGroup(
+        groups,
+        province,
+        [source.admissionBaselineYear - 2, source.admissionBaselineYear - 1, source.admissionBaselineYear],
+        subjects,
+      ),
       this.resolveStudentRank(student, source.scoreSegmentYear),
       purityMapPromise,
       isNewUniversityMapPromise,
@@ -1899,9 +2007,21 @@ export class PlanCandidateService {
           majorHonor: ep.majorHonor,
           // 2026 招生考试报页码 (整数), 历史年 null. 前端给老师做 P.XX 角标快查纸版页码.
           bookPageNumber: ep.bookPageNumber ?? null,
-          // 专业级征集数(本科类·累计各轮): 展开态专业行显示, 比组级更精确到"这个专业没录满多少"
+          // 专业级征集数(各轮累计): 展开态专业行显示, 比组级更精确到"这个专业没录满多少"
+          // 兼容旧字段 supplementaryCount(最新年的累计), 新前端走 supplementaryByYear
           supplementaryCount: supplementary
-            ? (supplementary.byMajorCode?.get(ep.majorCode) ?? supplementary.byMajorName?.get(ep.majorName) ?? null)
+            ? (this.extractMajorSupplementaryByYear(
+                supplementary,
+                ep,
+                [source.admissionBaselineYear - 2, source.admissionBaselineYear - 1, source.admissionBaselineYear],
+              )[source.admissionBaselineYear] ?? null)
+            : null,
+          supplementaryByYear: supplementary
+            ? this.extractMajorSupplementaryByYear(
+                supplementary,
+                ep,
+                [source.admissionBaselineYear - 2, source.admissionBaselineYear - 1, source.admissionBaselineYear],
+              )
             : null,
           planNotes: ep.planNotes,
           isSinoForeign: ep.isSinoForeign,
@@ -2034,7 +2154,8 @@ export class PlanCandidateService {
         groupChangeType: first.groupChangeType ?? null,
         oldGroupMajors2025: oldGroupMajors2025List,
         dynamicGradient,
-        // 组级·学生科类·多轮累计征集(byMajorCode/byMajorName 是 Map, 不外泄, 只出干净字段)
+        // 组级·学生科类·多轮累计征集. byYear 给每年(可 null) 的累计 + 分轮明细.
+        // sourceYear/totalPlanCount/totalRounds 是向后兼容字段(=最新有数据年的)
         supplementary: supplementary
           ? {
               scope: supplementary.scope,
@@ -2042,6 +2163,7 @@ export class PlanCandidateService {
               sourceYear: supplementary.sourceYear,
               totalPlanCount: supplementary.totalPlanCount,
               totalRounds: supplementary.totalRounds,
+              byYear: supplementary.byYear,
             }
           : null,
         suggestedGradient: dynamicGradient.gradient,

@@ -232,7 +232,7 @@ describe('PlanCandidateService', () => {
 
     await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
 
-    expect(supplSpy).toHaveBeenCalledWith(expect.anything(), expect.anything(), 2025, expect.anything());
+    expect(supplSpy).toHaveBeenCalledWith(expect.anything(), expect.anything(), [2023, 2024, 2025], expect.anything());
   });
 
   it('2026 场景下 score↔rank 换算用 scoreSegmentYear=2025（不是 2026）', async () => {
@@ -1142,32 +1142,37 @@ describe('PlanCandidateService', () => {
   it('ignores supplementary records from a different batch/group', async () => {
     // 征集按 (院校,批次,组代码) 匹配; 不同批次的征集不挂到本组
     prisma.supplementaryRecord.findMany.mockResolvedValue([
-      { universityId: 7, batch: 'Batch B', groupCode: 'G7', subject: '物理', majorCode: '1', majorName: 'M', planCount: 8, roundNumber: 1 },
+      { year: 2025, universityId: 7, batch: 'Batch B', groupCode: 'G7', subject: '物理', majorCode: '1', majorName: 'M', planCount: 8, roundNumber: 1 },
     ]);
 
     const groups = new Map<string, any>([
       ['7|G7|Batch A|General|物理', [{ universityId: 7, batch: 'Batch A', groupCode: 'G7' }]],
     ]);
-    const result: Map<string, any> = await (service as any).loadSupplementaryByGroup(groups, 'Sichuan', 2025, '物理');
+    const result: Map<string, any> = await (service as any).loadSupplementaryByGroup(groups, 'Sichuan', [2023, 2024, 2025], '物理');
 
     expect(result.has('7|G7|Batch A|General|物理')).toBe(false);
   });
 
-  it('aggregates group-level supplementary by subject + rounds', async () => {
-    // 同组同科类多轮累计: round1 物理 12 + round2 物理 22 = 34, 2 轮
+  it('aggregates group-level supplementary by subject + rounds + multi-year byYear', async () => {
+    // 2025 新高考: 组级严格按 groupCode + 多轮累计;
+    // 2024 旧高考: 无 groupCode, 按 majorName 兜底进入 byYear[2024]
     prisma.supplementaryRecord.findMany.mockResolvedValue([
-      { universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: '化工', planCount: 12, roundNumber: 1 },
-      { universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: '化工', planCount: 22, roundNumber: 2 },
+      { year: 2025, universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: '化工', planCount: 12, roundNumber: 1 },
+      { year: 2025, universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: '化工', planCount: 22, roundNumber: 2 },
+      { year: 2024, universityId: 7, batch: 'Batch A', groupCode: null, subject: null, majorCode: null, majorName: '化工', planCount: 6, roundNumber: 1 },
     ]);
     const groups = new Map<string, any>([
-      ['7|G7|Batch A|General|物理', [{ universityId: 7, batch: 'Batch A', groupCode: 'G7' }]],
+      ['7|G7|Batch A|General|物理', [{ universityId: 7, batch: 'Batch A', groupCode: 'G7', majorCode: '0813', majorName: '化工' }]],
     ]);
-    const result: Map<string, any> = await (service as any).loadSupplementaryByGroup(groups, 'Sichuan', 2025, '物理');
+    const result: Map<string, any> = await (service as any).loadSupplementaryByGroup(groups, 'Sichuan', [2023, 2024, 2025], '物理');
     const s = result.get('7|G7|Batch A|General|物理');
     expect(s.scope).toBe('GROUP_SUBJECT');
+    expect(s.sourceYear).toBe(2025);
     expect(s.totalPlanCount).toBe(34);
     expect(s.totalRounds).toBe(2);
-    expect(s.byMajorCode.get('0813')).toBe(34);
+    expect(s.byYear[2025]).toEqual({ totalPlanCount: 34, totalRounds: 2, rounds: [{ round: 1, count: 12 }, { round: 2, count: 22 }] });
+    expect(s.byYear[2024]).toEqual({ totalPlanCount: 6, totalRounds: 1, rounds: [{ round: 1, count: 6 }] });
+    expect(s.byYear[2023]).toBeNull();
   });
 
   it('exposes group-level supplementary filtered by student subject + per-major breakdown', async () => {
@@ -1209,18 +1214,23 @@ describe('PlanCandidateService', () => {
     ]);
     // 组内: 物理 0808 两轮 5+3=8; 另有历史一行(应被科类过滤掉)
     prisma.supplementaryRecord.findMany.mockResolvedValue([
-      { universityId: 8, batch: 'Batch A', groupCode: 'G8', subject: '物理', majorCode: '0808', majorName: 'Scoped Major', planCount: 5, roundNumber: 1 },
-      { universityId: 8, batch: 'Batch A', groupCode: 'G8', subject: '物理', majorCode: '0808', majorName: 'Scoped Major', planCount: 3, roundNumber: 2 },
+      { year: 2025, universityId: 8, batch: 'Batch A', groupCode: 'G8', subject: '物理', majorCode: '0808', majorName: 'Scoped Major', planCount: 5, roundNumber: 1 },
+      { year: 2025, universityId: 8, batch: 'Batch A', groupCode: 'G8', subject: '物理', majorCode: '0808', majorName: 'Scoped Major', planCount: 3, roundNumber: 2 },
     ]);
 
     const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
 
     const group = result.groups[0];
-    expect(group.supplementary).toEqual({
-      scope: 'GROUP_SUBJECT', subject: '物理', sourceYear: 2025, totalPlanCount: 8, totalRounds: 2,
-    });
-    // payload 不外泄 Map
-    expect(group.supplementary.byMajorCode).toBeUndefined();
+    expect(group.supplementary.scope).toBe('GROUP_SUBJECT');
+    expect(group.supplementary.subject).toBe('物理');
+    expect(group.supplementary.sourceYear).toBe(2025);
+    expect(group.supplementary.totalPlanCount).toBe(8);
+    expect(group.supplementary.totalRounds).toBe(2);
+    expect(group.supplementary.byYear[2025]).toEqual({ totalPlanCount: 8, totalRounds: 2, rounds: [{ round: 1, count: 5 }, { round: 2, count: 3 }] });
+    expect(group.supplementary.byYear[2024]).toBeNull();
+    // payload 不外泄内部 Map
+    expect(group.supplementary.byMajorByYear).toBeUndefined();
+    expect(group.supplementary.oldByMajor).toBeUndefined();
     // 专业级征集挂到专业行
     const major = group.majors.find((m: any) => m.majorCode === '0808');
     expect(major.supplementaryCount).toBe(8);
@@ -1617,8 +1627,8 @@ describe('PlanCandidateService', () => {
       },
     ]);
     prisma.supplementaryRecord.findMany.mockResolvedValue([
-      { universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: 'Chemistry Engineering', planCount: 5, roundNumber: 1 },
-      { universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: 'Chemistry Engineering', planCount: 3, roundNumber: 2 },
+      { year: 2025, universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: 'Chemistry Engineering', planCount: 5, roundNumber: 1 },
+      { year: 2025, universityId: 7, batch: 'Batch A', groupCode: 'G7', subject: '物理', majorCode: '0813', majorName: 'Chemistry Engineering', planCount: 3, roundNumber: 2 },
     ]);
 
     const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
