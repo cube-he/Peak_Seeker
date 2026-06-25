@@ -8,6 +8,7 @@ import {
 } from '../interfaces/recommend.types';
 import { HealthFilterService, CheckResult } from './health-filter.service';
 import { RegionFilterService } from './region-filter.service';
+import { isSinoForeignFromNotes } from '../../plan-candidate/sino-foreign-filter';
 
 /**
  * Sub-module 4: Candidate Filter (CRITICAL)
@@ -147,8 +148,8 @@ export class CandidateFilterService {
       // Filter: Tuition budget
       if (ep && !this.withinTuitionBudget(ep, student)) continue;
 
-      // Filter: Sino-foreign cooperation
-      if (ep?.isSinoForeign && !student.acceptSinoForeign) continue;
+      // Filter: Sino-foreign cooperation — 直接读专业备注判定, 不读 is_sino_foreign 物化列
+      if (isSinoForeignFromNotes(ep?.planNotes) && !student.acceptSinoForeign) continue;
 
       // Filter: Private university acceptance
       if (
@@ -334,7 +335,7 @@ export class CandidateFilterService {
 
       planCount: ep?.planCount ?? null,
       tuition: ep?.tuition ?? null,
-      isSinoForeign: ep?.isSinoForeign ?? false,
+      isSinoForeign: isSinoForeignFromNotes(ep?.planNotes),
       subjects: ep?.subjects ?? null,
       subjectRequirements: ep?.subjectRequirements ?? null,
       enrollmentGroupCode: ep?.groupCode ?? null,

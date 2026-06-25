@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isSinoForeignFromNotes } from '../plan-candidate/sino-foreign-filter';
 import type { FindAggregatedDto } from './dto/find-aggregated.dto';
 import type {
   AggregatedAdmissionResponse,
@@ -392,11 +393,13 @@ export class AdmissionService {
         localMasterPoint: true,
         localDoctoralPoint: true,
         isNew: true,
-        isSinoForeign: true,
         planNotes: true,
       },
     });
-    const currentPlan: CurrentEnrollmentPlan | null = planRow ?? null;
+    // 中外合作直接据专业备注判定(不读 is_sino_foreign 物化列, 重导后可能陈旧)
+    const currentPlan: CurrentEnrollmentPlan | null = planRow
+      ? { ...planRow, isSinoForeign: isSinoForeignFromNotes(planRow.planNotes) }
+      : null;
 
     // 征集志愿摘要：按 (university, batch) 维度取最新年份一条
     const suppRow = await this.prisma.supplementarySummary.findFirst({
