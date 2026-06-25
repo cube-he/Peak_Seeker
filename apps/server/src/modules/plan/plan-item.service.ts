@@ -285,6 +285,15 @@ export class PlanItemService {
     return deleted;
   }
 
+  // 清空: 一次性删除该方案全部志愿项 (单事务 + 单次风险重算, 比逐条删省往返/重算)
+  async removeAll(planId: number, actorUserId?: number) {
+    await this.getEditablePlan(planId, actorUserId);
+    const { count } = await this.prisma.planItem.deleteMany({ where: { planId } });
+    // 触发风险重算(非阻塞)
+    this.riskEngine.recomputeForPlan(planId).catch(() => {});
+    return { ok: true, count };
+  }
+
   async reorder(planId: number, itemIds: number[], actorUserId?: number) {
     await this.getEditablePlan(planId, actorUserId);
     const count = await this.prisma.planItem.count({
