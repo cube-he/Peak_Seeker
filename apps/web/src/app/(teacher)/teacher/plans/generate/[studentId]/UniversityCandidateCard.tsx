@@ -132,6 +132,11 @@ export default function UniversityCandidateCard({
           const anchor = g.majorSections?.recommended?.[0]?.majorName ?? g.majors?.[0]?.majorName ?? null;
           const cnt = g.majorCount ?? g.majors?.length ?? 0;
           const smallBatch = typeof g.currentPlanCount === 'number' && g.currentPlanCount > 0 && g.currentPlanCount <= 5;
+          // grow-signals 行: 全用真实字段(纯净度/招生类别/招生计划 vs 去年同组), 不引入设计稿 mock(hit/chg)
+          const planNow = typeof g.currentPlanCount === 'number' ? g.currentPlanCount : null;
+          const planPrev = typeof g.previousPlanCount === 'number' ? g.previousPlanCount : null;
+          const planDelta = planNow != null && planPrev != null ? planNow - planPrev : null;
+          const recruit = g.recruitType ? String(g.recruitType) : null;
           return (
             <div
               className={`pgv3-grow ${muted ? 'is-muted' : ''} ${isSoft ? 'status-soft' : ''}`}
@@ -150,11 +155,6 @@ export default function UniversityCandidateCard({
                 ) : (
                   <span className={`pgv2-tier-tag tone-${GRAD_TONE[grad] ?? 'stable'}`}>{GRAD_LABEL[grad] ?? grad}</span>
                 )}
-                {pur ? (
-                  <span className={`pgv2-tag tone-${pur.tone}`} style={{ marginTop: 3, display: 'inline-flex' }} title={pur.desc}>
-                    {pur.label}
-                  </span>
-                ) : null}
               </span>
               <span className="grank">
                 末位 <b>{fmt(g.groupMinRank)}</b>
@@ -196,6 +196,20 @@ export default function UniversityCandidateCard({
                   </button>
                 )}
               </span>
+              {/* grow-signals: 纯净度 / 招生类别 / 招生计划增减 —— 对齐设计稿 dchip 行, 数据全真 */}
+              {(pur || recruit || planNow != null) ? (
+                <span className="grow-signals">
+                  {pur ? (
+                    <span className={`pgv2-dchip tone-${pur.tone}`} title={pur.desc}>纯净度 {pur.label}</span>
+                  ) : null}
+                  {planNow != null ? (
+                    <span className="pgv2-dchip tone-accent" title="本组 2026 招生计划及相对去年同组增减">
+                      招生 {planNow} 人{planDelta ? (planDelta > 0 ? ` +${planDelta}` : ` ${planDelta}`) : ''}
+                    </span>
+                  ) : null}
+                  {recruit ? <span className="pgv2-dchip tone-neutral">{recruit}</span> : null}
+                </span>
+              ) : null}
             </div>
           );
         })}

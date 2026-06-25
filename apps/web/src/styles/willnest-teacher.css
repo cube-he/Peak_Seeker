@@ -8282,10 +8282,10 @@
   display: inline-flex; align-items: center; gap: 5px;
 }
 .wn-teacher-scope .pgv3-fchip:hover { border-color: var(--primary); color: var(--primary); }
-.wn-teacher-scope .pgv3-fchip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
-.wn-teacher-scope .pgv3-fchip.on.t-rush   { background: var(--rush);   border-color: var(--rush); }
-.wn-teacher-scope .pgv3-fchip.on.t-stable { background: var(--stable); border-color: var(--stable); }
-.wn-teacher-scope .pgv3-fchip.on.t-safe   { background: var(--safe);   border-color: var(--safe); }
+.wn-teacher-scope .pgv3-fchip.on { background: var(--primary-fixed); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.wn-teacher-scope .pgv3-fchip.on.t-rush   { background: var(--rush-fixed);   border-color: var(--rush);   color: var(--rush); }
+.wn-teacher-scope .pgv3-fchip.on.t-stable { background: var(--stable-fixed); border-color: var(--stable); color: var(--stable); }
+.wn-teacher-scope .pgv3-fchip.on.t-safe   { background: var(--safe-fixed);   border-color: var(--safe);   color: var(--safe); }
 .wn-teacher-scope .pgv3-fchip .n { font-size: 10.5px; opacity: .7; font-variant-numeric: tabular-nums; }
 .wn-teacher-scope .pgv3-fchip.on .n { opacity: .85; }
 /* 三态 chip(中外合作) */
@@ -8468,11 +8468,14 @@
 /* ==========================================================================
    pgv3 — 专业行(完整数据列)+ 加入按钮放大 + 复核 Drawer
    ========================================================================== */
-/* 8 列:★ / 专业 / 当年分位 / 近3年组录取 / 近3年征集 / 硕博 / 计划 / 操作 */
+/* 6 列:★ / 专业(代码·学费·学制·备注·招生报页码) / 2026计划 / 历年录取矩阵 / 硕博 / 操作 */
 .wn-teacher-scope .pgv3-major-head, .wn-teacher-scope .pgv3-major-row {
-  grid-template-columns: 20px minmax(124px, 1.2fr) 70px 150px 124px 38px 46px 92px !important;
+  grid-template-columns: 16px minmax(110px, 1.4fr) 74px minmax(366px, 1.6fr) 40px 78px !important;
   align-items: center;
+  column-gap: 5px;
 }
+.wn-teacher-scope .pgv3-major-row { padding: 11px 0; }
+.wn-teacher-scope .pgv3-major-row .nm { align-items: flex-start; align-content: flex-start; }
 .wn-teacher-scope .pgv3-major-row .sup3 { display: inline-flex; gap: 5px; align-items: stretch; }
 .wn-teacher-scope .pgv3-major-row .sup3 .s3col {
   display: flex; flex-direction: column; align-items: center; gap: 1px;
@@ -8504,7 +8507,8 @@
 .wn-teacher-scope .pgv3-major-row .hist3 .hr { font-size: 11.5px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 .wn-teacher-scope .pgv3-major-row .hist3 .hsc { font-size: 10px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .wn-teacher-scope .pgv3-major-row .hist3 .hc { font-size: 9.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.wn-teacher-scope .pgv3-major-row .hist3 .h3none { font-size: 10px; color: var(--text-muted); text-align: center; line-height: 1.3; align-self: center; }
+.wn-teacher-scope .pgv3-major-row .hist3 .h3none,
+.wn-teacher-scope .pgv3-major-row .m-hist .h3none { font-size: 10px; color: var(--text-muted); text-align: center; line-height: 1.3; align-self: center; }
 .wn-teacher-scope .pgv3-major-row .dg .none { color: var(--text-faint); }
 
 /* 加入按钮放大(专业行 / Drawer) */
@@ -8594,3 +8598,304 @@
 }
 .wn-teacher-scope .pgv2-rail-reopen:hover { background: var(--surface-dim); }
 .wn-teacher-scope .pgv2-rail-reopen-txt { writing-mode: vertical-rl; letter-spacing: 3px; font-size: 13px; }
+
+/* ============ 工具栏筛选区: 三段分区面板(设计稿 pgv3-toolbar 复刻) ============ */
+/* 单一智能搜索 + 清除 */
+.wn-teacher-scope .pgv3-search-wide { flex: 1 1 320px; max-width: 460px; position: relative; }
+.wn-teacher-scope .pgv3-search-x {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  border: 0; background: var(--surface-dim); color: var(--text-muted);
+  width: 16px; height: 16px; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1;
+}
+.wn-teacher-scope .pgv3-search-x:hover { background: var(--rush-fixed); color: var(--rush); }
+
+/* 梯度主轴 segmented */
+.wn-teacher-scope .pgv3-gradbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.wn-teacher-scope .pgv3-gradbar .gb-lbl { font-size: 11.5px; font-weight: 600; letter-spacing: .5px; color: var(--text-secondary); }
+.wn-teacher-scope .pgv3-gradseg { display: inline-flex; gap: 3px; padding: 3px; background: var(--surface-dim); border-radius: 10px; flex-wrap: wrap; }
+.wn-teacher-scope .pgv3-gradseg .gseg {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 6px 14px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--text-secondary); font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.wn-teacher-scope .pgv3-gradseg .gseg .n { font-size: 11px; font-weight: 700; color: var(--text-faint); font-variant-numeric: tabular-nums; font-style: normal; }
+.wn-teacher-scope .pgv3-gradseg .gseg:hover { color: var(--text); }
+.wn-teacher-scope .pgv3-gradseg .gseg.on { background: var(--surface); box-shadow: 0 1px 3px rgba(26,26,25,.12); font-weight: 700; }
+.wn-teacher-scope .pgv3-gradseg .gseg.on.t-all    { color: var(--primary); }     .wn-teacher-scope .pgv3-gradseg .gseg.on.t-all .n    { color: var(--primary); }
+.wn-teacher-scope .pgv3-gradseg .gseg.on.t-rush   { color: var(--rush); }        .wn-teacher-scope .pgv3-gradseg .gseg.on.t-rush .n   { color: var(--rush); }
+.wn-teacher-scope .pgv3-gradseg .gseg.on.t-stable { color: var(--stable); }      .wn-teacher-scope .pgv3-gradseg .gseg.on.t-stable .n { color: var(--stable); }
+.wn-teacher-scope .pgv3-gradseg .gseg.on.t-safe   { color: var(--safe); }        .wn-teacher-scope .pgv3-gradseg .gseg.on.t-safe .n   { color: var(--safe); }
+.wn-teacher-scope .pgv3-gradseg .gseg.on.t-noline { color: var(--text-secondary); }
+
+/* 已选条件 filterbar */
+.wn-teacher-scope .pgv3-filterbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wn-teacher-scope .pgv3-filterbar .fb-lbl { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; font-size: 11.5px; font-weight: 600; color: var(--primary); }
+.wn-teacher-scope .pgv3-filterbar .fb-lbl svg { width: 13px; height: 13px; }
+.wn-teacher-scope .pgv3-activechips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; }
+.wn-teacher-scope .pgv3-activechips .empty { font-size: 11.5px; color: var(--text-faint); }
+.wn-teacher-scope .pgv3-activechips .ac {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 7px 3px 9px; border-radius: 999px;
+  background: var(--primary-fixed); border: 1px solid transparent;
+  font-size: 11.5px; color: var(--primary); font-weight: 500; cursor: pointer;
+  transition: all var(--dur) var(--ease);
+}
+.wn-teacher-scope .pgv3-activechips .ac:hover { background: var(--rush-fixed); color: var(--rush); }
+.wn-teacher-scope .pgv3-activechips .ac i { font-style: normal; opacity: .65; font-size: 10px; }
+.wn-teacher-scope .pgv3-activechips .ac svg { width: 11px; height: 11px; opacity: .7; }
+.wn-teacher-scope .pgv3-clearall {
+  flex: 0 0 auto; border: 0; background: none; cursor: pointer;
+  font-size: 11.5px; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px;
+}
+.wn-teacher-scope .pgv3-clearall:hover { color: var(--rush); }
+
+/* 展开面板: 三段分区 */
+.wn-teacher-scope .pgv3-panel { display: flex; flex-direction: column; gap: 14px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+.wn-teacher-scope .pgv3-psec { display: flex; flex-direction: column; gap: 9px; }
+.wn-teacher-scope .pgv3-psec h6 {
+  margin: 0 0 1px; display: flex; align-items: center; gap: 7px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 1.2px; color: var(--text-muted);
+}
+.wn-teacher-scope .pgv3-psec h6::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--accent); }
+.wn-teacher-scope .pgv3-panel .flbl { min-width: 80px !important; }
+.wn-teacher-scope .pgv3-panel .pgv3-fchip { padding: 3px 10px; font-size: 11.5px; }
+/* 显示范围 toggle chip */
+.wn-teacher-scope .pgv3-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+  font-size: 11.5px; color: var(--text-secondary); cursor: pointer;
+  transition: all var(--dur) var(--ease); user-select: none;
+}
+.wn-teacher-scope .pgv3-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.wn-teacher-scope .pgv3-toggle:hover { border-color: var(--text-muted); }
+.wn-teacher-scope .pgv3-toggle.on { background: var(--primary-fixed); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.wn-teacher-scope .pgv3-toggle .n { font-size: 10px; opacity: .6; font-style: normal; font-variant-numeric: tabular-nums; }
+.wn-teacher-scope .pgv3-toggle:has(input:disabled) { opacity: .4; cursor: not-allowed; }
+
+/* ==========================================================================
+   追加:pgv3 分层结构 / 专业行矩阵 / 展开详情 / rail-stub
+   来源:WillNest Design System teacher/styles.css (2026-06-25)
+   ========================================================================== */
+
+/* ——— grow-signals / is-open (pgv3-grow 系补充) ——— */
+.wn-teacher-scope .pgv3-grow .grow-signals { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.wn-teacher-scope .pgv3-grow .grow-signals .pgv2-dchip { font-size: 11px; }
+.wn-teacher-scope .pgv3-grow.is-open { background: var(--primary-fixed); }
+.wn-teacher-scope .pgv3-grow-detail.on { border-color: var(--primary); color: var(--primary); }
+
+/* ——— pgv3-grow-expand 展开面板 ——— */
+/* animation: pgv2-rail-in 省略(keyframes 在 App 中不保证存在) */
+.wn-teacher-scope .pgv3-grow-expand {
+  padding: 4px 12px 14px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* ——— pgv3-major-rows 横向滚动容器 ——— */
+.wn-teacher-scope .pgv3-major-rows { overflow-x: auto; }
+.wn-teacher-scope .pgv3-major-rows .pgv3-major-head,
+.wn-teacher-scope .pgv3-major-rows .pgv3-major-row { min-width: 715px; }
+
+/* ——— 院校层级 / 专业组层级 分层结构 ——— */
+.wn-teacher-scope .pgv3-tier { display: flex; gap: 9px; align-items: flex-start; }
+.wn-teacher-scope .pgv3-tier-school { margin: 9px 0 4px; }
+.wn-teacher-scope .pgv3-tier-group {
+  margin-top: 9px; padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  align-items: stretch;
+}
+.wn-teacher-scope .pgv3-tier-group .tier-tag { align-self: flex-start; }
+.wn-teacher-scope .pgv3-tier.pgv3-tier-group .tier-body {
+  flex-direction: row; align-items: stretch; gap: 22px; align-self: center; flex-wrap: wrap;
+}
+.wn-teacher-scope .pgv3-tier-group .tb-main {
+  flex: 1 1 360px; min-width: 300px; max-width: 560px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.wn-teacher-scope .pgv3-tier-group .tb-signals {
+  flex: 1 1 260px; min-width: 220px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px;
+  align-content: center; margin: 0;
+  padding-left: 22px; border-left: 1px solid var(--border-subtle);
+}
+.wn-teacher-scope .pgv3-tier-group .tb-signals .pgv2-dchip { width: 100%; justify-content: flex-start; }
+.wn-teacher-scope .pgv3-tier-group .tb-main .pgv2-ruler { max-width: none; }
+.wn-teacher-scope .pgv3-group-actions {
+  flex: 0 0 132px; display: flex; flex-direction: column; gap: 9px;
+  padding-left: 22px; border-left: 1px solid var(--border-subtle);
+  align-self: stretch; justify-content: center;
+}
+.wn-teacher-scope .pgv3-tier .tier-tag {
+  flex: 0 0 auto; margin-top: 2px;
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  padding: 2px 7px; border-radius: 5px; white-space: nowrap;
+}
+.wn-teacher-scope .pgv3-tier-school .tier-tag { color: var(--primary); background: var(--primary-fixed); }
+.wn-teacher-scope .pgv3-tier-group  .tier-tag { color: var(--accent);  background: var(--accent-fixed); }
+.wn-teacher-scope .pgv3-tier .pgv2-card-tags { margin-bottom: 0; }
+.wn-teacher-scope .pgv3-tier .tier-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; align-self: center; }
+/* 专业组身份行 */
+.wn-teacher-scope .pgv3-group-id { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.wn-teacher-scope .pgv3-group-id .gid-code {
+  font-family: var(--font-heading); font-weight: 700; font-size: 14px;
+  color: var(--accent); letter-spacing: .3px;
+}
+.wn-teacher-scope .pgv3-group-id .gid-name { font-weight: 600; font-size: 14.5px; color: var(--text); }
+.wn-teacher-scope .pgv3-group-id .gid-meta { font-size: 12px; color: var(--text-muted); }
+.wn-teacher-scope .pgv3-tier-group .pgv2-decision-row { margin: 0; }
+
+/* ——— 院校招生代码(卡头) ——— */
+.wn-teacher-scope .pgv2-card-name h3 .pgv3-unicode {
+  margin-left: 9px; font-family: var(--font-body); font-weight: 500;
+  font-size: 11.5px; color: var(--text-muted); letter-spacing: .4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ——— pgv3 专业行:当年列 / 历年矩阵 / 招生计划 / 备注 ——— */
+/* 6 列 grid 覆盖(已在上方基础行定义,此处补充内部子块) */
+.wn-teacher-scope .pgv3-major-row .nm .m-fee {
+  display: block; width: 100%; margin-top: 3px;
+  font-size: 10.5px; color: var(--text-tertiary); font-weight: 400;
+  letter-spacing: .2px;
+}
+.wn-teacher-scope .pgv3-major-row .nm .m-page {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin-top: 4px; padding: 1px 7px;
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+  font-size: 10px; font-weight: 600; letter-spacing: .3px;
+  color: var(--text-secondary); background: var(--surface-dim);
+  border: 1px solid var(--border-subtle); border-radius: 5px; white-space: nowrap;
+}
+/* 当年 2025 列 */
+.wn-teacher-scope .pgv3-major-row .m-cur {
+  display: flex; flex-direction: column; gap: 1px;
+  font-variant-numeric: tabular-nums; line-height: 1.3;
+}
+.wn-teacher-scope .pgv3-major-row .m-cur .cur-plan { font-size: 10px; color: var(--text-muted); }
+.wn-teacher-scope .pgv3-major-row .m-cur .cur-plan b {
+  font-family: var(--font-heading); font-weight: 700; font-size: 15px; color: var(--text); margin-right: 2px;
+}
+.wn-teacher-scope .pgv3-major-row .m-cur .cur-avg { font-size: 11px; color: var(--text); font-weight: 600; }
+.wn-teacher-scope .pgv3-major-row .m-cur .cur-min { font-size: 10.5px; color: var(--text-secondary); }
+.wn-teacher-scope .pgv3-major-row .m-cur i { font-style: normal; color: var(--text-muted); margin-left: 3px; font-size: 9.5px; }
+/* 历年录取矩阵 */
+.wn-teacher-scope .pgv3-major-row .m-hist { display: block; }
+.wn-teacher-scope .pgv3-major-row .mh-grid {
+  display: grid;
+  grid-template-columns: 30px repeat(4, 1fr);
+  column-gap: 2px; row-gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.wn-teacher-scope .pgv3-major-row .mh-grid > i { font-style: normal; display: flex; }
+.wn-teacher-scope .pgv3-major-row .mh-yr {
+  justify-content: center; align-items: center;
+  font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: .2px;
+  padding: 3px 0 4px; border-bottom: 1px solid var(--border-subtle);
+}
+.wn-teacher-scope .pgv3-major-row .mh-yr.cur { color: var(--primary); background: var(--primary-fixed); border-bottom-color: transparent; border-radius: 7px 7px 0 0; }
+.wn-teacher-scope .pgv3-major-row .mh-lbl {
+  align-items: center; justify-content: flex-end;
+  font-size: 10.5px; color: var(--text-muted); font-weight: 500;
+  padding: 0 7px 0 0; letter-spacing: .5px;
+}
+.wn-teacher-scope .pgv3-major-row .mh-cell {
+  flex-direction: row; align-items: baseline; justify-content: center;
+  gap: 4px; line-height: 1.25; padding: 5px 3px;
+}
+.wn-teacher-scope .pgv3-major-row .mh-cell.cur { background: var(--primary-fixed); }
+.wn-teacher-scope .pgv3-major-row .mh-cell.min.cur { border-radius: 0 0 7px 7px; }
+.wn-teacher-scope .pgv3-major-row .mh-cell b { font-weight: 700; font-size: 13.5px; color: var(--text); display: inline-flex; align-items: baseline; }
+.wn-teacher-scope .pgv3-major-row .mh-cell.plan { justify-content: center; gap: 3px; }
+.wn-teacher-scope .pgv3-major-row .mh-cell.plan b { font-size: 13.5px; color: var(--text-secondary); font-weight: 600; }
+.wn-teacher-scope .pgv3-major-row .mh-cell.plan .supp { font-size: 10px; color: var(--accent); font-weight: 600; }
+.wn-teacher-scope .pgv3-major-row .mh-cell.cur b { color: var(--primary); }
+.wn-teacher-scope .pgv3-major-row .mh-cell u { text-decoration: none; font-size: 10.5px; color: var(--text-muted); }
+.wn-teacher-scope .pgv3-major-row .mh-cell.cur u { color: var(--primary-light); }
+.wn-teacher-scope .pgv3-major-row .mh-cell .nw { color: var(--text-faint); font-size: 11px; }
+.wn-teacher-scope .pgv3-major-row .mh-cell .mht { font-size: 11px; font-weight: 700; margin-left: 2px; }
+.wn-teacher-scope .pgv3-major-row .mh-cell .mht.up   { color: var(--rush); }
+.wn-teacher-scope .pgv3-major-row .mh-cell .mht.down { color: var(--safe); }
+.wn-teacher-scope .pgv3-major-row .mh-cell .mht.flat { color: var(--text-faint); }
+/* 2026 招生计划 */
+.wn-teacher-scope .pgv3-major-row .m-plan {
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0;
+  padding: 1px 0 1px 10px;
+  border-left: 3px solid var(--accent);
+  background: none; border-radius: 0;
+}
+.wn-teacher-scope .pgv3-major-row .m-plan .pl-y { font-style: normal; font-size: 9px; color: var(--text-muted); font-weight: 600; letter-spacing: .3px; }
+.wn-teacher-scope .pgv3-major-row .m-plan .pl-row { display: inline-flex; align-items: baseline; gap: 2px; }
+.wn-teacher-scope .pgv3-major-row .m-plan .pl-n { font-family: var(--font-heading); font-weight: 700; font-size: 24px; color: var(--accent); line-height: 1.05; font-variant-numeric: tabular-nums; }
+.wn-teacher-scope .pgv3-major-row .m-plan .pl-u { font-style: normal; font-size: 11px; color: var(--accent); }
+/* 专业备注 */
+.wn-teacher-scope .pgv3-major-row .nm .m-remark {
+  display: block; width: 100%; margin-top: 3px;
+  font-size: 10px; color: var(--text-muted); font-weight: 400; line-height: 1.4;
+}
+.wn-teacher-scope .pgv3-major-row .nm .m-remark i { font-style: normal; color: var(--accent); font-weight: 600; margin-right: 4px; }
+
+/* ——— 专业行展开 toggle ——— */
+.wn-teacher-scope .pgv3-nm-toggle { cursor: pointer; }
+.wn-teacher-scope .pgv3-major-row .nm .md-chev {
+  display: inline-block; margin-right: 5px;
+  color: var(--text-muted); font-weight: 700;
+  transition: transform var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.wn-teacher-scope .pgv3-major-row .nm .md-chev.open { transform: rotate(90deg); color: var(--primary); }
+.wn-teacher-scope .pgv3-major-row.is-detail-open { background: var(--primary-fixed); }
+/* animation: pgv2-rail-in 省略 */
+.wn-teacher-scope .pgv3-major-detail {
+  padding: 12px 14px 14px 28px;
+  background: var(--bg);
+  border-bottom: 1px dashed var(--border-subtle);
+}
+.wn-teacher-scope .pgv3-major-detail .md-facts {
+  display: flex; flex-wrap: wrap; gap: 8px 18px;
+  margin-bottom: 10px;
+  font-size: 12px; color: var(--text-tertiary);
+}
+.wn-teacher-scope .pgv3-major-detail .md-facts b {
+  color: var(--text); font-weight: 700;
+  font-family: var(--font-heading); font-variant-numeric: tabular-nums;
+}
+
+/* ——— pgv2-rail-stub 收起态小标签 ——— */
+/* animation: pgv2-stub-in 省略 */
+.wn-teacher-scope .pgv2-rail-stub {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  width: 60px; padding: 14px 0 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; box-shadow: 0 10px 30px rgba(26, 26, 25, .14);
+  color: var(--text-secondary); cursor: pointer;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.wn-teacher-scope .pgv2-rail-stub:hover { border-color: var(--primary); box-shadow: 0 12px 34px rgba(26, 26, 25, .2); }
+.wn-teacher-scope .pgv2-rail-stub .stub-ic { display: inline-flex; width: 16px; height: 16px; color: var(--text-muted); }
+.wn-teacher-scope .pgv2-rail-stub .stub-ic svg { width: 16px; height: 16px; }
+.wn-teacher-scope .pgv2-rail-stub .stub-label {
+  writing-mode: vertical-rl; letter-spacing: 3px;
+  font-size: 13px; font-weight: 600; color: var(--text);
+}
+.wn-teacher-scope .pgv2-rail-stub .stub-total {
+  min-width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: #fff; font-family: var(--font-heading);
+  font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.wn-teacher-scope .pgv2-rail-stub .stub-tiers {
+  display: flex; flex-direction: column; gap: 5px; width: 46px;
+}
+.wn-teacher-scope .pgv2-rail-stub .st {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2px 7px; border-radius: 6px;
+  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.wn-teacher-scope .pgv2-rail-stub .st i { font-style: normal; font-weight: 500; opacity: .85; }
+.wn-teacher-scope .pgv2-rail-stub .st.rush   { background: var(--rush-fixed);   color: var(--rush); }
+.wn-teacher-scope .pgv2-rail-stub .st.stable { background: var(--stable-fixed); color: var(--stable); }
+.wn-teacher-scope .pgv2-rail-stub .st.safe   { background: var(--safe-fixed);   color: var(--safe); }

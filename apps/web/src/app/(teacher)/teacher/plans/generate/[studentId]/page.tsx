@@ -664,8 +664,6 @@ function CandidateMajorSection({
     if (ap !== bp) return bp - ap;
     return (b.matchesKeyword ? 1 : 0) - (a.matchesKeyword ? 1 : 0);
   });
-  const sup = (group as any)?.supplementary;
-  const supYear = sup?.sourceYear ? `'${String(sup.sourceYear).slice(2)}` : '征集';
   return (
     <div className={styles.majorSection}>
       <div className={styles.majorSectionHead}>
@@ -675,23 +673,19 @@ function CandidateMajorSection({
       <div className="pgv2-major-rows pgv3-major-rows">
         <div className="pgv2-major-head pgv3-major-head">
           <span />
-          <span>专业</span>
-          <span>当年最低<br />分 / 位次</span>
-          <span>近 3 年组录取 <i>位次 / 分 / 录取数</i></span>
-          <span>近 3 年征集 <i>人 / 轮</i></span>
+          <span>专业 · 代码 / 学费 / 学制 / 备注</span>
+          <span>2026<br />招生计划</span>
+          <span>历年录取 2025 → 2022 <i>计划 · 平均分(位次) · 最低分(位次)</i></span>
           <span>硕博</span>
-          <span>本专业<br />计划</span>
           <span />
         </div>
         {sortedMajors.map((major) => {
-          const curr = major.majorMinScore;
-          const prev = major.previousMajorMinScore;
-          const trend = curr != null && prev != null ? curr - prev : null;
           const isAdded = addingMajorKey === major.enrollmentPlanId;
           const evalText = major.disciplineEval && String(major.disciplineEval).trim() && String(major.disciplineEval).trim() !== '/' ? String(major.disciplineEval).trim() : null;
           const rankText = !evalText && major.majorRanking && String(major.majorRanking).trim() && String(major.majorRanking).trim() !== '/' ? String(major.majorRanking).trim() : null;
-          const hist = (group?.history3y ?? []).slice(-3);
-          const supCount = major.supplementaryCount;
+          // 专业 4 年录取序列 (后端 majorHistory4y, 倒推 2025→2022), 无数据则空数组
+          const h4 = (major.majorHistory4y ?? []);
+          const remark = major.planNotes && String(major.planNotes).trim() ? String(major.planNotes).trim() : null;
           return (
             <div
               key={major.enrollmentPlanId}
@@ -702,7 +696,7 @@ function CandidateMajorSection({
             >
               {/* 1 星标 */}
               <span className={`pgv2-star ${section === 'RECOMMENDED' ? 'rec' : section === 'RISK' ? 'risk' : 'bak'}`}>★</span>
-              {/* 2 专业名 + 评级/标签 */}
+              {/* 2 专业名 + 评级/标签 + 学费/学制 + 招生报页码 + 备注 */}
               <span className="nm">
                 <b>{major.majorName}{major.majorCode ? <i className="mcode">{major.majorCode}</i> : null}</b>
                 {evalText ? (
@@ -713,56 +707,71 @@ function CandidateMajorSection({
                 {major.isSinoForeign ? <span className="pgv2-mt-tag sino">中外</span> : null}
                 {major.matchesKeyword ? <span className="pgv2-mt-tag" style={{ background: '#fffbe6', color: '#d48806', borderColor: '#ffe58f' }}>🔍 搜索</span> : null}
                 {major.matchesPreferredTier ? <span className="pgv2-mt-tag" style={{ background: '#f6ffed', color: '#389e0d', borderColor: '#b7eb8f' }}>🎯 梯队意向</span> : null}
-                {major.planNotes ? <NotesChip notes={major.planNotes} /> : null}
                 {major.isRecommendedAnchor ? <span className="pgv2-mt-tag anchor">推荐锚定</span> : null}
+                <span className="m-fee">
+                  {major.tuition != null ? `学费 ${major.tuition.toLocaleString()} 元/年` : '学费 —'}
+                  {major.duration ? ` · 学制 ${major.duration}` : null}
+                </span>
                 {major.bookPageNumber != null ? (
-                  <span
-                    title="2026 招生考试报页码"
-                    style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 6 }}
-                  >
-                    P.{major.bookPageNumber}
-                  </span>
+                  <span className="m-page" title="该专业在《2026 招生考试报》纸质专刊中的页码,便于人工逐条核对">招生报 P.{major.bookPageNumber}</span>
                 ) : null}
+                {remark ? <span className="m-remark" title={remark}><i>备注</i> {remark}</span> : null}
               </span>
-              {/* 3 当年最低分 / 位次 */}
-              <span className="sc">
-                <b>{curr ?? '—'}</b>
-                {trend != null && trend !== 0 ? <span className={trend > 0 ? 'up' : 'down'}>{trend > 0 ? '↗ +' : '↘ '}{trend}</span> : null}
-                <em style={{ display: 'block' }}>位次 {major.majorMinRank?.toLocaleString() ?? '—'}</em>
+              {/* 3 2026 招生计划 */}
+              <span className="m-plan">
+                <i className="pl-y">2026 招生计划</i>
+                <span className="pl-row"><b className="pl-n">{major.planCount ?? '—'}</b><i className="pl-u">人</i></span>
               </span>
-              {/* 4 近3年组录取 */}
-              <span className="hist3" title="该专业组近 3 年录取门槛: 组最低位次 / 最低分 / 录取人数。专业级仅当年, 跨年看组级。">
-                {hist.length ? hist.map((h) => (
-                  <span className="h3col" key={h.year}>
-                    <i className="hy">{`'${String(h.year).slice(2)}`}</i>
-                    <i className="hr">{h.rank != null ? h.rank.toLocaleString() : '—'}</i>
-                    <i className="hsc">{h.score != null ? h.score : '—'}</i>
-                    <i className="hc">{h.count != null ? `${h.count}人` : '—'}</i>
+              {/* 4 历年录取 — 专业级 4 年(2025→2022)对齐矩阵: 计划 · 平均分(位次) · 最低分(位次) */}
+              <span className="m-hist" title="本专业近 4 年(2025→2022)逐年:计划人数 / 平均分(位次) / 最低分(位次)">
+                {h4.length > 0 ? (
+                  <span className="mh-grid">
+                    <i className="mh-corner" />
+                    {h4.map((h) => (
+                      <i className={`mh-yr ${h.year === 2025 ? 'cur' : ''}`} key={h.year}>{h.year === 2025 ? '2025' : `'${String(h.year).slice(2)}`}</i>
+                    ))}
+
+                    <i className="mh-lbl">计划</i>
+                    {h4.map((h) => (
+                      <i className={`mh-cell plan ${h.year === 2025 ? 'cur' : ''}`} key={h.year}>{h.planCount != null ? <b>{h.planCount}</b> : <em className="nw">—</em>}</i>
+                    ))}
+
+                    <i className="mh-lbl">平均</i>
+                    {h4.map((h) => (
+                      <i className={`mh-cell ${h.year === 2025 ? 'cur' : ''}`} key={h.year}>
+                        {h.avgScore != null ? <><b>{h.avgScore}</b>{h.avgRank != null ? <u>{h.avgRank.toLocaleString()}</u> : null}</> : <em className="nw">—</em>}
+                      </i>
+                    ))}
+
+                    <i className="mh-lbl">最低</i>
+                    {h4.map((h, hi) => {
+                      const older = h4[hi + 1];
+                      let mtrend: 'up' | 'down' | 'flat' | null = null;
+                      if (h.minScore != null && older && older.minScore != null) {
+                        const d = h.minScore - older.minScore;
+                        mtrend = d >= 2 ? 'up' : d <= -2 ? 'down' : 'flat';
+                      }
+                      return (
+                        <i className={`mh-cell min ${h.year === 2025 ? 'cur' : ''}`} key={h.year}>
+                          {h.minScore != null ? (
+                            <>
+                              <b>{h.minScore}{mtrend ? <em className={`mht ${mtrend}`} title={mtrend === 'up' ? '较上一年最低分走高 · 竞争升温' : mtrend === 'down' ? '较上一年最低分走低 · 难度回落' : '较上一年基本持平'}>{mtrend === 'up' ? '↗' : mtrend === 'down' ? '↘' : '→'}</em> : null}</b>
+                              {h.minRank != null ? <u>{h.minRank.toLocaleString()}</u> : null}
+                            </>
+                          ) : <em className="nw">—</em>}
+                        </i>
+                      );
+                    })}
                   </span>
-                )) : <span className="h3none">无史线<br />需人工判断</span>}
+                ) : <span className="h3none">无史线<br />需人工判断</span>}
               </span>
-              {/* 5 近3年征集(数据驱动: 后端只有当年组级, 2023/2024旧高考无组代码) */}
-              <span className="sup3" title="本专业征集: 没招满需补录, 常伴随降分, 是可达性的积极信号。2023/2024 旧高考无专业组征集数据, 仅当年。">
-                {supCount != null && supCount > 0 ? (
-                  <span className="s3col">
-                    <i className="sy">{supYear}</i>
-                    <i className="sc2">{supCount}人</i>
-                    <i className="sr">{sup?.totalRounds ? `${sup.totalRounds}轮` : '—'}</i>
-                  </span>
-                ) : <span className="none">无征集</span>}
-              </span>
-              {/* 6 硕/博点 */}
+              {/* 5 硕/博点 */}
               <span className="dg">
-                {major.localMasterPoint || (major as any).localDoctoralPoint ? (
-                  <>
-                    {major.localMasterPoint ? <i className="has">硕</i> : null}
-                    {(major as any).localDoctoralPoint ? <i className="has">博</i> : null}
-                  </>
+                {major.localMasterPoint || major.localDoctoralPoint ? (
+                  <i className="dg-pill">{[major.localMasterPoint ? '硕' : null, major.localDoctoralPoint ? '博' : null].filter(Boolean).join('·')}</i>
                 ) : <i className="none">—</i>}
               </span>
-              {/* 7 本专业计划 */}
-              <span className="pl"><b>{major.planCount ?? '—'}</b> 人</span>
-              {/* 8 操作 */}
+              {/* 6 操作 */}
               <span className="op">
                 {group && onAdd ? (
                   <button
@@ -779,36 +788,6 @@ function CandidateMajorSection({
                   </span>
                 )}
               </span>
-              {/* 9 专业 4 年最低/平均分位 + 计划子表 (后端 majorHistory4y, baseline 倒推 4 年): */}
-              {/* 视觉粗糙占位, 等 claude-design 美化; 此处仅打通数据穿透 + null 容错。 */}
-              {major.majorHistory4y && major.majorHistory4y.length > 0 ? (
-                <div style={{ gridColumn: '1 / -1', marginTop: 4, fontSize: 12 }}>
-                  <table style={{ width: '100%', textAlign: 'center', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: '#fafafa' }}>
-                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>年份</th>
-                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>最低分</th>
-                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>最低位次</th>
-                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>平均分</th>
-                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>平均位次</th>
-                        <th style={{ padding: '2px 4px', fontWeight: 500 }}>计划</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {major.majorHistory4y.map((h) => (
-                        <tr key={h.year}>
-                          <td style={{ padding: '2px 4px' }}>{h.year}</td>
-                          <td style={{ padding: '2px 4px' }}>{h.minScore ?? '—'}</td>
-                          <td style={{ padding: '2px 4px' }}>{h.minRank != null ? h.minRank.toLocaleString() : '—'}</td>
-                          <td style={{ padding: '2px 4px' }}>{h.avgScore ?? '—'}</td>
-                          <td style={{ padding: '2px 4px' }}>{h.avgRank != null ? h.avgRank.toLocaleString() : '—'}</td>
-                          <td style={{ padding: '2px 4px' }}>{h.planCount ?? '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
             </div>
           );
         })}
@@ -2432,377 +2411,17 @@ export default function GeneratePlanPage() {
                 </div>
               </div>
 
-              {/* —— 多行筛选盒: 中外合作 / 分数 / 纯净度 / 意向梯队 / 梯度 / 办学性质 —— */}
+              {/* —— 工具栏筛选区: 梯度主轴 + 三段分区面板 + 已选汇总（设计稿 pgv3-toolbar 复刻） —— */}
               <div className="pgv3-filter-rows">
-              {/* —— 中外合作过滤 chip (三态; 两视图通用) —— */}
-              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
-                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>中外合作</span>
-                {([
-                  { v: null, label: '全部' },
-                  { v: 'only' as const, label: '只看中外合作' },
-                  { v: 'exclude' as const, label: '排除中外合作' },
-                ]).map((opt) => (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    className={`pgv2-tier-chip ${sinoForeignFilter === opt.v ? 'is-active' : ''}`}
-                    onClick={() => {
-                      setSinoForeignFilter(opt.v);
-                      setCandidatePage(1);
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
 
-              {/* 学生未接受中外合作时, "只看中外合作"会近乎为空(后端软规则默认隐藏中外合作组) — 给出说明 */}
-              {sinoForeignFilter === 'only' && student?.acceptSinoForeign !== true ? (
-                <div className="pgv2-source-note" style={{ marginTop: 4 }}>
-                  <InfoCircleOutlined />
-                  该生资料「接受中外合作办学」为否，中外合作专业组默认不进候选，所以这里几乎为空。如要查看 / 推荐中外合作，请到{' '}
-                  <a href={`/teacher/students/${studentId}`} target="_blank" rel="noreferrer" style={{ color: 'var(--primary, #1677ff)' }}>
-                    学生资料页
-                  </a>
-                  {' '}开启「接受中外合作」后再筛。
-                </div>
-              ) : null}
-
-              {/* —— 分数条: 全量程 150-750 (两视图通用; 拖动只更显示, 松手才筛) —— */}
-              {candidateGroups ? (
-                <div className="pgv2-tier-bar" style={{ marginTop: 4, alignItems: 'center', gap: 12 }}>
-                  <span style={{ color: '#666', fontSize: 12 }}>
-                    今年预估分{' '}
-                    {(scoreSlider ?? scoreRange)
-                      ? `${(scoreSlider ?? scoreRange)![0]}–${(scoreSlider ?? scoreRange)![1]}`
-                      : '全部'}
-                  </span>
-                  <div style={{ flex: 1, maxWidth: 420, padding: '0 8px' }}>
-                    <Slider
-                      range
-                      // 全量程 150-750: 老师有自主决策权, 不被预估分窗口卡死, 可下拉看保底/上拉看冲档。
-                      // 兜底值 [150,750] 而非预估带: 拉满(=不筛, scoreRange=null)后 thumbs 停在两端不缩回。
-                      min={150}
-                      max={750}
-                      value={scoreSlider ?? scoreRange ?? [150, 750]}
-                      onChange={(v) => setScoreSlider(v as [number, number])}
-                      onChangeComplete={(v) => {
-                        const [lo, hi] = v as [number, number];
-                        const isFull = lo <= 150 && hi >= 750;
-                        setScoreRange(isFull ? null : [lo, hi]);
-                        setScoreSlider(null);
-                        setCandidatePage(1);
-                      }}
-                    />
-                  </div>
-                  {scoreRange ? (
-                    <button
-                      type="button"
-                      className="pgv2-tier-chip"
-                      style={{ opacity: 0.7 }}
-                      onClick={() => { setScoreRange(null); setScoreSlider(null); setCandidatePage(1); }}
-                    >
-                      清除
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {/* —— 纯净度过滤 chip (多选;空 = 全部) (#4) —— */}
-              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
-                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>纯净度</span>
-                {[
-                  { lv: 'S', label: '干净', tone: 'safe' },
-                  { lv: 'A', label: '较纯', tone: 'accent' },
-                  { lv: 'B', label: '较乱', tone: 'rush-soft' },
-                  { lv: 'C', label: '混乱', tone: 'rush' },
-                ].map((opt) => {
-                  const active = purityFilter.includes(opt.lv);
-                  return (
-                    <button
-                      key={opt.lv}
-                      type="button"
-                      className={`pgv2-tier-chip ${active ? 'is-active' : ''}`}
-                      onClick={() => togglePurity(opt.lv)}
-                      title={`仅显示「${opt.label}」组（再点取消，全不选 = 全部显示）`}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-                {purityFilter.length > 0 ? (
-                  <button
-                    type="button"
-                    className="pgv2-tier-chip"
-                    onClick={() => setPurityFilter([])}
-                    style={{ opacity: 0.7 }}
-                  >
-                    清除
-                  </button>
-                ) : null}
-              </div>
-
-              {/* —— 招生类型过滤 chip (多选; 空 = 全部; 后端给出可选项即渲染, 无 >1 守门) —— */}
-              {(candidateGroups?.availableRecruitTypes ?? []).length > 0 ? (
-                <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
-                  <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>招生类型</span>
-                  {(candidateGroups?.availableRecruitTypes ?? []).map((rt) => {
-                    const active = recruitTypeFilter.includes(rt);
-                    return (
-                      <button
-                        key={rt}
-                        type="button"
-                        className={`pgv2-tier-chip ${active ? 'is-active' : ''}`}
-                        onClick={() => { toggleRecruitType(rt); setCandidatePage(1); }}
-                        title={`仅显示「${rt}」(再点取消, 全不选 = 全部)`}
-                      >
-                        {rt}
-                      </button>
-                    );
-                  })}
-                  {recruitTypeFilter.length > 0 ? (
-                    <button
-                      type="button"
-                      className="pgv2-tier-chip"
-                      onClick={() => { setRecruitTypeFilter([]); setCandidatePage(1); }}
-                      style={{ opacity: 0.7 }}
-                    >
-                      清除
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {/* —— 意向梯队过滤 chip (每个 chip 带粗略命中数); 院校优先模式下隐藏(专业维度) —— */}
-              {viewMode === 'MAJOR' && ((candidateGroups as any)?.availableTiers ?? []).length > 0 ? (
-                <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
-                  <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>意向梯队</span>
-                  <button
-                    type="button"
-                    className={`pgv2-tier-chip ${appliedTier === 0 ? 'is-active' : ''}`}
-                    onClick={() => setAppliedTier(0)}
-                  >
-                    全部
-                  </button>
-                  {((candidateGroups as any).availableTiers as Array<{tier: number; majors: string[]; groupCount: number}>).map((t) => {
-                    const head = t.majors[0] ?? '(空)';
-                    const more = t.majors.length > 1 ? ` +${t.majors.length - 1}` : '';
-                    const empty = t.groupCount === 0;
-                    return (
-                      <button
-                        key={t.tier}
-                        type="button"
-                        className={`pgv2-tier-chip ${appliedTier === t.tier ? 'is-active' : ''}`}
-                        onClick={() => setAppliedTier(t.tier)}
-                        title={`${t.majors.join('、')} — 本批次候选 ${t.groupCount} 组`}
-                        style={empty ? { opacity: 0.55 } : undefined}
-                      >
-                        梯队{t.tier}: {head}{more} <span style={{ color: empty ? '#bfbfbf' : '#666', fontWeight: 400 }}>({t.groupCount})</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-
-              {/* —— 办学性质 chip (两视图通用; 5 项单选) —— */}
-              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
-                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>办学性质</span>
-                {([
-                  { v: null, label: '全部' },
-                  { v: 'public' as const, label: '公办' },
-                  { v: 'private' as const, label: '民办' },
-                  { v: 'sinoForeign' as const, label: '中外合作' },
-                  { v: 'hkMacau' as const, label: '港澳合作' },
-                  { v: 'independent' as const, label: '独立学院' },
-                ]).map((opt) => (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    className={`pgv2-tier-chip ${natureFilter === opt.v ? 'is-active' : ''}`}
-                    onClick={() => setNatureFilter(opt.v)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* —— 院校标签 chip (985 / 211 / 双一流; 多选 AND) —— */}
-              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
-                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>院校标签</span>
-                {([
-                  { v: '985', label: '985' },
-                  { v: '211', label: '211' },
-                  { v: 'doubleFirstClass', label: '双一流' },
-                ]).map((opt) => {
-                  const active = tagsFilter.includes(opt.v);
-                  return (
-                    <button
-                      key={opt.v}
-                      type="button"
-                      className={`pgv2-tier-chip ${active ? 'is-active' : ''}`}
-                      onClick={() => toggleTag(opt.v)}
-                      title="多选 AND: 同时满足所选标签"
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-                {tagsFilter.length > 0 ? (
-                  <button
-                    type="button"
-                    className="pgv2-tier-chip"
-                    onClick={() => setTagsFilter([])}
-                    style={{ opacity: 0.7 }}
-                  >
-                    清除
-                  </button>
-                ) : null}
-              </div>
-
-              {/* —— 院校背景 chip (多选 OR) ——
-                  chip label 与生产 universityBackground token 一致, 用 String.includes() OR 子串匹配 */}
-              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
-                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>院校背景</span>
-                {[
-                  'C9联盟',
-                  '华东五校',
-                  '中坚九校',
-                  '国防七子',
-                  '兵工七子',
-                  '五院四系',
-                  '建筑老八校',
-                  '五财一贸',
-                  '两电一邮',
-                  '八大美院',
-                ].map((b) => {
-                  const active = backgroundsFilter.includes(b);
-                  return (
-                    <button
-                      key={b}
-                      type="button"
-                      className={`pgv2-tier-chip ${active ? 'is-active' : ''}`}
-                      onClick={() => toggleBackground(b)}
-                      title="多选 OR: 命中任一即显示"
-                    >
-                      {b}
-                    </button>
-                  );
-                })}
-                {backgroundsFilter.length > 0 ? (
-                  <button
-                    type="button"
-                    className="pgv2-tier-chip"
-                    onClick={() => setBackgroundsFilter([])}
-                    style={{ opacity: 0.7 }}
-                  >
-                    清除
-                  </button>
-                ) : null}
-              </div>
-
-              {/* —— 院校所在省 chip (常用 12 省; 多选 IN) —— */}
-              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
-                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>院校所在省</span>
-                {[
-                  '北京', '上海', '天津', '重庆',
-                  '江苏', '浙江', '广东', '湖北',
-                  '陕西', '四川', '辽宁', '山东',
-                ].map((p) => {
-                  const active = provincesFilter.includes(p);
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      className={`pgv2-tier-chip ${active ? 'is-active' : ''}`}
-                      onClick={() => toggleProvince(p)}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
-                {provincesFilter.length > 0 ? (
-                  <button
-                    type="button"
-                    className="pgv2-tier-chip"
-                    onClick={() => setProvincesFilter([])}
-                    style={{ opacity: 0.7 }}
-                  >
-                    清除
-                  </button>
-                ) : null}
-              </div>
-
-              {/* —— 城市: 占位输入框, 老师手敲 + 回车添加 (claude-design 后续做选项) —— */}
-              <div className="pgv2-tier-bar" style={{ marginTop: 4, alignItems: 'center', gap: 6 }}>
-                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>院校所在市</span>
-                <input
-                  type="text"
-                  value={cityInput}
-                  onChange={(e) => setCityInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addCity();
-                    }
-                  }}
-                  placeholder="输入城市名,回车添加"
-                  style={{
-                    border: '1px solid #d9d9d9',
-                    borderRadius: 4,
-                    padding: '2px 8px',
-                    fontSize: 12,
-                    width: 160,
-                    height: 24,
-                  }}
-                />
-                {citiesFilter.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    className="pgv2-tier-chip is-active"
-                    onClick={() => removeCity(c)}
-                    title="点击移除"
-                  >
-                    {c} ×
-                  </button>
-                ))}
-                {citiesFilter.length > 0 ? (
-                  <button
-                    type="button"
-                    className="pgv2-tier-chip"
-                    onClick={() => setCitiesFilter([])}
-                    style={{ opacity: 0.7 }}
-                  >
-                    清除
-                  </button>
-                ) : null}
-              </div>
-
-              {/* —— 新增院校/专业 chip (单选) —— */}
-              <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
-                <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>新增</span>
-                {([
-                  { v: null, label: '全部' },
-                  { v: 'major' as const, label: '含新增专业' },
-                  { v: 'university' as const, label: '含新增院校' },
-                ]).map((opt) => (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    className={`pgv2-tier-chip ${newItemFilter === opt.v ? 'is-active' : ''}`}
-                    onClick={() => setNewItemFilter(opt.v)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* —— Region 5: pgv2-tier-bar 8 段梯度过滤 chip; 院校优先模式下隐藏(专业维度) —— */}
+              {/* —— 梯度主轴 segmented（独立一段; 仅专业优先） —— */}
               {viewMode === 'MAJOR' ? (
-                <div className="pgv2-tier-bar">
+                <div className="pgv3-gradbar">
+                  <span className="gb-lbl">梯度</span>
+                  <div className="pgv3-gradseg">
                   {GRADIENT_FILTER_OPTIONS.map((o) => {
                     // 优先用后端全池计数 (tierCounts); 拿不到才退回当前页计数 —— 当前页口径会让
-                    // 老师误判"冲档 0"(实测全池有冲档但排序沉到后面的页)
+                    // 老师误判"冲档0"(实测全池有冲档但排序沉到后面的页)
                     const poolCounts = (candidateGroups as any)?.tierCounts as { rush: number; stable: number; safe: number; noLine?: number } | undefined;
                     const baseGroups = groups.filter((g) => showHidden || !hiddenGroupKeys.has(g.groupKey));
                     const n = poolCounts
@@ -2816,25 +2435,26 @@ export default function GeneratePlanPage() {
                         : o.tones
                           ? baseGroups.filter((g) => !groupHasNoHistoryLine(g) && o.tones!.includes(gradientTier(g))).length
                           : baseGroups.length);
+                    const tone = o.value === 'RUSH' ? 't-rush' : o.value === 'STABLE' ? 't-stable' : o.value === 'SAFE' ? 't-safe' : o.value === 'all' ? 't-all' : o.value === 'NO_LINE' ? 't-noline' : '';
                     return (
                       <button
                         key={o.value}
                         type="button"
-                        className={`pgv2-tier-chip ${gradientFilter === o.value ? 'is-active' : ''}`}
+                        className={`gseg ${tone} ${gradientFilter === o.value ? 'on' : ''}`}
                         onClick={() => setGradientFilter(o.value)}
                       >
-                        {o.label} <span className="n">{n}</span>
+                        {o.label} <i className="n">{n}</i>
                       </button>
                     );
                   })}
-                  <span className="pgv2-tier-sep" aria-hidden="true" />
+                  </div>
                   <span className="pgv2-density-note">
                     当前展示 <strong>{visibleGroups.length}</strong> 个候选, 按
                     <strong> {currentSortLabel}</strong> 排序
                   </span>
                 </div>
               ) : (
-                <div className="pgv2-tier-bar">
+                <div className="pgv3-gradbar">
                   <span className="pgv2-density-note">
                     当前展示 <strong>{candidateUniversities.length}</strong> 所院校（本页）,
                     共 <strong>{candidateGroups?.total ?? 0}</strong> 所 · 按
@@ -2842,6 +2462,421 @@ export default function GeneratePlanPage() {
                   </span>
                 </div>
               )}
+
+              {/* —— 三段分区面板 —— */}
+              <div className="pgv3-panel pgv3-panel-static">
+
+                {/* —— 决策维度 —— */}
+                <section className="pgv3-psec">
+                  <h6>决策维度</h6>
+
+                  {/* 意向梯队 (单选; 仅专业优先模式) */}
+                  {viewMode === 'MAJOR' && ((candidateGroups as any)?.availableTiers ?? []).length > 0 ? (
+                    <div className="pgv3-frow">
+                      <span className="flbl">意向梯队</span>
+                      <button
+                        type="button"
+                        className={`pgv3-fchip ${appliedTier === 0 ? 'on' : ''}`}
+                        onClick={() => setAppliedTier(0)}
+                      >
+                        全部
+                      </button>
+                      {((candidateGroups as any).availableTiers as Array<{tier: number; majors: string[]; groupCount: number}>).map((t) => {
+                        const head = t.majors[0] ?? '(空)';
+                        const more = t.majors.length > 1 ? ` +${t.majors.length - 1}` : '';
+                        const empty = t.groupCount === 0;
+                        return (
+                          <button
+                            key={t.tier}
+                            type="button"
+                            className={`pgv3-fchip ${appliedTier === t.tier ? 'on' : ''}`}
+                            onClick={() => setAppliedTier(t.tier)}
+                            title={`${t.majors.join('、')} — 本批次候选 ${t.groupCount} 组`}
+                            style={empty ? { opacity: 0.55 } : undefined}
+                          >
+                            梯队{t.tier}: {head}{more} <span className="n">{t.groupCount}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  {/* 纯净度 (多选; 空 = 全部) */}
+                  <div className="pgv3-frow">
+                    <span className="flbl">纯净度</span>
+                    <button
+                      type="button"
+                      className={`pgv3-fchip ${purityFilter.length === 0 ? 'on' : ''}`}
+                      onClick={() => setPurityFilter([])}
+                    >
+                      不限
+                    </button>
+                    {[
+                      { lv: 'S', label: '干净' },
+                      { lv: 'A', label: '较纯' },
+                      { lv: 'B', label: '较乱' },
+                      { lv: 'C', label: '混乱' },
+                    ].map((opt) => {
+                      const active = purityFilter.includes(opt.lv);
+                      return (
+                        <button
+                          key={opt.lv}
+                          type="button"
+                          className={`pgv3-fchip ${active ? 'on' : ''}`}
+                          onClick={() => togglePurity(opt.lv)}
+                          title={`仅显示「${opt.label}」组（再点取消，全不选 = 全部显示）`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 分数: antd Slider 全量程 150-750（保留 antd Slider） */}
+                  {candidateGroups ? (
+                    <div className="pgv3-frow">
+                      <span className="flbl">分数</span>
+                      <div style={{ flex: 1, maxWidth: 420, padding: '0 8px' }}>
+                        <Slider
+                          range
+                          // 全量程 150-750: 老师有自主决策权, 不被预估分窗口卡死, 可下拉看保底/上拉看冲档。
+                          // 兜底值 [150,750] 而非预估带: 拉满(=不筛, scoreRange=null)后 thumbs 停在两端不缩回。
+                          min={150}
+                          max={750}
+                          value={scoreSlider ?? scoreRange ?? [150, 750]}
+                          onChange={(v) => setScoreSlider(v as [number, number])}
+                          onChangeComplete={(v) => {
+                            const [lo, hi] = v as [number, number];
+                            const isFull = lo <= 150 && hi >= 750;
+                            setScoreRange(isFull ? null : [lo, hi]);
+                            setScoreSlider(null);
+                            setCandidatePage(1);
+                          }}
+                        />
+                      </div>
+                      <span className="pgv3-dr-vals">
+                        {(scoreSlider ?? scoreRange)
+                          ? `${(scoreSlider ?? scoreRange)![0]} – ${(scoreSlider ?? scoreRange)![1]} 分`
+                          : '全部'}
+                      </span>
+                      {scoreRange ? (
+                        <button
+                          type="button"
+                          className="pgv3-fchip"
+                          style={{ opacity: 0.7 }}
+                          onClick={() => { setScoreRange(null); setScoreSlider(null); setCandidatePage(1); }}
+                        >
+                          清除
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </section>
+
+                {/* —— 院校维度 —— */}
+                <section className="pgv3-psec">
+                  <h6>院校维度</h6>
+
+                  {/* 办学性质 (单选) */}
+                  <div className="pgv3-frow">
+                    <span className="flbl">办学性质</span>
+                    {([
+                      { v: null, label: '全部' },
+                      { v: 'public' as const, label: '公办' },
+                      { v: 'private' as const, label: '民办' },
+                      { v: 'sinoForeign' as const, label: '中外合作' },
+                      { v: 'hkMacau' as const, label: '港澳合作' },
+                      { v: 'independent' as const, label: '独立学院' },
+                    ]).map((opt) => (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        className={`pgv3-fchip ${natureFilter === opt.v ? 'on' : ''}`}
+                        onClick={() => setNatureFilter(opt.v)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 院校标签 (985 / 211 / 双一流; 多选 AND) + 院校背景 (多选 OR) */}
+                  <div className="pgv3-frow">
+                    <span className="flbl">院校标签</span>
+                    {([
+                      { v: '985', label: '985' },
+                      { v: '211', label: '211' },
+                      { v: 'doubleFirstClass', label: '双一流' },
+                    ]).map((opt) => {
+                      const active = tagsFilter.includes(opt.v);
+                      return (
+                        <button
+                          key={opt.v}
+                          type="button"
+                          className={`pgv3-fchip ${active ? 'on' : ''}`}
+                          onClick={() => toggleTag(opt.v)}
+                          title="多选 AND: 同时满足所选标签"
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                    {tagsFilter.length > 0 ? (
+                      <button
+                        type="button"
+                        className="pgv3-fchip"
+                        onClick={() => setTagsFilter([])}
+                        style={{ opacity: 0.7 }}
+                      >
+                        清除
+                      </button>
+                    ) : null}
+                    <span className="flbl" style={{ marginLeft: 12 }}>院校背景</span>
+                    {[
+                      'C9联盟',
+                      '华东五校',
+                      '中坚九校',
+                      '国防七子',
+                      '兵工七子',
+                      '五院四系',
+                      '建筑老八校',
+                      '五财一贸',
+                      '两电一邮',
+                      '八大美院',
+                    ].map((b) => {
+                      const active = backgroundsFilter.includes(b);
+                      return (
+                        <button
+                          key={b}
+                          type="button"
+                          className={`pgv3-fchip ${active ? 'on' : ''}`}
+                          onClick={() => toggleBackground(b)}
+                          title="多选 OR: 命中任一即显示"
+                        >
+                          {b}
+                        </button>
+                      );
+                    })}
+                    {backgroundsFilter.length > 0 ? (
+                      <button
+                        type="button"
+                        className="pgv3-fchip"
+                        onClick={() => setBackgroundsFilter([])}
+                        style={{ opacity: 0.7 }}
+                      >
+                        清除
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {/* 院校所在省 (多选 IN) */}
+                  <div className="pgv3-frow">
+                    <span className="flbl">省份</span>
+                    {[
+                      '北京', '上海', '天津', '重庆',
+                      '江苏', '浙江', '广东', '湖北',
+                      '陕西', '四川', '辽宁', '山东',
+                    ].map((pr) => {
+                      const active = provincesFilter.includes(pr);
+                      return (
+                        <button
+                          key={pr}
+                          type="button"
+                          className={`pgv3-fchip ${active ? 'on' : ''}`}
+                          onClick={() => toggleProvince(pr)}
+                        >
+                          {pr}
+                        </button>
+                      );
+                    })}
+                    {provincesFilter.length > 0 ? (
+                      <button
+                        type="button"
+                        className="pgv3-fchip"
+                        onClick={() => setProvincesFilter([])}
+                        style={{ opacity: 0.7 }}
+                      >
+                        清除
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {/* 院校所在市: 输入框 + 回车添加 */}
+                  <div className="pgv3-frow">
+                    <span className="flbl">城市</span>
+                    <input
+                      type="text"
+                      value={cityInput}
+                      onChange={(e) => setCityInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addCity();
+                        }
+                      }}
+                      placeholder="输入城市名,回车添加"
+                      style={{
+                        border: '1px solid #d9d9d9',
+                        borderRadius: 4,
+                        padding: '2px 8px',
+                        fontSize: 12,
+                        width: 160,
+                        height: 24,
+                      }}
+                    />
+                    {citiesFilter.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className="pgv3-fchip on"
+                        onClick={() => removeCity(c)}
+                        title="点击移除"
+                      >
+                        {c} ×
+                      </button>
+                    ))}
+                    {citiesFilter.length > 0 ? (
+                      <button
+                        type="button"
+                        className="pgv3-fchip"
+                        onClick={() => setCitiesFilter([])}
+                        style={{ opacity: 0.7 }}
+                      >
+                        清除
+                      </button>
+                    ) : null}
+                  </div>
+                </section>
+
+                {/* —— 招生与显示 —— */}
+                <section className="pgv3-psec">
+                  <h6>招生与显示</h6>
+
+                  {/* 招生类别 (多选) + 中外合作 (三态) */}
+                  <div className="pgv3-frow">
+                    {(candidateGroups?.availableRecruitTypes ?? []).length > 0 ? (
+                      <>
+                        <span className="flbl">招生类别</span>
+                        {(candidateGroups?.availableRecruitTypes ?? []).map((rt) => {
+                          const active = recruitTypeFilter.includes(rt);
+                          return (
+                            <button
+                              key={rt}
+                              type="button"
+                              className={`pgv3-fchip ${active ? 'on' : ''}`}
+                              onClick={() => { toggleRecruitType(rt); setCandidatePage(1); }}
+                              title={`仅显示「${rt}」(再点取消, 全不选 = 全部)`}
+                            >
+                              {rt}
+                            </button>
+                          );
+                        })}
+                        {recruitTypeFilter.length > 0 ? (
+                          <button
+                            type="button"
+                            className="pgv3-fchip"
+                            onClick={() => { setRecruitTypeFilter([]); setCandidatePage(1); }}
+                            style={{ opacity: 0.7 }}
+                          >
+                            清除
+                          </button>
+                        ) : null}
+                      </>
+                    ) : null}
+                    <span className="flbl" style={(candidateGroups?.availableRecruitTypes ?? []).length > 0 ? { marginLeft: 12 } : undefined}>中外合作</span>
+                    <span className="pgv3-tristate">
+                      {([
+                        { v: null, label: '全部' },
+                        { v: 'only' as const, label: '只看' },
+                        { v: 'exclude' as const, label: '排除' },
+                      ]).map((opt) => (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          className={sinoForeignFilter === opt.v ? 'on' : ''}
+                          onClick={() => { setSinoForeignFilter(opt.v); setCandidatePage(1); }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </span>
+                  </div>
+
+                  {/* 学生未接受中外合作时的说明 */}
+                  {sinoForeignFilter === 'only' && student?.acceptSinoForeign !== true ? (
+                    <div className="pgv2-source-note">
+                      <InfoCircleOutlined />
+                      该生资料「接受中外合作办学」为否，中外合作专业组默认不进候选，所以这里几乎为空。如要查看 / 推荐中外合作，请到{' '}
+                      <a href={`/teacher/students/${studentId}`} target="_blank" rel="noreferrer" style={{ color: 'var(--primary, #1677ff)' }}>
+                        学生资料页
+                      </a>
+                      {' '}开启「接受中外合作」后再筛。
+                    </div>
+                  ) : null}
+
+                  {/* 新增 (单选) */}
+                  <div className="pgv3-frow">
+                    <span className="flbl">新增</span>
+                    {([
+                      { v: null, label: '全部' },
+                      { v: 'major' as const, label: '含新增专业' },
+                      { v: 'university' as const, label: '含新增院校' },
+                    ]).map((opt) => (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        className={`pgv3-fchip ${newItemFilter === opt.v ? 'on' : ''}`}
+                        onClick={() => setNewItemFilter(opt.v)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </div>{/* /pgv3-panel */}
+
+              {/* —— 已选条件 filterbar（仅在有激活筛选时出现） —— */}
+              {(() => {
+                const chips: Array<{ id: string; label: string; value: string; clear: () => void }> = [];
+                if (viewMode === 'MAJOR' && appliedTier > 0) chips.push({ id: 'tier', label: '梯队', value: `梯队${appliedTier}`, clear: () => setAppliedTier(0) });
+                purityFilter.forEach((lv) => chips.push({ id: 'purity-' + lv, label: '纯净度', value: ({ S: '干净', A: '较纯', B: '较乱', C: '混乱' } as Record<string, string>)[lv] ?? lv, clear: () => togglePurity(lv) }));
+                if (scoreRange) chips.push({ id: 'score', label: '分数', value: `${scoreRange[0]}–${scoreRange[1]}`, clear: () => { setScoreRange(null); setScoreSlider(null); setCandidatePage(1); } });
+                if (natureFilter) chips.push({ id: 'nature', label: '办学性质', value: ({ public: '公办', private: '民办', sinoForeign: '中外合作', hkMacau: '港澳合作', independent: '独立学院' } as Record<string, string>)[natureFilter] ?? natureFilter, clear: () => setNatureFilter(null) });
+                tagsFilter.forEach((t) => chips.push({ id: 'tag-' + t, label: '标签', value: t === 'doubleFirstClass' ? '双一流' : t, clear: () => toggleTag(t) }));
+                backgroundsFilter.forEach((b) => chips.push({ id: 'bg-' + b, label: '背景', value: b, clear: () => toggleBackground(b) }));
+                provincesFilter.forEach((pr) => chips.push({ id: 'prov-' + pr, label: '省份', value: pr, clear: () => toggleProvince(pr) }));
+                citiesFilter.forEach((c) => chips.push({ id: 'city-' + c, label: '城市', value: c, clear: () => removeCity(c) }));
+                recruitTypeFilter.forEach((rt) => chips.push({ id: 'rt-' + rt, label: '招生类别', value: rt, clear: () => { toggleRecruitType(rt); setCandidatePage(1); } }));
+                if (sinoForeignFilter) chips.push({ id: 'sino', label: '中外合作', value: sinoForeignFilter === 'only' ? '只看' : '排除', clear: () => { setSinoForeignFilter(null); setCandidatePage(1); } });
+                if (newItemFilter) chips.push({ id: 'new', label: '新增', value: newItemFilter === 'major' ? '含新增专业' : '含新增院校', clear: () => setNewItemFilter(null) });
+                if (chips.length === 0) return null;
+                const clearAll = () => {
+                  setAppliedTier(0);
+                  setPurityFilter([]);
+                  setScoreRange(null); setScoreSlider(null);
+                  setNatureFilter(null);
+                  setTagsFilter([]);
+                  setBackgroundsFilter([]);
+                  setProvincesFilter([]);
+                  setCitiesFilter([]);
+                  setRecruitTypeFilter([]);
+                  setSinoForeignFilter(null);
+                  setNewItemFilter(null);
+                  setCandidatePage(1);
+                };
+                return (
+                  <div className="pgv3-filterbar">
+                    <span className="fb-lbl"><CheckOutlined /> 已选</span>
+                    <div className="pgv3-activechips">
+                      {chips.map((ch) => (
+                        <button key={ch.id} type="button" className="ac" onClick={ch.clear} title="移除该条件">
+                          <i>{ch.label}</i>{ch.value}<CloseOutlined />
+                        </button>
+                      ))}
+                    </div>
+                    <button type="button" className="pgv3-clearall" onClick={clearAll}>清空</button>
+                  </div>
+                );
+              })()}
               </div>{/* /pgv3-filter-rows */}
 
               {/* —— Region 6: pgv2-source-note 计划口径回退提示 —— */}
