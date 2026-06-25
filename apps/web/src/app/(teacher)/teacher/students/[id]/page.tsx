@@ -30,7 +30,7 @@ import PreferredMajorTierFormItem from '@/components/student/preferred-majors/Pr
 import { tagForLevels, type EligibleLevel } from '@/lib/level-mismatch';
 import { getRegionCascaderOptions, type CascaderOption } from '@/data/student-options';
 import { fieldLabel } from '@/components/student/stage-fields';
-import { CHECK_TO_SECTION, firstMissingSectionKey } from './missing-field-locate';
+import { CHECK_TO_SECTION } from './missing-field-locate';
 import {
   type Subject9Form,
   to9Subjects,
@@ -462,16 +462,17 @@ export default function StudentDetailPage() {
       // 未提交字段沿用库里旧值)。缺关键资料则提示缺哪 + 定位到第一个缺的子页(复用生成方案那套)。
       // 不拦截保存 — 渐进式录入随时可存。toast 统一 key, 连点保存只刷新同一条不堆叠。
       const merged = { ...student, ...(savedValues as Record<string, any>) };
-      const checksAfter = getFieldChecks(merged);
-      const miss = checksAfter.filter((c) => !c.passed);
-      const sec = firstMissingSectionKey(checksAfter);
-      if (miss.length > 0 && sec) {
+      // 只对必填子页缺失项催填(意向/加分/体检等选填缺失不提示) → 必填齐了就只报"保存成功"。
+      const miss = getFieldChecks(merged).filter(
+        (c) => !c.passed && CHECK_TO_SECTION[c.key] === 'required',
+      );
+      if (miss.length > 0) {
         const labels = miss.slice(0, 3).map((c) => c.label).join('、');
         void message.warning({
           content: `已保存 · 还缺 ${miss.length} 项关键资料:${labels}${miss.length > 3 ? ' 等' : ''}，已为你定位`,
           key: 'save-profile',
         });
-        jumpToSection(sec);
+        jumpToSection('required');
       } else {
         void message.success({ content: '保存成功', key: 'save-profile' });
       }
@@ -751,7 +752,10 @@ export default function StudentDetailPage() {
     ? Math.floor((Date.now() - signedAt.getTime()) / 86_400_000)
     : null;
   const checks = getFieldChecks(student);
-  const missingFieldsList = checks.filter((c) => !c.passed);
+  // "缺关键资料" 只算必填子页字段(考试成绩/户籍/色觉); 选填子页(意向/加分/体检)缺失属正常按需采集, 不计入、不催填。
+  const missingFieldsList = checks.filter(
+    (c) => !c.passed && CHECK_TO_SECTION[c.key] === 'required',
+  );
   const intakeStatus: string = student.intakeStatus ?? 'DRAFT';
   const INTAKE_INFO: Record<string, { label: string; tone: string; hint: string }> = {
     DRAFT: { label: '资料草稿', tone: 'muted', hint: '学生还在自填' },
@@ -962,12 +966,12 @@ export default function StudentDetailPage() {
                   void message.warning('需先确认学生资料后再生成');
                   return;
                 }
-                const fieldChecks = getFieldChecks(student);
-                const sec = firstMissingSectionKey(fieldChecks);
-                const firstMissing = fieldChecks.find((c) => !c.passed);
-                if (sec) {
-                  void message.warning(`还缺关键资料:${firstMissing!.label}，已为你定位`);
-                  jumpToSection(sec);
+                const reqMiss = getFieldChecks(student).filter(
+                  (c) => !c.passed && CHECK_TO_SECTION[c.key] === 'required',
+                );
+                if (reqMiss.length > 0) {
+                  void message.warning(`还缺关键资料:${reqMiss[0].label}，已为你定位`);
+                  jumpToSection('required');
                 } else {
                   void message.warning('档案未达到可推荐阈值,请补全上方"缺失项"提示的字段');
                 }
@@ -1150,12 +1154,12 @@ export default function StudentDetailPage() {
               '按需采集 · 每类可由老师手动开启或跳过,缺失不影响基本出方案',
             ],
           };
-          // 每个子页未通过核对项数 → rush 角标; 考试页位次偏差 → accent ! 角标
+          // 必填子页未通过核对项数 → rush 角标; 考试页位次偏差 → accent ! 角标。
+          // 选填子页缺失不算"缺关键资料"(按需采集), 不上红角标。
           const missBySec: Record<string, number> = {};
           for (const c of checks) {
-            if (!c.passed) {
-              const sec = CHECK_TO_SECTION[c.key];
-              if (sec) missBySec[sec] = (missBySec[sec] ?? 0) + 1;
+            if (!c.passed && CHECK_TO_SECTION[c.key] === 'required') {
+              missBySec.required = (missBySec.required ?? 0) + 1;
             }
           }
           const examWarn = !!student.rankCheck?.isMismatch;
