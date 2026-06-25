@@ -2649,17 +2649,21 @@ export default function GeneratePlanPage() {
                 ) : null}
               </div>
 
-              {/* —— 院校背景 chip (7 个联盟; 多选 OR) —— */}
+              {/* —— 院校背景 chip (多选 OR) ——
+                  chip label 与生产 universityBackground token 一致, 用 String.includes() OR 子串匹配 */}
               <div className="pgv2-tier-bar" style={{ marginTop: 4 }}>
                 <span style={{ color: '#666', fontSize: 12, marginRight: 6 }}>院校背景</span>
                 {[
-                  '九校联盟',
-                  '卓越大学联盟',
+                  'C9联盟',
+                  '华东五校',
+                  '中坚九校',
                   '国防七子',
                   '兵工七子',
-                  '法学五院四系',
-                  '六大农林',
-                  '电气二龙四虎',
+                  '五院四系',
+                  '建筑老八校',
+                  '五财一贸',
+                  '两电一邮',
+                  '八大美院',
                 ].map((b) => {
                   const active = backgroundsFilter.includes(b);
                   return (
