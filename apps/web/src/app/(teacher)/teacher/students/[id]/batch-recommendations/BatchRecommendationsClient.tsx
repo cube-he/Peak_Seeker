@@ -223,7 +223,7 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
             共 {data.batches.length} 个批次 · 符合资格 <strong>{eligibleForAll.length}</strong> · 已选 <strong className="sel">{selected.size}</strong>
           </span>
           <span className="br-actions-links">
-            <button onClick={selectAll}>全选符合资格</button>
+            <button onClick={selectAll} title="只全选「符合资格」批次; 「建议谨慎选择」分组的批次可手动逐项勾选">全选符合资格</button>
             <span className="sep">·</span>
             <button onClick={clearAll} disabled={selected.size === 0}>清空</button>
           </span>
@@ -237,7 +237,7 @@ export function BatchRecommendationsClient({ studentId }: { studentId: number })
         )}
         {top.map(renderCard)}
         {bottom.length > 0 && (
-          <div className="br-list-div"><span className="ln"/>不符合条件 · {bottom.length}<span className="ln"/></div>
+          <div className="br-list-div"><span className="ln"/>建议谨慎选择 · {bottom.length} (资格存疑, 老师可按需勾选)<span className="ln"/></div>
         )}
         {bottom.map(renderCard)}
       </div>
