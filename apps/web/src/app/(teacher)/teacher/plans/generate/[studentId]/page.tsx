@@ -1775,7 +1775,7 @@ export default function GeneratePlanPage() {
     : '综合推荐';
   const intakeReady = student?.intakeStatus === 'VERIFIED';
   return (
-    <div className="view-transition pgv2-page">
+    <div className={`view-transition pgv2-page ${planId ? 'has-rail' : ''} ${railCollapsed ? 'rail-collapsed' : ''}`}>
       {/* —— Region 1: pgv2-top 返回 + eyebrow + 标题 + 学生 + 批次 + 操作 —— */}
       <div className="pgv2-top">
         <div className="pgv2-top-l">
