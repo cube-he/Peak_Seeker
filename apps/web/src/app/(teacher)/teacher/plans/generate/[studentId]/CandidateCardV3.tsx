@@ -1,15 +1,24 @@
 /**
- * 候选卡 v3 — 完全复刻新设计稿 plan-generate.jsx 的 pgv2-card 结构:
- *   - MatchHeader (匹配环 + 理由 + 4 偏好 dots + 趋势 sparkline + 预测位次)
- *   - candidate top (院校 + 8 段梯度 chip + tags + 选科/计划/最低 + 操作)
- *   - MetricStrip 6 项就业指标 (招生/考研/深造/就业/薪资/满意度)
- *   - 展开 3 Tab 框架 (Tab 内容由父组件 renderExpandedContent 提供 → 复用现有
- *     CandidateMajorSection / EvidenceItem / UniversityBadges 真实字段渲染)
+ * 候选卡 v3 — 逐行照抄设计稿 plan-generate.jsx 940-1135 的 pgv2-card(专业优先 MAJOR 卡)结构:
+ *   - pgv2-card-top → pgv2-card-l:
+ *       pgv2-card-name (logo + 校名 + 招生代码 + 梯度 tier-tag + flags)
+ *       pgv3-tier-school (「院校」tag + 院校属性 tags)
+ *       pgv3-tier-group (「专业组」tag + tier-body[tb-main: 组身份/位次尺/分数行 + tb-signals: 决策 dchip]
+ *                        + pgv3-group-actions[iconcol 对比/移除 + cta 加入])
+ *   - 展开态 pgv2-card-body: pgv2-match-header (匹配环+理由+偏好+趋势) + pgv2-metric-bar (6 项)
+ *       + 专业级内容 (renderExpandedContent — 含 P.XX 页码 / 4 年历史 / 征集 byYear, 由父组件提供)
  *
  * 设计稿 mock 字段 → 真实字段映射全部内置 (g.uniName → group.universityName 等)。
- * className 用 pgv2-*; 在 (teacher) layout 的 .wn-teacher-scope 容器内生效。
+ * className 用 pgv2-* / pgv3-*; 在 (teacher) layout 的 .wn-teacher-scope 容器内生效。
  */
 import React from 'react';
+import {
+  CheckOutlined,
+  CloseOutlined,
+  PlusOutlined,
+  RollbackOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
 import UniversityLogo from '@/components/university/UniversityLogo';
 
 // 8 段动态梯度 — 与 page.tsx 的 GRADIENT_LABEL / gradientTone 保持一致
@@ -84,24 +93,6 @@ function purityTitle(purity: any): string {
   if (purity.mixedForeign) parts.push('混入中外合作');
   if (Array.isArray(purity.reasons) && purity.reasons[0]) parts.push(purity.reasons[0]);
   return parts.filter(Boolean).join(' · ');
-}
-
-/** rank gap 文案: 老师心算的就是"差多少位/差多少分", 系统直接给绝对值 */
-function rankGapText(
-  studentRank?: number,
-  adjustedRank?: number | null,
-  studentScore?: number,
-  groupMinScore?: number | null,
-): string {
-  if (!studentRank || !adjustedRank) return '位次口径不足';
-  const diff = studentRank - adjustedRank;
-  // 分差: 学生有效分 vs 组 2025 线(跨年对照, 老师惯用口径)
-  const scorePart = studentScore != null && groupMinScore != null
-    ? ` · ${studentScore - groupMinScore >= 0 ? '高线' : '低线'} ${Math.abs(studentScore - groupMinScore)} 分`
-    : '';
-  if (diff > 0) return `落后 ${diff.toLocaleString()} 位${scorePart}`;
-  if (diff < 0) return `领先 ${Math.abs(diff).toLocaleString()} 位${scorePart}`;
-  return `位次基本匹配${scorePart}`;
 }
 
 // ============ 小组件 ============
@@ -268,9 +259,9 @@ export interface CandidateCardV3Props {
 export function CandidateCardV3(props: CandidateCardV3Props) {
   const {
     group, isExpanded, isHidden, isCompare, isAdded,
-    studentRankForDecision, studentScoreForDecision, preferredHitCount, expandedTab,
-    onToggleExpand, onToggleCompare, onHide, onRestore, onAdd, onTabChange,
-    renderExpandedContent, adjustedRank,
+    studentRankForDecision, preferredHitCount, expandedTab,
+    onToggleExpand, onToggleCompare, onHide, onRestore, onAdd,
+    renderExpandedContent,
   } = props;
 
   const tier = tier8(group);
@@ -329,261 +320,238 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
     : tone === 'rush' ? 'chong' : tone === 'safe' ? 'bao' : 'wen';
   const isMuted = reachFar || tooLow || noLine;
 
+  // 组内专业数 · 招生类别(设计稿 gid-meta)。recruitType 走后端真实字段。
+  const recruitType: string = group?.recruitType?.trim?.() || '普通类';
+
+  // 2026 招生 vs 2025 同专业录取数 chip 元数据(组重组后唯一可比口径, 后端按 majorCode 回算 2025)。
+  // delta=0 → tone-muted + "持平", 避免「+0」绿色误读为扩招。
+  const admitVs2025 = (group?.currentPlanCount != null && group?.previousMajorsAdmissionSum2025 != null)
+    ? (() => {
+        const cur = group.currentPlanCount as number;
+        const prev = group.previousMajorsAdmissionSum2025 as number;
+        const delta = cur - prev;
+        return {
+          tone: delta === 0 ? 'muted' : delta > 0 ? 'safe' : 'rush',
+          label: delta === 0
+            ? `招生 ${cur} 人 (与 2025 持平)`
+            : `招生 ${cur} 人 (${delta > 0 ? '+' : ''}${delta} vs 2025 同专业)`,
+          title: `2026 招 ${cur} 人 vs 2025 同专业录取 ${prev} 人。口径: 取本组 2026 包含的专业, 在 2025 各自的录取人数求和`,
+        };
+      })()
+    : null;
+
   return (
+    // 逐行照抄设计稿 plan-generate.jsx 940-1135 的 pgv2-card(专业优先 MAJOR 卡)DOM 树。
+    // mock g.xxx → 真实 group.xxx; TIcon.x → @ant-design/icons; window 组件 → 现有 props。
     <article
-      className={`pgv2-card ${isExpanded ? 'is-expanded' : ''} ${isHidden ? 'is-hidden' : ''} ${isCompare ? 'is-compare' : ''} dist-${distKey} ${regionMismatch ? 'status-region' : ''} ${isMuted ? 'is-muted' : ''}`}
+      className={`pgv2-card ${isExpanded ? 'is-expanded' : ''} ${isCompare ? 'is-compare' : ''} dist-${distKey} ${regionMismatch ? 'status-region' : ''} ${isMuted ? 'is-muted' : ''} ${isHidden ? 'is-hidden' : ''}`}
       title={mutedReason ? `${mutedReason} —— 已灰显区分, 但仍可由老师自主决策加入。` : undefined}
     >
-      {/* —— MatchHeader: 匹配环 + 理由 + 4 偏好 dots + 趋势 + 预测 —— */}
-      <div className="pgv2-match-header" onClick={onToggleExpand}>
-        <MatchRing score={group?.matchScore} />
-        <div className="pgv2-match-body">
-          <div className="pgv2-match-reason">
-            {mutedReason ? <span style={{ color: '#8c8c8c', fontWeight: 600 }}>【{mutedReason}】 </span> : null}
-            {group?.matchReason ?? '—'}
-          </div>
-          <div className="pgv2-pref-row">
-            <PrefDot ok={group?.prefMatch?.province === 'match'} label="地域" />
-            <PrefDot ok={group?.prefMatch?.tuition === 'within'} label="学费" />
-            <PrefDot ok={group?.prefMatch?.career === 'strong'} label="职业" />
-            {/* 候选池已按选科过滤(选科恒符), "选科"dot 是噪音, 删除 */}
-          </div>
-        </div>
-        {trend ? (
-          <div className="pgv2-trend-mini">
-            <Sparkline data={trend} />
-            <div className="pgv2-trend-meta">
-              <span className="t-range">{trend[0].score} → {trend[trend.length - 1].score}</span>
-              {group?.predictedMinRank?.point != null ? (
-                <span
-                  className="t-pred"
-                  title={predBand ? `预测今年录取位次区间 ${predBand}(乐观~保守), 区间越宽预测越不确定` : undefined}
-                >
-                  ◇ 预测 {predBand ? `${predBand} 位` : `~${group.predictedMinRank.point.toLocaleString()} 位`}
-                  {confLabel ? <span className={`t-conf ${confCls}`}>{confLabel}</span> : null}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      {/* —— candidate top: 院校 / 梯度 / 标签 / 选科 + 计划 + 最低 / 操作 —— */}
       <div className="pgv2-card-top" onClick={onToggleExpand}>
         <div className="pgv2-card-l">
           <div className="pgv2-card-name">
             <span className={`pgv2-uni-logo tone-${tone}`}>
-              <UniversityLogo name={uniName} logoUrl={uni.logoUrl} size={36} />
+              <UniversityLogo name={uniName} logoUrl={uni.logoUrl} size={28} />
             </span>
-            <h3>
-              {uniName}
-              {group?.universityCode ? (
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.85em', marginLeft: 8, fontWeight: 400, letterSpacing: '0.5px' }}>
-                  {group.universityCode}
-                </span>
-              ) : null}
-            </h3>
+            <h3>{uniName}{group?.universityCode ? <span className="pgv3-unicode">招生代码 {group.universityCode}</span> : null}</h3>
+            {!noLine
+              ? <span className={`pgv2-tier-tag tone-${tone}`}>{GRADIENT_LABEL_8[tier] ?? tier}</span>
+              : null}
             <DistFlag distKey={distKey} />
             {regionMismatch ? <span className="pgv2-status-flag s-region">非意向地区</span> : null}
-            {/* 冲稳保标签只在右侧 grade-badge 显示一次, 此处删除重复 */}
-            {isAdded ? <span className="pgv2-tag tone-muted">已加入</span> : null}
-            {/* 软规则失败分类显示（#3）— 学费/办学性质各自 chip，便于老师判定 */}
-            {group?.softFailBreakdown?.tuition > 0 ? (
-              <span className="pgv2-tag tone-rush-soft" title="组内有学费超学生预算的专业（调剂可能命中）">
-                ¥{group.softFailBreakdown.tuition} 学费超
-              </span>
-            ) : null}
-            {group?.softFailBreakdown?.nature > 0 ? (
-              <span className="pgv2-tag tone-rush-soft" title="组内有办学性质不符学生偏好（公办/民办/合作）的专业">
-                🏛{group.softFailBreakdown.nature} 办学不符
-              </span>
-            ) : null}
-            {group?.softFailBreakdown?.other > 0 ? (
-              <span className="pgv2-tag tone-rush-soft" title="其他软规则不符">
-                {group.softFailBreakdown.other} 其他风险
-              </span>
-            ) : group?.softFailCount > 0 && !group?.softFailBreakdown ? (
-              // 后端老接口 fallback
-              <span className="pgv2-tag tone-rush-soft">{group.softFailCount} 风险专业</span>
-            ) : null}
-            {isHidden ? <span className="pgv2-tag tone-muted">已隐藏</span> : null}
+            {isAdded && <span className="pgv2-tag tone-muted">已加入</span>}
+            {isHidden && <span className="pgv2-tag tone-muted">已隐藏</span>}
           </div>
-          {/* —— 位次刻度尺(核心可视化) —— */}
-          <RankRuler
-            studentRank={studentRankForDecision}
-            groupMinRank={group?.groupMinRank}
-            adjusted={group?.dynamicGradient?.adjustedMinRank ?? group?.predictedMinRank?.point}
-            ratio={typeof edge === 'number' ? edge : undefined}
-            noLine={noLine}
-          />
-          {/* —— 决策要素 chip(纯净度 / 组变动 / 意向命中) —— */}
-          <div className="pgv2-decision-row">
-            {group?.purity?.level && PURITY_META[group.purity.level] ? (
-              <span className={`pgv2-dchip tone-${PURITY_META[group.purity.level].tone}`} title={purityTitle(group.purity)}>
-                纯净度 {purityPercent(group.purity.score) || PURITY_META[group.purity.level].label}
-              </span>
-            ) : null}
-            {group?.groupChangeType && group.groupChangeType !== '未变' && CHANGE_META[group.groupChangeType] ? (
-              <span
-                className={`pgv2-dchip tone-${CHANGE_META[group.groupChangeType].tone}`}
-                title={changeTitle(group)}
-              >
-                {CHANGE_META[group.groupChangeType].label}
-              </span>
-            ) : null}
-            {typeof preferredHitCount === 'number' ? (
-              <span
-                className={`pgv2-dchip ${preferredHitCount > 0 ? 'tone-safe' : 'tone-rush'}`}
-                title="组内命中学生意向的专业数 / 组内专业总数, 命中越少服从调剂落到非意向的风险越高"
-              >
-                意向命中 {preferredHitCount}/{groupMajorCount}
-              </span>
-            ) : null}
-            {/* 2026 招生 vs 2025 同专业录取数 chip — 组重组后唯一可比口径(后端按 majorCode 列表回算 2025) */}
-            {group?.currentPlanCount != null && group?.previousMajorsAdmissionSum2025 != null ? (() => {
-              const cur = group.currentPlanCount as number;
-              const prev = group.previousMajorsAdmissionSum2025 as number;
-              const delta = cur - prev;
-              // delta=0 走 tone-muted + "与 2025 持平" 文案, 避免「+0」绿色误读为扩招
-              const tone = delta === 0 ? 'muted' : delta > 0 ? 'safe' : 'rush';
-              const label = delta === 0
-                ? `招生 ${cur} 人 (与 2025 持平)`
-                : `招生 ${cur} 人 (${delta > 0 ? '+' : ''}${delta} vs 2025 同专业)`;
-              return (
+
+          {/* 院校层级 —— 学校身份属性 */}
+          <div className="pgv3-tier pgv3-tier-school">
+            <span className="tier-tag">院校</span>
+            <div className="pgv2-card-tags">
+              {uni.is985 ? <span className="pgv2-tag tone-neutral">985</span> : null}
+              {uni.is211 ? <span className="pgv2-tag tone-neutral">211</span> : null}
+              {uni.isDoubleFirstClass ? <span className="pgv2-tag tone-neutral">双一流</span> : null}
+              {uni.firstClassCategory ? <span className="pgv2-tag tone-neutral">{uni.firstClassCategory}</span> : null}
+              <span className="pgv2-tag tone-neutral">{uni.runningNature || '公办'}</span>
+              {location ? <span className="pgv2-tag tone-neutral">{location}</span> : null}
+              {uni.softRanking ? (
                 <span
-                  className={`pgv2-dchip tone-${tone}`}
-                  title={`2026 招 ${cur} 人 vs 2025 同专业录取 ${prev} 人。口径: 取本组 2026 包含的专业, 在 2025 各自的录取人数求和`}
+                  className="pgv2-tag tone-neutral"
+                  title={String(uni.runningNature ?? '').includes('民办') ? '民办院校按软科民办榜单独排名' : undefined}
                 >
-                  {label}
+                  软科{String(uni.runningNature ?? '').includes('民办') ? '民办' : ''} #{uni.softRanking}
                 </span>
-              );
-            })() : null}
-          </div>
-          {/* —— 院校级标签 —— */}
-          <div className="pgv2-card-tags">
-            {uni.is985 ? <span className="pgv2-tag tone-accent">985</span> : null}
-            {uni.is211 ? <span className="pgv2-tag tone-accent">211</span> : null}
-            {uni.isDoubleFirstClass ? <span className="pgv2-tag tone-accent">双一流</span> : null}
-            {uni.firstClassCategory ? <span className="pgv2-tag tone-accent">{uni.firstClassCategory}</span> : null}
-            {uni.runningNature ? <span className="pgv2-tag tone-muted">{uni.runningNature}</span> : null}
-            {/* 院校背景标签(卓越教师/五院四系等)折叠态不显示, 收进展开态院校详情, 给决策信号让位 */}
-            {location ? <span className="pgv2-tag tone-muted">{location}</span> : null}
-            {uni.softRanking ? (
-              <span
-                className="pgv2-tag tone-muted"
-                title={String(uni.runningNature ?? '').includes('民办') ? '民办院校按软科民办榜单独排名' : undefined}
-              >
-                软科{String(uni.runningNature ?? '').includes('民办') ? '民办' : ''} #{uni.softRanking}
-              </span>
-            ) : null}
-          </div>
-          {/* —— 专业组级标签 (与院校级分行): 仅保留组身份信息, 决策类信号(纯净度/意向/征集)统一走决策行 —— */}
-          {(group?.groupCode || group?.groupName) ? (
-            <div className="pgv2-card-tags" style={{ marginTop: 2 }}>
-              <span
-                className="pgv2-tag tone-accent"
-                style={{ fontSize: '0.95rem', fontWeight: 600, padding: '4px 10px', letterSpacing: '0.2px' }}
-              >
-                {group?.groupCode ? `[${group.groupCode}] ` : ''}{group?.groupName ?? '专业组'}
-                {groupMajorCount ? ` · ${groupMajorCount} 专业` : ''}
-              </span>
+              ) : null}
             </div>
-          ) : null}
-          <div className="pgv2-card-sub">
-            {/* 选科已在组标签/池过滤体现, 折叠态不重复; 此行只留分数信号 */}
-            {group?.groupMinScore != null ? (
-              <span>历史最低 <strong>{group.groupMinScore}</strong> 分</span>
-            ) : null}
-            {/* 无史线组的参照锚: 有线组分数带(同校同类型优先, 回退全批次同类型), 老师人工判断的对照基准 */}
-            {group?.groupMinScore == null && group?.siblingLineBand ? (
-              <span title={`该组无历史录取线; ${group.siblingLineBand.scope === 'BATCH' ? '本批次' : '同校'}同类型(${group?.recruitType ?? '同类'})有 ${group.siblingLineBand.count} 个有线组可作参照`}>
-                {group.siblingLineBand.scope === 'BATCH' ? '本批同类组' : '同校同类组'}{' '}
-                <strong>
-                  {group.siblingLineBand.min === group.siblingLineBand.max
-                    ? group.siblingLineBand.min
-                    : `${group.siblingLineBand.min}~${group.siblingLineBand.max}`}
-                </strong>{' '}
-                分 ({group.siblingLineBand.count} 组)
-              </span>
-            ) : null}
           </div>
-        </div>
 
-        <div className="pgv2-card-r">
-          {/* 无史线组不显示 grade-badge(没有历史录取线就没有有意义的梯度), 信号已由 RankRuler is-noline 承担。
-              非无史线组按正常 8 段梯度显示。 */}
-          {!noLine ? (
-            <div className={`pgv2-grade-badge tone-${tone}`}>
-              <span className="lbl">梯度</span>
-              <span className="val">{GRADIENT_LABEL_8[tier] ?? tier}</span>
-              <span className="note">{rankGapText(studentRankForDecision, adjustedRank, studentScoreForDecision, group?.groupMinScore)}</span>
+          {/* 专业组层级 —— 本组身份 + 录取位置 + 决策信号 */}
+          <div className="pgv3-tier pgv3-tier-group">
+            <span className="tier-tag">专业组</span>
+            <div className="tier-body">
+              <div className="tb-main">
+                <div className="pgv3-group-id">
+                  {group?.groupCode ? <span className="gid-code">[{group.groupCode}]</span> : null}
+                  <span className="gid-name">{group?.groupName ?? '专业组'}</span>
+                  <span className="gid-meta">{groupMajorCount}专业 · {recruitType}</span>
+                </div>
+
+                {/* 位次刻度尺 —— 核心可视化 */}
+                <RankRuler
+                  studentRank={studentRankForDecision}
+                  groupMinRank={group?.groupMinRank}
+                  adjusted={group?.dynamicGradient?.adjustedMinRank ?? group?.predictedMinRank?.point}
+                  ratio={typeof edge === 'number' ? edge : undefined}
+                  noLine={noLine}
+                />
+
+                <div className="pgv2-card-sub">
+                  {group?.subjects && <span>选科 {group.subjects}</span>}
+                  {group?.subjects && (group?.groupMinScore != null || group?.siblingLineBand) ? <span className="dot" /> : null}
+                  {group?.groupMinScore != null && group?.groupMinRank != null ? (
+                    <span>历史最低 <strong>{group.groupMinScore}</strong> 分 / 位次 <strong>{group.groupMinRank.toLocaleString()}</strong></span>
+                  ) : group?.siblingLineBand ? (
+                    <span title={`本组无历史录取线; ${group.siblingLineBand.scope === 'BATCH' ? '本批次' : '同校'}同类型有 ${group.siblingLineBand.count} 个有线组可作参照`}>
+                      {group.siblingLineBand.scope === 'BATCH' ? '本批同类组' : '同校同类组'}{' '}
+                      <strong>
+                        {group.siblingLineBand.min === group.siblingLineBand.max
+                          ? group.siblingLineBand.min
+                          : `${group.siblingLineBand.min}~${group.siblingLineBand.max}`}
+                      </strong>{' '}
+                      分（{group.siblingLineBand.count} 组参照）
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)' }}>无历史录取线</span>
+                  )}
+                </div>
+              </div>
+
+              {/* 决策要素(高权重·彩色)—— 填充中部 */}
+              <div className="pgv2-decision-row tb-signals">
+                {group?.purity?.level && PURITY_META[group.purity.level] ? (
+                  <span className={`pgv2-dchip tone-${PURITY_META[group.purity.level].tone}`} title={purityTitle(group.purity)}>
+                    纯净度 {purityPercent(group.purity.score) || PURITY_META[group.purity.level].label}
+                  </span>
+                ) : null}
+                {typeof preferredHitCount === 'number' ? (
+                  <span
+                    className={`pgv2-dchip ${preferredHitCount > 0 ? 'tone-safe' : 'tone-rush'}`}
+                    title="组内命中学生意向的专业数 / 组内专业总数, 命中越少服从调剂落到非意向的风险越高"
+                  >
+                    意向命中 {preferredHitCount}/{groupMajorCount}
+                  </span>
+                ) : null}
+                {group?.supplementary && group.supplementary.totalPlanCount > 0 ? (
+                  <span className="pgv2-dchip tone-safe-soft" title={`${group.supplementary.sourceYear} 年本组累计征集 ${group.supplementary.totalPlanCount} 人 / ${group.supplementary.totalRounds} 轮。征集=没招满需补录, 常伴随降分, 是可达性的积极信号`}>征集 {group.supplementary.totalPlanCount}人/{group.supplementary.totalRounds}轮</span>
+                ) : null}
+                {group?.groupChangeType && group.groupChangeType !== '未变' && CHANGE_META[group.groupChangeType] ? (
+                  <span className={`pgv2-dchip tone-${CHANGE_META[group.groupChangeType].tone}`} title={changeTitle(group)}>组变动 · {CHANGE_META[group.groupChangeType].label}</span>
+                ) : null}
+                {admitVs2025 ? (
+                  <span className={`pgv2-dchip tone-${admitVs2025.tone}`} title={admitVs2025.title}>{admitVs2025.label}</span>
+                ) : group?.currentPlanCount != null ? (
+                  <span className="pgv2-dchip tone-accent" title="本组 2026 招生计划及相对 2025 同专业增减">招生 {group.currentPlanCount} 人{group.planCountChange ? (group.planCountChange > 0 ? ` +${group.planCountChange}` : ` ${group.planCountChange}`) : ''}</span>
+                ) : null}
+              </div>
             </div>
-          ) : null}
-          <div className="pgv2-card-actions" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="pgv2-action-btn"
-              title={isCompare ? '取消对比' : '加入对比'}
-              onClick={onToggleCompare}
-            >
-              ⚖
-            </button>
-            {isHidden ? (
-              <button type="button" className="pgv2-action-btn" title="恢复" onClick={onRestore}>↺</button>
-            ) : (
-              <button type="button" className="pgv2-action-btn" title="不考虑此校" onClick={onHide}>✕</button>
-            )}
-            <button
-              type="button"
-              className={`pgv2-add-btn ${isAdded ? 'added' : ''}`}
-              onClick={onAdd}
-              disabled={isAdded}
-            >
-              {isAdded ? '✓ 已加入' : '+ 加入'}
-            </button>
+
+            {/* 操作:对比 / 移除 + 加入 —— 在专业组层级内垂直居中 */}
+            <div className="pgv3-group-actions" onClick={(e) => e.stopPropagation()}>
+              <div className="pgv2-card-iconcol">
+                <button
+                  type="button"
+                  className="pgv2-action-btn"
+                  title={isCompare ? '取消对比' : '加入对比'}
+                  onClick={onToggleCompare}
+                >
+                  {isCompare ? <span style={{ width: 12, height: 12, display: 'inline-flex' }}><CheckOutlined /></span> : '⚖'}
+                </button>
+                {isHidden ? (
+                  <button type="button" className="pgv2-action-btn" title="恢复" onClick={onRestore}>
+                    <span style={{ width: 12, height: 12, display: 'inline-flex' }}><RollbackOutlined /></span>
+                  </button>
+                ) : (
+                  <button type="button" className="pgv2-action-btn" title="不考虑此校" onClick={onHide}>
+                    <span style={{ width: 12, height: 12, display: 'inline-flex' }}><CloseOutlined /></span>
+                  </button>
+                )}
+              </div>
+              <div className="pgv2-card-cta">
+                {isAdded ? (
+                  <button type="button" className="pgv2-add-btn tall added" disabled>
+                    <span className="ic"><CheckOutlined /></span><span>已加入</span>
+                  </button>
+                ) : (
+                  <button type="button" className="pgv2-add-btn tall" onClick={onAdd}>
+                    <span className="ic"><PlusOutlined /></span><span>加入方案</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* —— MetricStrip(设计稿 6 项, 带进度条)——
-           招生 / 考研率 / 深造率 / 就业率 / 平均薪资 / 满意度
-           注: postgradRate 字段实为「保研率」, furtherStudyRate 实为「升学率」(导入时如此映射), 此处沿用设计稿标签 */}
-      <div className="pgv2-metric-bar" onClick={onToggleExpand}>
-        <MBar k="招生" v={group?.currentPlanCount} suffix=" 人" chg={group?.planCountChange} />
-        <MBar k="考研率" v={postgradPct} suffix="%" pct={postgradPct} />
-        <MBar k="深造率" v={furtherPct} suffix="%" pct={furtherPct} />
-        <MBar k="就业率" v={empPct} suffix="%" pct={empPct} />
-        <MBar k="平均薪资" v={avgSalaryK} suffix="k" pct={avgSalaryPct} />
-        <MBar
-          k="满意度"
-          v={satOverall}
-          suffix={uni.satisfactionCount ? `/5 · ${uni.satisfactionCount}人` : '/5'}
-          pct={satPct}
-        />
-      </div>
+      {/* —— 状态说明条 —— */}
+      {regionMismatch ? (
+        <div className="pgv2-hard-note"><WarningOutlined /><span>该院校所在地({location || '—'})不在学生意向地区, 整卡已去饱和区分 —— 仍可由老师自主决策加入。</span></div>
+      ) : null}
 
-      {/* —— 展开态: 3 Tab 框架 + 由父组件提供内容 —— */}
+      {/* 展开区: MatchHeader + 就业指标(6 项) + 专业级信息(由父组件提供) */}
       {isExpanded ? (
         <div className="pgv2-card-body">
-          <div className="pgv2-card-tabs">
-            {(
-              [
-                { k: 'majors' as const, label: '专业列表', n: sectionTotal },
-                // 2026-06-25 删除「数据依据」「院校详情」tab — 简化候选卡, 减少决策干扰
-              ]
-            ).map((t) => (
-              <button
-                type="button"
-                key={t.k}
-                className={`pgv2-card-tab ${expandedTab === t.k ? 'is-active' : ''}`}
-                onClick={() => onTabChange(t.k)}
-              >
-                {t.label}
-                {t.n != null ? <span className="n">{t.n}</span> : null}
-              </button>
-            ))}
+          {/* —— 匹配分环 + 理由 + 偏好 + 趋势 —— */}
+          <div className="pgv2-match-header">
+            <MatchRing score={group?.matchScore} />
+            <div className="pgv2-match-body">
+              <div className="pgv2-match-reason">
+                {mutedReason ? <span style={{ color: '#8c8c8c', fontWeight: 600 }}>【{mutedReason}】 </span> : null}
+                {group?.matchReason ?? '—'}
+              </div>
+              <div className="pgv2-pref-row">
+                <PrefDot ok={group?.prefMatch?.province === 'match'} label="地域" />
+                <PrefDot ok={group?.prefMatch?.tuition === 'within'} label="学费" />
+                <PrefDot ok={group?.prefMatch?.career === 'strong'} label="职业" />
+                {/* 候选池已按选科过滤(选科恒符), "选科"dot 是噪音, 删除 */}
+              </div>
+            </div>
+            {trend ? (
+              <div className="pgv2-trend-mini">
+                <Sparkline data={trend} />
+                <div className="pgv2-trend-meta">
+                  <span className="t-range">{trend[0].score} → {trend[trend.length - 1].score}</span>
+                  {group?.predictedMinRank?.point != null ? (
+                    <span
+                      className="t-pred"
+                      title={predBand ? `预测今年录取位次区间 ${predBand}(乐观~保守), 区间越宽预测越不确定` : undefined}
+                    >
+                      ◇ 预测 {predBand ? `${predBand} 位` : `~${group.predictedMinRank.point.toLocaleString()} 位`}
+                      {confLabel ? <span className={`t-conf ${confCls}`}>{confLabel}</span> : null}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="pgv2-trend-mini">
+                <div className="pgv2-trend-meta" style={{ textAlign: 'right' }}>
+                  <span className="t-range" style={{ color: 'var(--text-muted)' }}>无历史录取线</span>
+                  <span className="t-pred" style={{ color: 'var(--text-muted)' }}>需人工判断</span>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* —— 就业 6 项(带进度条)——
+               注: postgradRate 字段实为「保研率」, furtherStudyRate 实为「升学率」(导入时如此映射), 此处沿用设计稿标签 */}
+          <div className="pgv2-metric-bar">
+            <MBar k="招生" v={group?.currentPlanCount} suffix="人" chg={group?.planCountChange} />
+            <MBar k="考研率" v={postgradPct} suffix="%" pct={postgradPct} />
+            <MBar k="深造率" v={furtherPct} suffix="%" pct={furtherPct} />
+            <MBar k="就业率" v={empPct} suffix="%" pct={empPct} />
+            <MBar k="平均薪资" v={avgSalaryK} suffix="k" pct={avgSalaryPct} />
+            <MBar k="满意度" v={satOverall} suffix={uni.satisfactionCount ? `/5 · ${uni.satisfactionCount}人` : '/5'} pct={satPct} />
+          </div>
+
+          {/* —— 专业级信息(展开态专业列表, 含 P.XX 页码 / 4 年历史 / 征集 byYear)—— */}
           <div className="pgv2-card-tab-content">
             {renderExpandedContent(expandedTab)}
           </div>
