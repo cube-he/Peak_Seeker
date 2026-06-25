@@ -231,3 +231,36 @@ def test_convert_plans_row_missing_change_columns_yields_none():
     p2026 = next(p for p in plans if p["year"] == 2026)
     assert p2026.get("groupChangeType") is None
     assert p2026.get("oldGroupMajors2025") is None
+
+
+def test_convert_plans_row_attaches_book_page_number_to_2026_only():
+    """招生考试报页码 只挂 2026 行;历史年(2025/2024/2023)不带 (政考公告每年改版)"""
+    from xlsx_to_json_2026 import convert_plans_row
+    row = {
+        "院校代码": "5196", "专业名称": "X", "专业代码": "01",
+        "专业组代码": "101", "科类": "历史", "批次": "本科批B段",
+        "招生类型": "普通类本科", "选科要求": "不限",
+        "本科/专科": "本科", "计划人数": 30, "专业组计划人数": 210,
+        "计划人数结果1": 28, "计划人数结果2": 25, "计划人数结果3": 22,
+        "招生考试报页码": 123,
+    }
+    plans = convert_plans_row(row)
+    p2026 = next(p for p in plans if p["year"] == 2026)
+    assert p2026["bookPageNumber"] == 123
+    for yr in (2025, 2024, 2023):
+        p = next(p for p in plans if p["year"] == yr)
+        assert "bookPageNumber" not in p or p["bookPageNumber"] is None
+
+
+def test_convert_plans_row_book_page_number_missing_yields_none():
+    from xlsx_to_json_2026 import convert_plans_row
+    row = {
+        "院校代码": "5196", "专业名称": "X", "专业代码": "01",
+        "专业组代码": "101", "科类": "历史", "批次": "本科批B段",
+        "招生类型": "普通类本科", "选科要求": "不限",
+        "本科/专科": "本科", "计划人数": 30, "专业组计划人数": 210,
+        # 缺 招生考试报页码 列
+    }
+    plans = convert_plans_row(row)
+    p2026 = next(p for p in plans if p["year"] == 2026)
+    assert p2026.get("bookPageNumber") is None

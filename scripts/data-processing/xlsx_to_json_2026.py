@@ -170,6 +170,7 @@ def convert_plans_row(r) -> list:
         "groupPurityScore": _float(r.get("专业组干净度")),  # 仅 2026；历史年组成不同，复用此值有误
         "groupChangeType": _str(r.get("专业组是否改变")),    # 仅 2026；组级枚举，行内一致但反规范化存每行
         "oldGroupMajors2025": _str(r.get("25老组专业构成")),  # 仅 2026；重组时行级不同
+        "bookPageNumber": _int(r.get("招生考试报页码")),     # 仅 2026；政考公告每年改版，历史年不挂
     }]
 
     # 历史计划：per-major planCount 来自 计划人数结果1/2/3；缺即跳过该年。groupPlanCount/tuition/duration 不可得。
