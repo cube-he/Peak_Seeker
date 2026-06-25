@@ -1010,9 +1010,14 @@ export default function GeneratePlanPage() {
   const preferredBatchNames: string[] | null = Array.isArray(student?.preferredBatches)
     ? (student!.preferredBatches as string[])
     : null;
-  // 取消"必须先在推荐页确认批次"限制 (2026-06-25): 始终显示全部符合资格的批次, 老师直接选。
-  // preferredBatchNames 仅保留作"已确认"信息展示, 不再过滤下拉项。
-  const batches = allBatches;
+  // 老师确认过批次 → 下拉只在"已确认的批次"里选(尊重确认结果, 不再列全部资格批次);
+  // 没确认(空/null) → fallback 显示全部资格批次, 不强制先去确认(保留 2026-06-25 拆门策略)。
+  // 确认的批次若已不在资格集(资格变动)→ 过滤后为空, 再退回全部, 避免无批次可选的死路。
+  const confirmedBatches =
+    preferredBatchNames && preferredBatchNames.length > 0
+      ? allBatches.filter((b) => preferredBatchNames!.includes(b.batchName))
+      : [];
+  const batches = confirmedBatches.length > 0 ? confirmedBatches : allBatches;
 
   const { data: existingPlanData, isLoading: existingPlansLoading } = useQuery({
     queryKey: ['student-plans-latest', studentId],
@@ -1272,6 +1277,24 @@ export default function GeneratePlanPage() {
     }
   }, [batches, batchConfigId]);
 
+  // 只有 1 个(确认的)批次 → 自动选中并建草稿, 直接落到工作台, 省去"选批次 + 点创建"两步。
+  // 老师反馈单批次还要手动选+点太墨迹; 多批次时不自动, 让老师自己挑哪个批次先做。
+  // 已有方案的情况交给上面的 auto-open effect (existingPlans>0), 这里只管"零方案"。
+  const autoSingleBatchDone = useRef(false);
+  useEffect(() => {
+    if (autoSingleBatchDone.current) return;
+    if (planId) return; // 已在某方案里
+    if (batchLoading || existingPlansLoading) return; // 等批次/已有方案查询完, 否则误判
+    if (existingPlans.length > 0) return; // 有方案 → auto-open effect 负责
+    if (batches.length !== 1) return; // 仅单批次自动
+    if (createMutation.isPending) return;
+    autoSingleBatchDone.current = true;
+    const only = batches[0];
+    setBatchConfigId(only.batchConfigId);
+    createMutation.mutate(only.batchConfigId); // 显式传 id, 不读异步 setState 前的旧值
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batches, existingPlans, planId, batchLoading, existingPlansLoading]);
+
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
@@ -1322,7 +1345,10 @@ export default function GeneratePlanPage() {
   }, [candidateGroups?.availableRecruitTypes]);
 
   const createMutation = useMutation({
-    mutationFn: () => planApi.createForStudent(studentId, { batchConfigId: batchConfigId! }),
+    // 传 explicitBatchId 用于"自动建草稿"场景 — setBatchConfigId 是异步的,
+    // 紧接着 mutate() 会读到旧的 batchConfigId(undefined), 故允许显式传入。
+    mutationFn: (explicitBatchId?: number) =>
+      planApi.createForStudent(studentId, { batchConfigId: (explicitBatchId ?? batchConfigId)! }),
     onSuccess: (res) => {
       const created = unwrap<Record<string, any>>(res);
       setPlanId(created.id);
@@ -1561,7 +1587,7 @@ export default function GeneratePlanPage() {
       void message.success('已打开已有方案');
       return;
     }
-    createMutation.mutate();
+    createMutation.mutate(batchConfigId);
   };
 
   const toggleGroup = (key: string) => {
