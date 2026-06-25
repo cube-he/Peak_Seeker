@@ -103,10 +103,10 @@ export class UniversityService {
     if (isDoubleFirstClass !== undefined) where.isDoubleFirstClass = isDoubleFirstClass;
     if (is985 !== undefined) where.is985 = is985;
     if (is211 !== undefined) where.is211 = is211;
-    // 院校背景 tag 筛选(University.tags 是 JSON 数组,prisma array_contains 编译成
-    // MySQL JSON_CONTAINS,匹配 tag 字符串。如果数据库 tags 字段还没有这个 tag,
-    // 会返回空 — 这是 OK 的,后续数据 import 补齐)
-    if (hasTag) (where.tags as unknown) = { array_contains: hasTag };
+    // 院校背景 tag 筛选: 实际数据写在 universityBackground 字符串列(斜杠分隔 token),
+    // 不在 University.tags JSON 数组(那一列从未灌入 background token).
+    // 用子串匹配, 跟生成页 7 项筛选的 filterGroupsByBackgrounds 同口径.
+    if (hasTag) where.universityBackground = { contains: hasTag };
 
     const isHistory = examType === '历史';
     const minScoreField = isHistory ? 'minScoreHistory' : 'minScorePhysics';
