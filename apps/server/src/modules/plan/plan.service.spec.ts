@@ -62,18 +62,23 @@ describe('PlanService workflow gates', () => {
     notifications = mod.get(NotificationService);
   });
 
-  it('createForStudent rejects unverified intake', async () => {
+  it('createForStudent 放宽策略: intakeStatus 未 VERIFIED 也允许出方案 (2026-06-25 拆门)', async () => {
     prisma.teacherProfile.findUnique.mockResolvedValue({ id: 5, userId: 20 });
     prisma.studentProfile.findUnique.mockResolvedValue({
       id: 10,
       teacherId: 5,
       intakeStatus: 'SUBMITTED',
+      preferredBatches: [],
       user: { realName: '小王', username: 'student' },
     });
+    prisma.batchConfig.findUnique.mockResolvedValue({
+      id: 1, batch: '本科批B段', year: 2026, province: '四川',
+    });
+    prisma.volunteerPlan.findFirst.mockResolvedValue(null);
+    prisma.volunteerPlan.create.mockResolvedValue({ id: 99, status: 'DRAFT' });
 
-    await expect(
-      service.createForStudent(20, 10, { batchConfigId: 1 } as any),
-    ).rejects.toThrow(ConflictException);
+    const result = await service.createForStudent(20, 10, { batchConfigId: 1 } as any);
+    expect(result).toEqual({ id: 99, status: 'DRAFT' });
   });
 
   it('createForStudent reuses an existing plan for the same student and batch', async () => {

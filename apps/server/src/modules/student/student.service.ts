@@ -13,7 +13,6 @@ import { QueryStudentDto } from './dto/query-student.dto';
 import { Role, StudentStatus, Prisma } from '@prisma/client';
 import { ProgressService } from './progress.service';
 import { eligibleLevelFromScore } from './eligible-level';
-import { validateIntakeForBatchSelection } from '../batch-config/batch-config.service';
 import {
   TEACHER_ONLY_FIELDS,
   FIELD_TO_PROVENANCE_GROUP,
@@ -995,13 +994,8 @@ export class StudentService {
         throw new BadRequestException(`未知批次: ${b}`);
       }
     }
-    // 关键资料缺失则禁止确认 (推荐 + 方案制作的前提)
-    const intakeGap = validateIntakeForBatchSelection(student);
-    if (!intakeGap.ok) {
-      throw new BadRequestException(
-        `学生关键资料未完成, 请催学生补完后再确认批次: ${intakeGap.missing.map(m => m.label).join(', ')}`,
-      );
-    }
+    // 关键资料必填门已取消 (2026-06-25): 缺字段也允许确认批次, 不硬拦。
+    // 批次资格判定 (judgeBatchEligibility) 对缺失字段按"未填"降级处理, 不阻断流程。
     return this.prisma.studentProfile.update({
       where: { id: studentId },
       data: {

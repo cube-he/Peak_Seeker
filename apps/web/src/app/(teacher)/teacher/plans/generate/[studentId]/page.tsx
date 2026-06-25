@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { pickerApi } from '@/services/picker';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -1167,9 +1166,9 @@ export default function GeneratePlanPage() {
   const preferredBatchNames: string[] | null = Array.isArray(student?.preferredBatches)
     ? (student!.preferredBatches as string[])
     : null;
-  const batches = preferredBatchNames && preferredBatchNames.length > 0
-    ? allBatches.filter((b) => preferredBatchNames.includes(b.batchName))
-    : allBatches;
+  // 取消"必须先在推荐页确认批次"限制 (2026-06-25): 始终显示全部符合资格的批次, 老师直接选。
+  // preferredBatchNames 仅保留作"已确认"信息展示, 不再过滤下拉项。
+  const batches = allBatches;
 
   const { data: existingPlanData, isLoading: existingPlansLoading } = useQuery({
     queryKey: ['student-plans-latest', studentId],
@@ -1909,21 +1908,10 @@ export default function GeneratePlanPage() {
                 <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>
                   已确认 {preferredBatchNames.length} 个
                 </span>
-              ) : (
-                <Link
-                  href={`/teacher/students/${studentId}/batch-recommendations`}
-                  style={{ marginLeft: 6, fontSize: 11, color: 'var(--rush)' }}
-                >
-                  未确认批次, 去推荐页选 →
-                </Link>
-              )}
+              ) : null}
             </label>
             <Select
-              placeholder={
-                preferredBatchNames && preferredBatchNames.length > 0
-                  ? '请选择批次...'
-                  : '(老师未确认批次, 当前显示全部) 请选择...'
-              }
+              placeholder="请选择批次..."
               value={batchConfigId}
               loading={batchLoading}
               options={batchOptions}
@@ -1933,7 +1921,7 @@ export default function GeneratePlanPage() {
           </div>
           <Button
             type="primary"
-            disabled={!batchConfigId || !intakeReady}
+            disabled={!batchConfigId}
             onClick={openOrCreatePlan}
             icon={selectedBatchPlan ? <FileTextOutlined /> : <PlusOutlined />}
           >
@@ -1967,14 +1955,14 @@ export default function GeneratePlanPage() {
         </div>
       </div>
 
-      {/* —— 资料未确认 Alert (pgv2 设计稿风格) —— */}
+      {/* —— 资料未确认软提示 (不拦截, 仅引导 — 2026-06-25 拆门) —— */}
       {!intakeReady ? (
         <div className="pgv2-alert tone-warn fade-up">
           <span className="ic"><WarningOutlined /></span>
           <div>
             <strong>学生资料尚未确认</strong>
-            ,当前状态为「{formatLabel(student?.intakeStatus || 'DRAFT', INTAKE_STATUS_LABEL)}」。
-            需要先在学生详情页完成资料审核,才能进入下一步生成方案。
+            (当前「{formatLabel(student?.intakeStatus || 'DRAFT', INTAKE_STATUS_LABEL)}」)。
+            建议先在学生详情页完成资料审核以保证候选数据准确;当前可直接生成方案预览。
           </div>
         </div>
       ) : null}

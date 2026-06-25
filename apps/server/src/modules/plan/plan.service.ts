@@ -14,7 +14,6 @@ import { PlanStateMachineService, PlanAction } from './plan-state-machine.servic
 import { RiskEngineService } from './risk-engine/risk-engine.service';
 import { NotificationService, NotificationEvent } from '../notification/notification.service';
 import { FEATURE_FLAGS } from '../../config/feature-flags';
-import { validateIntakeForBatchSelection } from '../batch-config/batch-config.service';
 
 @Injectable()
 export class PlanService {
@@ -361,15 +360,11 @@ export class PlanService {
     if (student.teacherId !== teacher.id) {
       throw new ForbiddenException('无权为不属于自己的学生创建方案');
     }
+    // 资料确认门 / 关键资料必填门已取消 (2026-06-25): 老师可在 intakeStatus 未 VERIFIED 或
+    // 关键字段未填时直接出方案预览。数据质量改由前端软提示引导, 不在此硬拦。
+    // 审核仍走 plan.status 状态机 (DRAFT→PENDING_REVIEW→...), 与 intakeStatus 解耦。
     if (student.intakeStatus !== 'VERIFIED') {
-      throw new ConflictException('学生资料需先由老师确认为 VERIFIED 后才能创建方案');
-    }
-    // 双保险: 即使 intakeStatus=VERIFIED, 也再校验一次关键资料 (防绕过)
-    const intakeGap = validateIntakeForBatchSelection(student);
-    if (!intakeGap.ok) {
-      throw new BadRequestException(
-        `学生关键资料未完成, 无法做方案: ${intakeGap.missing.map(m => m.label).join(', ')}`,
-      );
+      console.warn(`[plan.create] 学生 ${studentId} intakeStatus=${student.intakeStatus} (未确认), 按放宽策略仍允许出方案`);
     }
 
     const batchConfig = await this.prisma.batchConfig.findUnique({
