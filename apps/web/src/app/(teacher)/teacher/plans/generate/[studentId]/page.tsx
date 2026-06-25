@@ -2442,7 +2442,8 @@ export default function GeneratePlanPage() {
                       { v: null, label: '全部' },
                       { v: 'public' as const, label: '公办' },
                       { v: 'private' as const, label: '民办' },
-                      { v: 'sinoForeign' as const, label: '中外合作' },
+                      // 中外合作不在"办学性质"判定(校级会漏公办校里的中外专业);
+                      // 统一由"招生与显示"里的中外合作三态(读专业备注)负责筛选。
                       { v: 'hkMacau' as const, label: '港澳合作' },
                       { v: 'independent' as const, label: '境外办学' },
                     ]).map((opt) => (

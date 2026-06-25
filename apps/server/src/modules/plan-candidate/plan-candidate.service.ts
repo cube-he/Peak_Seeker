@@ -14,7 +14,7 @@ import { HouseholdRule } from './filters/soft-rules/household.rule';
 import { EthnicityRule } from './filters/soft-rules/ethnicity.rule';
 import { TuitionRule } from './filters/soft-rules/tuition.rule';
 import { NatureRule } from './filters/soft-rules/nature.rule';
-import { filterGroupsBySinoForeign, filterUniversitiesBySinoForeign } from './sino-foreign-filter';
+import { filterGroupsBySinoForeign, filterUniversitiesBySinoForeign, isSinoForeignFromNotes } from './sino-foreign-filter';
 import { filterGroupsByRecruitType, collectRecruitTypes } from './recruit-type-filter';
 import {
   filterGroupsByNature,
@@ -2024,7 +2024,8 @@ export class PlanCandidateService {
               )
             : null,
           planNotes: ep.planNotes,
-          isSinoForeign: ep.isSinoForeign,
+          // 中外合作直接从专业备注实时判定(不读 is_sino_foreign 物化列)→ 重导数据后不会失效。
+          isSinoForeign: isSinoForeignFromNotes(ep.planNotes),
           majorMinScore: currentRecord?.majorMinScore ?? null,
           majorMinRank: currentRecord?.majorMinRank ?? null,
           majorAdmissionCount: currentRecord?.majorAdmissionCount ?? null,

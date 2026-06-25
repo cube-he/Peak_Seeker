@@ -3,7 +3,28 @@ import {
   matchSinoForeign,
   filterGroupsBySinoForeign,
   filterUniversitiesBySinoForeign,
+  isSinoForeignFromNotes,
 } from './sino-foreign-filter';
+
+describe('isSinoForeignFromNotes: 直接读专业备注判定中外合作', () => {
+  it('备注含(中外合作办学) → true', () => {
+    expect(isSinoForeignFromNotes('(中外合作办学)(与英国雷丁大学合作办学)')).toBe(true);
+  });
+  it('普通专业声明"不含中外合作办学" → false(不误判)', () => {
+    expect(
+      isSinoForeignFromNotes('(录取分数线不低于我校普通类本科所在批次相应科类(不含中外合作办学)提档线下40分)(民族班)'),
+    ).toBe(false);
+  });
+  it('"中外合作办学，/,专业除外" → false', () => {
+    expect(isSinoForeignFromNotes('(中外合作办学，专业除外)')).toBe(false);
+    expect(isSinoForeignFromNotes('(中外合作办学,专业除外)')).toBe(false);
+  });
+  it('不含"中外合作"四字 / 空备注 → false', () => {
+    expect(isSinoForeignFromNotes('(中外人文交流计划)')).toBe(false);
+    expect(isSinoForeignFromNotes(null)).toBe(false);
+    expect(isSinoForeignFromNotes(undefined)).toBe(false);
+  });
+});
 
 const g = (majors: Array<{ isSinoForeign?: boolean }>) => ({ majors });
 
