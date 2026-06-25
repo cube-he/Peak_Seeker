@@ -14,6 +14,7 @@ import {
   InputNumber,
   Modal,
   Pagination,
+  Popconfirm,
   Select,
   Slider,
   Space,
@@ -1543,6 +1544,19 @@ export default function GeneratePlanPage() {
     },
     onError: (error: any) => {
       void message.error(error?.response?.data?.message ?? '移出失败');
+    },
+  });
+
+  // 清空当前方案全部志愿
+  const clearItemsMutation = useMutation({
+    mutationFn: () => planApi.clearItems(String(planId)),
+    onSuccess: () => {
+      void message.success('已清空当前方案志愿');
+      queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+      refreshRisks();
+    },
+    onError: (error: any) => {
+      void message.error(error?.response?.data?.message ?? '清空失败');
     },
   });
 
@@ -3122,6 +3136,27 @@ export default function GeneratePlanPage() {
                     <span className="pgv2-tag tone-accent">V{selectedBatchPlan.versionNo ?? 1}</span>
                   ) : null}
                   {planFetching ? <Spin size="small" style={{ marginLeft: 8 }} /> : null}
+                  {plan?.status === 'DRAFT' && planItems.length > 0 ? (
+                    <Popconfirm
+                      title="清空全部志愿"
+                      description={`确认删除当前方案的全部 ${planItems.length} 条院校专业组？此操作不可恢复。`}
+                      okText="清空"
+                      okButtonProps={{ danger: true }}
+                      cancelText="取消"
+                      onConfirm={() => clearItemsMutation.mutate()}
+                    >
+                      <Button
+                        size="small"
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        loading={clearItemsMutation.isPending}
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        清空
+                      </Button>
+                    </Popconfirm>
+                  ) : null}
                   <button type="button" className="pgv2-rail-collapse" onClick={toggleRail} title="收起当前方案">
                     <DoubleRightOutlined />
                   </button>
