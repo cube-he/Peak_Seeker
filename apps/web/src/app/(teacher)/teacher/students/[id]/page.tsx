@@ -36,7 +36,8 @@ import {
   to9Subjects,
   from9Subjects,
   sum9Subjects,
-  validate6Subjects,
+  isSixComplete,
+  checkTotalConflict,
 } from '@/components/student/stage1-score-mapping';
 import { ETHNICITY_OPTIONS } from '@/data/student-options';
 import { scoreSegmentApi, type ExamType as RankExamType } from '@/services/score-segment';
@@ -627,26 +628,23 @@ export default function StudentDetailPage() {
         scoreGeography: values.scoreGeography,
       };
       const has9 = Object.values(subj9).some((v) => v != null);
-      if (has9) {
-        // from9Subjects 要求 6 门凑齐才能整组翻译; 不齐时强行翻译会把
-        // examType 强翻成历史、totalScore 写成部分和、reChoices 清空
-        // (渐进式录入场景必踩)。不齐时: 语数英是独立列照常提交,
-        // 槽位字段(科类/首选/再选/总分)一律不发, 保留库里旧值。
-        const incompleteMsg = validate6Subjects(subj9);
-        if (!incompleteMsg) {
-          const t = from9Subjects(subj9);
-          Object.assign(values, {
-            totalScore: t.totalScore,
-            examType: t.examType,
-            firstChoice: t.firstChoice,
-            scoreFirstChoice: t.scoreFirstChoice,
-            reChoices: t.reChoices,
-            scoreSub1: t.scoreSub1,
-            scoreSub2: t.scoreSub2,
-          });
-        } else {
-          void message.info(`${incompleteMsg}；首选/再选成绩将在 6 门凑齐后一并保存`);
-        }
+      // 6 门齐 → 自动累加(以「和」为准, from9Subjects 写总分=和 + 首选/再选单科槽位)。
+      // 6 门不齐 → 不硬卡: 选科(examType/firstChoice/reChoices, 已是注册 field)+手填总分(totalScore field)
+      //   照常入库; 只有「首选/再选的单科分」待 6 门齐全才翻译落槽(避免半截数据污染槽位)。
+      const sixComplete = isSixComplete(subj9);
+      if (sixComplete) {
+        const t = from9Subjects(subj9);
+        Object.assign(values, {
+          totalScore: t.totalScore,
+          examType: t.examType,
+          firstChoice: t.firstChoice,
+          scoreFirstChoice: t.scoreFirstChoice,
+          reChoices: t.reChoices,
+          scoreSub1: t.scoreSub1,
+          scoreSub2: t.scoreSub2,
+        });
+      } else if (has9) {
+        void message.info('选科与总分已保存；首选/再选的单科成绩需 6 门齐全后才入库');
       }
       // 后端 DTO 不接受 6 个具体科目字段名 (物/史/化/生/政/地)，删掉
       for (const k of [
@@ -1743,9 +1741,20 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
     { key: 'scoreGeography', label: '地理' },
   ] as const;
   // 再选选择是纯 UI 本地态, 初值从已填分数推导 (4 选 2); 分数本身仍是 form 的真值
-  const [reSel, setReSel] = useState<string[]>(() =>
-    RE.filter((r) => form.getFieldValue(r.key) != null).map((r) => r.key),
-  );
+  const [reSel, setReSel] = useState<string[]>(() => {
+    const fromScores = RE.filter((r) => form.getFieldValue(r.key) != null).map((r) => r.key);
+    if (fromScores.length > 0) return fromScores;
+    // 无单科分时从 reChoices 名称反推 (老师只填选科+总分的场景, 否则再选回显为空)
+    const names = form.getFieldValue('reChoices');
+    return Array.isArray(names) ? RE.filter((r) => names.includes(r.label)).map((r) => r.key) : fromScores;
+  });
+
+  // reSel(本地选择) → form.reChoices(名称, 化生政地序): 让"只填选科+总分"也能把再选存库。
+  // 6 门齐时 from9Subjects 保存会写同一值, 不冲突。
+  useEffect(() => {
+    form.setFieldValue('reChoices', RE.filter((r) => reSel.includes(r.key)).map((r) => r.label));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reSel]);
 
   const pickFirst = (type: 'PHYSICS' | 'HISTORY') => {
     form.setFieldsValue({
@@ -1774,6 +1783,8 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
       {/* examType / firstChoice 靠 setFieldsValue 写入, 必须注册成 field entity, 否则 useWatch 读不到 → chip 高亮/科类/首选列全失效 */}
       <Form.Item name="examType" hidden><Input /></Form.Item>
       <Form.Item name="firstChoice" hidden><Input /></Form.Item>
+      {/* reChoices(再选名称数组)注册成 field, 由 reSel 同步写入 → 只填选科+总分时也能入库 */}
+      <Form.Item name="reChoices" hidden><Input /></Form.Item>
       {/* 高考年份固定 2026(单届产品, 选择器多余) — 仍注册为隐藏 field, 让值随档案落库,
           避免新建学生 examYear 为空导致按年份取批次/分数线时查不到。
           "成绩来源" 选择器(REAL_EXAM/MOCK_EXAM/ESTIMATED)与后端 ExamSource 枚举不匹配且非必填, 已删除。 */}
@@ -1880,10 +1891,11 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
         </div>
       </div>
 
-      {/* ③ 总分(自动累加) + 全省位次 */}
+      {/* ③ 总分(6科齐=自动累加 / 不齐=手动填写) + 全省位次 */}
       <div className="exam-foot">
         <div className="exam-total">
-          <div className="k">总分 · 自动累加</div>
+          {/* 两种输入模式: 6 科齐全→只读自动累加; 6 科不齐→可手填总分(老师拿不到单科分的场景)。
+              不硬卡: 不齐也能存(选科照常存, 总分用手填值)。冲突仅软提示。 */}
           <Form.Item
             noStyle
             shouldUpdate={(p, c) =>
@@ -1895,21 +1907,47 @@ function ExamFields({ rankCheck }: { rankCheck?: RankCheck }) {
               p.scoreChemistry !== c.scoreChemistry ||
               p.scoreBiology !== c.scoreBiology ||
               p.scorePolitics !== c.scorePolitics ||
-              p.scoreGeography !== c.scoreGeography
+              p.scoreGeography !== c.scoreGeography ||
+              p.totalScore !== c.totalScore
             }
           >
-            {({ getFieldsValue }) => {
+            {({ getFieldsValue, getFieldValue }) => {
               const v = getFieldsValue([
                 'scoreChinese', 'scoreMath', 'scoreEnglish',
                 'scorePhysics', 'scoreHistory',
                 'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
               ]) as Subject9Form;
-              const total = sum9Subjects(v);
+              const complete = isSixComplete(v);
+              const sum = sum9Subjects(v);
+              const rawManual = getFieldValue('totalScore');
+              const manual = typeof rawManual === 'number' ? rawManual : null;
+              const conflict = checkTotalConflict(v, manual);
               return (
-                <div className="v">
-                  {total}
-                  <small>分</small>
-                </div>
+                <>
+                  <div className="k">总分 · {complete ? '自动累加' : '手动填写'}</div>
+                  {complete ? (
+                    <div className="v">
+                      {sum}
+                      <small>分</small>
+                    </div>
+                  ) : (
+                    <div className="v">
+                      <Form.Item name="totalScore" noStyle>
+                        <InputNumber
+                          min={0}
+                          max={750}
+                          controls={false}
+                          placeholder="直接填总分"
+                          style={{ width: 130, fontSize: 28, fontWeight: 700 }}
+                        />
+                      </Form.Item>
+                      <small>分</small>
+                    </div>
+                  )}
+                  {conflict ? (
+                    <div className="sc-hint err" style={{ marginTop: 6 }}>{conflict}</div>
+                  ) : null}
+                </>
               );
             }}
           </Form.Item>
@@ -2027,6 +2065,9 @@ function EstimatedRankHint() {
   const scorePolitics = Form.useWatch('scorePolitics', form);
   const scoreGeography = Form.useWatch('scoreGeography', form);
   const examYear = Form.useWatch('examYear', form);
+  // 手填总分 + ① 选科组合首选 → 支持"只填选科+总分"也能估位次(老师拿不到单科分)
+  const manualTotalRaw = Form.useWatch('totalScore', form);
+  const firstChoice = Form.useWatch('firstChoice', form) as string | undefined;
 
   const subj9: Subject9Form = useMemo(
     () => ({
@@ -2047,11 +2088,20 @@ function EstimatedRankHint() {
     ],
   );
 
-  const validateErr = useMemo(() => validate6Subjects(subj9), [subj9]);
-  const total = useMemo(() => sum9Subjects(subj9), [subj9]);
+  const complete = useMemo(() => isSixComplete(subj9), [subj9]);
+  const sum = useMemo(() => sum9Subjects(subj9), [subj9]);
+  // 6 门齐 → 用 6 科之和; 不齐 → 用手填总分(只填选科+总分也能估)
+  const effectiveTotal = complete
+    ? sum
+    : (typeof manualTotalRaw === 'number' ? manualTotalRaw : 0);
+  // 科类: 优先已填首选分推断, 否则取 ① 选科组合里选的首选
   const examTypeForRank: RankExamType | null = subj9.scorePhysics != null
     ? '物理'
     : subj9.scoreHistory != null
+    ? '历史'
+    : firstChoice === '物理'
+    ? '物理'
+    : firstChoice === '历史'
     ? '历史'
     : null;
 
@@ -2060,12 +2110,12 @@ function EstimatedRankHint() {
   const requestedYear = typeof examYear === 'number' ? examYear : null;
   const effectiveYear = requestedYear ?? 2026;
 
-  const debouncedTotal = useDebounceValue(total, 500);
+  const debouncedTotal = useDebounceValue(effectiveTotal, 500);
   const debouncedYear = useDebounceValue(effectiveYear, 500);
   const debouncedExam = useDebounceValue(examTypeForRank, 500);
 
-  const queryEnabled =
-    !validateErr && debouncedExam != null && debouncedTotal > 0 && !!debouncedYear;
+  // 不再强制 6 科齐全: 有「首选科类 + 总分(自动或手填)」即可估算
+  const queryEnabled = debouncedExam != null && debouncedTotal > 0 && !!debouncedYear;
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['estimate-rank', debouncedYear, debouncedExam, debouncedTotal],
@@ -2088,8 +2138,8 @@ function EstimatedRankHint() {
     }
   }, [data?.rank, form]);
 
-  if (validateErr) {
-    return <div className="sc-hint">{`填齐 6 科分数后, 实时估算位次 · 当前: ${validateErr}`}</div>;
+  if (examTypeForRank == null || effectiveTotal <= 0) {
+    return <div className="sc-hint">填齐 6 科, 或先选首选科目 + 填总分, 即可实时估算位次</div>;
   }
   if (isLoading) return <div className="sc-hint">…正在估算位次</div>;
   if (isError) {
