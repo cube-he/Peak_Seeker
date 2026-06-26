@@ -2192,6 +2192,13 @@ export class PlanCandidateService {
       const isOpportunityGroup = allRiskIsRankOnly && !allWayOffRejected;
       // 有可见(灰显)中外专业才保留, 否则(如关了 includeSoftFails)别留出空组卡。
       const sinoOnlyIntent = q.sinoForeign === 'only' && visibleMajors.length > 0;
+      // way-off 兜底: 即使是 tier 命中 / 关键词搜索 / sinoOnly 三种特殊路径, 若组里
+      // *所有* 可见专业都"严重够不到"(way-off), 也别放行。否则 tier=4 会带出一堆
+      // 浙大 267 vs 学生 178515 这种 668 倍差的组, 误导推荐。
+      const allMajorsWayOffRejected = visibleMajors.length > 0 &&
+        visibleMajors.every((m: any) => m.rankStrategy?.eligibility === 'REJECTED') &&
+        rejectedMajors.every(isWayOffRejected);
+      if (allMajorsWayOffRejected) return null;
       if (isAllRisk && !isOpportunityGroup && !hitsTier && !hasAnyKeyword && !sinoOnlyIntent) return null;
 
       const orderedMajors = [
