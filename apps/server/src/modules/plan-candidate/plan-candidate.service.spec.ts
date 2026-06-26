@@ -1421,6 +1421,34 @@ describe('PlanCandidateService', () => {
     expect(result.groups).toHaveLength(0);
   });
 
+  it('keepAllGroups=true 时连 way-off 组也保留(家长版导出: 老师选进方案的组一律富化, 不丢)', async () => {
+    // 与上一个用例同样的 way-off 数据, 但 keepAllGroups=true → 不丢, 让导出能富化显示。
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({
+          id: 900,
+          university: { id: 9, name: 'Impossible University', code: 'I' },
+          majorName: 'Impossible Major',
+        }),
+      ],
+      records: [
+        makeGroupAdmissionRecord({
+          groupMinRank: 88,
+          majorMinRank: 88,
+          majorName: 'Impossible Major',
+        }),
+      ],
+    });
+    rankStrategy.evaluateCandidate.mockResolvedValue(makeRankStrategyResult('REJECTED', 88));
+
+    const result: any = await service.getCandidateGroups(
+      1,
+      { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH', keepAllGroups: true } as any,
+    );
+
+    expect(result.groups).toHaveLength(1);
+  });
+
   it('keeps a group with a recommended major and puts the unreachable sibling into risk', async () => {
     mockCandidateGroupRequest({
       student: { preferredMajors: ['Preferred Major'] },

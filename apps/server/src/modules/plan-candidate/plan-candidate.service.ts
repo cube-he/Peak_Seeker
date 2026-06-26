@@ -82,6 +82,9 @@ interface GetCandidatesQuery {
   // 是否把"硬规则不符"(选科/再选/性别/健康/户籍/民族, 客观资格不符=投档资格不符)也带出来,
   // 放进每组的 hardFailMajors 独立桶(灰显+禁加入), 默认 false=维持原逻辑(直接剔除, 输出不变)。
   includeHardFails?: boolean | string;
+  // 家长版导出专用: 不丢任何组(跳过 all-RISK 噪音过滤 + way-off 过滤)。导出只是把老师选进
+  // 方案的组原样富化显示, 不该受生成页"该不该推荐"的丢组逻辑影响(否则被丢的组→退快照)。
+  keepAllGroups?: boolean;
 }
 
 type CandidateGroupSort =
@@ -2198,8 +2201,11 @@ export class PlanCandidateService {
       const allMajorsWayOffRejected = visibleMajors.length > 0 &&
         visibleMajors.every((m: any) => m.rankStrategy?.eligibility === 'REJECTED') &&
         rejectedMajors.every(isWayOffRejected);
-      if (allMajorsWayOffRejected) return null;
-      if (isAllRisk && !isOpportunityGroup && !hitsTier && !hasAnyKeyword && !sinoOnlyIntent) return null;
+      // 家长版导出(keepAllGroups): 不丢任何组, 老师选进方案的组一律富化显示, 不受丢组过滤影响。
+      if (!q.keepAllGroups) {
+        if (allMajorsWayOffRejected) return null;
+        if (isAllRisk && !isOpportunityGroup && !hitsTier && !hasAnyKeyword && !sinoOnlyIntent) return null;
+      }
 
       const orderedMajors = [
         ...majorSections.recommended,
@@ -2517,6 +2523,9 @@ export class PlanCandidateService {
           includeSoftFails: true,
           includeHardFails: true,
           includeRegionMismatch: true,
+          // 与生成页解耦: 不丢任何组(way-off / 全 RISK 噪音过滤都跳过)。导出只显示老师选进
+          // 方案的组的真实数据, 不该因生成页过滤掉某组而退快照(如川师大 101 汉语言文学是正常的冲)。
+          keepAllGroups: true,
           groupBy: 'GROUP',
         } as any,
         userId,
