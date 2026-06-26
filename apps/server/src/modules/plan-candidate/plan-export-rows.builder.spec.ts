@@ -11,10 +11,12 @@ const enrichedGroup = {
   university: { city: '成都', runningNature: '公办', is985: true, is211: true, isDoubleFirstClass: true },
   groupCode: '01',
   currentPlanCount: 88,
+  subjects: '物理',
   majors: [
     {
       majorCode: '0809',
       majorName: '计算机类',
+      subjectRequirements: '化学',
       planCount: 20, // 26 计划
       tuition: 4900,
       duration: '四年',
@@ -79,6 +81,7 @@ describe('buildExportSheet', () => {
     expect(g.schoolNature).toBe('公办');
     expect(g.groupCode).toBe('01');
     expect(g.groupPlanCount).toBe(88);
+    expect(g.subjectRequirement).toBe('物理/化学'); // 首选物理 + 再选化学
     expect(g.gradientLabel).toBe('稳');
     expect(g.majors).toHaveLength(1);
 

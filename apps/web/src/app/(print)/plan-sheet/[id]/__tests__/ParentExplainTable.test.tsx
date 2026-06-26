@@ -20,6 +20,7 @@ const sheet: ExportSheet = {
       universityRank: 33,
       groupCode: '01',
       groupPlanCount: 88,
+      subjectRequirement: '物理/化学',
       fallback: false,
       majors: [
         {
@@ -60,6 +61,7 @@ describe('ParentExplainTable', () => {
     expect(screen.getByText('成都')).toBeInTheDocument();
     expect(screen.getByText('33')).toBeInTheDocument();
     expect(screen.getByText(/组招\s*88\s*人/)).toBeInTheDocument();
+    expect(screen.getByText('物理/化学')).toBeInTheDocument(); // 选科列
   });
 
   it('缺数据年份显示「—」, 有征集年份显示逐轮人数（第1轮\\第2轮）', () => {

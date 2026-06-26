@@ -47,6 +47,7 @@ export default function ParentExplainTable({ sheet }: { sheet: ExportSheet }) {
             <th>所在城市</th>
             <th>院校排名</th>
             <th>专业组</th>
+            <th>选科</th>
             <th>专业代码</th>
             <th>专业名称</th>
             <th>26计划</th>
@@ -87,6 +88,7 @@ export default function ParentExplainTable({ sheet }: { sheet: ExportSheet }) {
                       {dash(g.groupCode)}
                       <div className={styles.groupPlan}>组招 {dash(g.groupPlanCount)} 人</div>
                     </td>
+                    <td rowSpan={g.majors.length} className={styles.merge}>{dash(g.subjectRequirement)}</td>
                   </>
                 )}
                 <td>{dash(m.majorCode)}</td>

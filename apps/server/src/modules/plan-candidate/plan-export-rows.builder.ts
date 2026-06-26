@@ -26,6 +26,7 @@ export interface ExportGroup {
   universityRank: number | null;
   groupCode: string | null;
   groupPlanCount: number | null; // 组招生人数
+  subjectRequirement: string | null; // 选科要求(组级): 首选/再选, 如「历史/政治」「物理/不限」
   fallback: boolean;
   majors: ExportMajor[];
 }
@@ -56,6 +57,14 @@ function composeSchoolTags(u: any): string | null {
   if (u.is211) tags.push('211');
   if (u.isDoubleFirstClass) tags.push('双一流');
   return tags.length ? tags.join('/') : null;
+}
+
+// 选科要求: 首选科类(历史/物理) + 再选要求(政治/地理/不限...), 拼成「历史/政治」「物理/不限」。
+function composeSubjectRequirement(subjects: any, reReq: any): string | null {
+  const s = typeof subjects === 'string' ? subjects.trim() : '';
+  const r = typeof reReq === 'string' ? reReq.trim() : '';
+  if (s && r) return `${s}/${r}`;
+  return s || r || null;
 }
 
 function pickHistoryByYear(
@@ -123,6 +132,11 @@ function buildEnrichedGroup(item: any, g: any, years: number[]): ExportGroup {
     universityRank: typeof g.universityRank === 'number' ? g.universityRank : null,
     groupCode: item.groupCode ?? g.groupCode ?? null,
     groupPlanCount: typeof g.currentPlanCount === 'number' ? g.currentPlanCount : null,
+    // 选科要求(组级): 首选科类(g.subjects) + 再选要求(组内首个专业 subjectRequirements, 专业组内统一)
+    subjectRequirement: composeSubjectRequirement(
+      g.subjects,
+      Array.isArray(g.majors) ? g.majors[0]?.subjectRequirements : null,
+    ) ?? item.subjectRequirement ?? null,
     fallback: false,
     majors: Array.isArray(g.majors) ? g.majors.map((m: any) => buildEnrichedMajor(m, years)) : [],
   };
@@ -151,6 +165,7 @@ function buildFallbackGroup(item: any, years: number[]): ExportGroup {
     universityRank: null,
     groupCode: item.groupCode ?? null,
     groupPlanCount: null,
+    subjectRequirement: item.subjectRequirement ?? null,
     fallback: true,
     majors: [
       {

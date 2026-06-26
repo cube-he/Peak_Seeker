@@ -24,6 +24,7 @@ export interface ExportGroup {
   universityRank: number | null;
   groupCode: string | null;
   groupPlanCount: number | null;
+  subjectRequirement: string | null; // 选科要求(组级): 首选/再选
   fallback: boolean;
   majors: ExportMajor[];
 }
