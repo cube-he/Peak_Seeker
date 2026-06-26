@@ -796,28 +796,42 @@ export class PlanCandidateService {
     return uniqueValues(values);
   }
 
-  // 征集(2023-2025): supplementary_records 含 subject(物理/历史)+ majorCode + majorName。
-  // 跨年认"同一专业"只靠 (院校, 科类, 专业名) —— 实测专业组代码/专业代码/批次段/学费跨年都漂,
-  // 唯专业名稳定(参见 [[supplementary_3y_byyear]])。批次用两层匹配而非硬钉:
-  //   tier1 段级精确(本科A/本科B/提前A/提前B/专科…), 同段优先;
-  //   tier2 批次族兜底(本科/专科/提前 三族不串), 容纳"同专业逐年换段"(如市场营销 A段↔B段)。
+  // 征集(2023-2025): supplementary_records 含 subject(物理/历史)+ recruitType(招生类型)+ majorName。
+  // 跨年认"同一专业"= (院校, 科类, 批次族+类型 canonical, 专业名)。专业组代码/专业代码/批次段跨年都漂
+  // (参见 [[supplementary_3y_byyear]]), 故批次按四川「功能分类」对齐: 把(批次,招生类型)归一成
+  //   family(本科/专科/提前) · typeTag(普通/国家专项/地方专项/高校专项/预科/民族/师范/军事/医学定向…)
+  // 据 data/03_专家版主表/output/三年批次对比.xlsx + 2026年批次结构.xlsx 校验:
+  //   2023/2024 本科一批+二批 与 2025/2026 本科批B段 同归「本科·普通」→ 对齐;
+  //   国家/地方/高校专项、预科、民族、各提前批类型 各自独立 → 互不串。
+  // 两边(征集库归一批次 & 2026计划原始批次)过同一函数, 只看关键字, 不要求批次串字面相等。
   // 学生科类过滤在 where(subject 命中或为 null), 多轮按 roundNumber 累计 + 跨年透出。
-  private supplementaryBatchSegment(batch: string | null | undefined): string {
-    const t = (batch ?? '').trim();
-    if (!t) return '';
-    const zhuanke = t.includes('专科') || t.includes('高职');
-    const tiqian = t.includes('提前');
-    const isB = t.includes('B段') || t.includes('二批');
-    if (zhuanke) return tiqian ? '专科提前' : '专科';
-    if (tiqian) return isB ? '提前B' : '提前A';
-    if (isB) return '本科B';
-    return '本科A'; // A段/一批/各专项/预科/高校专项/运动队/少数民族 等本科段统一归 A
-  }
-  private supplementaryBatchFamily(batch: string | null | undefined): string {
-    const t = (batch ?? '').trim();
-    if (t.includes('专科') || t.includes('高职')) return '专科';
-    if (t.includes('提前')) return '提前';
-    return '本科';
+  private supplementaryCanonicalBatch(batch?: string | null, recruitType?: string | null): string {
+    const t = `${batch ?? ''} ${recruitType ?? ''}`;
+    const fam = t.includes('专科') || t.includes('高职') ? '专科' : t.includes('提前') ? '提前' : '本科';
+    const tag =
+        t.includes('强基') ? '强基'
+      : t.includes('优师') ? '优师'
+      : t.includes('国家专项') ? '国家专项'
+      : t.includes('地方专项') ? '地方专项'
+      : t.includes('高校专项') ? '高校专项'
+      : t.includes('帮扶专项') ? '帮扶专项'
+      : t.includes('乡村振兴') ? '乡村振兴'
+      : t.includes('区域教育均衡') || t.includes('区域均衡') ? '区域均衡'
+      : t.includes('运动队') ? '运动队'
+      : t.includes('艺术团') ? '艺术团'
+      : t.includes('军士') ? '军士'
+      : t.includes('军事') || t.includes('军队') ? '军事'
+      : t.includes('公安') || t.includes('司法') ? '公安司法'
+      : t.includes('消防') ? '消防'
+      : t.includes('综合评价') || t.includes('综合考核') ? '综合评价'
+      : t.includes('订单定向') || t.includes('免费医学') || (t.includes('医学') && t.includes('定向')) ? '医学定向'
+      : t.includes('航海') ? '航海'
+      : t.includes('招飞') || t.includes('航空') || t.includes('飞行') ? '招飞'
+      : t.includes('公费师范') || t.includes('师范') ? '师范'
+      : t.includes('少数民族语言') || t.includes('加授') || t.includes('民族语') || t.includes('一类模式') || t.includes('二类模式') || t.includes('民族班') ? '民族'
+      : t.includes('预科') ? '预科'
+      : '普通';
+    return `${fam}·${tag}`;
   }
 
   private async loadSupplementaryByGroup(
@@ -839,12 +853,12 @@ export class PlanCandidateService {
         ...(studentSubject ? { OR: [{ subject: studentSubject }, { subject: null }] } : {}),
       },
       select: {
-        year: true, universityId: true, batch: true, subject: true,
+        year: true, universityId: true, batch: true, subject: true, recruitType: true,
         majorCode: true, majorName: true, planCount: true, roundNumber: true,
       },
     });
 
-    // 索引: (院校|专业名) → 记录[]; 批次/年留到查找时按两层匹配, 不进键(键稳)
+    // 索引: (院校|专业名) → 记录[]; 批次/类型/年留到查找时按 canonical 对齐, 不进键(键稳)
     const byUniMajor = new Map<string, any[]>();
     for (const r of records) {
       if ((r.planCount ?? 0) <= 0 && r.roundNumber == null) continue;
@@ -858,14 +872,12 @@ export class PlanCandidateService {
     const roundsArr = (rm: Map<number, number>) =>
       Array.from(rm.entries()).sort((a, b) => a[0] - b[0]).map(([round, count]) => ({ round, count }));
 
-    // 某专业某年: 两层批次匹配后聚合 { total, rounds }(null = 该年无信号)
-    const pickYearBucket = (recs: any[], year: number, groupBatch: string) => {
-      const sameYear = recs.filter((r) => r.year === year);
-      if (sameYear.length === 0) return null;
-      const seg = this.supplementaryBatchSegment(groupBatch);
-      const fam = this.supplementaryBatchFamily(groupBatch);
-      let hit = sameYear.filter((r) => this.supplementaryBatchSegment(r.batch) === seg); // tier1 段级精确
-      if (hit.length === 0) hit = sameYear.filter((r) => this.supplementaryBatchFamily(r.batch) === fam); // tier2 批次族兜底
+    // 某专业某年: 按 (批次族+类型 canonical) 对齐后聚合 { total, rounds }(null = 该年无信号)
+    // 同 canonical 才算同一录取(普通/专项/类型分开), 跨批次段(A段↔B段, 一批↔二批↔B段)由 canonical 归一吸收
+    const pickYearBucket = (recs: any[], year: number, groupCanonical: string) => {
+      const hit = recs.filter(
+        (r) => r.year === year && this.supplementaryCanonicalBatch(r.batch, r.recruitType) === groupCanonical,
+      );
       if (hit.length === 0) return null;
       const rounds = new Map<number, number>();
       let total = 0;
@@ -881,7 +893,7 @@ export class PlanCandidateService {
     for (const { groupKey, rows } of groupRows) {
       const first = rows[0];
       const uni = first.universityId;
-      const groupBatch = first.batch;
+      const groupCanonical = this.supplementaryCanonicalBatch(first.batch, first.recruitType);
       // 组内去重专业名(同名专业只算一次, 防组级重复累加)
       const majorNames = uniqueValues(rows.map((r: any) => r.majorName).filter(Boolean));
 
@@ -890,7 +902,7 @@ export class PlanCandidateService {
       for (const m of majorNames) {
         const recs = byUniMajor.get(`${uni}|${m}`) ?? [];
         const perYear: Record<number, any> = {};
-        for (const y of sortedYearsAsc) perYear[y] = recs.length ? pickYearBucket(recs, y, groupBatch) : null;
+        for (const y of sortedYearsAsc) perYear[y] = recs.length ? pickYearBucket(recs, y, groupCanonical) : null;
         majorYear.set(m, perYear);
       }
 

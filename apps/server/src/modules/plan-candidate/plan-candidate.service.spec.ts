@@ -1140,49 +1140,49 @@ describe('PlanCandidateService', () => {
   });
 
   it('does not attach supplementary across batch families (本科 vs 专科)', async () => {
-    // 批次族隔离: 专科批的征集不能挂到本科批候选组(防同名专业本/专科错并)
+    // 批次族隔离: 专科批的征集不能挂到本科批候选组(canonical 专科·普通 ≠ 本科·普通)
     prisma.supplementaryRecord.findMany.mockResolvedValue([
-      { year: 2025, universityId: 7, batch: '高职(专科)批', subject: '物理', majorCode: '1', majorName: 'M', planCount: 8, roundNumber: 1 },
+      { year: 2025, universityId: 7, batch: '高职(专科)批', recruitType: '普通类高职(专科)', subject: '物理', majorCode: '1', majorName: 'M', planCount: 8, roundNumber: 1 },
     ]);
     const groups = new Map<string, any>([
-      ['7|G7|本科批B段|General|物理', [{ universityId: 7, batch: '本科批B段', groupCode: 'G7', majorCode: '1', majorName: 'M' }]],
+      ['7|G7|本科批B段|普通类本科|物理', [{ universityId: 7, batch: '本科批B段', recruitType: '普通类本科', groupCode: 'G7', majorCode: '1', majorName: 'M' }]],
     ]);
     const result: Map<string, any> = await (service as any).loadSupplementaryByGroup(groups, 'Sichuan', [2023, 2024, 2025], '物理');
 
-    expect(result.has('7|G7|本科批B段|General|物理')).toBe(false);
+    expect(result.has('7|G7|本科批B段|普通类本科|物理')).toBe(false);
   });
 
-  it('attaches supplementary across batch-segment/group drift by major name (市场营销 回归)', async () => {
-    // 真实坑: 同一专业逐年换专业组代码 + 换批次段(市场营销 2025在A段组103, 2026计划在B段组109)。
-    // 旧实现按 (院校,批次,组代码) 钉死 → 三年全漏。新实现按 (院校,专业名)+批次族兜底 → 命中。
+  it('aligns supplementary across batch-segment drift by canonical batch+type (市场营销 回归)', async () => {
+    // 市场营销 普通本科: 2024 本科一批/本科(45) + 2025 本科批B段/普通类本科(1) → 都归「本科·普通」→ 落 2026 B段普通卡。
+    // 同校同年的「地方专项」市场营销(canonical 本科·地方专项) 不串进普通卡。
     prisma.supplementaryRecord.findMany.mockResolvedValue([
-      { year: 2025, universityId: 10688, batch: '本科批A段', subject: '历史', majorCode: '1Q', majorName: '市场营销', planCount: 2, roundNumber: 1 },
-      { year: 2024, universityId: 10688, batch: '本科批A段', subject: null, majorCode: null, majorName: '市场营销', planCount: 3, roundNumber: 1 },
+      { year: 2025, universityId: 10688, batch: '本科批B段', recruitType: '普通类本科', subject: '历史', majorCode: '1Q', majorName: '市场营销', planCount: 1, roundNumber: 1 },
+      { year: 2024, universityId: 10688, batch: '本科批A段', recruitType: '本科', subject: '历史', majorCode: '1V', majorName: '市场营销', planCount: 45, roundNumber: 1 },
+      { year: 2025, universityId: 10688, batch: '本科批A段', recruitType: '地方专项计划', subject: '历史', majorCode: '1Q', majorName: '市场营销', planCount: 2, roundNumber: 1 },
     ]);
     const groups = new Map<string, any>([
-      ['10688|109|本科批B段|普通类|历史', [{ universityId: 10688, batch: '本科批B段', groupCode: '109', majorCode: '2F', majorName: '市场营销' }]],
+      ['10688|109|本科批B段|普通类本科|历史', [{ universityId: 10688, batch: '本科批B段', recruitType: '普通类本科', groupCode: '109', majorCode: '2F', majorName: '市场营销' }]],
     ]);
     const result: Map<string, any> = await (service as any).loadSupplementaryByGroup(groups, 'Sichuan', [2023, 2024, 2025], '历史');
-    const s = result.get('10688|109|本科批B段|普通类|历史');
+    const s = result.get('10688|109|本科批B段|普通类本科|历史');
     expect(s).toBeDefined();
-    // 2025(A段) 与 2024(A段, 旧高考 null) 都经"本科"批次族兜底落到 B段候选组
-    expect(s.byYear[2025].totalPlanCount).toBe(2);
-    expect(s.byYear[2024].totalPlanCount).toBe(3);
+    expect(s.byYear[2025].totalPlanCount).toBe(1);  // B段普通 2025(地方专项的 2 不并入)
+    expect(s.byYear[2024].totalPlanCount).toBe(45); // 本科一批/本科 经 canonical 归普通 → 落 B段
     expect(s.byYear[2023]).toBeNull();
     expect(s.sourceYear).toBe(2025);
   });
 
-  it('prefers same-segment (tier1) over cross-segment fallback when both exist', async () => {
-    // 同专业同年既有 B段又有 A段征集: B段候选组只取 B段(段级精确), 不把 A段也并进来
+  it('separates supplementary by canonical type (普通 vs 国家专项 不串)', async () => {
+    // 同校同年同专业, 普通 与 国家专项 是两种录取: 普通卡只取普通, 不并专项
     prisma.supplementaryRecord.findMany.mockResolvedValue([
-      { year: 2025, universityId: 9, batch: '本科批B段', subject: '历史', majorCode: 'a', majorName: '会计学', planCount: 1, roundNumber: 1 },
-      { year: 2025, universityId: 9, batch: '本科批A段', subject: '历史', majorCode: 'b', majorName: '会计学', planCount: 9, roundNumber: 1 },
+      { year: 2025, universityId: 9, batch: '本科批B段', recruitType: '普通类本科', subject: '历史', majorCode: 'a', majorName: '会计学', planCount: 1, roundNumber: 1 },
+      { year: 2025, universityId: 9, batch: '本科批A段(国家专项)', recruitType: '国家专项计划', subject: '历史', majorCode: 'b', majorName: '会计学', planCount: 9, roundNumber: 1 },
     ]);
     const groups = new Map<string, any>([
-      ['9|G|本科批B段|普通类|历史', [{ universityId: 9, batch: '本科批B段', groupCode: 'G', majorCode: 'a', majorName: '会计学' }]],
+      ['9|G|本科批B段|普通类本科|历史', [{ universityId: 9, batch: '本科批B段', recruitType: '普通类本科', groupCode: 'G', majorCode: 'a', majorName: '会计学' }]],
     ]);
     const result: Map<string, any> = await (service as any).loadSupplementaryByGroup(groups, 'Sichuan', [2023, 2024, 2025], '历史');
-    const s = result.get('9|G|本科批B段|普通类|历史');
+    const s = result.get('9|G|本科批B段|普通类本科|历史');
     expect(s.byYear[2025].totalPlanCount).toBe(1);
   });
 

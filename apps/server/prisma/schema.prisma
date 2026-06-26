@@ -1733,10 +1733,16 @@ model SupplementaryRecord {
   majorName      String? @map("major_name") @db.VarChar(200)
 
   // 新高考维度(2025 起): 科目(物理/历史) + 专业组代码 + 专业代码
-  // 旧高考(2023/2024)无专业组概念, 这三列为 null
+  // 科目源表 3 年都有(2026-06-26 重导后 2023/2024 也填), groupCode 仅 2025 起
   subject   String? @db.VarChar(20)
   groupCode String? @map("group_code") @db.VarChar(50)
   majorCode String? @map("major_code") @db.VarChar(50)
+
+  // 招生类型(原始, 如「普通类本科/国家专项计划/地方专项计划」) — 候选匹配按 (批次族+类型) 对齐跨年用
+  recruitType String? @map("recruit_type") @db.VarChar(100)
+  // 专业备注(校区/方向, 如「成龙校区」)+ 收费标准(学费) — 同名专业变体兜底区分用
+  majorNote   String? @map("major_note") @db.Text
+  tuition     Int?    @map("tuition")
 
   // 征集信息
   planCount      Int?    @map("plan_count")
