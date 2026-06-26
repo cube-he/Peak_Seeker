@@ -211,7 +211,24 @@ export default function PlanPreparationTable({ plan, items }: PlanPreparationTab
     const source = document.querySelector('[data-print-root]') as HTMLElement | null;
     installPrintStyle();
     if (source) installPrintRoot(source);
-    window.addEventListener('afterprint', removePrintArtifacts, { once: true });
+    // 设 document.title → 浏览器「另存为 PDF」默认文件名(如 王润_本科批B段_志愿填报预案表_20260626)
+    const prevTitle = document.title;
+    const safe = (s: string) => (s || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+    const now = new Date();
+    const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+      now.getDate(),
+    ).padStart(2, '0')}`;
+    document.title = `${[safe(textValue(studentName)) || '学生', safe(batchLabel)]
+      .filter(Boolean)
+      .join('_')}_志愿填报预案表_${ymd}`.replace(/_+/g, '_');
+    window.addEventListener(
+      'afterprint',
+      () => {
+        removePrintArtifacts();
+        document.title = prevTitle;
+      },
+      { once: true },
+    );
     window.print();
   };
 

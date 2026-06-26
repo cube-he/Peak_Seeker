@@ -704,12 +704,6 @@ export default function PlanDetailPage() {
   // ── 次动作（折叠到 Dropdown） ──
   const moreMenuItems = [
     {
-      key: 'parent-sheet',
-      icon: <ExportOutlined />,
-      label: '家长版数据表',
-      onClick: () => window.open(`/plan-sheet/${planId}`, '_blank', 'noopener'),
-    },
-    {
       key: 'export',
       icon: <ExportOutlined />,
       label: '导出 PDF',
@@ -1063,6 +1057,29 @@ export default function PlanDetailPage() {
         ) : (
           <div className="pd2-tl-empty">暂无审核记录</div>
         )}
+      </div>
+
+      {/* —— 打印 / 导出 PDF: 家长版数据表 + 填报预案表 放一起, 打开后 Ctrl+P 另存为 PDF —— */}
+      <div className="rounded-2xl bg-surface shadow-card p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-semibold text-text">打印 / 导出 PDF</span>
+          <Button
+            type="primary"
+            icon={<ExportOutlined />}
+            onClick={() => window.open(`/plan-sheet/${planId}`, '_blank', 'noopener')}
+          >
+            家长版数据表（A3 横版）
+          </Button>
+          <Button
+            icon={<FullscreenOutlined />}
+            onClick={() => setShowPreparationFullscreen(true)}
+          >
+            填报预案表（A4 竖版）
+          </Button>
+          <span className="text-xs text-text-muted">
+            打开后点「打印」按钮（或 Ctrl+P）→ 目标选「另存为 PDF」，文件名已自动命名
+          </span>
+        </div>
       </div>
 
       {/* —— 志愿填报预案一览表 (默认折叠 · 打印 / 填报对照, 保留 antd Collapse + Modal) —— */}
