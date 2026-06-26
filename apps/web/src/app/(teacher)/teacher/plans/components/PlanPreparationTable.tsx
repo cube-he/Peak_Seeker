@@ -125,11 +125,16 @@ function formatInteger(value: unknown) {
 function formatListValue(value: unknown) {
   if (!value) return '';
   if (Array.isArray(value)) {
-    return value
-      .map((item) => (typeof item === 'string' ? item : item?.name ?? item?.label ?? ''))
-      .filter(Boolean)
-      .slice(0, 6)
-      .join('、');
+    const flat: string[] = [];
+    for (const item of value) {
+      if (typeof item === 'string') flat.push(item);
+      // 分梯队结构 [{tier, majors:[...]}]: 展开各梯队的 majors
+      else if (item && Array.isArray((item as any).majors)) {
+        for (const m of (item as any).majors) if (typeof m === 'string') flat.push(m);
+      } else if (item?.name) flat.push(String(item.name));
+      else if (item?.label) flat.push(String(item.label));
+    }
+    return flat.filter(Boolean).slice(0, 6).join('、');
   }
   if (typeof value === 'object') return '';
   return String(value);
@@ -150,7 +155,11 @@ function formatPhysical(student: Record<string, any> | undefined) {
   const notes: string[] = [];
   if (student.colorBlind) notes.push('色盲');
   if (student.colorWeak) notes.push('色弱');
-  if (student.vision) notes.push(`视力${student.vision}`);
+  // 视力优先读新字段 visionLeft/visionRight, 回退已 deprecated 的 vision
+  const vl = student.visionLeft;
+  const vr = student.visionRight;
+  if (vl != null || vr != null) notes.push(`视力 ${vl ?? '-'}/${vr ?? '-'}`);
+  else if (student.vision) notes.push(`视力${student.vision}`);
   if (student.medicalHistory) notes.push(String(student.medicalHistory));
   return notes.join('、');
 }
@@ -269,7 +278,7 @@ export default function PlanPreparationTable({ plan, items }: PlanPreparationTab
                 </tr>
                 <tr className={styles.metaLabelRow}>
                   <td className={styles.thickLeft}>姓名</td>
-                  <td colSpan={2}>分数/2024/2023</td>
+                  <td colSpan={2}>分数/{year}</td>
                   <td>位次</td>
                   <td colSpan={3}>志愿倾向</td>
                   <td className={styles.thickRight}>身体情况</td>
