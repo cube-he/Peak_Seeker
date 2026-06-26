@@ -796,11 +796,30 @@ export class PlanCandidateService {
     return uniqueValues(values);
   }
 
-  // 征集(已校验版 2025 起重建): supplementary_records 含 subject(物理/历史)+ groupCode + majorCode。
-  // 按 (院校, 批次, 专业组代码) 聚合到组级, 用学生科类过滤, 多轮累计 + 跨年透出。
-  // 2025 新高考: 按 groupCode 严格聚合。
-  // 2023/2024 旧高考: subject/groupCode 全 null, 按 majorName 兜底进 byMajorName Map(只挂专业级, 不算组级 total)。
-  // 同时给出组内各专业的征集数(byMajor[year][majorCode|majorName]), 供展开态专业行按年显示。
+  // 征集(2023-2025): supplementary_records 含 subject(物理/历史)+ majorCode + majorName。
+  // 跨年认"同一专业"只靠 (院校, 科类, 专业名) —— 实测专业组代码/专业代码/批次段/学费跨年都漂,
+  // 唯专业名稳定(参见 [[supplementary_3y_byyear]])。批次用两层匹配而非硬钉:
+  //   tier1 段级精确(本科A/本科B/提前A/提前B/专科…), 同段优先;
+  //   tier2 批次族兜底(本科/专科/提前 三族不串), 容纳"同专业逐年换段"(如市场营销 A段↔B段)。
+  // 学生科类过滤在 where(subject 命中或为 null), 多轮按 roundNumber 累计 + 跨年透出。
+  private supplementaryBatchSegment(batch: string | null | undefined): string {
+    const t = (batch ?? '').trim();
+    if (!t) return '';
+    const zhuanke = t.includes('专科') || t.includes('高职');
+    const tiqian = t.includes('提前');
+    const isB = t.includes('B段') || t.includes('二批');
+    if (zhuanke) return tiqian ? '专科提前' : '专科';
+    if (tiqian) return isB ? '提前B' : '提前A';
+    if (isB) return '本科B';
+    return '本科A'; // A段/一批/各专项/预科/高校专项/运动队/少数民族 等本科段统一归 A
+  }
+  private supplementaryBatchFamily(batch: string | null | undefined): string {
+    const t = (batch ?? '').trim();
+    if (t.includes('专科') || t.includes('高职')) return '专科';
+    if (t.includes('提前')) return '提前';
+    return '本科';
+  }
+
   private async loadSupplementaryByGroup(
     groups: Map<string, any[]>,
     province: string,
@@ -810,124 +829,97 @@ export class PlanCandidateService {
     const result = new Map<string, any>();
     if (groups.size === 0 || years.length === 0 || !(this.prisma as any).supplementaryRecord?.findMany) return result;
 
-    const groupRows = Array.from(groups.entries()).map(([groupKey, rows]) => ({ groupKey, row: rows[0] }));
-    // 历史年 subject 为 null, 新高考 subject 严格匹配; 用 OR 容纳两套
+    const groupRows = Array.from(groups.entries()).map(([groupKey, rows]) => ({ groupKey, rows }));
+    // 历史年(2023/2024) subject 为 null, 新高考严格匹配; 用 OR 容纳两套
     const records = await (this.prisma as any).supplementaryRecord.findMany({
       where: {
         province: { in: this.provinceAliases(province) },
         year: { in: years },
-        universityId: { in: uniqueValues(groupRows.map(({ row }) => row.universityId)) },
+        universityId: { in: uniqueValues(groupRows.map(({ rows }) => rows[0].universityId)) },
         ...(studentSubject ? { OR: [{ subject: studentSubject }, { subject: null }] } : {}),
       },
       select: {
-        year: true, universityId: true, batch: true, groupCode: true, subject: true,
+        year: true, universityId: true, batch: true, subject: true,
         majorCode: true, majorName: true, planCount: true, roundNumber: true,
       },
     });
 
-    // 双口径聚合:
-    //   newAgg[uni|batch|groupCode] → byYear[year]={ total, rounds:Map<round,count>, byCode:Map<majorCode, total>, byName:... }
-    //   oldByUniBatchMajor[uni|batch|majorName] → byYear[year]={ rounds:Map<round,count>, total }
-    type YearBucket = { total: number; rounds: Map<number, number>; byCode: Map<string, number>; byName: Map<string, number>; byCodeRounds: Map<string, Map<number, number>>; byNameRounds: Map<string, Map<number, number>> };
-    const newAgg = new Map<string, Map<number, YearBucket>>();
-    const oldByMajor = new Map<string, Map<number, { total: number; rounds: Map<number, number> }>>();
-
-    const ensureNew = (key: string, year: number) => {
-      let m = newAgg.get(key);
-      if (!m) { m = new Map(); newAgg.set(key, m); }
-      let b = m.get(year);
-      if (!b) { b = { total: 0, rounds: new Map(), byCode: new Map(), byName: new Map(), byCodeRounds: new Map(), byNameRounds: new Map() }; m.set(year, b); }
-      return b;
-    };
-    const ensureOld = (key: string, year: number) => {
-      let m = oldByMajor.get(key);
-      if (!m) { m = new Map(); oldByMajor.set(key, m); }
-      let b = m.get(year);
-      if (!b) { b = { total: 0, rounds: new Map() }; m.set(year, b); }
-      return b;
-    };
-
+    // 索引: (院校|专业名) → 记录[]; 批次/年留到查找时按两层匹配, 不进键(键稳)
+    const byUniMajor = new Map<string, any[]>();
     for (const r of records) {
-      const pc = r.planCount ?? 0;
-      if (pc <= 0 && r.roundNumber == null) continue;
-      const round = r.roundNumber ?? 0;
-      if (r.groupCode != null) {
-        // 新高考 (2025+): 严格组级
-        const b = ensureNew(`${r.universityId}|${r.batch}|${r.groupCode}`, r.year);
-        b.total += pc;
-        b.rounds.set(round, (b.rounds.get(round) ?? 0) + pc);
-        if (r.majorCode) {
-          b.byCode.set(r.majorCode, (b.byCode.get(r.majorCode) ?? 0) + pc);
-          let cr = b.byCodeRounds.get(r.majorCode);
-          if (!cr) { cr = new Map(); b.byCodeRounds.set(r.majorCode, cr); }
-          cr.set(round, (cr.get(round) ?? 0) + pc);
-        }
-        if (r.majorName) {
-          b.byName.set(r.majorName, (b.byName.get(r.majorName) ?? 0) + pc);
-          let nr = b.byNameRounds.get(r.majorName);
-          if (!nr) { nr = new Map(); b.byNameRounds.set(r.majorName, nr); }
-          nr.set(round, (nr.get(round) ?? 0) + pc);
-        }
-      } else if (r.majorName) {
-        // 旧高考 (2023/2024): 无 groupCode, 挂 (uni,batch,majorName) 给专业级兜底
-        const b = ensureOld(`${r.universityId}|${r.batch}|${r.majorName}`, r.year);
-        b.total += pc;
-        b.rounds.set(round, (b.rounds.get(round) ?? 0) + pc);
-      }
+      if ((r.planCount ?? 0) <= 0 && r.roundNumber == null) continue;
+      if (!r.majorName) continue;
+      const key = `${r.universityId}|${r.majorName}`;
+      const arr = byUniMajor.get(key);
+      if (arr) arr.push(r); else byUniMajor.set(key, [r]);
     }
 
     const sortedYearsAsc = [...years].sort((a, b) => a - b);
-    const latestYear = sortedYearsAsc[sortedYearsAsc.length - 1];
     const roundsArr = (rm: Map<number, number>) =>
       Array.from(rm.entries()).sort((a, b) => a[0] - b[0]).map(([round, count]) => ({ round, count }));
 
-    for (const { groupKey, row } of groupRows) {
-      const newKey = `${row.universityId}|${row.batch}|${row.groupCode}`;
-      const yearMap = newAgg.get(newKey);
-      // 旧高考兜底: 该组所有 EP 行的 majorName 在 oldByMajor 命中后, 按 (uni,batch) 合并
-      const groupEPRows = groups.get(groupKey) ?? [row];
-      const groupMajorNames = uniqueValues(groupEPRows.map((ep: any) => ep.majorName).filter(Boolean));
+    // 某专业某年: 两层批次匹配后聚合 { total, rounds }(null = 该年无信号)
+    const pickYearBucket = (recs: any[], year: number, groupBatch: string) => {
+      const sameYear = recs.filter((r) => r.year === year);
+      if (sameYear.length === 0) return null;
+      const seg = this.supplementaryBatchSegment(groupBatch);
+      const fam = this.supplementaryBatchFamily(groupBatch);
+      let hit = sameYear.filter((r) => this.supplementaryBatchSegment(r.batch) === seg); // tier1 段级精确
+      if (hit.length === 0) hit = sameYear.filter((r) => this.supplementaryBatchFamily(r.batch) === fam); // tier2 批次族兜底
+      if (hit.length === 0) return null;
+      const rounds = new Map<number, number>();
+      let total = 0;
+      for (const r of hit) {
+        const pc = r.planCount ?? 0;
+        total += pc;
+        const round = r.roundNumber ?? 0;
+        rounds.set(round, (rounds.get(round) ?? 0) + pc);
+      }
+      return { totalPlanCount: total, totalRounds: rounds.size, rounds: roundsArr(rounds), _rounds: rounds };
+    };
 
-      // 组装 byYear (3 年完整, 缺年填 null)
+    for (const { groupKey, rows } of groupRows) {
+      const first = rows[0];
+      const uni = first.universityId;
+      const groupBatch = first.batch;
+      // 组内去重专业名(同名专业只算一次, 防组级重复累加)
+      const majorNames = uniqueValues(rows.map((r: any) => r.majorName).filter(Boolean));
+
+      // 专业级: 每专业 → 每年 bucket(供 extract helper 按 majorName 读)
+      const majorYear = new Map<string, Record<number, any>>();
+      for (const m of majorNames) {
+        const recs = byUniMajor.get(`${uni}|${m}`) ?? [];
+        const perYear: Record<number, any> = {};
+        for (const y of sortedYearsAsc) perYear[y] = recs.length ? pickYearBucket(recs, y, groupBatch) : null;
+        majorYear.set(m, perYear);
+      }
+
+      // 组级 byYear: 本组各专业(已去重)逐年累加
       const byYear: Record<number, any> = {};
       let hasAnySignal = false;
       for (const y of sortedYearsAsc) {
-        const newB = yearMap?.get(y);
-        if (newB && newB.total > 0) {
-          byYear[y] = {
-            totalPlanCount: newB.total,
-            totalRounds: newB.rounds.size,
-            rounds: roundsArr(newB.rounds),
-          };
-          hasAnySignal = true;
-        } else {
-          // 旧高考兜底: 加总该组所有 majorName 在 (uni,batch,majorName) 命中
-          let oldTotal = 0;
-          const oldRoundsMerged = new Map<number, number>();
-          for (const mname of groupMajorNames) {
-            const ob = oldByMajor.get(`${row.universityId}|${row.batch}|${mname}`)?.get(y);
-            if (ob) {
-              oldTotal += ob.total;
-              for (const [rn, ct] of ob.rounds) oldRoundsMerged.set(rn, (oldRoundsMerged.get(rn) ?? 0) + ct);
-            }
-          }
-          if (oldTotal > 0) {
-            byYear[y] = {
-              totalPlanCount: oldTotal,
-              totalRounds: oldRoundsMerged.size,
-              rounds: roundsArr(oldRoundsMerged),
-            };
-            hasAnySignal = true;
-          } else {
-            byYear[y] = null;
+        const merged = new Map<number, number>();
+        let total = 0;
+        let any = false;
+        for (const m of majorNames) {
+          const b = majorYear.get(m)?.[y];
+          if (b) {
+            total += b.totalPlanCount;
+            for (const [rn, ct] of b._rounds as Map<number, number>) merged.set(rn, (merged.get(rn) ?? 0) + ct);
+            any = true;
           }
         }
+        if (any && total > 0) {
+          byYear[y] = { totalPlanCount: total, totalRounds: merged.size, rounds: roundsArr(merged) };
+          hasAnySignal = true;
+        } else {
+          byYear[y] = null;
+        }
       }
-
       if (!hasAnySignal) continue;
 
-      // 向后兼容: 取最新有数据年的 total 作为顶层 totalPlanCount/totalRounds, sourceYear 也按它取
-      let compatYear = latestYear;
+      // 顶层兼容字段取"最新有数据年"
+      let compatYear = sortedYearsAsc[sortedYearsAsc.length - 1];
       for (let i = sortedYearsAsc.length - 1; i >= 0; i--) {
         if (byYear[sortedYearsAsc[i]] != null) { compatYear = sortedYearsAsc[i]; break; }
       }
@@ -939,55 +931,32 @@ export class PlanCandidateService {
         totalPlanCount: compat?.totalPlanCount ?? 0,
         totalRounds: compat?.totalRounds ?? 0,
         byYear,
-        // 内部用, 不外泄给前端
-        byMajorByYear: yearMap,  // newAgg 当年, 专业级精确
-        oldByMajor,  // 旧高考兜底
+        // 内部: 专业级逐年 bucket(供 extract helper 用, 透传层白名单不外泄)
+        _majorYear: majorYear,
       });
     }
     return result;
   }
 
-  // 取某专业行各年征集数(组聚合结果挂下来后, 按 majorCode/majorName 命中)
-  // 2025+ 走 byMajorByYear[year].byCode 优先 byName 兜底;
-  // 2023/2024 走 oldByMajor[uni|batch|majorName][year]
+  // 取某专业行各年征集数(按 majorName 命中组内 _majorYear)
   private extractMajorSupplementaryByYear(supp: any, ep: any, years: number[]): Record<number, number | null> {
     const out: Record<number, number | null> = {};
-    const newMap = supp?.byMajorByYear as Map<number, any> | undefined;
-    const oldMap = supp?.oldByMajor as Map<string, Map<number, any>> | undefined;
-    const oldKey = `${ep.universityId}|${ep.batch}|${ep.majorName}`;
-    for (const y of years) {
-      const newB = newMap?.get(y);
-      let v: number | null = null;
-      if (newB) v = newB.byCode?.get(ep.majorCode) ?? newB.byName?.get(ep.majorName) ?? null;
-      if (v == null) v = oldMap?.get(oldKey)?.get(y)?.total ?? null;
-      out[y] = v;
-    }
+    const perYear = (supp?._majorYear as Map<string, Record<number, any>> | undefined)?.get(ep.majorName);
+    for (const y of years) out[y] = perYear?.[y]?.totalPlanCount ?? null;
     return out;
   }
 
-  // 专业行各年「分轮」征集明细 — 供前端在该年计划数后展示 (1轮/2轮/3轮)。
-  // 2025+ 走 byMajorByYear[year].byCodeRounds 优先, byNameRounds 兜底;
-  // 2023/2024 (旧高考无 groupCode) 走 oldByMajor[uni|batch|majorName][year].rounds。
+  // 专业行各年「分轮」征集明细 — 供前端在该年计划数后展示 (5/3)
   private extractMajorSupplementaryRoundsByYear(
     supp: any,
     ep: any,
     years: number[],
   ): Record<number, { round: number; count: number }[] | null> {
     const out: Record<number, { round: number; count: number }[] | null> = {};
-    const newMap = supp?.byMajorByYear as Map<number, any> | undefined;
-    const oldMap = supp?.oldByMajor as Map<string, Map<number, any>> | undefined;
-    const oldKey = `${ep.universityId}|${ep.batch}|${ep.majorName}`;
-    const toArr = (rm: Map<number, number> | undefined | null) =>
-      rm && rm.size > 0
-        ? Array.from(rm.entries()).sort((a, b) => a[0] - b[0]).map(([round, count]) => ({ round, count }))
-        : null;
+    const perYear = (supp?._majorYear as Map<string, Record<number, any>> | undefined)?.get(ep.majorName);
     for (const y of years) {
-      const newB = newMap?.get(y);
-      let rounds: Map<number, number> | null = null;
-      if (newB) rounds = newB.byCodeRounds?.get(ep.majorCode) ?? newB.byNameRounds?.get(ep.majorName) ?? null;
-      let arr = toArr(rounds);
-      if (!arr) arr = toArr(oldMap?.get(oldKey)?.get(y)?.rounds);
-      out[y] = arr;
+      const b = perYear?.[y];
+      out[y] = b && Array.isArray(b.rounds) && b.rounds.length ? b.rounds : null;
     }
     return out;
   }
