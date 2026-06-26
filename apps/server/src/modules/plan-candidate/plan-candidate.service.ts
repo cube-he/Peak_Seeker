@@ -2170,13 +2170,29 @@ export class PlanCandidateService {
       //      "不接受中外"时全软不符→全 RISK, 不豁免就会被丢→筛完为空(数据其实有)。
       //      不替老师藏数据: 保留, 让中外组灰显待决策。
       const isAllRisk = majorSections.recommended.length === 0 && majorSections.backup.length === 0;
+      // REJECTED 全 RISK 组保留是为「轻微够不到 / 公费师范降分录取」这类真实捡漏机会; 但若门槛
+      // 位次 < 学生位次 / 1.5(即门槛比学生靠前 50%+, 如学生 178515 / 浙大 267 差 668 倍), 量级
+      // 上根本上不去, 放出来反而误导。WAY_OFF: 该组所有 REJECTED 专业的 candidateRank 都远比学生
+      // 靠前 → 不算"机会组", 丢弃。INSUFFICIENT_DATA(新组无史线)不在此列, 仍按机会组保留。
+      const REJECTED_RANK_TOO_FAR_RATIO = 1.5;
+      const isWayOffRejected = (m: any) =>
+        m.rankStrategy?.eligibility === 'REJECTED' &&
+        typeof m.rankStrategy?.candidateRank === 'number' &&
+        m.rankStrategy.candidateRank > 0 &&
+        studentRank / m.rankStrategy.candidateRank > REJECTED_RANK_TOO_FAR_RATIO;
       const allRiskIsRankOnly = isAllRisk && visibleMajors.length > 0 &&
         visibleMajors.every((m) =>
           (m.rankStrategy?.eligibility === 'REJECTED' || m.rankStrategy?.eligibility === 'INSUFFICIENT_DATA') &&
           (m.failReasons ?? []).length === 0);
+      // way-off-REJECTED 量级保护: 若组内 *存在* REJECTED 专业且 *所有 REJECTED 专业* 都严重够不到
+      // (门槛位次比学生 / 1.5 还靠前 → 浙大 267 vs 学生 178515 是 668 倍场景), 则该组非真捡漏,
+      // 不豁免。纯 INSUFFICIENT_DATA 的"无史线机会组"不受此影响, 仍保留。
+      const rejectedMajors = visibleMajors.filter((m: any) => m.rankStrategy?.eligibility === 'REJECTED');
+      const allWayOffRejected = rejectedMajors.length > 0 && rejectedMajors.every(isWayOffRejected);
+      const isOpportunityGroup = allRiskIsRankOnly && !allWayOffRejected;
       // 有可见(灰显)中外专业才保留, 否则(如关了 includeSoftFails)别留出空组卡。
       const sinoOnlyIntent = q.sinoForeign === 'only' && visibleMajors.length > 0;
-      if (isAllRisk && !allRiskIsRankOnly && !hitsTier && !hasAnyKeyword && !sinoOnlyIntent) return null;
+      if (isAllRisk && !isOpportunityGroup && !hitsTier && !hasAnyKeyword && !sinoOnlyIntent) return null;
 
       const orderedMajors = [
         ...majorSections.recommended,

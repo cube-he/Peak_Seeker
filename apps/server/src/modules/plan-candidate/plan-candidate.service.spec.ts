@@ -1395,9 +1395,9 @@ describe('PlanCandidateService', () => {
     ]);
   });
 
-  it('keeps an all-REJECTED group as an extreme-rush option instead of dropping it', async () => {
-    // 旧行为是整组丢弃; 但"位次明显高于学生"是极冲选项不是噪音 —— 提前批/公费师范
-    // 常降分录取, 灭组会让整个批次在工作台消失 (2026-06-13 提前批组粒度=0 的根因)
+  it('drops a way-off-REJECTED group (门槛位次远比学生靠前, 量级上根本上不去)', async () => {
+    // 学生 30000, 门槛 88(差 341 倍, 类似 学生 178515 / 浙大 267 = 668 倍场景)
+    // → 不是机会, 是噪音, 必须丢弃。否则会显示在"冲"段误导老师。
     mockCandidateGroupRequest({
       plans: [
         makeGroupEnrollmentPlan({
@@ -1418,9 +1418,7 @@ describe('PlanCandidateService', () => {
 
     const result: any = await service.getCandidateGroups(1, { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH' });
 
-    expect(result.groups).toHaveLength(1);
-    expect(result.groups[0].allRisk).toBe(true);
-    expect(result.groups[0].majorSections.risk).toHaveLength(1);
+    expect(result.groups).toHaveLength(0);
   });
 
   it('keeps a group with a recommended major and puts the unreachable sibling into risk', async () => {
