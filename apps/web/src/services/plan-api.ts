@@ -48,6 +48,8 @@ export interface CandidateGroupListParams extends CandidateListParams {
   sortDir?: CandidateSortDir;
   // 组名/定向县搜索 (提前批公费定向按县筛组)
   keywordGroup?: string;
+  // 专业备注搜索 (planNotes LIKE; 体检/学费/中外合作方向等)
+  keywordPlanNotes?: string;
   // 梯度档位过滤 (全池口径, 服务端分页前生效); 不传 = 全部
   gradientBand?: 'RUSH' | 'STABLE' | 'SAFE' | 'NO_LINE';
   // 意向梯队过滤 (0 / undefined = 不过滤, 1+ = 该梯队号)
@@ -148,6 +150,7 @@ export const planApi = {
         keywordUniversity: params?.keywordUniversity?.trim() || undefined,
         keywordMajor: params?.keywordMajor?.trim() || undefined,
         keywordGroup: params?.keywordGroup?.trim() || undefined,
+        keywordPlanNotes: params?.keywordPlanNotes?.trim() || undefined,
         gradientBand: params?.gradientBand,
         includeSoftFails: params?.includeSoftFails,
         sort: params?.sort ?? 'MAJOR_MATCH',

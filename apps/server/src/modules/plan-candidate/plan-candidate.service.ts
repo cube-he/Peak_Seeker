@@ -53,6 +53,7 @@ interface GetCandidatesQuery {
   keywordUniversity?: string; // 仅匹配 university.name
   keywordMajor?: string; // 匹配 major.name OR majorName
   keywordGroup?: string; // 匹配 groupName(定向县/专业组名), 提前批公费定向场景按县筛组
+  keywordPlanNotes?: string; // 匹配 EnrollmentPlan.planNotes(专业备注 LIKE)
   // 梯度档位过滤(全池口径, 分页前生效): 冲/稳/保/无史线; 不传 = 全部。
   // 在缓存后的分页层应用, 切档不触发重算
   gradientBand?: 'RUSH' | 'STABLE' | 'SAFE' | 'NO_LINE' | string;
@@ -575,6 +576,7 @@ export class PlanCandidateService {
       keywordUniversity: q.keywordUniversity?.trim() || '',
       keywordMajor: q.keywordMajor?.trim() || '',
       keywordGroup: q.keywordGroup?.trim() || '',
+      keywordPlanNotes: q.keywordPlanNotes?.trim() || '',
       includeSoftFails: q.includeSoftFails !== false,
       // includeHardFails 影响池构建(是否生成 hardFailMajors), 必须进缓存键, 否则开关切换命中旧池。
       includeHardFails: q.includeHardFails === true || q.includeHardFails === 'true',
@@ -1601,8 +1603,9 @@ export class PlanCandidateService {
     const kwUniversity = q.keywordUniversity?.trim();
     const kwMajor = q.keywordMajor?.trim();
     const kwGroup = q.keywordGroup?.trim();
+    const kwPlanNotes = q.keywordPlanNotes?.trim();
     const kwLegacy = q.keyword?.trim();
-    const hasNewKeywords = Boolean(kwUniversity || kwMajor || kwGroup);
+    const hasNewKeywords = Boolean(kwUniversity || kwMajor || kwGroup || kwPlanNotes);
     const hasAnyKeyword = hasNewKeywords || Boolean(kwLegacy);
     // 专业层"搜索匹配"chip 用的 keyword: 优先专业搜索, 兜底旧 keyword
     const matchKeyword = kwMajor || kwLegacy;
@@ -1630,6 +1633,8 @@ export class PlanCandidateService {
         });
         // 组名搜索: 提前批公费/优师的定向县在 groupName("定向凉山州昭觉县"), 老师按县筛组
         if (kwGroup) ands.push({ groupName: { contains: kwGroup } });
+        // 专业备注搜索: planNotes 是长文本(色觉/体检/学费/中外合作方向等), 老师按特定备注关键词筛
+        if (kwPlanNotes) ands.push({ planNotes: { contains: kwPlanNotes } });
         if (ands.length > 0) keywordWhere.AND = ands;
       } else if (kwLegacy) {
         keywordWhere.OR = [

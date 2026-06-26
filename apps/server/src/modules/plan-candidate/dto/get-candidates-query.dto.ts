@@ -42,6 +42,7 @@ export class GetCandidatesQueryDto {
   @IsOptional() @IsString() keywordUniversity?: string; // 仅匹配 university.name
   @IsOptional() @IsString() keywordMajor?: string; // 匹配 major.name OR majorName
   @IsOptional() @IsString() keywordGroup?: string; // 匹配 groupName(定向县/专业组名)
+  @IsOptional() @IsString() keywordPlanNotes?: string; // 匹配 EnrollmentPlan.planNotes(专业备注 LIKE)
   // 梯度档位过滤(全池口径, 分页前生效); 不传 = 全部
   @IsOptional() @IsIn(['RUSH', 'STABLE', 'SAFE', 'NO_LINE']) gradientBand?: string;
   @IsOptional() @Transform(onlyExplicitFalse) @IsBoolean() includeSoftFails?: boolean | string = true;

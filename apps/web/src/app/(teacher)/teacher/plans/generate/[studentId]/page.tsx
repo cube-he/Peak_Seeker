@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { pickerApi } from '@/services/picker';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   Alert,
@@ -742,113 +741,57 @@ function UniversityBadges({ group }: { group: CandidateGroup }) {
   );
 }
 
-// 院校搜索 AutoComplete: 输入时联想院校名 + 旧名 (renameHistory).
-// 老师输入"川"看到"四川大学"; 输入"北方交通大学"看到"北京交通大学 (原 北方交通大学)"
-function UniversitySearchAutoComplete({
-  value, onChange, onCommit,
-}: { value: string; onChange: (v: string) => void; onCommit: (v: string) => void }) {
-  const { data } = useQuery({
-    queryKey: ['picker-options', 'universities'],
-    queryFn: () => pickerApi.universities(),
-    staleTime: Infinity,
-  });
-  const universities = data ?? [];
-  const options = useMemo(() => {
-    const q = value.trim();
-    if (!q) return [];
-    const lower = q.toLowerCase();
-    // 名称命中优先, renameHistory 命中其次
-    const nameHits: any[] = [];
-    const renameHits: any[] = [];
-    for (const u of universities) {
-      if (u.name.toLowerCase().includes(lower)) {
-        nameHits.push({ value: u.name, label: u.name });
-      } else if (u.renameHistory && u.renameHistory.includes(q)) {
-        renameHits.push({
-          value: u.name,
-          label: `${u.name}  (含旧名: ${u.renameHistory.slice(0, 30)}${u.renameHistory.length > 30 ? '…' : ''})`,
-        });
-      }
-      if (nameHits.length + renameHits.length >= 20) break;
-    }
-    return [...nameHits.slice(0, 12), ...renameHits.slice(0, 8)];
-  }, [value, universities]);
-  return (
-    <span className="pgv2-search" title="按院校名搜索, 输入旧名 (如「北方交通大学」) 也能匹配到改名后的院校">
-      <SearchOutlined />
-      <AutoComplete
-        value={value}
-        options={options}
-        onChange={onChange}
-        onSelect={(v: string) => { onChange(v); onCommit(v); }}
-        onBlur={() => onCommit(value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') onCommit(value); }}
-        placeholder="搜索院校"
-        style={{ width: 220 }}
-        allowClear
-        notFoundContent={null}
-      />
-    </span>
-  );
-}
+// 旧 UniversitySearchAutoComplete / MajorSearchAutoComplete / GroupNameSearchInput
+// 已由统一的 FieldKeywordSearch 取代(Excel 风格字段下拉+搜索框)。
 
-// 专业搜索 AutoComplete: 输入时联想专业名
-function MajorSearchAutoComplete({
-  value, onChange, onCommit,
-}: { value: string; onChange: (v: string) => void; onCommit: (v: string) => void }) {
-  const { data } = useQuery({
-    queryKey: ['picker-options', 'majors'],
-    queryFn: () => pickerApi.majors(),
-    staleTime: Infinity,
-  });
-  const majors = data ?? [];
-  const options = useMemo(() => {
-    const q = value.trim();
-    if (!q) return [];
-    const lower = q.toLowerCase();
-    const hits: any[] = [];
-    for (const m of majors) {
-      if (m.name.toLowerCase().includes(lower)) {
-        hits.push({ value: m.name, label: m.name });
-        if (hits.length >= 20) break;
-      }
-    }
-    return hits;
-  }, [value, majors]);
-  return (
-    <span className="pgv2-search" title="按专业名搜索, 同时填院校则 AND 组合">
-      <SearchOutlined />
-      <AutoComplete
-        value={value}
-        options={options}
-        onChange={onChange}
-        onSelect={(v: string) => { onChange(v); onCommit(v); }}
-        onBlur={() => onCommit(value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') onCommit(value); }}
-        placeholder="搜索专业"
-        style={{ width: 220 }}
-        allowClear
-        notFoundContent={null}
-      />
-    </span>
-  );
-}
+// 字段下拉 + 关键词输入: Excel 风格按字段筛选(单字段单关键词, 切字段自动清空对侧)。
+export type SearchField = 'university' | 'major' | 'group' | 'planNotes';
+const SEARCH_FIELD_OPTIONS: Array<{ value: SearchField; label: string; placeholder: string }> = [
+  { value: 'university', label: '院校', placeholder: '输入院校名' },
+  { value: 'major', label: '专业', placeholder: '输入专业名' },
+  { value: 'group', label: '组名/定向县', placeholder: '如「昭觉」「凉山」' },
+  { value: 'planNotes', label: '专业备注', placeholder: '如「色弱」「中外合作」「单科」' },
+];
 
-function GroupNameSearchInput({
-  value, onChange, onCommit,
-}: { value: string; onChange: (v: string) => void; onCommit: (v: string) => void }) {
-  // 提前批公费/优师的定向县在组名里("定向凉山州昭觉县"), 老师按县筛组
+function FieldKeywordSearch({
+  field, value, onFieldChange, onValueChange, onCommit,
+}: {
+  field: SearchField;
+  value: string;
+  onFieldChange: (f: SearchField) => void;
+  onValueChange: (v: string) => void;
+  onCommit: (field: SearchField, value: string) => void;
+}) {
+  const opt = SEARCH_FIELD_OPTIONS.find((o) => o.value === field) ?? SEARCH_FIELD_OPTIONS[0];
   return (
-    <span className="pgv2-search" title="按专业组名/定向县搜索, 如「昭觉」「凉山」">
+    <span className="pgv2-search" title={`按「${opt.label}」字段搜索`}>
+      <select
+        className="pgv3-sort"
+        value={field}
+        onChange={(e) => {
+          const next = e.target.value as SearchField;
+          onFieldChange(next);
+          // 切字段先清值, 让搜索语义干净(也立刻 commit 清空, 旧字段过滤立刻撤掉)
+          onValueChange('');
+          onCommit(next, '');
+        }}
+        style={{ marginRight: 4 }}
+      >
+        {SEARCH_FIELD_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
       <SearchOutlined />
       <AutoComplete
         value={value}
         options={[]}
-        onChange={onChange}
-        onBlur={() => onCommit(value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') onCommit(value); }}
-        placeholder="组名/定向县"
-        style={{ width: 150 }}
+        onChange={onValueChange}
+        onBlur={() => onCommit(field, value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') onCommit(field, value); }}
+        placeholder={opt.placeholder}
+        style={{ width: 220 }}
         allowClear
         notFoundContent={null}
       />
@@ -921,9 +864,11 @@ export default function GeneratePlanPage() {
   const [keywordMajor, setKeywordMajor] = useState('');
   // 组名/定向县搜索 (提前批公费定向场景: 按"昭觉""凉山"筛定向组)
   const [keywordGroupName, setKeywordGroupName] = useState('');
-  const [searchTextUniversity, setSearchTextUniversity] = useState('');
-  const [searchTextMajor, setSearchTextMajor] = useState('');
-  const [searchTextGroupName, setSearchTextGroupName] = useState('');
+  // 专业备注搜索 (planNotes LIKE; 体检/学费/中外合作方向等)
+  const [keywordPlanNotes, setKeywordPlanNotes] = useState('');
+  // Excel 风格「字段下拉 + 搜索框」: 一次只筛一个字段, 切字段自动清空对侧 keyword
+  const [searchField, setSearchField] = useState<SearchField>('university');
+  const [searchText, setSearchText] = useState('');
   const [includeSoftFails, setIncludeSoftFails] = useState(true);
   // 非意向地区(整所院校省市都不在学生意向地区): 默认折叠隐藏, 开关展开
   const [includeRegionMismatch, setIncludeRegionMismatch] = useState(false);
@@ -1107,7 +1052,7 @@ export default function GeneratePlanPage() {
   // 搜索穿透: 老师搜了具体院校/专业时, 无视"非意向地区 / 分数窗口 / 档位"等隐藏, 让匹配项一定
   // 显示出来(没过规则的以真实档位灰显)。否则搜"清华"这类非意向地区/够不着的院校会被默认隐藏掉,
   // 等于工具替老师藏了数据。规则: 有任一搜索词 → 强制展开非意向地区 + 不发分数窗口 + 不带档位过滤。
-  const hasSearch = !!(keyword || keywordUniversity || keywordMajor || keywordGroupName);
+  const hasSearch = !!(keyword || keywordUniversity || keywordMajor || keywordGroupName || keywordPlanNotes);
   const effectiveIncludeRegion = hasSearch ? true : includeRegionMismatch;
 
   const { data: studentData, isLoading: studentLoading } = useQuery({
@@ -1154,7 +1099,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), natureFilter, sinoForeignFilter, hasSearch ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null), recruitTypeFilter.join(','), tagsFilter.join(','), backgroundsFilter.join(','), provincesFilter.join(','), citiesFilter.join(','), newItemFilter],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, keywordPlanNotes, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), natureFilter, sinoForeignFilter, hasSearch ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null), recruitTypeFilter.join(','), tagsFilter.join(','), backgroundsFilter.join(','), provincesFilter.join(','), citiesFilter.join(','), newItemFilter],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1162,6 +1107,7 @@ export default function GeneratePlanPage() {
       keywordUniversity,
       keywordMajor,
       keywordGroup: keywordGroupName,
+      keywordPlanNotes,
       // 档位过滤走服务端(全池口径+正确分页); 服务端在缓存后的分页层应用, 切档不重算。
       // 搜索时不带档位(hasSearch): 让搜到的院校无视冲/稳/保过滤都能出来。
       gradientBand: !hasSearch && viewMode !== 'UNIVERSITY' && gradientFilter !== 'all' ? gradientFilter : undefined,
@@ -1386,7 +1332,7 @@ export default function GeneratePlanPage() {
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
-  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, gradientFilter, includeSoftFails, includeRegionMismatch, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, natureFilter, tagsFilter, backgroundsFilter, provincesFilter, citiesFilter, newItemFilter]);
+  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordGroupName, keywordPlanNotes, gradientFilter, includeSoftFails, includeRegionMismatch, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, natureFilter, tagsFilter, backgroundsFilter, provincesFilter, citiesFilter, newItemFilter]);
 
   // 视图模式默认跟随 plan/student.priorityMode (仅在无 ?view= URL 参数时, 自动定一次)
   useEffect(() => {
@@ -2192,20 +2138,18 @@ export default function GeneratePlanPage() {
               {/* —— Region 4: pgv3-toolbar 搜索 + 排序 + 显示全部 / 状态勾选 —— */}
               <div className="pgv3-toolbar">
                 <div className="pgv3-search-group">
-                <UniversitySearchAutoComplete
-                  value={searchTextUniversity}
-                  onChange={setSearchTextUniversity}
-                  onCommit={setKeywordUniversity}
-                />
-                <MajorSearchAutoComplete
-                  value={searchTextMajor}
-                  onChange={setSearchTextMajor}
-                  onCommit={setKeywordMajor}
-                />
-                <GroupNameSearchInput
-                  value={searchTextGroupName}
-                  onChange={setSearchTextGroupName}
-                  onCommit={setKeywordGroupName}
+                <FieldKeywordSearch
+                  field={searchField}
+                  value={searchText}
+                  onFieldChange={setSearchField}
+                  onValueChange={setSearchText}
+                  onCommit={(field, value) => {
+                    // Excel 风格: 单字段单关键词。提交时只往选中字段 set 值, 其余三个清零。
+                    setKeywordUniversity(field === 'university' ? value : '');
+                    setKeywordMajor(field === 'major' ? value : '');
+                    setKeywordGroupName(field === 'group' ? value : '');
+                    setKeywordPlanNotes(field === 'planNotes' ? value : '');
+                  }}
                 />
                 {viewMode === 'UNIVERSITY' ? (
                   <select
@@ -2922,11 +2866,12 @@ export default function GeneratePlanPage() {
                         </>
                       );
                     }
-                    if (keyword || keywordUniversity || keywordMajor || keywordGroupName) {
+                    if (keyword || keywordUniversity || keywordMajor || keywordGroupName || keywordPlanNotes) {
                       const parts: string[] = [];
                       if (keywordUniversity) parts.push(`院校「${keywordUniversity}」`);
                       if (keywordMajor) parts.push(`专业「${keywordMajor}」`);
                       if (keywordGroupName) parts.push(`组名/定向「${keywordGroupName}」`);
+                      if (keywordPlanNotes) parts.push(`专业备注「${keywordPlanNotes}」`);
                       if (!parts.length && keyword) parts.push(`「${keyword}」`);
                       // 当前选了具体梯队时, 搜索可能被 tier 排除 — 提示切到「全部」
                       const hint = appliedTier > 0
