@@ -71,6 +71,18 @@
   font-size: 8px;
 }
 
+/* 招生考试报页码 P.XX 角标 */
+.page {
+  display: inline-block;
+  margin-left: 3px;
+  padding: 0 2px;
+  font-size: 7.5px;
+  color: #1e3a5f;
+  background: #eef4fb;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
 .notesHead {
   width: 18%;
 }

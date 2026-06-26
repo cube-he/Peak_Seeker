@@ -11,6 +11,7 @@ export interface ExportMajor {
   duration: string | null;
   tuition: number | null;
   planNotes: string | null;
+  bookPageNumber: number | null; // 招生考试报页码(2026), 历史年 null
 }
 
 export interface ExportGroup {
@@ -100,6 +101,7 @@ function buildEnrichedMajor(m: any, years: number[]): ExportMajor {
     duration: m.duration ?? m.standardDuration ?? null,
     tuition: typeof m.tuition === 'number' ? m.tuition : null,
     planNotes: m.planNotes ?? null,
+    bookPageNumber: typeof m.bookPageNumber === 'number' ? m.bookPageNumber : null,
   };
 }
 
@@ -156,6 +158,7 @@ function buildFallbackGroup(item: any, years: number[]): ExportGroup {
         duration: null,
         tuition: typeof item.tuition === 'number' ? item.tuition : null,
         planNotes: null,
+        bookPageNumber: null,
       },
     ],
   };

@@ -87,7 +87,12 @@ export default function ParentExplainTable({ sheet }: { sheet: ExportSheet }) {
                   </>
                 )}
                 <td>{dash(m.majorCode)}</td>
-                <td className={styles.majorName}>{dash(m.majorName)}</td>
+                <td className={styles.majorName}>
+                  {dash(m.majorName)}
+                  {m.bookPageNumber != null ? (
+                    <span className={styles.page}>P.{m.bookPageNumber}</span>
+                  ) : null}
+                </td>
                 <td>{dash(m.planCount)}</td>
                 {years.map((y) => (
                   <td key={`p${y}`}>

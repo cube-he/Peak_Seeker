@@ -28,6 +28,7 @@ const enrichedGroup = {
       ],
       supplementaryByYear: { 2025: 3, 2024: null, 2023: null },
       supplementaryRoundsByYear: { 2025: [{ round: 1, count: 2 }, { round: 2, count: 1 }], 2024: null, 2023: null },
+      bookPageNumber: 312, // 招生考试报页码
     },
   ],
 };
@@ -90,6 +91,7 @@ describe('buildExportSheet', () => {
     expect(m.duration).toBe('四年');
     expect(m.tuition).toBe(4900);
     expect(m.planNotes).toContain('中外合作');
+    expect(m.bookPageNumber).toBe(312);
   });
 
   it('快照兜底：组在富化结果缺失时用 planItem 快照渲染单个锚定专业', () => {
@@ -106,6 +108,7 @@ describe('buildExportSheet', () => {
     expect(m.minScoreByYear).toEqual({ 2023: null, 2024: 662, 2025: 668 }); // 快照 25/24 有, 23 无
     expect(m.planByYear).toEqual({ 2023: null, 2024: null, 2025: null });
     expect(m.suppByYear[2025]).toBeNull();
+    expect(m.bookPageNumber).toBeNull(); // 快照无页码
   });
 
   it('schoolTags 缺快照时由院校 985/211/双一流 标志合成', () => {

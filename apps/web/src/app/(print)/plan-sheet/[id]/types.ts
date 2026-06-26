@@ -9,6 +9,7 @@ export interface ExportMajor {
   duration: string | null;
   tuition: number | null;
   planNotes: string | null;
+  bookPageNumber: number | null;
 }
 
 export interface ExportGroup {

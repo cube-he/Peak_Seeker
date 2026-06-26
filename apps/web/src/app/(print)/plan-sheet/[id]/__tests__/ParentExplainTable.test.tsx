@@ -32,6 +32,7 @@ const sheet: ExportSheet = {
           duration: '四年',
           tuition: 4900,
           planNotes: '色盲色弱不录取',
+          bookPageNumber: 312,
         },
         {
           majorCode: '0807',
@@ -43,6 +44,7 @@ const sheet: ExportSheet = {
           duration: '四年',
           tuition: 4900,
           planNotes: '',
+          bookPageNumber: null,
         },
       ],
     },
@@ -69,5 +71,12 @@ describe('ParentExplainTable', () => {
   it('梯度标签渲染', () => {
     render(<ParentExplainTable sheet={sheet} />);
     expect(screen.getByText('稳')).toBeInTheDocument();
+  });
+
+  it('有招生考试报页码显示 P.XX 角标, 无则不显示', () => {
+    render(<ParentExplainTable sheet={sheet} />);
+    expect(screen.getByText('P.312')).toBeInTheDocument();
+    // 第二个专业 bookPageNumber=null → 不应出现任何 P. 角标
+    expect(screen.queryAllByText(/^P\./)).toHaveLength(1);
   });
 });
