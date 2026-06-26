@@ -1,11 +1,13 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Empty, Spin } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { planApi } from '@/services/plan-api';
 import ParentExplainTable from './ParentExplainTable';
+import { buildExportTitle } from './export-filename';
 import type { ExportSheet } from './types';
 
 // @page 必须是全局 at-rule(CSS Module 不 scope 它), 故直接注入 <style>。
@@ -24,6 +26,17 @@ export default function PlanSheetPrintPage() {
     queryFn: () => planApi.getExportRows(params.id) as Promise<ExportSheet>,
     enabled: !!params.id,
   });
+
+  // 设 document.title → 浏览器「另存为 PDF」默认文件名(如 王润_本科批B段_志愿方案(家长版)_20260626)。
+  // 离开页面时还原, 避免污染其它路由标题。
+  useEffect(() => {
+    if (!data) return;
+    const prev = document.title;
+    document.title = buildExportTitle(data);
+    return () => {
+      document.title = prev;
+    };
+  }, [data]);
 
   return (
     <div style={{ padding: 16, background: '#fff', minHeight: '100vh' }}>
