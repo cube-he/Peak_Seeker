@@ -22,6 +22,9 @@ interface ParsedSupplementaryRecord {
   groupCode: string | null;
   majorCode: string | null;
   majorName: string | null;
+  recruitType: string | null;
+  majorNote: string | null;
+  tuition: number | null;
   planCount: number | null;
   requirements: string | null;
   filingMinScore: number | null;
@@ -167,10 +170,13 @@ async function parseWorkbook(
     const universityCode = toText(getCell(row, indexes, '院校代码'));
     const universityName = toText(getCell(row, indexes, '院校名称'));
     const majorName = toText(getCell(row, indexes, '专业名称')) || null;
-    // 候选卡可见性依赖这三列(loadSupplementaryByGroup 按 groupCode 聚合 + subject 过滤); 源缺列时 getCell→null
-    const subject = toText(getCell(row, indexes, '科类')) || toText(getCell(row, indexes, '首选科目')) || null;
+    // 科目: 总合并表表头是「科目」(3 年都填 物理/历史), 旧逐年文件用「科类/首选科目」; 都兜一下
+    const subject = toText(getCell(row, indexes, '科目')) || toText(getCell(row, indexes, '科类')) || toText(getCell(row, indexes, '首选科目')) || null;
     const groupCode = toText(getCell(row, indexes, '专业组代码')) || null;
     const majorCode = toText(getCell(row, indexes, '专业代码')) || null;
+    // 招生类型(候选匹配按 批次族+类型 对齐用) + 专业备注/学费(同名变体兜底区分用)
+    const majorNote = toText(getCell(row, indexes, '专业备注')) || null;
+    const tuition = toNumber(getCell(row, indexes, '收费标准'));
     if (!year || !rawBatch || !universityName) {
       skippedInvalid++;
       continue;
@@ -211,6 +217,9 @@ async function parseWorkbook(
         groupCode,
         majorCode,
         majorName,
+        recruitType: recruitType || null,
+        majorNote,
+        tuition,
         planCount,
         requirements,
         filingMinScore,
