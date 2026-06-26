@@ -7730,13 +7730,16 @@
 .wn-teacher-scope .pgv2-rail-stats .num.stable { color: var(--stable); }
 
 .wn-teacher-scope .pgv2-rail-list {
-  flex: 1;
+  /* 高度尽量撑满: 列表 flex 填满卡片在 header/stats 与底部按钮之间的剩余空间,
+     内容超过卡片 max-height(calc(100vh-112px)) 才内部滚; min-height:0 让 flex 子项能收缩滚动
+     而不是把内容顶出去挤掉底部「提交」按钮。去掉原 max-height:320px 的固定矮约束。 */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   display: flex; flex-direction: column; gap: 2px;
   border-top: 1px solid var(--border-subtle);
   padding-top: 10px;
   margin-bottom: 12px;
-  max-height: 320px;
 }
 .wn-teacher-scope .pgv2-rail-list::-webkit-scrollbar { width: 6px; }
 .wn-teacher-scope .pgv2-rail-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
@@ -7868,7 +7871,8 @@
 }
 .wn-teacher-scope .pgv2-rail-tip strong { font-weight: 600; }
 
-.wn-teacher-scope .pgv2-hints { border-top: 1px solid var(--border-subtle); padding-top: 12px; }
+/* flex-shrink:0 — 列表撑满后底部「提交主管审核」按钮区不被挤压, 始终可见 */
+.wn-teacher-scope .pgv2-hints { border-top: 1px solid var(--border-subtle); padding-top: 12px; flex-shrink: 0; }
 .wn-teacher-scope .pgv2-hints h4 {
   margin: 0 0 8px;
   font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase;
