@@ -28,7 +28,7 @@ const sheet: ExportSheet = {
           planCount: 20,
           planByYear: { 2023: null, 2024: 18, 2025: 20 },
           minScoreByYear: { 2023: null, 2024: 662, 2025: 668 },
-          suppByYear: { 2023: null, 2024: null, 2025: { count: 3, rounds: 2 } },
+          suppByYear: { 2023: null, 2024: null, 2025: [2, 1] },
           duration: '四年',
           tuition: 4900,
           planNotes: '色盲色弱不录取',
@@ -62,10 +62,11 @@ describe('ParentExplainTable', () => {
     expect(screen.getByText(/组招\s*88\s*人/)).toBeInTheDocument();
   });
 
-  it('缺数据年份显示「—」, 有征集年份显示征集尾注', () => {
+  it('缺数据年份显示「—」, 有征集年份显示逐轮人数（第1轮\\第2轮）', () => {
     render(<ParentExplainTable sheet={sheet} />);
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
-    expect(screen.getByText(/征\s*2\s*轮/)).toBeInTheDocument();
+    // 第1轮2人, 第2轮1人 → （2\1）
+    expect(screen.getByText('（2\\1）')).toBeInTheDocument();
   });
 
   it('梯度标签渲染', () => {

@@ -86,7 +86,7 @@ describe('buildExportSheet', () => {
     expect(m.planCount).toBe(20);
     expect(m.planByYear).toEqual({ 2023: null, 2024: 18, 2025: 20 });
     expect(m.minScoreByYear).toEqual({ 2023: null, 2024: 662, 2025: 668 });
-    expect(m.suppByYear[2025]).toEqual({ count: 3, rounds: 2 });
+    expect(m.suppByYear[2025]).toEqual([2, 1]); // 逐轮人数: 第1轮2人, 第2轮1人
     expect(m.suppByYear[2024]).toBeNull();
     expect(m.duration).toBe('四年');
     expect(m.tuition).toBe(4900);

@@ -16,7 +16,10 @@ function YearPlanCell({ major, year }: { major: ExportMajor; year: number }) {
   return (
     <>
       {plan === null || plan === undefined ? '—' : plan}
-      {supp ? <span className={styles.supp}>（征{supp.rounds}轮·{supp.count}人）</span> : null}
+      {supp && supp.length ? (
+        // 征集逐轮人数: （第1轮\第2轮\第3轮）
+        <span className={styles.supp}>（{supp.join('\\')}）</span>
+      ) : null}
     </>
   );
 }

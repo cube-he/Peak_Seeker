@@ -5,7 +5,7 @@ export interface ExportMajor {
   planCount: number | null;
   planByYear: Record<number, number | null>;
   minScoreByYear: Record<number, number | null>;
-  suppByYear: Record<number, { count: number; rounds: number } | null>;
+  suppByYear: Record<number, number[] | null>; // 逐轮征集人数 [第1轮, 第2轮, ...]
   duration: string | null;
   tuition: number | null;
   planNotes: string | null;

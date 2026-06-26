@@ -7,7 +7,7 @@ export interface ExportMajor {
   planCount: number | null; // 26 计划(当前年)
   planByYear: Record<number, number | null>;
   minScoreByYear: Record<number, number | null>;
-  suppByYear: Record<number, { count: number; rounds: number } | null>;
+  suppByYear: Record<number, number[] | null>; // 逐轮征集人数 [第1轮, 第2轮, ...]
   duration: string | null;
   tuition: number | null;
   planNotes: string | null;
@@ -72,17 +72,22 @@ function pickHistoryByYear(
   return out;
 }
 
+// 逐轮征集人数, 按轮次升序: [第1轮, 第2轮, 第3轮...]。无征集=null。
 function buildSuppByYear(
   suppByYear: Record<number, number | null> | null | undefined,
   suppRoundsByYear: Record<number, Array<{ round: number; count: number }> | null> | null | undefined,
   years: number[],
-): Record<number, { count: number; rounds: number } | null> {
-  const out: Record<number, { count: number; rounds: number } | null> = {};
+): Record<number, number[] | null> {
+  const out: Record<number, number[] | null> = {};
   for (const y of years) {
-    const count = suppByYear?.[y];
     const rounds = suppRoundsByYear?.[y];
-    if ((typeof count === 'number' && count > 0) || (Array.isArray(rounds) && rounds.length > 0)) {
-      out[y] = { count: typeof count === 'number' ? count : 0, rounds: Array.isArray(rounds) ? rounds.length : 0 };
+    const total = suppByYear?.[y];
+    if (Array.isArray(rounds) && rounds.length > 0) {
+      out[y] = [...rounds]
+        .sort((a, b) => (a?.round ?? 0) - (b?.round ?? 0))
+        .map((r) => (typeof r?.count === 'number' ? r.count : 0));
+    } else if (typeof total === 'number' && total > 0) {
+      out[y] = [total]; // 无分轮明细(旧数据兜底): 当作单轮显示
     } else {
       out[y] = null;
     }
@@ -131,7 +136,7 @@ function buildFallbackGroup(item: any, years: number[]): ExportGroup {
   if (typeof item.score24Major === 'number' && years.includes(2024)) minScoreByYear[2024] = item.score24Major;
   if (typeof item.score25Major === 'number' && years.includes(2025)) minScoreByYear[2025] = item.score25Major;
   const planByYear: Record<number, number | null> = {};
-  const suppByYear: Record<number, { count: number; rounds: number } | null> = {};
+  const suppByYear: Record<number, number[] | null> = {};
   for (const y of years) { planByYear[y] = null; suppByYear[y] = null; }
 
   return {
