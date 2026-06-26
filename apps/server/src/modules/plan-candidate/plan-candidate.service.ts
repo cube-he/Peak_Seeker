@@ -2473,7 +2473,10 @@ export class PlanCandidateService {
         planId,
         {
           page: 1,
-          pageSize: 500,
+          // 候选池可达数千组(实测某历史生本科批B段 2056 组), 且富化是对全池预先算好+缓存的,
+          // 分页只在末尾切片(纯内存, 进程内调用无序列化开销)。必须取全量, 否则方案里排序靠后的组
+          // (如攀枝花学院排 500 名后)匹配不到富化数据, 错退成信息稀疏的快照(city/rank/多年全空)。
+          pageSize: 100000,
           excludeAdded: false,
           includeSoftFails: true,
           includeHardFails: true,

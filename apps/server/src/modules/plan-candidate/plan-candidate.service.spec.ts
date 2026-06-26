@@ -2074,4 +2074,72 @@ describe('PlanCandidateService', () => {
     expect(res.universities).toHaveLength(1);
     expect(res.universities[0].universityId).toBe(91);
   });
+
+  // 回归(生产 bug): 候选池可达数千组(实测 2056), getExportRows 必须取全量富化,
+  // 不能分页截断 —— 否则方案里排序靠后的组(如攀枝花学院 10700|101 排在 500 名后)
+  // 匹配不到富化数据, 错误退回信息稀疏的快照(city/rank/多年最低分全空)。
+  it('getExportRows 取全量候选组富化, 不被分页截断(排序靠后的组也要富化)', async () => {
+    const target = {
+      universityId: 10700,
+      universityName: '攀枝花学院',
+      universityCode: '5139',
+      universityRank: 377,
+      university: { city: '攀枝花', runningNature: '公办', is985: false, is211: false, isDoubleFirstClass: false },
+      groupCode: '101',
+      currentPlanCount: 461,
+      majors: [
+        {
+          majorCode: '50', majorName: '会计学', planCount: 37, tuition: 4600, duration: '四年', planNotes: '',
+          majorHistory4y: [
+            { year: 2025, minScore: 500, minRank: 60000, avgScore: 510, avgRank: 55000, planCount: 40 },
+            { year: 2024, minScore: 498, minRank: 61000, avgScore: 508, avgRank: 56000, planCount: 33 },
+            { year: 2023, minScore: 495, minRank: 62000, avgScore: 505, avgRank: 57000, planCount: 20 },
+            { year: 2022, minScore: 490, minRank: 63000, avgScore: 500, avgRank: 58000, planCount: 18 },
+          ],
+          supplementaryByYear: null, supplementaryRoundsByYear: null,
+        },
+      ],
+    };
+    // 700 个组的假池, 目标组放在第 600 位(超过旧 pageSize=500)
+    const filler = Array.from({ length: 699 }, (_, i) => ({
+      universityId: 90000 + i, universityName: `Filler ${i}`, universityCode: `F${i}`, universityRank: null,
+      university: { city: 'X', runningNature: '公办' }, groupCode: 'ZZ', currentPlanCount: 1, majors: [],
+    }));
+    const pool = [...filler.slice(0, 600), target, ...filler.slice(600)];
+
+    // mock 的 getCandidateGroups 尊重 pageSize 切片(复现真实分页行为)
+    const cgSpy = jest
+      .spyOn(service, 'getCandidateGroups')
+      .mockImplementation(async (_planId: number, q: any) =>
+        ({ groups: pool.slice(0, q.pageSize), admissionBaselineYear: 2025 }) as any,
+      );
+
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 59, name: 'v1', year: 2026, batchName: '本科批B段', versionNo: 1, createdById: 21,
+      student: { userId: 68, examType: 'HISTORY', totalScore: 475, provincialRank: 63370, user: { realName: 'wangrun' } },
+      planItems: [
+        {
+          sequence: 1, gradient: 'CHONG', universityId: 10700, universityName: '攀枝花学院',
+          universityCode: '5139', schoolNature: '公办', schoolTags: '', groupCode: '101',
+          majorId: 501, majorName: '会计学', majorCode: '50', planCount: 37, tuition: 4600,
+        },
+      ],
+    });
+
+    const sheet: any = await service.getExportRows(59, 21);
+
+    // 必须请求全量(大 pageSize 覆盖整池), 而非旧的截断值 500
+    expect(cgSpy).toHaveBeenCalledWith(59, expect.objectContaining({ excludeAdded: false }), 21);
+    expect(cgSpy.mock.calls[0][1].pageSize).toBeGreaterThanOrEqual(pool.length);
+
+    // 攀枝花组应被富化(非快照): 城市/排名/组招/多年最低分齐全
+    // (ExportGroup 不含 universityId, 按 universityName 匹配)
+    const g = sheet.groups.find((x: any) => x.universityName === '攀枝花学院');
+    expect(g).toBeTruthy();
+    expect(g.fallback).toBe(false);
+    expect(g.city).toBe('攀枝花');
+    expect(g.universityRank).toBe(377);
+    expect(g.groupPlanCount).toBe(461);
+    expect(g.majors[0].minScoreByYear).toEqual({ 2023: 495, 2024: 498, 2025: 500 });
+  });
 });
