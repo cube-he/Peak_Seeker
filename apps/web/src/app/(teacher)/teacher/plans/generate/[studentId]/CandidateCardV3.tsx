@@ -440,13 +440,23 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                     意向命中 {preferredHitCount}/{groupMajorCount}
                   </span>
                 ) : null}
-                {group?.supplementary && group.supplementary.totalPlanCount > 0 ? (() => {
-                  // 组级按 sourceYear 的分轮明细 (后端 byYear[sourceYear].rounds), 在总数后展示 (5/3)
-                  const sy = group.supplementary.sourceYear;
-                  const rounds = group.supplementary.byYear?.[sy]?.rounds;
-                  const perRound = Array.isArray(rounds) && rounds.length ? rounds.map((r: any) => r.count).join('/') : null;
+                {group?.supplementary && (group.supplementaryMaxSum ?? 0) > 0 ? (() => {
+                  // 征集人数口径: Σ每年(该年多轮里的最大单轮人数)。逐年明细(各取该年 max round)放 tooltip。
+                  const byYear = group.supplementary.byYear ?? {};
+                  const perYear = Object.keys(byYear)
+                    .filter((y) => Array.isArray(byYear[y]?.rounds) && byYear[y].rounds.length)
+                    .sort()
+                    .map((y) => {
+                      const mx = Math.max(...byYear[y].rounds.map((r: any) => r.count ?? 0));
+                      return `${String(y).slice(2)}年${mx}人`;
+                    });
                   return (
-                    <span className="pgv2-dchip tone-safe-soft" title={`${sy} 年本组累计征集 ${group.supplementary.totalPlanCount} 人 / ${group.supplementary.totalRounds} 轮${perRound ? ` (分轮 ${rounds.map((r: any) => `第${r.round}轮 ${r.count}人`).join(' / ')})` : ''}。征集=没招满需补录, 常伴随降分, 是可达性的积极信号`}>征集 {group.supplementary.totalPlanCount}人{perRound ? ` (${perRound})` : `/${group.supplementary.totalRounds}轮`}</span>
+                    <span
+                      className="pgv2-dchip tone-safe-soft"
+                      title={`征集人数 = 各年取该年多轮里的最大单轮人数, 再跨年求和${perYear.length ? `：${perYear.join(' + ')} = ${group.supplementaryMaxSum}人` : ''}。征集=没招满需补录, 常伴随降分, 是可达性的积极信号`}
+                    >
+                      征集 {group.supplementaryMaxSum}人{perYear.length ? `（${perYear.join(' / ')}）` : ''}
+                    </span>
                   );
                 })() : null}
                 {group?.groupChangeType && group.groupChangeType !== '未变' && CHANGE_META[group.groupChangeType] ? (

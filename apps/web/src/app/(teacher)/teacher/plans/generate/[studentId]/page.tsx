@@ -423,6 +423,7 @@ const CANDIDATE_SORT_OPTIONS: Array<{
   { label: '专业最低分', value: 'MAJOR_MIN_SCORE', dir: { desc: '分高', asc: '分低' } },
   { label: '院校层次', value: 'UNIVERSITY_RANK', dir: { desc: '排名高', asc: '排名低' } },
   { label: '招生计划变更', value: 'PLAN_COUNT_CHANGE', dir: { desc: '扩招多', asc: '缩招多' } },
+  { label: '征集人数', value: 'SUPPLEMENTARY', dir: { desc: '征集多', asc: '征集少' } },
 ];
 
 // 院校优先视图的排序 (groupBy=UNIVERSITY)

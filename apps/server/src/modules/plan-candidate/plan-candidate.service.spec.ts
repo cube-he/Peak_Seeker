@@ -1,6 +1,6 @@
 // plan-candidate.service.spec.ts
 import { Test } from '@nestjs/testing';
-import { PlanCandidateService } from './plan-candidate.service';
+import { PlanCandidateService, supplementaryMaxRoundYearSum } from './plan-candidate.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ScoreSegmentService } from '../score-segment/score-segment.service';
 import { RankStrategyService } from '../recommend/services/rank-strategy.service';
@@ -2174,5 +2174,24 @@ describe('PlanCandidateService', () => {
     expect(g.universityRank).toBe(377);
     expect(g.groupPlanCount).toBe(461);
     expect(g.majors[0].minScoreByYear).toEqual({ 2023: 495, 2024: 498, 2025: 500 });
+  });
+});
+
+describe('supplementaryMaxRoundYearSum (专业组征集人数口径)', () => {
+  it('每年取多轮里的最大单轮人数, 再跨年求和', () => {
+    const supp = {
+      byYear: {
+        2023: { rounds: [{ round: 1, count: 5 }, { round: 2, count: 3 }] }, // max 5
+        2024: { rounds: [{ round: 1, count: 2 }] }, // max 2
+        2025: { rounds: [{ round: 1, count: 4 }, { round: 2, count: 1 }] }, // max 4
+      },
+    };
+    expect(supplementaryMaxRoundYearSum(supp)).toBe(11); // 5+2+4, 非各轮求和(那会是 16)
+  });
+
+  it('无征集 / 空轮次返回 0', () => {
+    expect(supplementaryMaxRoundYearSum(null)).toBe(0);
+    expect(supplementaryMaxRoundYearSum({ byYear: { 2025: null } })).toBe(0);
+    expect(supplementaryMaxRoundYearSum({ byYear: { 2025: { rounds: [] } } })).toBe(0);
   });
 });

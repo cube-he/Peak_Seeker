@@ -88,7 +88,8 @@ type CandidateGroupSort =
   | 'SAFETY'
   | 'MAJOR_MIN_SCORE'
   | 'UNIVERSITY_RANK'
-  | 'PLAN_COUNT_CHANGE';
+  | 'PLAN_COUNT_CHANGE'
+  | 'SUPPLEMENTARY';
 type SortDir = 'ASC' | 'DESC';
 type CandidateGroupScoreSource = 'GROUP' | 'FILING' | 'MAJOR' | 'NONE';
 type StudentRankSource = 'PROFILE' | 'SCORE_SEGMENT' | 'MISSING';
@@ -300,6 +301,23 @@ function compareAscMissingLast(a: unknown, b: unknown) {
   const av = metricNumber(a, Infinity);
   const bv = metricNumber(b, Infinity);
   return av - bv;
+}
+
+// 专业组征集人数口径: 每年取该年多轮里的「最大单轮人数」, 再跨年求和。
+// 注意不是各轮求和 — 老师口径认为每轮是同批未招满名额的再补录, 取最大轮代表该年征集规模。
+// 用于卡片显示 + 「征集」排序轴。
+export function supplementaryMaxRoundYearSum(supp: any): number {
+  const byYear = supp?.byYear;
+  if (!byYear || typeof byYear !== 'object') return 0;
+  let sum = 0;
+  for (const key of Object.keys(byYear)) {
+    const rounds = byYear[key]?.rounds;
+    if (Array.isArray(rounds) && rounds.length > 0) {
+      const max = Math.max(...rounds.map((r: any) => (typeof r?.count === 'number' ? r.count : 0)));
+      if (max > 0) sum += max;
+    }
+  }
+  return sum;
 }
 
 function rankingNumber(value: unknown) {
@@ -1178,6 +1196,13 @@ export class PlanCandidateService {
             ? g.currentPlanCount - g.previousMajorsAdmissionSum2025
             : null;
         const prim = compareDesc(planVs2025(a), planVs2025(b));
+        if (prim !== 0) return prim * sign;
+        return this.compareCandidateGroupFallback(a, b, studentRank, false);
+      }
+
+      if (sort === 'SUPPLEMENTARY') {
+        // 征集轴: 按组级征集人数(Σ每年多轮最大)降序(征集多在前); 翻转 = 征集少在前。
+        const prim = compareDesc(a.supplementaryMaxSum ?? 0, b.supplementaryMaxSum ?? 0);
         if (prim !== 0) return prim * sign;
         return this.compareCandidateGroupFallback(a, b, studentRank, false);
       }
@@ -2238,6 +2263,8 @@ export class PlanCandidateService {
               byYear: supplementary.byYear,
             }
           : null,
+        // 征集人数(口径: Σ每年多轮最大), 供卡片显示 + 「征集」排序轴
+        supplementaryMaxSum: supplementaryMaxRoundYearSum(supplementary),
         suggestedGradient: dynamicGradient.gradient,
         anchorMajorMinScore: recommendedAnchor?.majorMinScore ?? null,
         anchorMajorMinRank: recommendedAnchor?.majorMinRank ?? null,
