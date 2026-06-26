@@ -2496,7 +2496,9 @@ export default function GeneratePlanPage() {
                               : student?.examType === 'HISTORY' ? '历史'
                               : null
                             }
-                            year={candidateGroups?.scoreSegmentYear ?? candidateGroups?.admissionBaselineYear ?? null}
+                            // 分数条按"历史最低分"(admissionBaselineYear, 卡片同源)过滤, 故位次换算也必须用这年,
+                            // 不能用 scoreSegmentYear(考生当年) —— 否则"选的≠看到的"(见 [[score_range_slider]] b7338edd)。
+                            year={candidateGroups?.admissionBaselineYear ?? null}
                           />
                         ) : null}
                       </div>
