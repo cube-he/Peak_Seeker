@@ -109,9 +109,10 @@ export class PlanItemService {
     const bc = await this.prisma.batchConfig.findUnique({ where: { id: plan.batchConfigId } });
     if (!bc) throw new NotFoundException('批次配置不存在');
 
-    const count = await this.prisma.planItem.count({ where: { planId } });
-    if (count >= bc.maxGroupCount) {
-      throw new ConflictException(`已达到上限 ${bc.maxGroupCount} 组`);
+    // 上限改为软上限: 老师可超额选(先多备选, 正式填报再精简回上限内), 不在加入时拦截。
+    // 仅 maxGroupCount=0 的批次(强基校测)本就无平行组志愿, 仍然全禁。
+    if (bc.maxGroupCount === 0) {
+      throw new ConflictException('该批次无院校专业组志愿');
     }
 
     const ep = await this.prisma.enrollmentPlan.findUnique({

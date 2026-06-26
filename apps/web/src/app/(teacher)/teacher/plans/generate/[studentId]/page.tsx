@@ -1165,7 +1165,7 @@ export default function GeneratePlanPage() {
     return acc;
   }, [planItems]);
 
-  // 提交就绪度: 后端要求"志愿数 === 批次上限 且 无未解决严重风险"才放行,
+  // 提交就绪度: 后端要求"不足额需理由 且 无未解决严重风险"才放行(上限为软上限, 超额不挡),
   // 否则点了才撞 400/409。这里把门槛前置成可见信息 + 禁用按钮。
   // 上限优先取 plan 详情的 batchConfig.maxGroupCount, 退化到批次列表里的同名字段。
   const maxGroupCount: number | undefined =
@@ -1190,9 +1190,7 @@ export default function GeneratePlanPage() {
   const submitReadiness = useMemo(() => {
     if (plan?.status !== 'DRAFT') return { ok: false, underfill: false, reason: '当前不是草稿状态' };
     if (!planItems.length) return { ok: false, underfill: false, reason: '尚未加入任何志愿' };
-    if (maxGroupCount != null && planItems.length > maxGroupCount) {
-      return { ok: false, underfill: false, reason: `超出上限 ${maxGroupCount} 组,当前 ${planItems.length} 组` };
-    }
+    // 上限改为软上限: 超额(> maxGroupCount)不再挡提交, 老师可多备选, 正式填报时再精简
     if (criticalUnresolved > 0) {
       return { ok: false, underfill: false, reason: `有 ${criticalUnresolved} 条严重风险未处理,去方案详情逐条处理` };
     }

@@ -50,11 +50,29 @@ describe('PlanItemService.add', () => {
     await expect(service.add(1, { enrollmentPlanId: 100 } as any)).rejects.toThrow();
   });
 
-  it('达到 maxGroupCount 上限拒绝加入', async () => {
+  it('maxGroupCount=0 的批次(强基校测)拒绝加入: 本无平行组志愿', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 1, status: 'DRAFT', batchConfigId: 5, year: 2026, studentId: 10 });
+    prisma.batchConfig.findUnique.mockResolvedValue({ id: 5, maxGroupCount: 0 });
+    await expect(service.add(1, { enrollmentPlanId: 100 } as any)).rejects.toThrow(ConflictException);
+  });
+
+  it('超过 maxGroupCount 仍可加入: 上限为软上限, 老师可超额备选', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 1, status: 'DRAFT', batchConfigId: 5, year: 2026, studentId: 10 });
     prisma.batchConfig.findUnique.mockResolvedValue({ id: 5, maxGroupCount: 45 });
-    prisma.planItem.count.mockResolvedValue(45);
-    await expect(service.add(1, { enrollmentPlanId: 100 } as any)).rejects.toThrow(ConflictException);
+    prisma.planItem.count.mockResolvedValue(45); // 已满 45, 加第 46 个
+    prisma.planItem.aggregate.mockResolvedValue({ _max: { sequence: 45 } });
+    prisma.studentProfile.findUnique.mockResolvedValue({ id: 10, provincialRank: 8000 });
+    prisma.enrollmentPlan.findUnique.mockResolvedValue({
+      id: 100, universityId: 11, majorId: 22, university: { name: 'U', code: 'UC' }, major: { name: 'M' },
+      groupCode: 'G', groupName: 'GN', majorCode: 'MC', majorName: 'M',
+      groupMajors: 'A,B', subjects: '物理', batch: '本科批', recruitType: '普通类',
+      planCount: 5, tuition: 5000, subjectRequirements: null,
+    });
+    prisma.admissionRecord.findFirst.mockResolvedValue({ groupMinScore: 600, groupMinRank: 10000 });
+    prisma.planItem.create.mockImplementation((args: any) => Promise.resolve({ id: 999, ...args.data }));
+
+    const result = await service.add(1, { enrollmentPlanId: 100 } as any);
+    expect(result.sequence).toBe(46); // max(sequence)=45 → 46, 不被上限拦截
   });
 
   it('rejects a soft-failed candidate unless the teacher confirms override', async () => {

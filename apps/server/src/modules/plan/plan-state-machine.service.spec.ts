@@ -29,10 +29,9 @@ describe('PlanStateMachineService', () => {
     })).toThrow(/组数|理由/);
   });
 
-  it('组数超出上限 → 即使有理由也拒', () => {
-    expect(() => sm.transition('DRAFT', 'SUBMIT_REVIEW', {
-      itemCount: 46, maxGroupCount: 45, underfillReason: '这是一个足够长的不足额理由说明',
-    })).toThrow(/组数|上限/);
+  it('组数超出上限 → 放行 (软上限, 老师可超额备选, 正式填报再精简)', () => {
+    expect(sm.transition('DRAFT', 'SUBMIT_REVIEW', { itemCount: 46, maxGroupCount: 45 }))
+      .toBe('PENDING_REVIEW');
   });
 
   it('PENDING_REVIEW -> start-review -> REVIEWING', () => {

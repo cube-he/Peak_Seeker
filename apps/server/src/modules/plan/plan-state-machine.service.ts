@@ -19,9 +19,8 @@ export class PlanStateMachineService {
     if (from === 'DRAFT' && action === 'SUBMIT_REVIEW') {
       const itemCount = ctx.itemCount ?? 0;
       const max = ctx.maxGroupCount ?? -1;
-      if (itemCount > max) {
-        throw new BadRequestException(`组数超出上限，上限 ${max}，当前 ${itemCount}`);
-      }
+      // 上限改为软上限: 超额(>max)也放行, 老师可多备选, 正式填报时再精简回上限内。
+      // 仅保留"不足额(<max)需理由"的闸门(提前批/专项只填想去的组才专业)。
       if (itemCount < max && (ctx.underfillReason ?? '').trim().length < 10) {
         throw new BadRequestException(
           `组数不足，需要 ${max}，当前 ${itemCount}。如确需不足额提交(如公费师范只填可接受的定向县组), 请填写不足额理由(至少 10 字)`,
