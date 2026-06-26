@@ -3101,6 +3101,10 @@ export default function GeneratePlanPage() {
                 document.body,
               ) : null
             ) : (
+            // 展开态也 portal 到 body — 与收起态小条一致, 逃出 view-transition 的祖先 transform,
+            // 否则 position:fixed 被 transform 圈住会跟着页面滚(用户反馈: 面板要固定常驻不随页滚)
+            railMounted ? createPortal(
+              <div className="wn-teacher-scope">
             <aside className="pgv2-rail">
               <div className="pgv2-rail-card">
                 <h3>
@@ -3275,6 +3279,9 @@ export default function GeneratePlanPage() {
                 </div>
               </div>
             </aside>
+              </div>,
+              document.body,
+            ) : null
             )}
           </div>
         </>
