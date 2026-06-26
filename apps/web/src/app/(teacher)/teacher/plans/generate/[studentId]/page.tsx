@@ -44,6 +44,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type EligibleBatch } from '@/services/student-api';
 import { planApi, type CandidateGroupSort, type CandidateSortDir } from '@/services/plan-api';
+import { scoreSegmentApi } from '@/services/score-segment';
 import { teacherApi, type TierThresholds, DEFAULT_TIER_THRESHOLDS, TIER_THRESHOLD_KEYS } from '@/services/teacher-api';
 import { CandidateCardV3, RankRuler } from './CandidateCardV3';
 import UniversityCandidateCard from './UniversityCandidateCard';
@@ -851,6 +852,54 @@ function GroupNameSearchInput({
         notFoundContent={null}
       />
     </span>
+  );
+}
+
+/** 防抖小工具 (分数条拖动时避免每帧打位次接口) */
+function useDebouncedValue<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+/** 分数条下方：把当前两端分数换算成全省位次 (一分一段, 年份用候选基准的 scoreSegmentYear)。
+ *  高分→位次小、低分→位次大, 故展示 rank(hi) – rank(lo) 升序。失败/无科类时不渲染。 */
+function ScoreRankHint({ lo, hi, examType, year }: {
+  lo: number;
+  hi: number;
+  examType: '物理' | '历史' | null;
+  year: number | null;
+}) {
+  const dLo = useDebouncedValue(lo, 350);
+  const dHi = useDebouncedValue(hi, 350);
+  const enabled = examType != null && year != null;
+  const qLo = useQuery({
+    queryKey: ['seg-rank', year, examType, dLo],
+    queryFn: () => scoreSegmentApi.lookup({ year: year!, examType: examType!, score: dLo }),
+    enabled: enabled && dLo > 0,
+    retry: false,
+    staleTime: 600_000,
+  });
+  const qHi = useQuery({
+    queryKey: ['seg-rank', year, examType, dHi],
+    queryFn: () => scoreSegmentApi.lookup({ year: year!, examType: examType!, score: dHi }),
+    enabled: enabled && dHi > 0,
+    retry: false,
+    staleTime: 600_000,
+  });
+  if (!enabled) return null;
+  const rLo = qLo.data?.rank;
+  const rHi = qHi.data?.rank;
+  if (rLo == null && rHi == null) return null;
+  const fmt = (n?: number) => (n != null ? n.toLocaleString('zh-CN') : '…');
+  return (
+    <div className="pgv3-score-rank" style={{ width: '100%', marginTop: 4, fontSize: 12, color: 'var(--text-muted, #8a8a85)' }}>
+      对应全省位次约 <b style={{ color: 'var(--text, #1a1a19)', fontVariantNumeric: 'tabular-nums' }}>{fmt(rHi)} – {fmt(rLo)}</b> 位
+      <span style={{ opacity: 0.65 }}>（{year} 一分一段）</span>
+    </div>
   );
 }
 
@@ -2437,6 +2486,19 @@ export default function GeneratePlanPage() {
                             setCandidatePage(1);
                           }}
                         />
+                        {/* 分数条下方: 当前两端分数 → 对应全省位次 (一分一段) */}
+                        {(scoreSlider ?? scoreRange) ? (
+                          <ScoreRankHint
+                            lo={(scoreSlider ?? scoreRange)![0]}
+                            hi={(scoreSlider ?? scoreRange)![1]}
+                            examType={
+                              student?.examType === 'PHYSICS' ? '物理'
+                              : student?.examType === 'HISTORY' ? '历史'
+                              : null
+                            }
+                            year={candidateGroups?.scoreSegmentYear ?? candidateGroups?.admissionBaselineYear ?? null}
+                          />
+                        ) : null}
                       </div>
                       <span className="pgv3-dr-vals">
                         {(scoreSlider ?? scoreRange)
