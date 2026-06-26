@@ -106,6 +106,72 @@ export function from9Subjects(form: Subject9Form): {
   };
 }
 
+/** 6 门是否齐全（语数外 + 首选 + 再选 2 门）。 */
+export function isSixComplete(form: Subject9Form): boolean {
+  return validate6Subjects(form) === null;
+}
+
+/**
+ * 宽松翻译（6 门不齐时用）：不强制凑齐，能推多少推多少。
+ * - 选科（examType/firstChoice/reChoices）从已填分数推断（首选取已填的物/史；再选取已填的化生政地）
+ * - 单科槽位分数（scoreFirstChoice/scoreSub1/scoreSub2）只发已填的，未填给 undefined
+ * - 总分用手填值 manualTotal（老师拿不到单科分时只填选科+总分的场景）
+ * 未填字段返回 undefined → 调用方拼 DTO 时省略，不污染库里旧值。
+ */
+export function from9SubjectsLoose(
+  form: Subject9Form,
+  manualTotal: number | null | undefined,
+): {
+  examType: 'PHYSICS' | 'HISTORY' | undefined;
+  firstChoice: '物理' | '历史' | undefined;
+  scoreFirstChoice: number | undefined;
+  reChoices: string[] | undefined;
+  scoreSub1: number | undefined;
+  scoreSub2: number | undefined;
+  scoreChinese: number | undefined;
+  scoreMath: number | undefined;
+  scoreEnglish: number | undefined;
+  totalScore: number | undefined;
+} {
+  const isPhysics = form.scorePhysics != null;
+  const isHistory = form.scoreHistory != null;
+  const reChoices = RE_SUBJECTS_ORDER.filter((s) => form[RE_KEY_MAP[s]] != null);
+  return {
+    examType: isPhysics ? 'PHYSICS' : isHistory ? 'HISTORY' : undefined,
+    firstChoice: isPhysics ? '物理' : isHistory ? '历史' : undefined,
+    scoreFirstChoice: isPhysics ? form.scorePhysics : isHistory ? form.scoreHistory : undefined,
+    reChoices: reChoices.length > 0 ? [...reChoices] : undefined,
+    scoreSub1: reChoices[0] ? form[RE_KEY_MAP[reChoices[0]]] : undefined,
+    scoreSub2: reChoices[1] ? form[RE_KEY_MAP[reChoices[1]]] : undefined,
+    scoreChinese: form.scoreChinese,
+    scoreMath: form.scoreMath,
+    scoreEnglish: form.scoreEnglish,
+    totalScore: manualTotal ?? undefined,
+  };
+}
+
+/**
+ * 总分冲突检查（软提示，不阻断保存 —— 老师拿不到单科分时只填选科+总分的场景）。
+ * - 6 门齐：手填总分 ≠ 6 科之和 → 提示（以「和」为准，手填值将被忽略）
+ * - 6 门不齐：已填单科之和 > 手填总分 → 提示（不可能，请核对）
+ * 返回提示文案或 null（无冲突）。
+ */
+export function checkTotalConflict(
+  form: Subject9Form,
+  manualTotal: number | null | undefined,
+): string | null {
+  if (manualTotal == null) return null;
+  const partialSum = sum9Subjects(form);
+  if (isSixComplete(form)) {
+    return manualTotal !== partialSum
+      ? `6 科已齐，总分按 6 科之和 ${partialSum} 计算（手填 ${manualTotal} 已忽略）`
+      : null;
+  }
+  return partialSum > manualTotal
+    ? `已填单科之和 ${partialSum} 已超过手填总分 ${manualTotal}，请核对`
+    : null;
+}
+
 /** 6 门齐全校验。通过返回 null，否则返回错误文案。 */
 export function validate6Subjects(form: Subject9Form): string | null {
   if (form.scoreChinese == null || form.scoreMath == null || form.scoreEnglish == null) {

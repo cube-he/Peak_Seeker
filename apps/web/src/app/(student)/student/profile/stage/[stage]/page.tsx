@@ -36,7 +36,9 @@ import {
   sum9Subjects,
   to9Subjects,
   from9Subjects,
-  validate6Subjects,
+  isSixComplete,
+  checkTotalConflict,
+  from9SubjectsLoose,
 } from '@/components/student/stage1-score-mapping';
 import {
   ETHNICITY_OPTIONS,
@@ -164,6 +166,8 @@ export default function StudentStageFormPage() {
       const rawBirth = profile.birthDate ?? profile.user?.birthDate ?? null;
       initial.birthDate = rawBirth ? dayjs(rawBirth) : undefined;
       Object.assign(initial, to9Subjects(profile));
+      // 总分: 6 科不齐时走手填, 回填库里已存的总分
+      initial.totalScore = profile.totalScore ?? undefined;
     } else {
       for (const f of fields) initial[f] = profile[f];
     }
@@ -222,12 +226,13 @@ export default function StudentStageFormPage() {
           scorePolitics: values.scorePolitics,
           scoreGeography: values.scoreGeography,
         } as Subject9Form;
-        const err = validate6Subjects(subj9);
-        if (err) {
-          void message.error(err);
-          return;
-        }
-        const translated = from9Subjects(subj9);
+        // 不硬卡: 6 科齐 → 严格翻译(总分=和); 不齐 → 宽松翻译(选科尽量推 + 手填总分),
+        // 缺的字段返回 undefined → 拼 DTO 时被 JSON 省略, 不覆盖库里旧值。
+        // (语数外仍由 ScoreInput required 保证; 这里放开的是"首选/再选未齐也能存选科+总分")
+        const manualTotal = typeof values.totalScore === 'number' ? values.totalScore : null;
+        const translated = isSixComplete(subj9)
+          ? from9Subjects(subj9)
+          : from9SubjectsLoose(subj9, manualTotal);
         const payload: UpdateStudentDto = {
           dataVersion: values.dataVersion,
           realName: values.realName,
@@ -752,6 +757,7 @@ function Stage1Fields() {
           </section>
         </div>
 
+        {/* 总分: 6 科齐→自动累加(只读); 6 科不齐→可手填(拿不到单科分的场景)。冲突仅软提示。 */}
         <Form.Item
           noStyle
           shouldUpdate={(p, c) =>
@@ -763,22 +769,41 @@ function Stage1Fields() {
             p.scoreChemistry !== c.scoreChemistry ||
             p.scoreBiology !== c.scoreBiology ||
             p.scorePolitics !== c.scorePolitics ||
-            p.scoreGeography !== c.scoreGeography
+            p.scoreGeography !== c.scoreGeography ||
+            p.totalScore !== c.totalScore
           }
         >
-          {({ getFieldsValue }) => {
+          {({ getFieldsValue, getFieldValue }) => {
             const v = getFieldsValue([
               'scoreChinese', 'scoreMath', 'scoreEnglish',
               'scorePhysics', 'scoreHistory',
               'scoreChemistry', 'scoreBiology', 'scorePolitics', 'scoreGeography',
             ]) as Subject9Form;
-            const total = sum9Subjects(v);
+            const complete = isSixComplete(v);
+            const sum = sum9Subjects(v);
+            const rawManual = getFieldValue('totalScore');
+            const manual = typeof rawManual === 'number' ? rawManual : null;
+            const conflict = checkTotalConflict(v, manual);
             return (
-              <div className="mt-4 flex items-center justify-between rounded-2xl bg-primary-fixed px-4 py-4 text-sm text-text">
-                <span className="font-medium">总分自动累加</span>
-                <span className="font-serif text-2xl font-semibold tabular-nums text-accent">
-                  {total} 分
-                </span>
+              <div className="mt-4 rounded-2xl bg-primary-fixed px-4 py-4 text-sm text-text">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">总分 · {complete ? '自动累加' : '手动填写'}</span>
+                  {complete ? (
+                    <span className="font-serif text-2xl font-semibold tabular-nums text-accent">
+                      {sum} 分
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <Form.Item name="totalScore" noStyle>
+                        <InputNumber min={0} max={750} controls={false} placeholder="直接填总分" className="w-28" />
+                      </Form.Item>
+                      <span className="text-text-faint">分</span>
+                    </span>
+                  )}
+                </div>
+                {conflict ? (
+                  <div className="mt-2 text-xs leading-5 text-red-600">{conflict}</div>
+                ) : null}
               </div>
             );
           }}

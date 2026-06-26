@@ -3,6 +3,9 @@ import {
   from9Subjects,
   validate6Subjects,
   sum9Subjects,
+  isSixComplete,
+  checkTotalConflict,
+  from9SubjectsLoose,
   type Subject9Form,
 } from '../stage1-score-mapping';
 
@@ -233,6 +236,84 @@ describe('stage1-score-mapping', () => {
       expect(onlyPhysics).toBe(90);
       const onlyHistory = sum9Subjects({ scoreHistory: 75 });
       expect(onlyHistory).toBe(75);
+    });
+  });
+
+  describe('isSixComplete', () => {
+    it('6 门齐 → true', () => {
+      expect(isSixComplete({
+        scoreChinese: 120, scoreMath: 130, scoreEnglish: 125,
+        scorePhysics: 92, scoreChemistry: 88, scoreBiology: 85,
+      })).toBe(true);
+    });
+    it('缺再选 → false', () => {
+      expect(isSixComplete({
+        scoreChinese: 120, scoreMath: 130, scoreEnglish: 125, scorePhysics: 92,
+      })).toBe(false);
+    });
+    it('空 → false', () => {
+      expect(isSixComplete({})).toBe(false);
+    });
+  });
+
+  describe('checkTotalConflict (老师只填选科+总分场景的软提示)', () => {
+    const complete: Subject9Form = {
+      scoreChinese: 120, scoreMath: 130, scoreEnglish: 125,
+      scorePhysics: 92, scoreChemistry: 88, scoreBiology: 85, // 和=640
+    };
+    it('无手填总分 → 无冲突', () => {
+      expect(checkTotalConflict(complete, null)).toBeNull();
+      expect(checkTotalConflict({}, undefined)).toBeNull();
+    });
+    it('6 门齐且手填=和 → 无冲突', () => {
+      expect(checkTotalConflict(complete, 640)).toBeNull();
+    });
+    it('6 门齐但手填≠和 → 提示以和为准', () => {
+      const msg = checkTotalConflict(complete, 600);
+      expect(msg).toMatch(/6 科已齐/);
+      expect(msg).toContain('640');
+      expect(msg).toContain('600');
+    });
+    it('6 门不齐: 已填单科之和 ≤ 手填总分 → 无冲突', () => {
+      // 只填语数英=375, 手填总分 475
+      const partial: Subject9Form = { scoreChinese: 120, scoreMath: 130, scoreEnglish: 125 };
+      expect(checkTotalConflict(partial, 475)).toBeNull();
+    });
+    it('6 门不齐: 已填单科之和 > 手填总分 → 提示超过', () => {
+      const partial: Subject9Form = { scoreChinese: 120, scoreMath: 130, scoreEnglish: 125 }; // 和=375
+      const msg = checkTotalConflict(partial, 300);
+      expect(msg).toMatch(/已超过/);
+      expect(msg).toContain('375');
+      expect(msg).toContain('300');
+    });
+  });
+
+  describe('from9SubjectsLoose (6 门不齐的宽松翻译)', () => {
+    it('只填首选(历史)+手填总分 → 推 examType/firstChoice, 总分用手填, 其余 undefined', () => {
+      const out = from9SubjectsLoose({ scoreHistory: 80 }, 475);
+      expect(out.examType).toBe('HISTORY');
+      expect(out.firstChoice).toBe('历史');
+      expect(out.scoreFirstChoice).toBe(80);
+      expect(out.reChoices).toBeUndefined();
+      expect(out.scoreSub1).toBeUndefined();
+      expect(out.totalScore).toBe(475);
+      expect(out.scoreChinese).toBeUndefined();
+    });
+    it('纯选科+总分(无任何单科分) → 选科全 undefined, 仅总分', () => {
+      const out = from9SubjectsLoose({}, 500);
+      expect(out.examType).toBeUndefined();
+      expect(out.firstChoice).toBeUndefined();
+      expect(out.reChoices).toBeUndefined();
+      expect(out.totalScore).toBe(500);
+    });
+    it('部分再选(只政治)→ reChoices=[政治], scoreSub1=政治分, sub2 undefined', () => {
+      const out = from9SubjectsLoose({ scoreHistory: 80, scorePolitics: 75 }, 470);
+      expect(out.reChoices).toEqual(['政治']);
+      expect(out.scoreSub1).toBe(75);
+      expect(out.scoreSub2).toBeUndefined();
+    });
+    it('无手填总分 → totalScore undefined(不覆盖库里旧值)', () => {
+      expect(from9SubjectsLoose({ scoreHistory: 80 }, null).totalScore).toBeUndefined();
     });
   });
 });
