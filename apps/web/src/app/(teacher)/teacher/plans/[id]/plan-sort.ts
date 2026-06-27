@@ -2,7 +2,7 @@
 // 梯度是固定分组层, 不在此 SortKey 内(见 buildAppliedOrder)。null 值一律沉底。
 
 export type SortKey =
-  | 'SCHOOL_NATURE'    // 办学性质 公办/民办/中外合作
+  | 'SCHOOL_NATURE'    // 办学性质 公办/民办(二元;中外合作走 sinoForeign 筛选,不在此键)
   | 'PROVINCE_INOUT'   // 川内 / 川外
   | 'GROUP_MIN_SCORE'  // 专业组最低分
   | 'GROUP_MIN_RANK'   // 专业组最低位次
@@ -36,12 +36,13 @@ export interface SortableItem {
 
 export interface SortContext { studentRank: number | null; }
 
-// 办学性质 → 序: 公办0 < 民办1 < 中外合作2; 无法判定 = null(沉底)
+// 办学性质 → 二元序: 公办0 < 民办1; 其它(港澳/境外/中外合作-但其本身多为"公办 中外合作办学"复合串) = null 沉底。
+// 注意: 不再把中外合作并入此键 — 真实数据 runningNature 是"公办 中外合作办学"这类复合串, 公办判断会先截胡;
+// 且中外合作有独立 sinoForeign 筛选, 不该混进办学性质排序。
 function natureRank(s: string | null): number | null {
   if (!s) return null;
   if (s.includes('公办')) return 0;
   if (s.includes('民办')) return 1;
-  if (s.includes('中外') || s.includes('合作')) return 2;
   return null;
 }
 
@@ -121,7 +122,7 @@ export function resolveTierRenderOrder<T>(tiers: T[], preview: boolean, gradient
 export const SORT_KEY_OPTIONS: Array<{
   key: SortKey; label: string; defaultDir: SortDir; dir: { asc: string; desc: string };
 }> = [
-  { key: 'SCHOOL_NATURE',   label: '办学性质',       defaultDir: 'asc',  dir: { asc: '公办优先', desc: '中外优先' } },
+  { key: 'SCHOOL_NATURE',   label: '办学性质',       defaultDir: 'asc',  dir: { asc: '公办优先', desc: '民办优先' } },
   { key: 'PROVINCE_INOUT',  label: '川内川外',       defaultDir: 'asc',  dir: { asc: '川内优先', desc: '川外优先' } },
   { key: 'GROUP_MIN_SCORE', label: '专业组最低分',   defaultDir: 'desc', dir: { asc: '分低', desc: '分高' } },
   { key: 'GROUP_MIN_RANK',  label: '专业组最低位次', defaultDir: 'asc',  dir: { asc: '位次靠前', desc: '位次靠后' } },

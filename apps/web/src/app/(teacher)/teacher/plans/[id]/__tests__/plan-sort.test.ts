@@ -13,10 +13,29 @@ const mk = (over: Partial<SortableItem> & { id: number }): SortableItem => ({
 const ctx = { studentRank: 10000 };
 
 describe('sortPlanItems', () => {
-  it('单键: 办学性质 公办优先(asc)', () => {
-    const items = [mk({ id: 1, schoolNature: '民办' }), mk({ id: 2, schoolNature: '公办' })];
+  it('单键: 办学性质 公办优先(asc) — 二元(公办/民办), 其它沉底', () => {
+    const items = [
+      mk({ id: 1, schoolNature: '民办' }),
+      mk({ id: 2, schoolNature: '公办' }),
+      // 真实数据: 中外合作院校的 runningNature 是"公办 中外合作办学"复合串 → 视同公办, 不再单分一档
+      mk({ id: 3, schoolNature: '公办 中外合作办学' }),
+      // 港澳/境外/未知 → null 沉底
+      mk({ id: 4, schoolNature: '境外高校独立办学' }),
+      mk({ id: 5, schoolNature: null }),
+    ];
     const rules: SortRule[] = [{ key: 'SCHOOL_NATURE', dir: 'asc' }];
-    expect(sortPlanItems(items, rules, ctx).map((i) => i.id)).toEqual([2, 1]);
+    // 公办(2,3 稳定保持原序) → 民办(1) → 沉底(4,5 稳定保持原序)
+    expect(sortPlanItems(items, rules, ctx).map((i) => i.id)).toEqual([2, 3, 1, 4, 5]);
+  });
+
+  it('单键: 办学性质 民办优先(desc) — 翻转后民办在前, 沉底项位置不变', () => {
+    const items = [
+      mk({ id: 1, schoolNature: '公办' }),
+      mk({ id: 2, schoolNature: '民办' }),
+      mk({ id: 3, schoolNature: null }),
+    ];
+    const rules: SortRule[] = [{ key: 'SCHOOL_NATURE', dir: 'desc' }];
+    expect(sortPlanItems(items, rules, ctx).map((i) => i.id)).toEqual([2, 1, 3]);
   });
 
   it('多级: 川内优先 → 分数线高到低', () => {
