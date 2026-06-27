@@ -262,6 +262,13 @@ export default function PlanDetailPage() {
   const [gradientDir, setGradientDir] = useState<SortDir>('asc'); // 段序: asc=冲→稳→保
   const [sortPreview, setSortPreview] = useState(false);
   const [sortPanelOpen, setSortPanelOpen] = useState(false);
+  // 切换方案时清空排序预览/规则栈,避免上一份方案的排序状态泄漏到下一份(如"审下一份"router.push 不重挂载组件)
+  useEffect(() => {
+    setSortPreview(false);
+    setSortRules([]);
+    setGradientDir('asc');
+    setSortPanelOpen(false);
+  }, [plan?.id]);
   const reorderMutation = useMutation({
     mutationFn: (ids: number[]) => planApi.reorderItems(String(planId), ids),
     onSuccess: () => {
