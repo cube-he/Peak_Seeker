@@ -13,6 +13,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Popover,
   Select,
   Space,
   Spin,
@@ -33,6 +34,7 @@ import {
   RightOutlined,
   RollbackOutlined,
   SendOutlined,
+  SortAscendingOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -41,6 +43,14 @@ import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
 import PlanMajorSelectionEditor from '../components/PlanMajorSelectionEditor';
 import PlanPreparationTable from '../components/PlanPreparationTable';
+import PlanSortPanel from './PlanSortPanel';
+import {
+  sortPlanItems,
+  buildAppliedOrder,
+  type SortRule,
+  type SortDir,
+  type SortableItem,
+} from './plan-sort';
 import {
   getPlanItemMajorSelection,
   type PlanItemMajorSelectionLike,
@@ -246,6 +256,11 @@ export default function PlanDetailPage() {
   }, [plan?.id, (plan?.items ?? []).map((it: any) => `${it.id}:${it.sequence}`).join(',')]);
   const [dragRow, setDragRow] = useState<{ tier: string; pos: number } | null>(null);
   const [overRow, setOverRow] = useState<{ tier: string; pos: number } | null>(null);
+  // —— 多级排序(预览 + 一键应用) ——
+  const [sortRules, setSortRules] = useState<SortRule[]>([]);
+  const [gradientDir, setGradientDir] = useState<SortDir>('asc'); // 段序: asc=冲→稳→保
+  const [sortPreview, setSortPreview] = useState(false);
+  const [sortPanelOpen, setSortPanelOpen] = useState(false);
   const reorderMutation = useMutation({
     mutationFn: (ids: number[]) => planApi.reorderItems(String(planId), ids),
     onSuccess: () => {
@@ -574,6 +589,23 @@ export default function PlanDetailPage() {
       avgMargin,
     };
   }, [plan, items]);
+
+  const sortCtx = { studentRank: summary.studentRank };
+
+  // 应用为志愿顺序: 段内栈算出扁平 itemId, 复用 reorder 写回(仅 DRAFT)
+  const applySortOrder = () => {
+    const order = buildAppliedOrder(localItems as SortableItem[], sortRules, sortCtx);
+    setLocalItems((prev) => {
+      const byId = new Map(prev.map((it) => [it.id, it]));
+      return order.map((id) => byId.get(id)).filter(Boolean) as any[];
+    });
+    reorderMutation.mutate(order);
+    setSortPreview(false);
+    setSortPanelOpen(false);
+  };
+
+  // 预览态下: TIER_META 渲染顺序按段序方向, 段内按规则排
+  const tierMetaOrdered = gradientDir === 'desc' ? [...TIER_META].reverse() : TIER_META;
 
   if (isLoading) {
     return (
@@ -915,6 +947,29 @@ export default function PlanDetailPage() {
               草稿已保存 {draftSavedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
             </span>
           ) : null}
+          <Popover
+            open={sortPanelOpen}
+            onOpenChange={setSortPanelOpen}
+            trigger="click"
+            placement="bottomLeft"
+            content={
+              <PlanSortPanel
+                rules={sortRules}
+                gradientDir={gradientDir}
+                preview={sortPreview}
+                canApply={status === 'DRAFT'}
+                onRulesChange={(r) => { setSortRules(r); if (r.length) setSortPreview(true); }}
+                onGradientDirChange={setGradientDir}
+                onPreview={() => setSortPreview(true)}
+                onRestore={() => setSortPreview(false)}
+                onApply={applySortOrder}
+              />
+            }
+          >
+            <Button size="small" type="text" icon={<SortAscendingOutlined />} style={{ marginLeft: 8 }}>
+              排序
+            </Button>
+          </Popover>
           {status === 'DRAFT' && localItems.length > 0 ? (
             <Popconfirm
               title="清空全部志愿"
@@ -937,6 +992,17 @@ export default function PlanDetailPage() {
             </Popconfirm>
           ) : null}
         </div>
+        {sortPreview ? (
+          <div style={{ padding: '8px 22px', background: '#fffbe6', borderBottom: '1px solid #ffe58f', fontSize: 12, color: '#874d00', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span>排序预览中（未保存）· 拖拽已暂停</span>
+            <Button size="small" type="link" style={{ padding: 0 }} onClick={() => setSortPreview(false)}>恢复手动顺序</Button>
+            {status === 'DRAFT' ? (
+              <Button size="small" type="link" style={{ padding: 0, marginLeft: 'auto' }} onClick={applySortOrder}>应用为志愿顺序</Button>
+            ) : (
+              <span style={{ marginLeft: 'auto', color: '#bfbfbf' }}>仅草稿可写回顺序</span>
+            )}
+          </div>
+        ) : null}
         <div className="pl-tbl-head">
           <span>顺位</span>
           <span>梯度</span>
@@ -954,10 +1020,13 @@ export default function PlanDetailPage() {
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无志愿明细" />
           </div>
         ) : (
-          TIER_META.map((meta) => {
-            const tierItems = localItems.filter((it) => GRADIENT_TIER[it.gradient] === meta.tier);
+          tierMetaOrdered.map((meta) => {
+            const rawTierItems = localItems.filter((it) => GRADIENT_TIER[it.gradient] === meta.tier);
+            const tierItems = sortPreview
+              ? sortPlanItems(rawTierItems as SortableItem[], sortRules, sortCtx)
+              : rawTierItems;
             if (tierItems.length === 0) return null;
-            const canDragRows = status === 'DRAFT' && !reorderMutation.isPending;
+            const canDragRows = status === 'DRAFT' && !reorderMutation.isPending && !sortPreview;
             return (
               <div key={meta.tier}>
                 <div className={`pl-section t-${meta.tier}`}>
