@@ -1438,6 +1438,24 @@ export default function GeneratePlanPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateGroups?.availableRecruitTypes]);
 
+  // 进页/切批次时, 若该批次混类且可选项含"普通类本科" → 默认选中"普通类本科",
+  // 避免老师每次进本科批B段(普通类本科占 99%)都要手动点一下。
+  // 每个 batchConfigId 只默认填一次: 用 ref 记上次填过的 id, 老师手动清除后不会再被填回。
+  const recruitTypeAutoFilledForBatchRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!batchConfigId) return;
+    if (!candidateGroups || !Array.isArray(candidateGroups.availableRecruitTypes)) return;
+    if (recruitTypeAutoFilledForBatchRef.current === batchConfigId) return; // 该批次已尝试过
+    const avail = candidateGroups.availableRecruitTypes;
+    if (avail.length === 0) return; // 数据还没真到达, 等下次 effect
+    recruitTypeAutoFilledForBatchRef.current = batchConfigId; // 不管选不选都标记, 避免反复触发
+    if (avail.includes('普通类本科') && recruitTypeFilter.length === 0) {
+      setRecruitTypeFilter(['普通类本科']);
+      setCandidatePage(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchConfigId, candidateGroups?.availableRecruitTypes]);
+
   const createMutation = useMutation({
     // 传 explicitBatchId 用于"自动建草稿"场景 — setBatchConfigId 是异步的,
     // 紧接着 mutate() 会读到旧的 batchConfigId(undefined), 故允许显式传入。
