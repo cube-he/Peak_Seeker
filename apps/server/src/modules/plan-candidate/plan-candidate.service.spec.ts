@@ -1021,6 +1021,51 @@ describe('PlanCandidateService', () => {
     expect(result.groups[0].universityName).toBe('Beta');
   });
 
+  // onlyAdded: 仅显示已加入 plan 的组(复盘), 与 excludeAdded 相反 — 只留 G1(Alpha), 隐藏未加入的 G2(Beta)
+  it('onlyAdded=true 时, 只保留已加入 plan 的院校组(其余隐藏)', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,
+      planItems: [{ universityId: 1, groupCode: 'G1' }], // G1 已加入
+    });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 10, province: 'Sichuan', examType: 'PHYSICS', provincialRank: 9800,
+      preferredMajors: [], preferredMajorCategories: [], excludedMajors: [], excludedMajorCategories: [],
+      colorBlind: false, colorWeak: false, visionLeft: 5, visionRight: 5,
+      isRural: false, tuitionBudget: 'UNLIMITED', acceptSinoForeign: true,
+      acceptPrivate: 'RELAXED', user: { gender: 'male', ethnicity: 'Han' },
+    });
+    prisma.enrollmentPlan.groupBy.mockResolvedValue([{ year: 2025, _count: { _all: 2 } }]);
+    prisma.enrollmentPlan.findMany
+      .mockResolvedValueOnce([
+        { id: 100, universityId: 1, majorId: 11, university: { id: 1, name: 'Alpha' },
+          major: { id: 11, name: 'A', code: '01', category: 'X' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '01', majorName: 'A', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G1', groupName: 'G1', groupPlanCount: 10, planCount: 10 },
+        { id: 200, universityId: 2, majorId: 21, university: { id: 2, name: 'Beta' },
+          major: { id: 21, name: 'B', code: '02', category: 'Y' },
+          recruitType: 'General', isSinoForeign: false, planNotes: '', tuition: 5000,
+          majorCode: '02', majorName: 'B', subjects: 'Physics', batch: 'Batch A',
+          groupCode: 'G2', groupName: 'G2', groupPlanCount: 10, planCount: 10 },
+      ])
+      .mockResolvedValueOnce([]);
+    prisma.admissionRecord.findMany.mockResolvedValue([
+      { universityId: 1, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G1', majorCode: '01', majorName: 'A', year: 2025,
+        groupMinRank: 10000, groupMinScore: 600, majorMinRank: 9800, majorMinScore: 600, majorAdmissionCount: 10 },
+      { universityId: 2, subjects: 'Physics', batch: 'Batch A', recruitType: 'General',
+        groupCode: 'G2', majorCode: '02', majorName: 'B', year: 2025,
+        groupMinRank: 10000, groupMinScore: 600, majorMinRank: 9800, majorMinScore: 600, majorAdmissionCount: 10 },
+    ]);
+
+    const result: any = await service.getCandidateGroups(1, {
+      page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH', onlyAdded: true,
+    });
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0].universityName).toBe('Alpha');
+  });
+
   it('uses score-segment rank for fallback-year candidate groups when stored rank is impossible', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({
       id: 1, studentId: 10, batchName: 'Batch A', batchConfigId: 5, year: 2026,

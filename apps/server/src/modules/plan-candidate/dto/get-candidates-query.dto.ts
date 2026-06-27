@@ -74,6 +74,9 @@ export class GetCandidatesQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) tier?: number;
   // 是否隐藏已加入当前 plan 的院校组. 默认 true (老师只看未加入的)
   @IsOptional() @Transform(onlyExplicitFalse) @IsBoolean() excludeAdded?: boolean | string = true;
+  // 仅显示已加入当前 plan 的院校组(复盘已填报). 默认 false; true 时优先于 excludeAdded,
+  // 池只留已填报组 + 分页层跳过收窄过滤(招生类型/性质/省/档位/分数窗/非意向地区), 把全部已填报露出。
+  @IsOptional() @Transform(onlyExplicitTrue) @IsBoolean() onlyAdded?: boolean | string = false;
   // 客观纯净度过滤. csv 形式 'S,A,B,C'; 空或 undefined = 不过滤
   @IsOptional() @IsString() purity?: string;
   // 招生类型过滤: CSV 多选(如 普通类本科,国家专项计划); 空/缺省 = 不过滤. 两视图均生效, 分页层应用
