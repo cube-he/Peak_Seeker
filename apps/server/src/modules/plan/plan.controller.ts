@@ -190,8 +190,9 @@ export class PlanController {
   async derive(
     @Param('id', ParseIntPipe) id: number,
     @Request() req: any,
+    @Body() body: { versionNote?: string } = {},
   ) {
-    return this.planService.deriveVersion(id, req.user.id);
+    return this.planService.deriveVersion(id, req.user.id, body.versionNote);
   }
 
   @Post(':id/review')
