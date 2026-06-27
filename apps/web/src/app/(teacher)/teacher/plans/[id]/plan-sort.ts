@@ -112,6 +112,25 @@ export function buildAppliedOrder(items: SortableItem[], rules: SortRule[], ctx:
   return ordered.map((it) => it.id);
 }
 
+// 自由排序(扁平): 把数组中 from 位移到 to 位, 返回新数组(纯函数, drag + 序号输入共用)。
+export function applyMove<T>(arr: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return arr;
+  const next = [...arr];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
+// 自由排序: 把 itemId 移到目标 1-based 位置, 返回新的 itemId 顺序(全表, 不分冲稳保)。
+// to 越界自动夹到 [1, len]。喂给 reorderItems(planId, itemIds) 持久化。
+export function moveToPositionOrder(items: Array<{ id: number }>, itemId: number, targetPos1Based: number): number[] {
+  const ids = items.map((it) => it.id);
+  const from = ids.indexOf(itemId);
+  if (from < 0) return ids;
+  const to = Math.max(0, Math.min(ids.length - 1, Math.floor(targetPos1Based) - 1));
+  return applyMove(ids, from, to);
+}
+
 // 段序翻转(desc)仅在预览态生效: spec 规定翻转只为"看", 写回/恢复后渲染必须回到固定的 冲→稳→保。
 // 不门控 preview 会导致: 切倒序后恢复手动顺序或应用写回, 表格仍倒序渲染, 与合法顺位矛盾(误导老师)。
 export function resolveTierRenderOrder<T>(tiers: T[], preview: boolean, gradientDir: SortDir): T[] {

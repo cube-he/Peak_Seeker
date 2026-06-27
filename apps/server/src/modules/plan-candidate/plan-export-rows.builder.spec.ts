@@ -8,9 +8,11 @@ const enrichedGroup = {
   universityName: '电子科技大学',
   universityCode: '0612',
   universityRank: 33,
-  university: { city: '成都', runningNature: '公办', is985: true, is211: true, isDoubleFirstClass: true },
+  university: { province: '四川', city: '成都', runningNature: '公办', is985: true, is211: true, isDoubleFirstClass: true },
   groupCode: '01',
   currentPlanCount: 88,
+  previousMajorsAdmissionSum2025: 80, // 26 计划 88 - 25 录取 80 → +8 扩招
+  groupMinScore: 668, // 2025 年组级最低分
   subjects: '物理',
   majors: [
     {
@@ -76,11 +78,14 @@ describe('buildExportSheet', () => {
 
     const g = sheet.groups[0];
     expect(g.fallback).toBe(false);
+    expect(g.province).toBe('四川');
     expect(g.city).toBe('成都');
     expect(g.universityRank).toBe(33);
     expect(g.schoolNature).toBe('公办');
     expect(g.groupCode).toBe('01');
     expect(g.groupPlanCount).toBe(88);
+    expect(g.groupPlanCountVs2025).toBe(8); // 88 - 80
+    expect(g.groupMinScore2025).toBe(668);
     expect(g.subjectRequirement).toBe('物理/化学'); // 首选物理 + 再选化学
     expect(g.gradientLabel).toBe('稳');
     expect(g.majors).toHaveLength(1);
@@ -88,7 +93,7 @@ describe('buildExportSheet', () => {
     const m = g.majors[0];
     expect(m.planCount).toBe(20);
     expect(m.planByYear).toEqual({ 2023: null, 2024: 18, 2025: 20 });
-    expect(m.minScoreByYear).toEqual({ 2023: null, 2024: 662, 2025: 668 });
+    expect(m.minRankByYear).toEqual({ 2023: null, 2024: 1500, 2025: 1200 });
     expect(m.suppByYear[2025]).toEqual([2, 1]); // 逐轮人数: 第1轮2人, 第2轮1人
     expect(m.suppByYear[2024]).toBeNull();
     expect(m.duration).toBe('四年');
@@ -108,7 +113,7 @@ describe('buildExportSheet', () => {
     expect(g.majors).toHaveLength(1);
     const m = g.majors[0];
     expect(m.majorName).toBe('计算机类');
-    expect(m.minScoreByYear).toEqual({ 2023: null, 2024: 662, 2025: 668 }); // 快照 25/24 有, 23 无
+    expect(m.minRankByYear).toEqual({ 2023: null, 2024: null, 2025: null }); // 快照专业级位次全无
     expect(m.planByYear).toEqual({ 2023: null, 2024: null, 2025: null });
     expect(m.suppByYear[2025]).toBeNull();
     expect(m.bookPageNumber).toBeNull(); // 快照无页码

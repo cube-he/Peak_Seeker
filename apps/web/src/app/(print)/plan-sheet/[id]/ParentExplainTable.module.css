@@ -73,6 +73,18 @@
   font-size: 9.5px;
 }
 
+/* 招生计划 vs 2025 变化 chip: 扩招绿 / 缩招红 */
+.planUp {
+  color: #276749;
+  font-weight: 600;
+  margin-left: 2px;
+}
+.planDown {
+  color: #c53030;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
 /* 招生考试报页码 P.XX 角标 */
 .page {
   display: inline-block;

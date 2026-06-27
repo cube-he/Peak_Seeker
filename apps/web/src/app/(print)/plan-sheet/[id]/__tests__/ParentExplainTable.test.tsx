@@ -16,10 +16,13 @@ const sheet: ExportSheet = {
       universityCode: '0612',
       schoolNature: '公办',
       schoolTags: '985/211/双一流',
+      province: '四川',
       city: '成都',
       universityRank: 33,
       groupCode: '01',
       groupPlanCount: 88,
+      groupPlanCountVs2025: 8,
+      groupMinScore2025: 668,
       subjectRequirement: '物理/化学',
       fallback: false,
       majors: [
@@ -28,7 +31,7 @@ const sheet: ExportSheet = {
           majorName: '计算机类',
           planCount: 20,
           planByYear: { 2023: null, 2024: 18, 2025: 20 },
-          minScoreByYear: { 2023: null, 2024: 662, 2025: 668 },
+          minRankByYear: { 2023: null, 2024: 1500, 2025: 1200 },
           suppByYear: { 2023: null, 2024: null, 2025: [2, 1] },
           duration: '四年',
           tuition: 4900,
@@ -40,7 +43,7 @@ const sheet: ExportSheet = {
           majorName: '电子信息类',
           planCount: 30,
           planByYear: { 2023: null, 2024: 28, 2025: 30 },
-          minScoreByYear: { 2023: null, 2024: 658, 2025: 665 },
+          minRankByYear: { 2023: null, 2024: 1800, 2025: 1600 },
           suppByYear: { 2023: null, 2024: null, 2025: null },
           duration: '四年',
           tuition: 4900,
@@ -58,9 +61,11 @@ describe('ParentExplainTable', () => {
     expect(screen.getAllByText('电子科技大学')).toHaveLength(1);
     expect(screen.getByText('计算机类')).toBeInTheDocument();
     expect(screen.getByText('电子信息类')).toBeInTheDocument();
-    expect(screen.getByText('成都')).toBeInTheDocument();
+    expect(screen.getByText('四川-成都')).toBeInTheDocument(); // 省份-城市
     expect(screen.getByText('33')).toBeInTheDocument();
     expect(screen.getByText(/组招\s*88\s*人/)).toBeInTheDocument();
+    expect(screen.getByText('+8')).toBeInTheDocument(); // vs2025 扩招 chip
+    expect(screen.getByText(/25组线\s*668\s*分/)).toBeInTheDocument();
     expect(screen.getByText('物理/化学')).toBeInTheDocument(); // 选科列
   });
 
