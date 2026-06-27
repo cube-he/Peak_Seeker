@@ -14,6 +14,7 @@ import { PlanStateMachineService, PlanAction } from './plan-state-machine.servic
 import { RiskEngineService } from './risk-engine/risk-engine.service';
 import { NotificationService, NotificationEvent } from '../notification/notification.service';
 import { FEATURE_FLAGS } from '../../config/feature-flags';
+import { toSortFields, type UniversitySortSource } from './plan-item-sort-fields';
 
 @Injectable()
 export class PlanService {
@@ -150,7 +151,7 @@ export class PlanService {
     };
   }
 
-  private toPlanItem(item: any) {
+  private toPlanItem(item: any, uniMap?: Map<number, UniversitySortSource>) {
     return {
       id: item.id,
       order: item.sequence,
@@ -178,6 +179,8 @@ export class PlanService {
       overrideSoftFail: item.overrideSoftFail,
       softFailReasons: item.softFailReasons,
       overrideReason: item.overrideReason,
+      // —— 多级排序所需字段(拆开分数线 + University 属性) ——
+      ...toSortFields(item, uniMap?.get(item.universityId)),
     };
   }
 
@@ -230,6 +233,18 @@ export class PlanService {
           },
         })
       : null;
+    // 排序需要 University 的省份/办学性质/排名/标签; PlanItem 无 relation, 单独批量查后 merge。
+    const uniIds = [...new Set((plan.planItems ?? []).map((it: any) => it.universityId))];
+    const universities = uniIds.length
+      ? await this.prisma.university.findMany({
+          where: { id: { in: uniIds } },
+          select: {
+            id: true, province: true, runningNature: true, softRanking: true,
+            is985: true, is211: true, isDoubleFirstClass: true,
+          },
+        })
+      : [];
+    const uniMap = new Map(universities.map((u) => [u.id, u]));
     return {
       ...plan,
       studentName: plan.student?.user?.realName ?? plan.student?.user?.username,
@@ -237,7 +252,7 @@ export class PlanService {
       batch: plan.batchName ?? plan.batch,
       batchConfig,
       itemCount: plan.planItems?.length ?? 0,
-      items: (plan.planItems ?? []).map((item) => this.toPlanItem(item)),
+      items: (plan.planItems ?? []).map((item) => this.toPlanItem(item, uniMap)),
     };
   }
 
