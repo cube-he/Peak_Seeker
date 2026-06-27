@@ -1494,6 +1494,34 @@ describe('PlanCandidateService', () => {
     expect(result.groups).toHaveLength(1);
   });
 
+  it('includeOutOfReach=true 时连 way-off 组也保留(生成页"显示全部": 老师要看过高/够不着的组)', async () => {
+    // 同 way-off 数据, includeOutOfReach=true → 不丢, 让老师在"显示全部"下看到过高组(灰显待决策)。
+    mockCandidateGroupRequest({
+      plans: [
+        makeGroupEnrollmentPlan({
+          id: 900,
+          university: { id: 9, name: 'Impossible University', code: 'I' },
+          majorName: 'Impossible Major',
+        }),
+      ],
+      records: [
+        makeGroupAdmissionRecord({
+          groupMinRank: 88,
+          majorMinRank: 88,
+          majorName: 'Impossible Major',
+        }),
+      ],
+    });
+    rankStrategy.evaluateCandidate.mockResolvedValue(makeRankStrategyResult('REJECTED', 88));
+
+    const result: any = await service.getCandidateGroups(
+      1,
+      { page: 1, pageSize: 10, includeSoftFails: true, sort: 'MAJOR_MATCH', includeOutOfReach: true } as any,
+    );
+
+    expect(result.groups).toHaveLength(1);
+  });
+
   it('keeps a group with a recommended major and puts the unreachable sibling into risk', async () => {
     mockCandidateGroupRequest({
       student: { preferredMajors: ['Preferred Major'] },

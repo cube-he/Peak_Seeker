@@ -87,6 +87,9 @@ interface GetCandidatesQuery {
   // 家长版导出专用: 不丢任何组(跳过 all-RISK 噪音过滤 + way-off 过滤)。导出只是把老师选进
   // 方案的组原样富化显示, 不该受生成页"该不该推荐"的丢组逻辑影响(否则被丢的组→退快照)。
   keepAllGroups?: boolean;
+  // "显示全部"再进一步: 把 way-off(够不着, 门槛比学生靠前 50%+) 与 all-RISK 噪音组也放出来,
+  // 让老师能看到过高/过低的组(灰显待决策)。与 keepAllGroups 同跳过 2 道丢组, 但进缓存键、面向生成页。
+  includeOutOfReach?: boolean | string;
 }
 
 type CandidateGroupSort =
@@ -585,6 +588,8 @@ export class PlanCandidateService {
       includeSoftFails: q.includeSoftFails !== false,
       // includeHardFails 影响池构建(是否生成 hardFailMajors), 必须进缓存键, 否则开关切换命中旧池。
       includeHardFails: q.includeHardFails === true || q.includeHardFails === 'true',
+      // includeOutOfReach 影响池构建(是否丢 way-off/all-RISK 组), 必须进缓存键。
+      includeOutOfReach: q.includeOutOfReach === true || q.includeOutOfReach === 'true',
       sort: q.sort ?? 'MAJOR_MATCH',
       tier: q.tier ?? 0,
       excludeAdded: q.excludeAdded !== false,
@@ -2219,8 +2224,10 @@ export class PlanCandidateService {
       const allMajorsWayOffRejected = visibleMajors.length > 0 &&
         visibleMajors.every((m: any) => m.rankStrategy?.eligibility === 'REJECTED') &&
         rejectedMajors.every(isWayOffRejected);
-      // 家长版导出(keepAllGroups): 不丢任何组, 老师选进方案的组一律富化显示, 不受丢组过滤影响。
-      if (!q.keepAllGroups) {
+      // 家长版导出(keepAllGroups)或生成页"显示全部+看过高过低"(includeOutOfReach): 不丢 way-off/all-RISK 组,
+      // 让过高(够不着)/噪音组也露出(灰显待决策)。工具不替老师藏数据, 老师有最终决策权。
+      const includeOutOfReach = q.includeOutOfReach === true || q.includeOutOfReach === 'true';
+      if (!q.keepAllGroups && !includeOutOfReach) {
         if (allMajorsWayOffRejected) return null;
         if (isAllRisk && !isOpportunityGroup && !hitsTier && !hasAnyKeyword && !sinoOnlyIntent) return null;
       }
