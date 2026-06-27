@@ -275,8 +275,10 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   // 组内专业数: 优先 purity.majorCount (后端客观统计), fallback 组 majorCount / 可见 section 合计
   const groupMajorCount = group?.purity?.majorCount ?? group?.majorCount ?? sectionTotal;
 
-  // location: 优先 city, 否则 province
-  const location = uni.city || uni.province || '';
+  // location: 省份-城市(如 安徽-淮南); 省市同名(直辖市)只显一次; 缺一显另一个
+  const location = uni.province && uni.city && uni.province !== uni.city
+    ? `${uni.province}-${uni.city}`
+    : (uni.province || uni.city || '');
 
   // 趋势数据 (history3y 优先,fallback historyFiling3y)
   const trend = group?.history3y && group.history3y.length >= 2
