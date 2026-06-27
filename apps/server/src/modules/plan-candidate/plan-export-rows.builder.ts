@@ -6,7 +6,7 @@ export interface ExportMajor {
   majorName: string;
   planCount: number | null; // 26 计划(当前年)
   planByYear: Record<number, number | null>;
-  minScoreByYear: Record<number, number | null>;
+  minRankByYear: Record<number, number | null>; // 多年专业最低位次(替代旧 minScoreByYear)
   suppByYear: Record<number, number[] | null>; // 逐轮征集人数 [第1轮, 第2轮, ...]
   duration: string | null;
   tuition: number | null;
@@ -22,10 +22,13 @@ export interface ExportGroup {
   universityCode: string | null;
   schoolNature: string | null;
   schoolTags: string | null;
+  province: string | null; // 院校所在省
   city: string | null;
   universityRank: number | null;
   groupCode: string | null;
-  groupPlanCount: number | null; // 组招生人数
+  groupPlanCount: number | null; // 组招生人数(2026)
+  groupPlanCountVs2025: number | null; // 26 计划 - 2025 本组各专业录取数总和(>0 扩招 / <0 缩招)
+  groupMinScore2025: number | null; // 2025 年组级最低分
   subjectRequirement: string | null; // 选科要求(组级): 首选/再选, 如「历史/政治」「物理/不限」
   fallback: boolean;
   majors: ExportMajor[];
@@ -70,7 +73,7 @@ function composeSubjectRequirement(subjects: any, reReq: any): string | null {
 function pickHistoryByYear(
   history4y: any[] | null | undefined,
   years: number[],
-  field: 'planCount' | 'minScore',
+  field: 'planCount' | 'minScore' | 'minRank',
 ): Record<number, number | null> {
   const out: Record<number, number | null> = {};
   for (const y of years) {
@@ -110,7 +113,7 @@ function buildEnrichedMajor(m: any, years: number[]): ExportMajor {
     majorName: m.majorName ?? '',
     planCount: typeof m.planCount === 'number' ? m.planCount : null,
     planByYear: pickHistoryByYear(m.majorHistory4y, years, 'planCount'),
-    minScoreByYear: pickHistoryByYear(m.majorHistory4y, years, 'minScore'),
+    minRankByYear: pickHistoryByYear(m.majorHistory4y, years, 'minRank'),
     suppByYear: buildSuppByYear(m.supplementaryByYear, m.supplementaryRoundsByYear, years),
     duration: m.duration ?? m.standardDuration ?? null,
     tuition: typeof m.tuition === 'number' ? m.tuition : null,
@@ -120,6 +123,11 @@ function buildEnrichedMajor(m: any, years: number[]): ExportMajor {
 }
 
 function buildEnrichedGroup(item: any, g: any, years: number[]): ExportGroup {
+  // 组招生人数 vs 2025: 用 currentPlanCount - previousMajorsAdmissionSum2025 (口径同候选卡, 见
+  // [[enrollment_plan_count_grain]]: group_plan_count 历史年常 NULL, 故用本组各专业 2025 录取数总和)
+  const cur = typeof g.currentPlanCount === 'number' ? g.currentPlanCount : null;
+  const prev2025 = typeof g.previousMajorsAdmissionSum2025 === 'number' ? g.previousMajorsAdmissionSum2025 : null;
+  const planVs2025 = cur !== null && prev2025 !== null ? cur - prev2025 : null;
   return {
     sequence: item.sequence,
     gradient: item.gradient,
@@ -128,10 +136,13 @@ function buildEnrichedGroup(item: any, g: any, years: number[]): ExportGroup {
     universityCode: g.universityCode ?? item.universityCode ?? null,
     schoolNature: g.university?.runningNature ?? item.schoolNature ?? null,
     schoolTags: item.schoolTags ?? composeSchoolTags(g.university),
+    province: g.university?.province ?? null,
     city: g.university?.city ?? null,
     universityRank: typeof g.universityRank === 'number' ? g.universityRank : null,
     groupCode: item.groupCode ?? g.groupCode ?? null,
-    groupPlanCount: typeof g.currentPlanCount === 'number' ? g.currentPlanCount : null,
+    groupPlanCount: cur,
+    groupPlanCountVs2025: planVs2025,
+    groupMinScore2025: typeof g.groupMinScore === 'number' ? g.groupMinScore : null,
     // 选科要求(组级): 首选科类(g.subjects) + 再选要求(组内首个专业 subjectRequirements, 专业组内统一)
     subjectRequirement: composeSubjectRequirement(
       g.subjects,
@@ -144,11 +155,11 @@ function buildEnrichedGroup(item: any, g: any, years: number[]): ExportGroup {
 
 // 快照兜底: 富化结果缺该组时, 用 planItem 自身渲染单个锚定专业。
 function buildFallbackGroup(item: any, years: number[]): ExportGroup {
-  const minScoreByYear: Record<number, number | null> = {};
-  for (const y of years) minScoreByYear[y] = null;
-  // 快照线字段名锁定 2024/2025 两年, 按真实年份映射(而非数组位置), years 平移也不会错位。
-  if (typeof item.score24Major === 'number' && years.includes(2024)) minScoreByYear[2024] = item.score24Major;
-  if (typeof item.score25Major === 'number' && years.includes(2025)) minScoreByYear[2025] = item.score25Major;
+  // 快照里没有专业级历史位次, 全 null。25 年专业级位次从 rank25Major 映射(若有), 24 同理。
+  const minRankByYear: Record<number, number | null> = {};
+  for (const y of years) minRankByYear[y] = null;
+  if (typeof item.rank24Major === 'number' && years.includes(2024)) minRankByYear[2024] = item.rank24Major;
+  if (typeof item.rank25Major === 'number' && years.includes(2025)) minRankByYear[2025] = item.rank25Major;
   const planByYear: Record<number, number | null> = {};
   const suppByYear: Record<number, number[] | null> = {};
   for (const y of years) { planByYear[y] = null; suppByYear[y] = null; }
@@ -161,10 +172,13 @@ function buildFallbackGroup(item: any, years: number[]): ExportGroup {
     universityCode: item.universityCode ?? null,
     schoolNature: item.schoolNature ?? null,
     schoolTags: item.schoolTags ?? null,
+    province: null,
     city: null,
     universityRank: null,
     groupCode: item.groupCode ?? null,
     groupPlanCount: null,
+    groupPlanCountVs2025: null,
+    groupMinScore2025: typeof item.score25Group === 'number' ? item.score25Group : null,
     subjectRequirement: item.subjectRequirement ?? null,
     fallback: true,
     majors: [
@@ -173,7 +187,7 @@ function buildFallbackGroup(item: any, years: number[]): ExportGroup {
         majorName: item.majorName ?? '',
         planCount: typeof item.planCount === 'number' ? item.planCount : null,
         planByYear,
-        minScoreByYear,
+        minRankByYear,
         suppByYear,
         duration: null,
         tuition: typeof item.tuition === 'number' ? item.tuition : null,

@@ -4,7 +4,7 @@ export interface ExportMajor {
   majorName: string;
   planCount: number | null;
   planByYear: Record<number, number | null>;
-  minScoreByYear: Record<number, number | null>;
+  minRankByYear: Record<number, number | null>; // 多年专业最低位次
   suppByYear: Record<number, number[] | null>; // 逐轮征集人数 [第1轮, 第2轮, ...]
   duration: string | null;
   tuition: number | null;
@@ -20,10 +20,13 @@ export interface ExportGroup {
   universityCode: string | null;
   schoolNature: string | null;
   schoolTags: string | null;
+  province: string | null;
   city: string | null;
   universityRank: number | null;
   groupCode: string | null;
   groupPlanCount: number | null;
+  groupPlanCountVs2025: number | null; // 26 计划 vs 25 同专业录取
+  groupMinScore2025: number | null;
   subjectRequirement: string | null; // 选科要求(组级): 首选/再选
   fallback: boolean;
   majors: ExportMajor[];
