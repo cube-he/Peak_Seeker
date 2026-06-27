@@ -25,7 +25,7 @@ import UniversityLogo from '@/components/university/UniversityLogo';
 // 无史线状态(NO_LINE)不进 grade-badge 显示, 信号统一交给 RankRuler is-noline + 展开 banner;
 // 见下方 noLine 处理。
 const GRADIENT_LABEL_8: Record<string, string> = {
-  JI_CHONG: '极冲', CHONG: '冲', XIAO_CHONG: '小冲',
+  JI_CHONG: '够不着', CHONG: '冲', XIAO_CHONG: '小冲',
   WEN: '稳', WEN_BAO: '稳保',
   BAO: '保', QIANG_BAO: '强保', DIBAO: '兜底',
 };
@@ -177,10 +177,10 @@ function ratePct(v?: number | string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// 距离虚线灰标(够不着 / 偏低) — 仅极端档显示;
+// 距离虚线灰标(分数偏低) — 仅极端档显示;
+// "够不着"已并入档位徽章(JI_CHONG → 够不着), 不再单出 reach 灰标避免重复; dist-reach 仅保留 CSS 灰色条。
 // 无史线信号不进 dist-flag, 由 RankRuler is-noline + 展开 banner 单独承担, 避免在 4 处重复。
 const DIST_FLAG: Record<string, { label: string; hint: string }> = {
-  reach: { label: '够不着', hint: '该专业组录取门槛位次远好于学生, 差距过大、基本够不着, 仅供参考。老师可自主决策。' },
   toolow: { label: '分数偏低', hint: '学生位次远高于该专业组录取门槛, 报考可能浪费分数。老师可自主决策。' },
 };
 function DistFlag({ distKey }: { distKey: string }) {
@@ -309,7 +309,9 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   // 阈值与院校卡一致(rankGapRatio = 组门槛位次/学生位次 - 1)。
   const regionMismatch = !!group?.regionMismatch;
   const edge = group?.dynamicGradient?.rankGapRatio;
-  const reachFar = typeof edge === 'number' && edge < -0.45;
+  // "够不着"与极冲线重合: tier===JI_CHONG 即 edge<老师的极冲阈值(jiChong), 自动跟随自定义阈值,
+  // 不再用写死的 -0.45(那会让 -0.15~-0.45 这段几乎没戏的组仍标成可推荐的"极冲")。
+  const reachFar = tier === 'JI_CHONG';
   const tooLow = typeof edge === 'number' && edge > 0.5;
   const mutedReason = regionMismatch ? '非意向地区' : reachFar ? '够不着(门槛远高于学生)' : tooLow ? '分数偏低(可能浪费分)' : '';
   // —— 二维编码: 距离(左色条 dist-*) + 状态(底色 status-*). 距离极端档/无史线 → is-muted 去饱和 ——

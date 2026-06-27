@@ -139,7 +139,7 @@ export class TeacherService {
     const clean = sanitizeTierThresholds(raw);
     if (!clean) {
       throw new BadRequestException(
-        '梯度阈值非法: 需 7 项(极冲/冲/小冲/稳/稳保/保/强保)齐全, 且严格单调递增。',
+        '梯度阈值非法: 需 7 项(够不着/冲/小冲/稳/稳保/保/强保)齐全, 且严格单调递增。',
       );
     }
     await this.prisma.teacherProfile.update({

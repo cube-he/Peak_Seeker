@@ -21,7 +21,7 @@ export const ALL_GRADES: GradeKey[] = [
 ];
 
 const GRADE_LABEL: Record<GradeKey, string> = {
-  JI_CHONG: '极冲', CHONG: '冲', XIAO_CHONG: '小冲',
+  JI_CHONG: '够不着', CHONG: '冲', XIAO_CHONG: '小冲',
   WEN: '稳', WEN_BAO: '稳保',
   BAO: '保', QIANG_BAO: '强保', DIBAO: '兜底',
 };

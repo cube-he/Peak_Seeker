@@ -19,7 +19,7 @@ function cx(...classes: Array<string | false | null | undefined>) {
 }
 
 const GRADIENT_LABEL: Record<string, string> = {
-  JI_CHONG: '极冲',
+  JI_CHONG: '够不着',
   CHONG: '冲',
   XIAO_CHONG: '小冲',
   WEN: '稳',
