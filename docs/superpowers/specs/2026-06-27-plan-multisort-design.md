@@ -95,9 +95,10 @@ UI 上梯度表现为**固定的第一条排序规则**（带方向切换），�
 唯一后端改动：扩展 `plan.service.ts` 的 `toPlanItem`，补齐排序所需字段：
 
 1. **拆开分数线**：现状 `historicalMinScore = score25Group ?? score25Major` 把组级线和专业级线压成一个值。新增透出原始 `score25Group / rank25Group / score25Major / rank25Major`（保留 `historicalMinScore/Rank` 兼容现有 UI）。
-2. **关联 University**：在查询里 `include: { university: { select: { province, runningNature, softRanking, is985, is211, isDoubleFirstClass } } }`，透出 `province / runningNature / universityRank / tags`。
-   - 这是 University 表的直接 JOIN（`PlanItem.universityId` 已有），**不走**那条最重的候选富化管线（`getCandidateGroups`）。
-3. 中外合作（`isSinoForeign`）：作为"办学性质=中外合作"档位的判定来源。优先用 `University.runningNature`/快照判定；若不足，按需关联 `EnrollmentPlan`（标为后续可选，不阻塞核心排序键）。
+2. **补 University 字段（单独查 + merge，不是 include）**：`PlanItem` 模型**没有**到 `University` 的关系字段，只有 `universityId` 标量，因此**不能** `include: { university }`。做法：`findById` 加载完 `planItems` 后，收集 `universityId` 集合，`university.findMany({ where: { id: { in } }, select: { id, province, runningNature, softRanking, is985, is211, isDoubleFirstClass } })`，建 `Map<id, uni>`，在 `toPlanItem` 里按 `item.universityId` 取出 merge。透出 `province / runningNature / softRanking / is985 / is211 / isDoubleFirstClass`，并派生 `inSichuan = province === '四川'`。
+   - 这是 University 表的一次批量查（每方案一次，~24 行），**不走**那条最重的候选富化管线（`getCandidateGroups`），也**不加 Prisma relation / 不改 schema / 零迁移**（规避生产迁移漂移风险）。
+   - 办学性质优先用 `University.runningNature`，缺失回退 `item.schoolNature`（快照）；标签优先用 University 三个 Boolean，回退 `item.schoolTags`（快照字符串含 985/211 子串）。
+3. 中外合作：首版用 `runningNature` 含"中外/合作"子串 或快照 `schoolNature` 判定，归入"办学性质=中外合作"档位；精确判定（关联 `EnrollmentPlan.isSinoForeign`）列为后续可选，不阻塞核心排序键。
 
 `tuition` 已在 `PlanItem` 上，无需补。
 
