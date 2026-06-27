@@ -2256,6 +2256,22 @@
 .wn-teacher-scope .pl-row:hover .pl-grip { opacity: 1; }
 .wn-teacher-scope .pl-grip:hover { color: var(--text-secondary); }
 
+/* 自由排序: 序号输入框(改数字回车→移到第N位) */
+.wn-teacher-scope .pl-seq-input {
+  width: 34px;
+  padding: 1px 3px;
+  font-size: 12px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+}
+.wn-teacher-scope .pl-seq-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
 .wn-teacher-scope .pl-row .majors { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .wn-teacher-scope .pl-major-chev {
   display: inline-flex; width: 11px; height: 11px;

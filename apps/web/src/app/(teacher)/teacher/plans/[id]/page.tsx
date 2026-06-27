@@ -17,6 +17,7 @@ import {
   Select,
   Space,
   Spin,
+  Switch,
   Tag,
   message,
 } from 'antd';
@@ -48,6 +49,8 @@ import {
   sortPlanItems,
   buildAppliedOrder,
   resolveTierRenderOrder,
+  applyMove,
+  moveToPositionOrder,
   type SortRule,
   type SortDir,
   type SortableItem,
@@ -262,12 +265,15 @@ export default function PlanDetailPage() {
   const [gradientDir, setGradientDir] = useState<SortDir>('asc'); // 段序: asc=冲→稳→保
   const [sortPreview, setSortPreview] = useState(false);
   const [sortPanelOpen, setSortPanelOpen] = useState(false);
+  // 自由排序: 关=按冲稳保分组(投档铁律, 默认安全); 开=扁平全表, 排序/拖拽/序号输入跨段自由调。
+  const [freeSortMode, setFreeSortMode] = useState(false);
   // 切换方案时清空排序预览/规则栈,避免上一份方案的排序状态泄漏到下一份(如"审下一份"router.push 不重挂载组件)
   useEffect(() => {
     setSortPreview(false);
     setSortRules([]);
     setGradientDir('asc');
     setSortPanelOpen(false);
+    setFreeSortMode(false);
   }, [plan?.id]);
   const reorderMutation = useMutation({
     mutationFn: (ids: number[]) => planApi.reorderItems(String(planId), ids),
@@ -311,9 +317,26 @@ export default function PlanDetailPage() {
     setLocalItems(next);
     reorderMutation.mutate(next.map((it) => it.id));
   };
+  // 自由排序: 扁平重排(不分冲稳保), 直接按 localItems 顺序写回。
+  const commitFlatReorder = (from: number, to: number) => {
+    const next = applyMove(localItems, from, to);
+    if (next === localItems) return;
+    setLocalItems(next);
+    reorderMutation.mutate(next.map((it) => it.id));
+  };
+  // 序号输入: 把某志愿移到第 N 位(1-based)。
+  const moveItemToPosition = (itemId: number, targetPos: number) => {
+    const order = moveToPositionOrder(localItems, itemId, targetPos);
+    const byId = new Map(localItems.map((it) => [it.id, it]));
+    const next = order.map((id) => byId.get(id)).filter(Boolean) as any[];
+    if (next.map((it) => it.id).join(',') === localItems.map((it) => it.id).join(',')) return;
+    setLocalItems(next);
+    reorderMutation.mutate(order);
+  };
   const handleRowDragEnd = () => {
     if (dragRow && overRow && dragRow.tier === overRow.tier) {
-      commitRowReorder(dragRow.tier, dragRow.pos, overRow.pos);
+      if (dragRow.tier === 'flat') commitFlatReorder(dragRow.pos, overRow.pos);
+      else commitRowReorder(dragRow.tier, dragRow.pos, overRow.pos);
     }
     setDragRow(null);
     setOverRow(null);
@@ -600,9 +623,11 @@ export default function PlanDetailPage() {
 
   const sortCtx = { studentRank: summary.studentRank };
 
-  // 应用为志愿顺序: 段内栈算出扁平 itemId, 复用 reorder 写回(仅 DRAFT)
+  // 应用为志愿顺序: free=全表扁平排序(不分冲稳保); 否则=段内栈算扁平 itemId。复用 reorder 写回(仅 DRAFT)
   const applySortOrder = () => {
-    const order = buildAppliedOrder(localItems as SortableItem[], sortRules, sortCtx);
+    const order = freeSortMode
+      ? sortPlanItems(localItems as SortableItem[], sortRules, sortCtx).map((it) => it.id)
+      : buildAppliedOrder(localItems as SortableItem[], sortRules, sortCtx);
     setLocalItems((prev) => {
       const byId = new Map(prev.map((it) => [it.id, it]));
       return order.map((id) => byId.get(id)).filter(Boolean) as any[];
@@ -615,6 +640,44 @@ export default function PlanDetailPage() {
   // 预览态下: TIER_META 渲染顺序按段序方向, 段内按规则排。
   // 段序翻转仅预览态生效(spec): 否则恢复/应用后表格仍倒序, 与合法顺位视觉矛盾。
   const tierMetaOrdered = resolveTierRenderOrder(TIER_META, sortPreview, gradientDir);
+
+  // 共享的志愿行渲染(分组态与自由态复用): dragTier='flat' 时跨段拖拽; freeMode 时显示序号输入框。
+  const renderPlanRow = (item: any, pos: number, dragTier: string, freeMode: boolean) => {
+    const canDragRows = status === 'DRAFT' && !reorderMutation.isPending && !sortPreview;
+    return (
+      <PlanRow
+        key={item.id}
+        item={item}
+        studentRank={summary.studentRank}
+        reviewMode={isReviewing}
+        canDrag={canDragRows}
+        isDragging={dragRow?.tier === dragTier && dragRow?.pos === pos}
+        isDragOver={overRow?.tier === dragTier && overRow?.pos === pos && !(dragRow?.tier === dragTier && dragRow?.pos === pos)}
+        onDragStartRow={() => setDragRow({ tier: dragTier, pos })}
+        onDragOverRow={() => { if (dragRow && dragRow.tier === dragTier) setOverRow({ tier: dragTier, pos }); }}
+        onDragEndRow={handleRowDragEnd}
+        annotation={annotations[item.sequence] ?? ''}
+        hasAnnotation={!!annotations[item.sequence]?.trim()}
+        onAnnotationChange={(val) => {
+          setAnnotations((prev) => {
+            const next = { ...prev, [item.sequence]: val };
+            debouncedSave(reviewComment, next);
+            return next;
+          });
+        }}
+        planStatus={status}
+        editable={status === 'DRAFT' || status === 'PENDING_REVIEW'}
+        saving={updateMajorSelectionMutation.isPending}
+        onSaveMajors={(payload) => updateMajorSelectionMutation.mutate({ itemId: item.id, ...payload })}
+        canDelete={status === 'DRAFT'}
+        deleting={deleteItemMutation.isPending && deleteItemMutation.variables === item.id}
+        onDelete={() => deleteItemMutation.mutate(item.id)}
+        freeMode={freeMode}
+        displayPos={pos + 1}
+        onMoveToPos={freeMode && status === 'DRAFT' && !sortPreview ? (p: number) => moveItemToPosition(item.id, p) : undefined}
+      />
+    );
+  };
 
   if (isLoading) {
     return (
@@ -979,6 +1042,14 @@ export default function PlanDetailPage() {
               排序
             </Button>
           </Popover>
+          {status === 'DRAFT' ? (
+            <span style={{ marginLeft: 10, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Switch size="small" checked={freeSortMode} onChange={setFreeSortMode} disabled={sortPreview} />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }} title="开启后志愿表不分冲/稳/保, 排序对全表生效, 可拖拽或填序号自由调整顺序">
+                自由排序
+              </span>
+            </span>
+          ) : null}
           {status === 'DRAFT' && localItems.length > 0 ? (
             <Popconfirm
               title="清空全部志愿"
@@ -1028,6 +1099,10 @@ export default function PlanDetailPage() {
           <div style={{ padding: '32px 22px' }}>
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无志愿明细" />
           </div>
+        ) : freeSortMode ? (
+          // 自由排序: 扁平全表(不分冲稳保), 拖拽/序号跨段自由调; 预览态排序也作用于全表。
+          (sortPreview ? sortPlanItems(localItems as SortableItem[], sortRules, sortCtx) : localItems)
+            .map((item, pos) => renderPlanRow(item, pos, 'flat', true))
         ) : (
           tierMetaOrdered.map((meta) => {
             const rawTierItems = localItems.filter((it) => GRADIENT_TIER[it.gradient] === meta.tier);
@@ -1035,7 +1110,6 @@ export default function PlanDetailPage() {
               ? sortPlanItems(rawTierItems as SortableItem[], sortRules, sortCtx)
               : rawTierItems;
             if (tierItems.length === 0) return null;
-            const canDragRows = status === 'DRAFT' && !reorderMutation.isPending && !sortPreview;
             return (
               <div key={meta.tier}>
                 <div className={`pl-section t-${meta.tier}`}>
@@ -1046,38 +1120,7 @@ export default function PlanDetailPage() {
                     {meta.en} · 本段 {tierItems.length} 条
                   </span>
                 </div>
-                {tierItems.map((item, pos) => (
-                  <PlanRow
-                    key={item.id}
-                    item={item}
-                    studentRank={summary.studentRank}
-                    reviewMode={isReviewing}
-                    canDrag={canDragRows}
-                    isDragging={dragRow?.tier === meta.tier && dragRow?.pos === pos}
-                    isDragOver={overRow?.tier === meta.tier && overRow?.pos === pos && !(dragRow?.tier === meta.tier && dragRow?.pos === pos)}
-                    onDragStartRow={() => setDragRow({ tier: meta.tier, pos })}
-                    onDragOverRow={() => { if (dragRow && dragRow.tier === meta.tier) setOverRow({ tier: meta.tier, pos }); }}
-                    onDragEndRow={handleRowDragEnd}
-                    annotation={annotations[item.sequence] ?? ''}
-                    hasAnnotation={!!annotations[item.sequence]?.trim()}
-                    onAnnotationChange={(val) => {
-                      setAnnotations((prev) => {
-                        const next = { ...prev, [item.sequence]: val };
-                        debouncedSave(reviewComment, next);
-                        return next;
-                      });
-                    }}
-                    planStatus={status}
-                    editable={status === 'DRAFT' || status === 'PENDING_REVIEW'}
-                    saving={updateMajorSelectionMutation.isPending}
-                    onSaveMajors={(payload) =>
-                      updateMajorSelectionMutation.mutate({ itemId: item.id, ...payload })
-                    }
-                    canDelete={status === 'DRAFT'}
-                    deleting={deleteItemMutation.isPending && deleteItemMutation.variables === item.id}
-                    onDelete={() => deleteItemMutation.mutate(item.id)}
-                  />
-                ))}
+                {tierItems.map((item, pos) => renderPlanRow(item, pos, meta.tier, false))}
               </div>
             );
           })
@@ -1249,6 +1292,9 @@ function PlanRow({
   canDelete,
   deleting,
   onDelete,
+  freeMode,
+  displayPos,
+  onMoveToPos,
 }: {
   item: any;
   studentRank: number | null;
@@ -1269,6 +1315,9 @@ function PlanRow({
   canDelete?: boolean;
   deleting?: boolean;
   onDelete?: () => void;
+  freeMode?: boolean;
+  displayPos?: number; // 自由态: 1-based 视觉序号(= 当前位置)
+  onMoveToPos?: (pos: number) => void; // 自由态: 序号输入提交 → 移到第 N 位
 }) {
   const [expanded, setExpanded] = useState(false);
   const [annotateOpen, setAnnotateOpen] = useState(false);
@@ -1330,7 +1379,29 @@ function PlanRow({
             className="pl-grip"
             title={canDrag ? '拖动调整顺位' : (planStatus === 'PENDING_REVIEW' ? '审核中 — 点「撤回修改」退回草稿后可调序' : '仅草稿状态可调序')}
           >⋮⋮</span>
-          {String(item.sequence).padStart(2, '0')}
+          {freeMode && onMoveToPos ? (
+            <input
+              key={`seq-${item.id}-${displayPos}`}
+              type="number"
+              className="pl-seq-input"
+              min={1}
+              defaultValue={displayPos}
+              title="改这个数字回车 → 把该志愿移到第 N 位"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const v = Number((e.target as HTMLInputElement).value);
+                  if (v >= 1) onMoveToPos(v);
+                }
+              }}
+              onBlur={(e) => {
+                const v = Number(e.target.value);
+                if (v >= 1 && v !== displayPos) onMoveToPos(v);
+              }}
+            />
+          ) : (
+            String(item.sequence).padStart(2, '0')
+          )}
         </span>
         <span className={`tier-dot t-${tier}`}>{GRADIENT_LABEL[item.gradient] ?? '-'}</span>
         <div className="uni">

@@ -77,7 +77,29 @@ describe('sortPlanItems', () => {
   });
 });
 
-import { buildAppliedOrder, resolveTierRenderOrder } from '../plan-sort';
+import { buildAppliedOrder, resolveTierRenderOrder, applyMove, moveToPositionOrder } from '../plan-sort';
+
+describe('applyMove / moveToPositionOrder (自由排序)', () => {
+  it('applyMove: 把第 5 位(idx4)移到第 2 位(idx1)', () => {
+    expect(applyMove([1, 2, 3, 4, 5], 4, 1)).toEqual([1, 5, 2, 3, 4]);
+  });
+  it('applyMove: from===to 或越界 → 原数组', () => {
+    expect(applyMove([1, 2, 3], 1, 1)).toEqual([1, 2, 3]);
+    expect(applyMove([1, 2, 3], 0, 9)).toEqual([1, 2, 3]);
+  });
+  it('moveToPositionOrder: 输入 N(1-based) → 该 item 移到第 N 位', () => {
+    const items = [{ id: 10 }, { id: 20 }, { id: 30 }, { id: 40 }, { id: 50 }];
+    // id=50 现在第 5 位, 移到第 2 位
+    expect(moveToPositionOrder(items, 50, 2)).toEqual([10, 50, 20, 30, 40]);
+    // id=10 移到第 3 位
+    expect(moveToPositionOrder(items, 10, 3)).toEqual([20, 30, 10, 40, 50]);
+  });
+  it('moveToPositionOrder: 越界位置夹到 [1, len]', () => {
+    const items = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    expect(moveToPositionOrder(items, 1, 99)).toEqual([2, 3, 1]); // 夹到末位
+    expect(moveToPositionOrder(items, 3, 0)).toEqual([3, 1, 2]);  // 夹到首位
+  });
+});
 
 describe('resolveTierRenderOrder', () => {
   const tiers = ['rush', 'stable', 'safe'];
