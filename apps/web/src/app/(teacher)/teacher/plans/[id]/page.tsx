@@ -872,6 +872,26 @@ export default function PlanDetailPage() {
       {status === 'FINALIZED' ? (
         <Alert type="success" showIcon message="方案已定稿，后续修改请派生新版本。" />
       ) : null}
+      {status === 'OUTDATED' ? (
+        (() => {
+          // 取代它的版本 = versions 里 parentVersionId 指向当前方案的那条
+          const newer = versions.find((v) => v.parentVersionId === Number(planId));
+          return (
+            <Alert
+              type="warning"
+              showIcon
+              message="此版本已被新一版取代 · 只读"
+              description={
+                newer ? (
+                  <Link href={`/teacher/plans/${newer.id}`}>
+                    打开 v{newer.versionNo} 继续编辑 →
+                  </Link>
+                ) : '此版本不可再编辑。'
+              }
+            />
+          );
+        })()
+      ) : null}
 
       {/* —— 版本对比工具栏 (设计稿 pd2-compare-bar; antd Select 保留对比逻辑) —— */}
       {versions.length > 1 ? (
