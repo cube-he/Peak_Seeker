@@ -99,7 +99,9 @@ export default function UniversityCandidateCard({
             <span className={`pgv2-tag ${isPrivate ? 'tone-rush-soft' : 'tone-muted'}`}>{u.runningNature}</span>
           ) : null}
           {(u.province || u.city) ? (
-            <span className="pgv2-tag tone-muted">{u.province ?? ''} {u.city ?? ''}</span>
+            <span className="pgv2-tag tone-muted">
+              {u.province && u.city && u.province !== u.city ? `${u.province}-${u.city}` : (u.province || u.city)}
+            </span>
           ) : null}
           {typeof u.softRanking === 'number' ? (
             <span className="pgv2-tag tone-muted" title={isPrivate ? '民办院校按软科民办榜单独排名' : undefined}>
