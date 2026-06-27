@@ -5,6 +5,7 @@ import {
   filterGroupsByUniversityProvinces,
   filterGroupsByUniversityCities,
   filterGroupsByIsNewItem,
+  collectProvinces,
 } from './major-mode-filters';
 
 // 构造最小 group: 7 项 chip 只看 university 子对象 + isNewMajor/isNewUniversity 顶层标记
@@ -161,6 +162,22 @@ describe('major-mode-filters', () => {
     it('空 isNewItem 原样返回同引用', () => {
       expect(filterGroupsByIsNewItem(groups, '')).toBe(groups);
       expect(filterGroupsByIsNewItem(groups, undefined)).toBe(groups);
+    });
+  });
+
+  describe('collectProvinces: distinct + 组数降序', () => {
+    it('按出现组数降序, 同数 localeCompare, 空/缺省份跳过', () => {
+      const groups = [
+        g({ province: '四川' }), g({ province: '四川' }), g({ province: '四川' }), // 3
+        g({ province: '江苏' }), g({ province: '江苏' }),                          // 2
+        g({ province: '北京' }),                                                  // 1
+        g({ province: null }), g({ province: '' }), g({}),                        // 跳过
+      ];
+      expect(collectProvinces(groups)).toEqual(['四川', '江苏', '北京']);
+    });
+
+    it('空数组 → 空', () => {
+      expect(collectProvinces([])).toEqual([]);
     });
   });
 });
