@@ -340,7 +340,7 @@ interface CandidateGroupListResult {
 const STICKY_BAR_STORAGE_KEY = 'plan-workbench:student-bar-expanded';
 
 const GRADIENT_LABEL: Record<DynamicGradientTier, string> = {
-  JI_CHONG: '极冲',
+  JI_CHONG: '够不着',
   CHONG: '冲',
   XIAO_CHONG: '小冲',
   WEN: '稳',
@@ -351,7 +351,7 @@ const GRADIENT_LABEL: Record<DynamicGradientTier, string> = {
 };
 
 const GRADIENT_COLOR: Record<DynamicGradientTier, string> = {
-  JI_CHONG: 'magenta',
+  JI_CHONG: 'default',
   CHONG: 'red',
   XIAO_CHONG: 'orange',
   WEN: 'blue',
@@ -369,7 +369,7 @@ function fmtEdgePct(v: number): string {
 }
 function gradDescFromThresholds(t: TierThresholds): Record<DynamicGradientTier, string> {
   return {
-    JI_CHONG: `位次差 < ${fmtEdgePct(t.jiChong)} · 极有挑战,仅做参考`,
+    JI_CHONG: `位次差 < ${fmtEdgePct(t.jiChong)} · 门槛远好于学生,基本够不着`,
     CHONG: `${fmtEdgePct(t.jiChong)} ~ ${fmtEdgePct(t.chong)} · 需要发挥`,
     XIAO_CHONG: `${fmtEdgePct(t.chong)} ~ ${fmtEdgePct(t.xiaoChong)} · 有机会`,
     WEN: `${fmtEdgePct(t.xiaoChong)} ~ ${fmtEdgePct(t.wen)} · 基本匹配`,
@@ -381,7 +381,7 @@ function gradDescFromThresholds(t: TierThresholds): Record<DynamicGradientTier, 
 }
 // 编辑器: 7 个分界的中文标签(每个值=该段与下一段的分界 edge%)。
 const TIER_EDIT_LABELS: Array<{ key: keyof TierThresholds; label: string }> = [
-  { key: 'jiChong', label: '极冲 / 冲 分界' },
+  { key: 'jiChong', label: '够不着 / 冲 分界' },
   { key: 'chong', label: '冲 / 小冲 分界' },
   { key: 'xiaoChong', label: '小冲 / 稳 分界' },
   { key: 'wen', label: '稳 / 稳保 分界' },
@@ -3767,7 +3767,7 @@ export default function GeneratePlanPage() {
                     ))}
                     {!gradDraftValid ? (
                       <div style={{ color: 'var(--rush, #c53030)', fontSize: 12, marginBottom: 8 }}>
-                        分界必须从上到下严格递增(极冲分界 &lt; 冲分界 &lt; … &lt; 强保分界)。
+                        分界必须从上到下严格递增(够不着分界 &lt; 冲分界 &lt; … &lt; 强保分界)。
                       </div>
                     ) : null}
                     <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
