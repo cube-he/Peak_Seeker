@@ -23,6 +23,7 @@ import {
   filterGroupsByUniversityProvinces,
   filterGroupsByUniversityCities,
   filterGroupsByIsNewItem,
+  collectProvinces,
 } from './major-mode-filters';
 import {
   filterGroupsByRankWindow,
@@ -684,6 +685,7 @@ export class PlanCandidateService {
       regionMismatchCount,
       tierCounts,
       availableRecruitTypes: collectRecruitTypes(value.groups),
+      availableProvinces: collectProvinces(value.groups),
       groups: pool.slice(start, start + pageSize),
     };
   }
@@ -767,6 +769,7 @@ export class PlanCandidateService {
       ...meta,
       groupBy: 'UNIVERSITY' as const,
       availableRecruitTypes: collectRecruitTypes(value.groups),
+      availableProvinces: collectProvinces(value.groups),
       total: universities.length,
       regionMismatchCount,
       page,

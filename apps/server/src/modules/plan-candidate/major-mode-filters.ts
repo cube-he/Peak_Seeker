@@ -90,6 +90,20 @@ export function filterGroupsByBackgrounds<T extends GroupWithUniversity>(
   });
 }
 
+/** 全量池里有哪些院校所在省: distinct + 按出现组数降序(同数 localeCompare). 组数最多者居首。
+ *  对标 collectRecruitTypes: 让"省份"chip 动态、完整, 不再前端写死(库里 32 省, 旧版只列 12)。 */
+export function collectProvinces(groups: GroupWithUniversity[]): string[] {
+  const counts = new Map<string, number>();
+  for (const g of groups) {
+    const p = String(g.university?.province ?? '').trim();
+    if (!p) continue;
+    counts.set(p, (counts.get(p) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([p]) => p);
+}
+
 /** 院校所在省 CSV (university.province IN). 空 csv=不过滤同引用返回; 院校 province 空 → 排除. */
 export function filterGroupsByUniversityProvinces<T extends GroupWithUniversity>(
   groups: T[],

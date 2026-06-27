@@ -324,6 +324,7 @@ interface CandidateGroupListResult {
   // "非意向地区"院校组数量(当前其他过滤后口径); 驱动"显示非意向地区 (N)"开关
   regionMismatchCount?: number;
   availableRecruitTypes?: string[];
+  availableProvinces?: string[];
   planYear?: number;
   sourceYear?: number;
   admissionBaselineYear?: number;
@@ -1455,6 +1456,16 @@ export default function GeneratePlanPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchConfigId, candidateGroups?.availableRecruitTypes]);
+
+  // 切批次/池 → 清掉已不在可选省份里的已选省(同招生类型清理逻辑); 省份选项现由后端动态返回。
+  useEffect(() => {
+    if (!candidateGroups || !Array.isArray(candidateGroups.availableProvinces)) return;
+    if (provincesFilter.length === 0) return;
+    const avail = candidateGroups.availableProvinces;
+    const kept = provincesFilter.filter((p) => avail.includes(p));
+    if (kept.length !== provincesFilter.length) setProvincesFilter(kept);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidateGroups?.availableProvinces]);
 
   const createMutation = useMutation({
     // 传 explicitBatchId 用于"自动建草稿"场景 — setBatchConfigId 是异步的,
@@ -2626,15 +2637,19 @@ export default function GeneratePlanPage() {
                     ) : null}
                     <span className="flbl" style={{ marginLeft: 12 }}>院校背景</span>
                     {[
-                      'C9联盟',
-                      '华东五校',
-                      '中坚九校',
-                      '国防七子',
-                      '兵工七子',
-                      '五院四系',
-                      '建筑老八校',
+                      // 综合联盟
+                      'C9联盟', '华东五校', '中坚九校', 'E9联盟',
+                      // 军工
+                      '国防七子', '兵工七子', '军工六校',
+                      // 政法/外语
+                      '五院四系', '两外一法',
+                      // 建筑
+                      '建筑老八校', '建筑新八校',
+                      // 财经
                       '五财一贸',
-                      '两电一邮',
+                      // 电子/工科
+                      '两电一邮', '四大工学院', '电气二龙', '电气四虎', '机械四小龙',
+                      // 艺术
                       '八大美院',
                     ].map((b) => {
                       const active = backgroundsFilter.includes(b);
@@ -2662,21 +2677,17 @@ export default function GeneratePlanPage() {
                     ) : null}
                   </div>
 
-                  {/* 院校所在省 (多选 IN) */}
+                  {/* 院校所在省 (多选 IN) — 选项由后端按候选池真实分布动态返回(组数多→少), 不再前端写死 */}
                   <div className="pgv3-frow">
                     <span className="flbl">省份</span>
-                    {[
-                      '北京', '上海', '天津', '重庆',
-                      '江苏', '浙江', '广东', '湖北',
-                      '陕西', '四川', '辽宁', '山东',
-                    ].map((pr) => {
+                    {(candidateGroups?.availableProvinces ?? []).map((pr) => {
                       const active = provincesFilter.includes(pr);
                       return (
                         <button
                           key={pr}
                           type="button"
                           className={`pgv3-fchip ${active ? 'on' : ''}`}
-                          onClick={() => toggleProvince(pr)}
+                          onClick={() => { toggleProvince(pr); setCandidatePage(1); }}
                         >
                           {pr}
                         </button>
