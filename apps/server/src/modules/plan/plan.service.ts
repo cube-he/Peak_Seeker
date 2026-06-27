@@ -75,8 +75,10 @@ export class PlanService {
   }
 
   async findMine(user: { id: number; role: string; studentProfileId?: number | null }) {
+    // 学生只看自己名下方案; 排除 OUTDATED(被二稿取代的只读初稿), 学生端不展示过期初稿,
+    // 仅老师端可见历史版本。老师自己的 findMine(createdById)不过滤, 保留全部版本。
     const where: Record<string, any> = user.studentProfileId
-      ? { studentId: user.studentProfileId }
+      ? { studentId: user.studentProfileId, status: { not: 'OUTDATED' } }
       : { createdById: user.id };
     const plans = await this.prisma.volunteerPlan.findMany({
       where,

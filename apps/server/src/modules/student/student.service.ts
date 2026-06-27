@@ -332,7 +332,9 @@ export class StudentService {
           },
           // 列表派生 workflowStatus / 「方案」列需要最新方案 + 总数
           volunteerPlans: {
-            orderBy: { updatedAt: 'desc' },
+            // 取最新版本(versionNo)而非最近改动: 派生二稿时初稿被置 OUTDATED 会刷新 @updatedAt,
+            // 用 updatedAt 排序会把过期初稿当成最新方案, versionNo 才稳。
+            orderBy: { versionNo: 'desc' },
             take: 1,
             select: { id: true, status: true, updatedAt: true, versionNo: true },
           },
@@ -402,7 +404,8 @@ export class StudentService {
           },
         },
         volunteerPlans: {
-          orderBy: { updatedAt: 'desc' },
+          // 同上: 取最新版本(versionNo)而非最近改动, 避免被置 OUTDATED 的初稿盖过新版。
+          orderBy: { versionNo: 'desc' },
           take: 1,
           select: { id: true, status: true, updatedAt: true, versionNo: true },
         },

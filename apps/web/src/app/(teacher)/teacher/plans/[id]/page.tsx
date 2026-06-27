@@ -487,6 +487,8 @@ export default function PlanDetailPage() {
           <p style={{ marginBottom: 8 }}>会保留当前为只读初稿,复制一份可编辑的新版本继续修改。</p>
           <Input.TextArea
             rows={3}
+            maxLength={500}
+            showCount
             placeholder="版本备注(可留空),如:二稿—按学生意见删某校、加某校"
             onChange={(e) => { deriveNoteRef.current = e.target.value; }}
           />
