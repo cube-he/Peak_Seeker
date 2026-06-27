@@ -56,6 +56,8 @@ export interface CandidateGroupListParams extends CandidateListParams {
   tier?: number;
   // 是否隐藏已加入当前 plan 的院校组 (默认 true)
   excludeAdded?: boolean;
+  // 仅显示已加入当前 plan 的院校组(复盘); true 优先于 excludeAdded
+  onlyAdded?: boolean;
   // 客观纯净度过滤. 空数组或 undefined = 不过滤; ['S','A'] = 仅显示干净/较纯
   purity?: string[];
   // 招生类型过滤. 空数组/undefined = 不过滤; ['普通类本科'] = 仅该类
@@ -157,6 +159,7 @@ export const planApi = {
         sortDir: params?.sortDir,
         tier: params?.tier,
         excludeAdded: params?.excludeAdded,
+        onlyAdded: params?.onlyAdded ? true : undefined,
         purity: params?.purity && params.purity.length > 0 && params.purity.length < 4
           ? params.purity.join(',')
           : undefined,

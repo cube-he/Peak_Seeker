@@ -65,6 +65,7 @@ interface GetCandidatesQuery {
   sortDir?: SortDir; // 排序方向 (GROUP 视图可比较轴): DESC=轴默认, ASC=翻转
   tier?: number;
   excludeAdded?: boolean | string;
+  onlyAdded?: boolean | string; // 仅显示已加入当前 plan 的组(复盘); true 优先于 excludeAdded
   purity?: string; // csv 'S,A,B,C'; 空 = 不过滤
   recruitType?: string; // 招生类型 CSV 多选; 空 = 不过滤; 分页层应用(同 sinoForeign)
   groupBy?: 'GROUP' | 'UNIVERSITY'; // 视图模式; UNIVERSITY=院校卡上卷
@@ -587,6 +588,7 @@ export class PlanCandidateService {
       sort: q.sort ?? 'MAJOR_MATCH',
       tier: q.tier ?? 0,
       excludeAdded: q.excludeAdded !== false,
+      onlyAdded: q.onlyAdded === true || q.onlyAdded === 'true',
       // "只看中外合作"会保留纯中外的全风险组(否则学生不接受时整组被丢→筛完为空),
       // 该保留发生在建池阶段, 故必须进缓存键(同 keyword/tier 的道理), 否则命中无中外组的旧池。
       sinoOnly: q.sinoForeign === 'only',
@@ -643,13 +645,16 @@ export class PlanCandidateService {
       universityCities?: string;
       isNewItem?: string;
     },
+    onlyAdded = false,
   ) {
     // 招生类型过滤(分页层): 先把全量池收窄成工作集, 让 band/sino/rank/region/tierCounts 全部基于它,
     // 否则冲/稳/保 chip 计数会大于列表 total(同非意向地区折叠的已有教训)。空选择 = 全部。
-    let baseGroups = filterGroupsByRecruitType(value.groups, recruitType);
+    // onlyAdded(仅显示填报)模式: 池已只剩已填报组(建池层), 这里全部跳过收窄, 把全部已填报露出
+    // (含非意向地区/档外/分数窗外), 让老师完整复盘自己填了什么。
+    let baseGroups = onlyAdded ? value.groups : filterGroupsByRecruitType(value.groups, recruitType);
     // 专业优先模式 7 项 chip (与 recruitType 同层): 在 band/sino/rank/region 之前应用,
     // 保证 tierCounts (冲/稳/保 chip 计数) 与列表 total 同口径 (基于收窄后的 baseGroups)。
-    if (majorMode) {
+    if (!onlyAdded && majorMode) {
       baseGroups = filterGroupsByNature(baseGroups, majorMode.nature);
       baseGroups = filterGroupsByTags(baseGroups, majorMode.tags);
       baseGroups = filterGroupsByBackgrounds(baseGroups, majorMode.backgrounds);
@@ -659,22 +664,23 @@ export class PlanCandidateService {
     }
     // 档位过滤在缓存后的分页层做: 切换冲/稳/保/无史线 chip 不触发全量重算,
     // total 改为档内数量(驱动分页), tierCounts 保持(收窄后)全池口径(驱动 chip 计数)
-    const validBand = gradientBand && ['RUSH', 'STABLE', 'SAFE', 'NO_LINE'].includes(gradientBand)
+    const validBand = !onlyAdded && gradientBand && ['RUSH', 'STABLE', 'SAFE', 'NO_LINE'].includes(gradientBand)
       ? gradientBand
       : null;
     const banded = validBand
       ? baseGroups.filter((g: any) => gradientBandOf(g) === validBand)
       : baseGroups;
-    const afterSino = filterGroupsBySinoForeign(banded, sinoForeign);
-    const afterRank = filterGroupsByRankWindow(afterSino, rankWindow ?? null);
+    const afterSino = onlyAdded ? banded : filterGroupsBySinoForeign(banded, sinoForeign);
+    const afterRank = onlyAdded ? afterSino : filterGroupsByRankWindow(afterSino, rankWindow ?? null);
     // 非意向地区(整所院校都不在学生意向省/市): 默认折叠隐藏, "显示非意向地区"开关展开。
     // 同档位过滤一样在分页层做(切开关不重算池)。count 取当前其他过滤后的口径, 驱动开关 (N)。
+    // onlyAdded 时强制展开(已填报的非意向地区组也要露出)。
     const regionMismatchCount = afterRank.filter((g: any) => g?.regionMismatch).length;
-    const pool = includeRegionMismatch ? afterRank : afterRank.filter((g: any) => !g?.regionMismatch);
+    const pool = (includeRegionMismatch || onlyAdded) ? afterRank : afterRank.filter((g: any) => !g?.regionMismatch);
     const start = (page - 1) * pageSize;
     // tierCounts 驱动冲/稳/保/无史线 chip 计数, 保持(招生类型收窄后)全池口径,
     // 折叠态(includeRegionMismatch=false)下扣掉被隐藏的非意向地区组, 否则 chip 数 > 列表 total。
-    const tierCounts = includeRegionMismatch
+    const tierCounts = (includeRegionMismatch || onlyAdded)
       ? countTiers(baseGroups)
       : countTiers(baseGroups.filter((g: any) => !g?.regionMismatch));
     return {
@@ -738,28 +744,35 @@ export class PlanCandidateService {
     rankWindow?: RankWindow | null,
   ) {
     const ctx = this.buildRollupContext(student);
+    // onlyAdded(仅显示填报): 池已只剩已填报组, 全部跳过收窄(招生类型/性质/省/中外/分数窗), 把全部已填报院校露出。
+    const onlyAdded = q.onlyAdded === true || q.onlyAdded === 'true';
     // UNIVERSITY 视图与 GROUP 视图同口径 7 项 chip 筛选: 先在 group 层 chain 完所有
     // 专业模式 chip (recruitType / nature 5项 / tags / backgrounds / 省 / 市 / isNewItem),
     // 再上卷成院校. 历史只接 public|private 的 if 块已被 filterGroupsByNature (5 项识别) 取代.
-    let filteredGroups = filterGroupsByRecruitType(value.groups, q.recruitType);
-    filteredGroups = filterGroupsByNature(filteredGroups, q.nature);
-    filteredGroups = filterGroupsByTags(filteredGroups, q.tags);
-    filteredGroups = filterGroupsByBackgrounds(filteredGroups, q.backgrounds);
-    filteredGroups = filterGroupsByUniversityProvinces(filteredGroups, q.universityProvinces);
-    filteredGroups = filterGroupsByUniversityCities(filteredGroups, q.universityCities);
-    filteredGroups = filterGroupsByIsNewItem(filteredGroups, q.isNewItem);
+    let filteredGroups = value.groups;
+    if (!onlyAdded) {
+      filteredGroups = filterGroupsByRecruitType(filteredGroups, q.recruitType);
+      filteredGroups = filterGroupsByNature(filteredGroups, q.nature);
+      filteredGroups = filterGroupsByTags(filteredGroups, q.tags);
+      filteredGroups = filterGroupsByBackgrounds(filteredGroups, q.backgrounds);
+      filteredGroups = filterGroupsByUniversityProvinces(filteredGroups, q.universityProvinces);
+      filteredGroups = filterGroupsByUniversityCities(filteredGroups, q.universityCities);
+      filteredGroups = filterGroupsByIsNewItem(filteredGroups, q.isNewItem);
+    }
     let universities = rollupByUniversity(filteredGroups, ctx);
-    // 中外合作过滤 (校内任一组含中外), 在排序+分页前
-    universities = filterUniversitiesBySinoForeign(universities, q.sinoForeign);
-    // 分数条过滤 (校内任一组命中位次窗口), 在排序+分页前
-    universities = filterUniversitiesByRankWindow(universities, rankWindow ?? null);
+    if (!onlyAdded) {
+      // 中外合作过滤 (校内任一组含中外), 在排序+分页前
+      universities = filterUniversitiesBySinoForeign(universities, q.sinoForeign);
+      // 分数条过滤 (校内任一组命中位次窗口), 在排序+分页前
+      universities = filterUniversitiesByRankWindow(universities, rankWindow ?? null);
+    }
     // 非意向地区折叠: 整所院校省市都不在学生意向地区时默认折叠隐藏 (院校卡=一所院校, 此处比组视角更自然),
     // includeRegionMismatch=true 才展开。regionMismatch 是院校级属性 (同校所有组一致), 取任一组即可。
     // 与 GROUP 视图同口径: count 在其他过滤之后取, 驱动前端"显示非意向地区 (N)"开关。
     const isRegionMismatchUni = (u: any) =>
       Array.isArray(u.groups) && u.groups.some((g: any) => g?.regionMismatch);
     const regionMismatchCount = universities.filter(isRegionMismatchUni).length;
-    if (q.includeRegionMismatch !== true) {
+    if (q.includeRegionMismatch !== true && !onlyAdded) {
       universities = universities.filter((u) => !isRegionMismatchUni(u));
     }
     sortCandidateUniversities(universities, q.sort ?? 'UNIVERSITY_OVERALL', value.studentRankUsed);
@@ -1561,8 +1574,9 @@ export class PlanCandidateService {
     // 已加入当前 plan 的 group 简易 key (universityId|groupCode) 集合, 默认隐藏
     // 同一 plan 下 batch/recruitType/subjects 都相同, 不需要完整 5 元组
     const excludeAdded = q.excludeAdded !== false;
+    const onlyAdded = q.onlyAdded === true || q.onlyAdded === 'true';
     const addedGroupKeys = new Set<string>();
-    if (excludeAdded && Array.isArray((plan as any).planItems)) {
+    if ((excludeAdded || onlyAdded) && Array.isArray((plan as any).planItems)) {
       for (const item of (plan as any).planItems) {
         if (!item) continue;
         addedGroupKeys.add(`${item.universityId}|${item.groupCode ?? ''}`);
@@ -1601,7 +1615,7 @@ export class PlanCandidateService {
       if (q.groupBy === 'UNIVERSITY') {
         return this.paginateAsUniversities(cached, q, student, page, pageSize, rankWindow);
       }
-      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType, pickMajorMode(q));
+      return this.paginateCandidateGroups(cached, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType, pickMajorMode(q), q.onlyAdded === true || q.onlyAdded === 'true');
     }
 
     // 拆分搜索: 院校 / 专业各自独立; 同时填则 AND 组合 (院校的特定专业)
@@ -1690,7 +1704,7 @@ export class PlanCandidateService {
           predictedScoreRange: null,
         };
         this.setCandidateGroupCache(cacheKey, emptyResult);
-        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType, pickMajorMode(q));
+        return this.paginateCandidateGroups(emptyResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType, pickMajorMode(q), q.onlyAdded === true || q.onlyAdded === 'true');
       }
       (where as any).OR = matchedGroups.map((g) => ({
         universityId: g.universityId,
@@ -1941,11 +1955,12 @@ export class PlanCandidateService {
       // tier 过滤: 整个 group 至少含该梯队任一专业, 否则整组隐藏
       const hitsTier = tierMajors.length > 0 && rows.some((ep: any) => tierMajors.includes(ep.majorName));
       if (tierMajors.length > 0 && !hitsTier) return null;
-      // excludeAdded 过滤: 已加入当前 plan 的组隐藏 (用简易 key universityId|groupCode)
-      if (excludeAdded) {
+      // 已加入当前 plan 的组: onlyAdded → 只留已填报(其余隐藏); 否则 excludeAdded → 隐藏已填报。
+      if (onlyAdded || excludeAdded) {
         const first = rows[0];
         const simpleKey = `${first.universityId}|${first.groupCode ?? ''}`;
-        if (addedGroupKeys.has(simpleKey)) return null;
+        const isAdded = addedGroupKeys.has(simpleKey);
+        if (onlyAdded ? !isAdded : isAdded) return null;
       }
 
       const groupRecords = [
@@ -2456,10 +2471,11 @@ export class PlanCandidateService {
     const availableTiers = tiersStructure.map((t) => {
       let count = 0;
       for (const [, rows] of groups.entries()) {
-        if (excludeAdded) {
+        if (onlyAdded || excludeAdded) {
           const first = rows[0] as any;
           const simpleKey = `${first.universityId}|${first.groupCode ?? ''}`;
-          if (addedGroupKeys.has(simpleKey)) continue;
+          const isAdded = addedGroupKeys.has(simpleKey);
+          if (onlyAdded ? !isAdded : isAdded) continue;
         }
         if (rows.some((ep: any) => t.majors.includes(ep.majorName))) count++;
       }
@@ -2492,7 +2508,7 @@ export class PlanCandidateService {
     if (q.groupBy === 'UNIVERSITY') {
       return this.paginateAsUniversities(fullResult, q, student, page, pageSize, rankWindow);
     }
-    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType, pickMajorMode(q));
+    return this.paginateCandidateGroups(fullResult, page, pageSize, q.gradientBand, q.sinoForeign, rankWindow, q.includeRegionMismatch === true, q.recruitType, pickMajorMode(q), q.onlyAdded === true || q.onlyAdded === 'true');
   }
 
   // 家长版 A3 数据表数据源: 复用 getCandidateGroups 富化 plan 各组, 缺组用快照兜底。

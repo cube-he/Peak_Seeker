@@ -1016,6 +1016,8 @@ export default function GeneratePlanPage() {
   const [excludeAdded, setExcludeAdded] = useState<boolean>(
     searchParams.get('excludeAdded') !== 'false',
   );
+  // 仅显示已加入当前 plan 的院校组(复盘已填报); 默认 false。开启后后端只留已填报组并跳过收窄过滤。
+  const [onlyShowAdded, setOnlyShowAdded] = useState<boolean>(false);
   // 客观纯净度过滤. 空数组 = 全部; 多选 (#4)
   const [purityFilter, setPurityFilter] = useState<string[]>([]);
   const togglePurity = (lv: string) =>
@@ -1155,7 +1157,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordPlanNotes, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, purityFilter.join(','), natureFilter, sinoForeignFilter, keywordUniversity ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null), recruitTypeFilter.join(','), tagsFilter.join(','), backgroundsFilter.join(','), provincesFilter.join(','), citiesFilter.join(','), newItemFilter],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordPlanNotes, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, onlyShowAdded, purityFilter.join(','), natureFilter, sinoForeignFilter, keywordUniversity ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null), recruitTypeFilter.join(','), tagsFilter.join(','), backgroundsFilter.join(','), provincesFilter.join(','), citiesFilter.join(','), newItemFilter],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1176,6 +1178,7 @@ export default function GeneratePlanPage() {
       sortDir: viewMode === 'UNIVERSITY' ? undefined : candidateSortDir,
       tier: effectiveTier,
       excludeAdded,
+      onlyAdded: onlyShowAdded,
       purity: purityFilter,
       groupBy: viewMode === 'UNIVERSITY' ? 'UNIVERSITY' : undefined,
       // 办学性质: 2026-06-25 起两视图共用 (后端 GROUP 视图分页层也已接入)
@@ -1389,7 +1392,7 @@ export default function GeneratePlanPage() {
   useEffect(() => {
     setCandidatePage(1);
     setExpandedGroupKeys([]);
-  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordPlanNotes, gradientFilter, includeSoftFails, includeRegionMismatch, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, natureFilter, tagsFilter, backgroundsFilter, provincesFilter, citiesFilter, newItemFilter]);
+  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordPlanNotes, gradientFilter, includeSoftFails, includeRegionMismatch, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, onlyShowAdded, natureFilter, tagsFilter, backgroundsFilter, provincesFilter, citiesFilter, newItemFilter]);
 
   // 视图模式默认跟随 plan/student.priorityMode (仅在无 ?view= URL 参数时, 自动定一次)
   useEffect(() => {
@@ -2392,10 +2395,10 @@ export default function GeneratePlanPage() {
                 <label className="pgv3-check">
                   <input
                     type="checkbox"
-                    checked={!excludeAdded}
-                    onChange={(event) => setExcludeAdded(!event.target.checked)}
+                    checked={onlyShowAdded}
+                    onChange={(event) => { setOnlyShowAdded(event.target.checked); setCandidatePage(1); }}
                   />
-                  显示已填报院校专业组
+                  仅显示填报的院校专业组
                 </label>
                 </div>
               </div>
