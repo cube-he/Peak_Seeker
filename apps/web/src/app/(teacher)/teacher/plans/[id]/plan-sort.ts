@@ -97,3 +97,46 @@ export function sortPlanItems(items: SortableItem[], rules: SortRule[], ctx: Sor
   });
   return decorated.map((d) => d.item);
 }
+
+// 写回志愿顺位: 投档铁律强制 冲→稳→保 分块, 块内套用段内多级排序, 返回扁平 itemId 顺序。
+// 喂给现有 reorderItems(planId, itemIds) 即可(后端两阶段提交避让唯一约束)。
+const TIER_ORDER: string[] = ['CHONG', 'WEN', 'BAO'];
+
+export function buildAppliedOrder(items: SortableItem[], rules: SortRule[], ctx: SortContext): number[] {
+  const buckets: Record<string, SortableItem[]> = { CHONG: [], WEN: [], BAO: [] };
+  for (const it of items) {
+    (buckets[it.gradient] ?? buckets.CHONG).push(it); // 未知梯度兜底进冲块
+  }
+  const ordered = TIER_ORDER.flatMap((g) => sortPlanItems(buckets[g], rules, ctx));
+  return ordered.map((it) => it.id);
+}
+
+// 排序键下拉选项: label + 默认方向 + 双向标签(切键时方向重置为 defaultDir)
+export const SORT_KEY_OPTIONS: Array<{
+  key: SortKey; label: string; defaultDir: SortDir; dir: { asc: string; desc: string };
+}> = [
+  { key: 'SCHOOL_NATURE',   label: '办学性质',       defaultDir: 'asc',  dir: { asc: '公办优先', desc: '中外优先' } },
+  { key: 'PROVINCE_INOUT',  label: '川内川外',       defaultDir: 'asc',  dir: { asc: '川内优先', desc: '川外优先' } },
+  { key: 'GROUP_MIN_SCORE', label: '专业组最低分',   defaultDir: 'desc', dir: { asc: '分低', desc: '分高' } },
+  { key: 'GROUP_MIN_RANK',  label: '专业组最低位次', defaultDir: 'asc',  dir: { asc: '位次靠前', desc: '位次靠后' } },
+  { key: 'PLAN_COUNT',      label: '招生计划数',     defaultDir: 'desc', dir: { asc: '计划少', desc: '计划多' } },
+  { key: 'UNIVERSITY_RANK', label: '院校排名',       defaultDir: 'asc',  dir: { asc: '排名高', desc: '排名低' } },
+  { key: 'TUITION',         label: '学费',           defaultDir: 'asc',  dir: { asc: '学费低', desc: '学费高' } },
+  { key: 'TAGS',            label: '985/211/双一流',  defaultDir: 'asc',  dir: { asc: '有标签优先', desc: '无标签优先' } },
+  { key: 'RANK_DIFF',       label: '相对位次差',     defaultDir: 'desc', dir: { asc: '偏冲', desc: '偏稳' } },
+];
+
+export const SORT_KEY_LABEL: Record<SortKey, string> = Object.fromEntries(
+  SORT_KEY_OPTIONS.map((o) => [o.key, o.label]),
+) as Record<SortKey, string>;
+
+export function defaultDirOf(key: SortKey): SortDir {
+  return SORT_KEY_OPTIONS.find((o) => o.key === key)?.defaultDir ?? 'desc';
+}
+
+// 快捷预设: 一键填入常用规则栈
+export const SORT_PRESETS: Array<{ label: string; rules: SortRule[] }> = [
+  { label: '公办优先', rules: [{ key: 'SCHOOL_NATURE', dir: 'asc' }] },
+  { label: '川内优先', rules: [{ key: 'PROVINCE_INOUT', dir: 'asc' }] },
+  { label: '分数线高→低', rules: [{ key: 'GROUP_MIN_SCORE', dir: 'desc' }] },
+];

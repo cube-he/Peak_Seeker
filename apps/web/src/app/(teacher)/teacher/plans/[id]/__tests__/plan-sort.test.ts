@@ -57,3 +57,24 @@ describe('sortPlanItems', () => {
     expect(sortPlanItems(items, [{ key: 'RANK_DIFF', dir: 'desc' }], ctx).map((i) => i.id)).toEqual([2, 1]);
   });
 });
+
+import { buildAppliedOrder } from '../plan-sort';
+
+describe('buildAppliedOrder', () => {
+  it('强制冲→稳→保 分块, 块内按规则排, 返回 itemId 顺序', () => {
+    const items = [
+      mk({ id: 1, gradient: 'BAO', score25Group: 500 }),
+      mk({ id: 2, gradient: 'CHONG', score25Group: 680 }),
+      mk({ id: 3, gradient: 'CHONG', score25Group: 700 }),
+      mk({ id: 4, gradient: 'WEN', score25Group: 600 }),
+    ];
+    const rules: SortRule[] = [{ key: 'GROUP_MIN_SCORE', dir: 'desc' }];
+    // 冲块(3:700, 2:680) → 稳块(4) → 保块(1)
+    expect(buildAppliedOrder(items, rules, ctx)).toEqual([3, 2, 4, 1]);
+  });
+
+  it('未知梯度归入冲块兜底', () => {
+    const items = [mk({ id: 1, gradient: 'WEN' }), mk({ id: 2, gradient: 'X' as any })];
+    expect(buildAppliedOrder(items, [], ctx)).toEqual([2, 1]); // X→冲块在前, WEN→稳块
+  });
+});
