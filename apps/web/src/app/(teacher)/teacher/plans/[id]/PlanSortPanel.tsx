@@ -10,18 +10,20 @@ import {
 export interface PlanSortPanelProps {
   rules: SortRule[];
   gradientDir: SortDir;           // 段序: asc=冲→稳→保, desc=保→稳→冲(仅预览)
+  grouped: boolean;               // 是否按梯度(冲/稳/保)分组; false=全表扁平排序(人工可选)
   preview: boolean;
   canApply: boolean;              // 仅 DRAFT 可写回
   onRulesChange: (rules: SortRule[]) => void;
   onGradientDirChange: (dir: SortDir) => void;
+  onGroupedChange: (grouped: boolean) => void;
   onPreview: () => void;
   onRestore: () => void;
   onApply: () => void;
 }
 
 export default function PlanSortPanel({
-  rules, gradientDir, preview, canApply,
-  onRulesChange, onGradientDirChange, onPreview, onRestore, onApply,
+  rules, gradientDir, grouped, preview, canApply,
+  onRulesChange, onGradientDirChange, onGroupedChange, onPreview, onRestore, onApply,
 }: PlanSortPanelProps) {
   const usedKeys = new Set(rules.map((r) => r.key));
   const firstUnused = SORT_KEY_OPTIONS.find((o) => !usedKeys.has(o.key));
@@ -49,24 +51,40 @@ export default function PlanSortPanel({
         ))}
       </div>
 
-      {/* 梯度固定第一级(分组层) */}
+      {/* 梯度分组层: 人工可选(分组/不分组)。不分组=全表扁平, 排序对整张表生效、可跨段拖拽/填序号 */}
       <div style={ruleRowStyle}>
-        <span style={{ flex: 1, fontWeight: 600 }}>① 梯度（分组）</span>
-        <div style={dirGroupStyle} role="group" aria-label="段序方向">
-          {([['asc', '冲→保'], ['desc', '保→冲']] as const).map(([d, txt]) => (
-            <button key={d} type="button" onClick={() => onGradientDirChange(d)} style={dirBtnStyle(gradientDir === d)}>
+        <span style={{ flex: 1, fontWeight: 600, color: grouped ? undefined : '#bfbfbf' }}>
+          {grouped ? '①' : '·'} 梯度（分组）
+        </span>
+        <div style={dirGroupStyle} role="group" aria-label="是否按梯度分组">
+          {([[true, '分组'], [false, '不分组']] as const).map(([v, txt]) => (
+            <button key={txt} type="button" onClick={() => onGroupedChange(v)} style={dirBtnStyle(grouped === v)}>
               {txt}
             </button>
           ))}
         </div>
+        {grouped ? (
+          <div style={dirGroupStyle} role="group" aria-label="段序方向">
+            {([['asc', '冲→保'], ['desc', '保→冲']] as const).map(([d, txt]) => (
+              <button key={d} type="button" onClick={() => onGradientDirChange(d)} style={dirBtnStyle(gradientDir === d)}>
+                {txt}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
+      {!grouped ? (
+        <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: -4 }}>
+          不分组：排序对全表生效，可跨"冲/稳/保"拖拽或填序号自由调整
+        </div>
+      ) : null}
 
       {/* 段内排序栈 */}
       {rules.map((rule, idx) => {
         const opt = SORT_KEY_OPTIONS.find((o) => o.key === rule.key);
         return (
           <div key={idx} style={ruleRowStyle}>
-            <span style={{ width: 18, color: '#8c8c8c' }}>{idx + 2}</span>
+            <span style={{ width: 18, color: '#8c8c8c' }}>{grouped ? idx + 2 : idx + 1}</span>
             <select
               value={rule.key}
               onChange={(e) => setRuleKey(idx, e.target.value as SortKey)}

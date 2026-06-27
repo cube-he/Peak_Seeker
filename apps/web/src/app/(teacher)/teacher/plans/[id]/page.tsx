@@ -17,7 +17,6 @@ import {
   Select,
   Space,
   Spin,
-  Switch,
   Tag,
   message,
 } from 'antd';
@@ -1028,10 +1027,12 @@ export default function PlanDetailPage() {
               <PlanSortPanel
                 rules={sortRules}
                 gradientDir={gradientDir}
+                grouped={!freeSortMode}
                 preview={sortPreview}
                 canApply={status === 'DRAFT'}
                 onRulesChange={(r) => { setSortRules(r); if (r.length) setSortPreview(true); }}
                 onGradientDirChange={setGradientDir}
+                onGroupedChange={(g) => setFreeSortMode(!g)}
                 onPreview={() => setSortPreview(true)}
                 onRestore={() => setSortPreview(false)}
                 onApply={applySortOrder}
@@ -1042,14 +1043,6 @@ export default function PlanDetailPage() {
               排序
             </Button>
           </Popover>
-          {status === 'DRAFT' ? (
-            <span style={{ marginLeft: 10, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <Switch size="small" checked={freeSortMode} onChange={setFreeSortMode} disabled={sortPreview} />
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }} title="开启后志愿表不分冲/稳/保, 排序对全表生效, 可拖拽或填序号自由调整顺序">
-                自由排序
-              </span>
-            </span>
-          ) : null}
           {status === 'DRAFT' && localItems.length > 0 ? (
             <Popconfirm
               title="清空全部志愿"
