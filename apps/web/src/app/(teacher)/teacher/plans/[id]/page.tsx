@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -23,6 +23,7 @@ import {
 import {
   ArrowRightOutlined,
   CheckCircleOutlined,
+  CopyOutlined,
   DeleteOutlined,
   DownOutlined,
   EditOutlined,
@@ -480,19 +481,46 @@ export default function PlanDetailPage() {
     onError: (error: any) => message.error(error?.response?.data?.message ?? '撤回失败'),
   });
 
+  // 派生备注用 ref 存(Modal.confirm 的 onOk 闭包读 ref.current,避开 state 闭包过期)
+  const deriveNoteRef = useRef('');
+
   const deriveMutation = useMutation({
-    mutationFn: () => planApi.deriveVersion(planId),
+    mutationFn: (note?: string) => planApi.deriveVersion(planId, note),
     onSuccess: (data: any) => {
-      void message.success('已派生新版本,可继续修改');
+      void message.success('已另存为新一版,初稿已锁为只读,继续在工作台修改');
       const newId = data?.id;
       if (newId) {
-        router.push(`/teacher/plans/${newId}`);
+        // 跳生成工作台改二稿(增删院校都在那里)
+        router.push(`/teacher/plans/generate/${plan.studentId}?planId=${newId}`);
       } else {
         refresh();
       }
     },
-    onError: (error: any) => message.error(error?.response?.data?.message ?? '派生新版本失败'),
+    onError: (error: any) => message.error(error?.response?.data?.message ?? '另存新版本失败'),
   });
+
+  // 弹备注框 → 派生二稿
+  const openDeriveModal = () => {
+    deriveNoteRef.current = '';
+    Modal.confirm({
+      title: '另存为二稿',
+      content: (
+        <div>
+          <p style={{ marginBottom: 8 }}>会保留当前为只读初稿,复制一份可编辑的新版本继续修改。</p>
+          <Input.TextArea
+            rows={3}
+            maxLength={500}
+            showCount
+            placeholder="版本备注(可留空),如:二稿—按学生意见删某校、加某校"
+            onChange={(e) => { deriveNoteRef.current = e.target.value; }}
+          />
+        </div>
+      ),
+      okText: '另存为二稿',
+      cancelText: '取消',
+      onOk: () => deriveMutation.mutate(deriveNoteRef.current || undefined),
+    });
+  };
 
   const exportMutation = useMutation({
     mutationFn: () => planApi.exportExcel(planId),
@@ -708,6 +736,13 @@ export default function PlanDetailPage() {
               继续编辑
             </Button>
             <Button
+              icon={<CopyOutlined />}
+              loading={deriveMutation.isPending}
+              onClick={openDeriveModal}
+            >
+              另存为二稿
+            </Button>
+            <Button
               type="primary"
               icon={<SendOutlined />}
               disabled={!items.length}
@@ -793,7 +828,7 @@ export default function PlanDetailPage() {
               type="primary"
               icon={<EditOutlined />}
               loading={deriveMutation.isPending}
-              onClick={() => deriveMutation.mutate()}
+              onClick={() => deriveMutation.mutate(undefined)}
             >
               派生新版本修改
             </Button>
@@ -900,6 +935,26 @@ export default function PlanDetailPage() {
       ) : null}
       {status === 'FINALIZED' ? (
         <Alert type="success" showIcon message="方案已定稿，后续修改请派生新版本。" />
+      ) : null}
+      {status === 'OUTDATED' ? (
+        (() => {
+          // 取代它的版本 = versions 里 parentVersionId 指向当前方案的那条
+          const newer = versions.find((v) => v.parentVersionId === Number(planId));
+          return (
+            <Alert
+              type="warning"
+              showIcon
+              message="此版本已被新一版取代 · 只读"
+              description={
+                newer ? (
+                  <Link href={`/teacher/plans/${newer.id}`}>
+                    打开 v{newer.versionNo} 继续编辑 →
+                  </Link>
+                ) : '此版本不可再编辑。'
+              }
+            />
+          );
+        })()
       ) : null}
 
       {/* —— 版本对比工具栏 (设计稿 pd2-compare-bar; antd Select 保留对比逻辑) —— */}

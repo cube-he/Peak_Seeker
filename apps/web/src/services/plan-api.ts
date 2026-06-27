@@ -233,10 +233,11 @@ export const planApi = {
 
   /**
    * 派生新版本(拷贝 PlanItem,状态回 DRAFT)。
-   * REJECTED 方案不可编辑也不可重交,这是唯一的继续通道。
+   * DRAFT 初稿派生 = 另存为二稿(初稿自动置 OUTDATED 只读); REJECTED 同理继续通道。
+   * versionNote: 可选版本备注(如"二稿—删A加B")。
    */
-  deriveVersion(id: string | number): Promise<any> {
-    return api.post(`/plans/${id}/derive-version`) as any;
+  deriveVersion(id: string | number, versionNote?: string): Promise<any> {
+    return api.post(`/plans/${id}/derive-version`, versionNote ? { versionNote } : undefined) as any;
   },
 
   startReview(id: string): Promise<any> {

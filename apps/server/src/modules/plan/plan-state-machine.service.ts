@@ -48,7 +48,13 @@ export class PlanStateMachineService {
   }
 
   canDeriveVersion(from: PlanStatus): boolean {
-    return from === 'APPROVED' || from === 'PARENT_CONFIRMED' || from === 'REJECTED' || from === 'FINALIZED';
+    return (
+      from === 'DRAFT' ||
+      from === 'APPROVED' ||
+      from === 'PARENT_CONFIRMED' ||
+      from === 'REJECTED' ||
+      from === 'FINALIZED'
+    );
   }
 
   canEditItems(from: PlanStatus): boolean {

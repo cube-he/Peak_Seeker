@@ -353,7 +353,7 @@ describe('PlanService review notifications', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
       },
-      planItem: { count: jest.fn(), findMany: jest.fn() },
+      planItem: { count: jest.fn(), findMany: jest.fn(), createMany: jest.fn() },
       planReview: { create: jest.fn() },
       planReviewDraft: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       $transaction: jest.fn((cb: any) => cb(prisma)),
@@ -430,5 +430,39 @@ describe('PlanService review notifications', () => {
     await service.submitReview(7, 20);
     expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 40, type: 'plan_submitted' }));
     expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 41, type: 'plan_submitted' }));
+  });
+
+  it('deriveVersion: 从 DRAFT 初稿派生二稿并把初稿置 OUTDATED', async () => {
+    jest.spyOn(service, 'findById').mockResolvedValue({
+      id: 1, status: 'DRAFT', createdById: 20, studentId: 10, batchConfigId: 22,
+      versionNo: 1, name: '小王-本科批-v1', year: 2026, province: '四川',
+      batchName: '本科批', notes: null,
+    } as any);
+    prisma.planItem.findMany.mockResolvedValue([]);
+    prisma.volunteerPlan.findFirst.mockResolvedValue({ versionNo: 1 });
+    prisma.volunteerPlan.create.mockResolvedValue({ id: 99, versionNo: 2, status: 'DRAFT' });
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 1, status: 'OUTDATED' });
+
+    const result = await service.deriveVersion(1, 20, '二稿—删A加B');
+
+    expect(prisma.volunteerPlan.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          studentId: 10, parentVersionId: 1, versionNo: 2,
+          status: 'DRAFT', versionNote: '二稿—删A加B', batchConfigId: 22,
+        }),
+      }),
+    );
+    expect(prisma.volunteerPlan.update).toHaveBeenCalledWith({
+      where: { id: 1 }, data: { status: 'OUTDATED' },
+    });
+    expect(result).toEqual({ id: 99, versionNo: 2, status: 'DRAFT' });
+  });
+
+  it('deriveVersion: 非出方案老师派生报 403', async () => {
+    jest.spyOn(service, 'findById').mockResolvedValue({
+      id: 1, status: 'DRAFT', createdById: 20, studentId: 10, name: 'X', versionNo: 1,
+    } as any);
+    await expect(service.deriveVersion(1, 999)).rejects.toThrow('只有出方案老师可以派生新版本');
   });
 });

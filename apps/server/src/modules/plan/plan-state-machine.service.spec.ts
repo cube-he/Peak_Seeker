@@ -87,12 +87,12 @@ describe('PlanStateMachineService', () => {
       .toThrow(/不允许/);
   });
 
-  it('canDeriveVersion: APPROVED/PARENT_CONFIRMED/REJECTED/FINALIZED 可派生，DRAFT/PENDING_REVIEW/REVIEWING 不可', () => {
+  it('canDeriveVersion: DRAFT/APPROVED/PARENT_CONFIRMED/REJECTED/FINALIZED 可派生，PENDING_REVIEW/REVIEWING 不可', () => {
+    expect(sm.canDeriveVersion('DRAFT')).toBe(true);
     expect(sm.canDeriveVersion('APPROVED')).toBe(true);
     expect(sm.canDeriveVersion('PARENT_CONFIRMED')).toBe(true);
     expect(sm.canDeriveVersion('REJECTED')).toBe(true);
     expect(sm.canDeriveVersion('FINALIZED')).toBe(true);
-    expect(sm.canDeriveVersion('DRAFT')).toBe(false);
     expect(sm.canDeriveVersion('PENDING_REVIEW')).toBe(false);
     expect(sm.canDeriveVersion('REVIEWING')).toBe(false);
   });
