@@ -111,6 +111,12 @@ export function buildAppliedOrder(items: SortableItem[], rules: SortRule[], ctx:
   return ordered.map((it) => it.id);
 }
 
+// 段序翻转(desc)仅在预览态生效: spec 规定翻转只为"看", 写回/恢复后渲染必须回到固定的 冲→稳→保。
+// 不门控 preview 会导致: 切倒序后恢复手动顺序或应用写回, 表格仍倒序渲染, 与合法顺位矛盾(误导老师)。
+export function resolveTierRenderOrder<T>(tiers: T[], preview: boolean, gradientDir: SortDir): T[] {
+  return preview && gradientDir === 'desc' ? [...tiers].reverse() : tiers;
+}
+
 // 排序键下拉选项: label + 默认方向 + 双向标签(切键时方向重置为 defaultDir)
 export const SORT_KEY_OPTIONS: Array<{
   key: SortKey; label: string; defaultDir: SortDir; dir: { asc: string; desc: string };

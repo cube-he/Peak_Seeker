@@ -58,7 +58,33 @@ describe('sortPlanItems', () => {
   });
 });
 
-import { buildAppliedOrder } from '../plan-sort';
+import { buildAppliedOrder, resolveTierRenderOrder } from '../plan-sort';
+
+describe('resolveTierRenderOrder', () => {
+  const tiers = ['rush', 'stable', 'safe'];
+
+  it('段序翻转仅在预览态生效: 预览 + desc → 反转', () => {
+    expect(resolveTierRenderOrder(tiers, true, 'desc')).toEqual(['safe', 'stable', 'rush']);
+  });
+
+  it('预览 + asc → 原序', () => {
+    expect(resolveTierRenderOrder(tiers, true, 'asc')).toEqual(['rush', 'stable', 'safe']);
+  });
+
+  it('非预览态即使 desc 也不反转(防恢复/应用后段序倒置)', () => {
+    expect(resolveTierRenderOrder(tiers, false, 'desc')).toEqual(['rush', 'stable', 'safe']);
+  });
+
+  it('非预览态 asc → 原序', () => {
+    expect(resolveTierRenderOrder(tiers, false, 'asc')).toEqual(['rush', 'stable', 'safe']);
+  });
+
+  it('不修改入参数组', () => {
+    const input = ['rush', 'stable', 'safe'];
+    resolveTierRenderOrder(input, true, 'desc');
+    expect(input).toEqual(['rush', 'stable', 'safe']);
+  });
+});
 
 describe('buildAppliedOrder', () => {
   it('强制冲→稳→保 分块, 块内按规则排, 返回 itemId 顺序', () => {

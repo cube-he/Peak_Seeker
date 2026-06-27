@@ -47,6 +47,7 @@ import PlanSortPanel from './PlanSortPanel';
 import {
   sortPlanItems,
   buildAppliedOrder,
+  resolveTierRenderOrder,
   type SortRule,
   type SortDir,
   type SortableItem,
@@ -604,8 +605,9 @@ export default function PlanDetailPage() {
     setSortPanelOpen(false);
   };
 
-  // 预览态下: TIER_META 渲染顺序按段序方向, 段内按规则排
-  const tierMetaOrdered = gradientDir === 'desc' ? [...TIER_META].reverse() : TIER_META;
+  // 预览态下: TIER_META 渲染顺序按段序方向, 段内按规则排。
+  // 段序翻转仅预览态生效(spec): 否则恢复/应用后表格仍倒序, 与合法顺位视觉矛盾。
+  const tierMetaOrdered = resolveTierRenderOrder(TIER_META, sortPreview, gradientDir);
 
   if (isLoading) {
     return (
