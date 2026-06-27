@@ -600,7 +600,7 @@ export class PlanService {
     });
   }
 
-  async deriveVersion(planId: number, userId: number) {
+  async deriveVersion(planId: number, userId: number, versionNote?: string) {
     const parent = await this.findById(planId, userId);
     if (parent.createdById !== userId) {
       throw new ForbiddenException('只有出方案老师可以派生新版本');
@@ -614,20 +614,31 @@ export class PlanService {
     });
 
     return this.prisma.$transaction(async (tx) => {
+      // 下一版本号 = 同学生同批次现有最大版本号 + 1。
+      // 防重复派生撞 @@unique([studentId, batchConfigId, versionNo])：
+      // canDeriveVersion 含 FINALIZED，从同一已定稿版本派生两次会撞旧的 parent.versionNo+1。
+      const latest = await tx.volunteerPlan.findFirst({
+        where: { studentId: parent.studentId, batchConfigId: parent.batchConfigId },
+        orderBy: { versionNo: 'desc' },
+        select: { versionNo: true },
+      });
+      const nextVersionNo = (latest?.versionNo ?? parent.versionNo) + 1;
+
       const baseName = parent.name?.replace(/-(初版|v\d+)$/, '') ?? parent.name;
       const newPlan = await tx.volunteerPlan.create({
         data: {
           studentId: parent.studentId,
           createdById: userId,
-          name: `${baseName}-v${parent.versionNo + 1}`,
+          name: `${baseName}-v${nextVersionNo}`,
           year: parent.year,
           province: parent.province,
           batchName: parent.batchName,
           batchConfigId: parent.batchConfigId,
           recommendType: 'MANUAL',
           status: 'DRAFT',
-          versionNo: parent.versionNo + 1,
+          versionNo: nextVersionNo,
           parentVersionId: parent.id,
+          versionNote: versionNote ?? null,
           notes: parent.notes,
         },
       });
@@ -666,6 +677,14 @@ export class PlanService {
             isManuallyModified: false,
             originalItemId: it.id,
           })),
+        });
+      }
+      // 锁定初稿：仅当父版本为 DRAFT 时置 OUTDATED（自动只读，见 canEditItems）。
+      // 其它可派生态（REJECTED/FINALIZED 等）维持原行为，避免回归。
+      if (parent.status === 'DRAFT') {
+        await tx.volunteerPlan.update({
+          where: { id: parent.id },
+          data: { status: 'OUTDATED' },
         });
       }
       return newPlan;
