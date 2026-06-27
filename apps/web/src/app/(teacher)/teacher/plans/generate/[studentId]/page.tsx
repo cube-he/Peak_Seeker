@@ -930,6 +930,9 @@ export default function GeneratePlanPage() {
   const [includeRegionMismatch, setIncludeRegionMismatch] = useState(false);
   // 是否带出"硬规则不符"(选科/再选/性别/健康/户籍/民族)放各组 hardFailMajors 桶: 灰显+禁加入。默认关。
   const [includeHardFails, setIncludeHardFails] = useState(false);
+  // 是否把 way-off(够不着, 门槛比学生靠前 50%+)/all-RISK 噪音组也放出来。默认关(建池层默认丢掉过高组),
+  // "显示全部"会一并打开, 让老师看到过高/过低的组(灰显待决策)。
+  const [includeOutOfReach, setIncludeOutOfReach] = useState(false);
   // 默认按"专业最低分·分高"排(专业组从分高至分低), 而非综合推荐 (老师要求 2026-06-25)。
   const [candidateSort, setCandidateSort] = useState<CandidateGroupSort>('MAJOR_MIN_SCORE');
   // 排序方向 (GROUP 视图): DESC=轴默认(分高在前), ASC=翻转; 切轴时重置回 DESC
@@ -1157,7 +1160,7 @@ export default function GeneratePlanPage() {
   const planItems = getPlanItemsForWorkbench(plan);
 
   const { data: groupData, isFetching: groupLoading } = useQuery({
-    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordPlanNotes, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, onlyShowAdded, purityFilter.join(','), natureFilter, sinoForeignFilter, keywordUniversity ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null), recruitTypeFilter.join(','), tagsFilter.join(','), backgroundsFilter.join(','), provincesFilter.join(','), citiesFilter.join(','), newItemFilter],
+    queryKey: ['plan-candidate-groups', planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordPlanNotes, hasSearch ? 'all' : gradientFilter, includeSoftFails, effectiveIncludeRegion, includeHardFails, includeOutOfReach, effectiveSort, viewMode === 'UNIVERSITY' ? null : candidateSortDir, candidatePage, effectiveTier, excludeAdded, onlyShowAdded, purityFilter.join(','), natureFilter, sinoForeignFilter, keywordUniversity ? null : (scoreRange ? `${scoreRange[0]}-${scoreRange[1]}` : null), recruitTypeFilter.join(','), tagsFilter.join(','), backgroundsFilter.join(','), provincesFilter.join(','), citiesFilter.join(','), newItemFilter],
     queryFn: () => planApi.getCandidateGroups(planId!, {
       page: candidatePage,
       pageSize: effectivePageSize,
@@ -1173,6 +1176,8 @@ export default function GeneratePlanPage() {
       includeRegionMismatch: effectiveIncludeRegion,
       // 硬规则不符(资格不符)带出来放 hardFailMajors 桶(灰显+禁加入); 默认 undefined=后端走原逻辑
       includeHardFails: includeHardFails || undefined,
+      // 过高(够不着)/过低 noise 组也放出来(建池层默认丢掉, "显示全部"打开); 默认 undefined=后端走原逻辑
+      includeOutOfReach: includeOutOfReach || undefined,
       sort: effectiveSort as CandidateGroupSort,
       // 方向仅 GROUP 视图生效; 院校视图沿用其自身排序, 不传 sortDir
       sortDir: viewMode === 'UNIVERSITY' ? undefined : candidateSortDir,
@@ -2307,7 +2312,7 @@ export default function GeneratePlanPage() {
                     一键展开 = 非意向地区/学费办学不符/已隐藏/已填报 都展开 + 放开分数窗口;
                     灰显区分但都看得到 — 工具不替老师藏数据, 老师有最终决策权。 */}
                 {(() => {
-                  const isShowingAll = showHidden && includeRegionMismatch && !excludeAdded;
+                  const isShowingAll = showHidden && includeRegionMismatch && !excludeAdded && includeOutOfReach;
                   return (
                     <button
                       type="button"
@@ -2323,20 +2328,22 @@ export default function GeneratePlanPage() {
                       }}
                       title={
                         isShowingAll
-                          ? '收回到默认: 仅显示意向地区 + 隐藏已填报, 重新启用分数窗口(若之前未手动调过则保持无)。'
-                          : '一键显示所有候选: 非意向地区 / 学费办学不符 / 已隐藏 / 已填报 都展开, 并放开分数窗口。没过软规则的灰显区分, 但都看得到, 由老师自主决策。'
+                          ? '收回到默认: 仅显示意向地区 + 隐藏已填报 + 重新隐藏过高/过低组, 重新启用分数窗口(若之前未手动调过则保持无)。'
+                          : '一键显示所有候选: 非意向地区 / 学费办学不符 / 已隐藏 / 已填报 / 过高(够不着)与过低组 都展开, 并放开分数窗口。没过软规则或够不着的灰显区分, 但都看得到, 由老师自主决策。'
                       }
                       onClick={() => {
                         if (isShowingAll) {
-                          // 恢复默认: 关掉本按钮放开的 3 个开关; 分数窗保持 null(用户想用时自己拖)
+                          // 恢复默认: 关掉本按钮放开的开关; 分数窗保持 null(用户想用时自己拖)
                           setShowHidden(false);
                           setIncludeRegionMismatch(false);
                           setExcludeAdded(true);
+                          setIncludeOutOfReach(false);
                         } else {
                           setShowHidden(true);
                           setIncludeSoftFails(true);
                           setIncludeRegionMismatch(true);
                           setExcludeAdded(false);
+                          setIncludeOutOfReach(true);
                           setScoreRange(null);
                           setScoreSlider(null);
                         }

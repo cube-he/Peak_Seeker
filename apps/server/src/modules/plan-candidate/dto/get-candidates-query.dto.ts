@@ -89,6 +89,8 @@ export class GetCandidatesQueryDto {
   // 是否把"硬规则不符"(选科/再选/性别/健康/户籍/民族, 客观资格不符)带出来放各组 hardFailMajors 桶
   // (前端灰显+禁加入). 默认 false=维持原逻辑(直接剔除, 输出不变)。
   @IsOptional() @Transform(onlyExplicitTrue) @IsBoolean() includeHardFails?: boolean | string = false;
+  // 是否把 way-off(够不着, 门槛比学生靠前 50%+)/all-RISK 噪音组也放出来(灰显). 默认 false; "显示全部"置 true。
+  @IsOptional() @Transform(onlyExplicitTrue) @IsBoolean() includeOutOfReach?: boolean | string = false;
   // 分数条: 今年预估分区间过滤 (两端都给才生效). 0..750
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(750) minScore?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(750) maxScore?: number;

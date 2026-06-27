@@ -82,6 +82,8 @@ export interface CandidateGroupListParams extends CandidateListParams {
   includeRegionMismatch?: boolean;
   // 是否带出"硬规则不符"(资格不符)放各组 hardFailMajors 桶(灰显+禁加入); 默认不带
   includeHardFails?: boolean;
+  // 是否把过高(够不着)/过低 noise 组也放出来(建池层默认丢掉); "显示全部"置 true
+  includeOutOfReach?: boolean;
   minScore?: number;
   maxScore?: number;
 }
@@ -176,6 +178,7 @@ export const planApi = {
         isNewItem: params?.isNewItem,
         includeRegionMismatch: params?.includeRegionMismatch,
         includeHardFails: params?.includeHardFails,
+        includeOutOfReach: params?.includeOutOfReach ? true : undefined,
         minScore: params?.minScore,
         maxScore: params?.maxScore,
       },
