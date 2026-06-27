@@ -2288,25 +2288,51 @@ export default function GeneratePlanPage() {
                     })()}
                   </>
                 )}
-                {/* 显示全部: 一键展开所有被隐藏的候选(非意向地区/软不符/已隐藏/已填报)+ 放开分数窗口。
-                    灰显区分但都看得到 —— 工具不替老师藏数据, 老师有最终决策权。 */}
-                <button
-                  type="button"
-                  className="pgv2-toggle"
-                  style={{ fontWeight: 600, color: '#1e3a5f', border: '1px dashed #91caff', background: '#f0f7ff', borderRadius: 4, padding: '2px 10px', cursor: 'pointer' }}
-                  title="一键显示所有候选: 非意向地区 / 学费办学不符 / 已隐藏 / 已填报 都展开, 并放开分数窗口。没过软规则的灰显区分, 但都看得到, 由老师自主决策。"
-                  onClick={() => {
-                    setShowHidden(true);
-                    setIncludeSoftFails(true);
-                    setIncludeRegionMismatch(true);
-                    setExcludeAdded(false);
-                    setScoreRange(null);
-                    setScoreSlider(null);
-                    setCandidatePage(1);
-                  }}
-                >
-                  显示全部
-                </button>
+                {/* 显示全部 ↔ 恢复默认: toggle 按钮。判定"已展开"用三个开关同时处于展开态,
+                    避免老师单独打开"显示已隐藏"时按钮就误显"恢复默认"。
+                    一键展开 = 非意向地区/学费办学不符/已隐藏/已填报 都展开 + 放开分数窗口;
+                    灰显区分但都看得到 — 工具不替老师藏数据, 老师有最终决策权。 */}
+                {(() => {
+                  const isShowingAll = showHidden && includeRegionMismatch && !excludeAdded;
+                  return (
+                    <button
+                      type="button"
+                      className="pgv2-toggle"
+                      style={{
+                        fontWeight: 600,
+                        color: isShowingAll ? '#7c3a00' : '#1e3a5f',
+                        border: `1px dashed ${isShowingAll ? '#ffbb96' : '#91caff'}`,
+                        background: isShowingAll ? '#fff7e6' : '#f0f7ff',
+                        borderRadius: 4,
+                        padding: '2px 10px',
+                        cursor: 'pointer',
+                      }}
+                      title={
+                        isShowingAll
+                          ? '收回到默认: 仅显示意向地区 + 隐藏已填报, 重新启用分数窗口(若之前未手动调过则保持无)。'
+                          : '一键显示所有候选: 非意向地区 / 学费办学不符 / 已隐藏 / 已填报 都展开, 并放开分数窗口。没过软规则的灰显区分, 但都看得到, 由老师自主决策。'
+                      }
+                      onClick={() => {
+                        if (isShowingAll) {
+                          // 恢复默认: 关掉本按钮放开的 3 个开关; 分数窗保持 null(用户想用时自己拖)
+                          setShowHidden(false);
+                          setIncludeRegionMismatch(false);
+                          setExcludeAdded(true);
+                        } else {
+                          setShowHidden(true);
+                          setIncludeSoftFails(true);
+                          setIncludeRegionMismatch(true);
+                          setExcludeAdded(false);
+                          setScoreRange(null);
+                          setScoreSlider(null);
+                        }
+                        setCandidatePage(1);
+                      }}
+                    >
+                      {isShowingAll ? '恢复默认' : '显示全部'}
+                    </button>
+                  );
+                })()}
                 </div>
                 <div className="pgv3-checks">
                 <label className="pgv3-check">
