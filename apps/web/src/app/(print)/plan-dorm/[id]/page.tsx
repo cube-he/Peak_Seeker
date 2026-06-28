@@ -10,6 +10,7 @@ import DormInfoSheet from './DormInfoSheet';
 import { buildDormTitle } from './export-filename';
 import type { DormSheet } from './types';
 
+// @page 必须是全局 at-rule(CSS Module 不 scope 它), 故直接注入 <style>。
 const PRINT_CSS = `
 @page { size: A4 portrait; margin: 12mm; }
 @media print {
@@ -26,6 +27,8 @@ export default function PlanDormPrintPage() {
     enabled: !!params.id,
   });
 
+  // 设 document.title → 浏览器「另存为 PDF」默认文件名(如 王润_本科批B段_院校生活情况_20260628)。
+  // 离开页面时还原, 避免污染其它路由标题。
   useEffect(() => {
     if (!data) return;
     const prev = document.title;
