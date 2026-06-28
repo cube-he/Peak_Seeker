@@ -1253,6 +1253,12 @@ export default function PlanDetailPage() {
           >
             填报预案表（A4 竖版）
           </Button>
+          <Button
+            icon={<ExportOutlined />}
+            onClick={() => window.open(`/plan-dorm/${planId}`, '_blank', 'noopener')}
+          >
+            院校生活情况（A4）
+          </Button>
           <span className="text-xs text-text-muted">
             打开后点「打印」按钮（或 Ctrl+P）→ 目标选「另存为 PDF」，文件名已自动命名
           </span>

@@ -46,6 +46,7 @@ import {
   type PreferredMajorTier,
 } from '../../utils/preferred-majors';
 import { buildExportSheet, ExportSheet } from './plan-export-rows.builder';
+import { buildDormSheet, DORM_FIELD_KEYS } from './plan-dorm-sheet.builder';
 
 interface GetCandidatesQuery {
   page: number;
@@ -2567,6 +2568,32 @@ export class PlanCandidateService {
 
     const years = [baselineYear - 2, baselineYear - 1, baselineYear];
     return buildExportSheet({ plan, enrichedGroups, years });
+  }
+
+  async getDormSheet(planId: number, userId?: number) {
+    const plan = await this.prisma.volunteerPlan.findUnique({
+      where: { id: planId },
+      include: {
+        planItems: { orderBy: { sequence: 'asc' }, select: { sequence: true, universityId: true } },
+        student: { include: { user: true } },
+      },
+    });
+    if (!plan) throw new NotFoundException('方案不存在');
+    if (userId && plan.createdById !== userId && plan.student?.userId !== userId) {
+      throw new ForbiddenException('无权查看此方案');
+    }
+
+    const ids = Array.from(new Set(plan.planItems.map((i) => i.universityId)));
+    const select: Record<string, true> = {
+      id: true, name: true, province: true, city: true, runningLevel: true, runningNature: true,
+    };
+    for (const k of DORM_FIELD_KEYS) select[k] = true;
+
+    const universities = ids.length
+      ? await this.prisma.university.findMany({ where: { id: { in: ids } }, select: select as any })
+      : [];
+
+    return buildDormSheet({ plan: plan as any, universities: universities as any });
   }
 
   async getCandidates(planId: number, q: GetCandidatesQuery, userId?: number) {

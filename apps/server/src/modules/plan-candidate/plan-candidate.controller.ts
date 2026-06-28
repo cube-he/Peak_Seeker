@@ -34,4 +34,12 @@ export class PlanCandidateController {
   ) {
     return this.service.getExportRows(planId, req.user.id);
   }
+
+  @Get(':planId/dorm-sheet')
+  getDormSheet(
+    @Param('planId', ParseIntPipe) planId: number,
+    @Req() req: any,
+  ) {
+    return this.service.getDormSheet(planId, req.user.id);
+  }
 }

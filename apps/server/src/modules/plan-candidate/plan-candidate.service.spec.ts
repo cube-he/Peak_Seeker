@@ -2274,6 +2274,41 @@ describe('PlanCandidateService', () => {
     expect(g.groupPlanCount).toBe(461);
     expect(g.majors[0].minScoreByYear).toEqual({ 2023: 495, 2024: 498, 2025: 500 });
   });
+
+  describe('getDormSheet', () => {
+    const planRow = {
+      id: 78, batchName: '本科批', year: 2026, createdById: 21,
+      student: { userId: 68, user: { realName: '张三' } },
+      planItems: [
+        { sequence: 1, universityId: 10 },
+        { sequence: 2, universityId: 20 },
+      ],
+    };
+
+    it('越权(非创建者非学生本人)抛 Forbidden', async () => {
+      prisma.volunteerPlan.findUnique.mockResolvedValue(planRow);
+      await expect(service.getDormSheet(78, 999)).rejects.toThrow('无权查看此方案');
+    });
+
+    it('方案不存在抛 NotFound', async () => {
+      prisma.volunteerPlan.findUnique.mockResolvedValue(null);
+      await expect(service.getDormSheet(78, 21)).rejects.toThrow('方案不存在');
+    });
+
+    it('创建者可取, 按方案顺序去重返回院校生活数据', async () => {
+      prisma.volunteerPlan.findUnique.mockResolvedValue(planRow);
+      prisma.university = {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 20, name: '北京大学', province: '北京', city: '北京', runningLevel: '本科', runningNature: '公办', roomCapacity: '4' },
+          { id: 10, name: '四川大学', province: '四川', city: '成都', runningLevel: '本科', runningNature: '公办', roomCapacity: '6' },
+        ]),
+      };
+      const sheet: any = await service.getDormSheet(78, 21);
+      expect(sheet.universities.map((u: any) => u.id)).toEqual([10, 20]);
+      expect(sheet.student.name).toBe('张三');
+      expect(sheet.universities[0].dorm.roomCapacity).toBe('6');
+    });
+  });
 });
 
 describe('supplementaryMaxRoundYearSum (专业组征集人数口径)', () => {
