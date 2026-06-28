@@ -376,6 +376,36 @@ model University {
   // 多维排名补充（来自 03_历年排名）
   rankingTimes                Int?     @map("ranking_times")
 
+  // === 宿舍生活情况 (来源: 全国重点高校宿舍与设施情况汇总.xlsx, 纯展示) ===
+  multiCampus             String? @map("multi_campus") @db.Text
+  loftBed                 String? @map("loft_bed") @db.Text
+  roomCapacity            String? @map("room_capacity") @db.Text
+  dormAirConditioner      String? @map("dorm_air_conditioner") @db.Text
+  privateBathroom         String? @map("private_bathroom") @db.Text
+  hotWaterSchedule        String? @map("hot_water_schedule") @db.Text
+  washingMachine          String? @map("washing_machine") @db.Text
+  dormPowerLimit          String? @map("dorm_power_limit") @db.Text
+  classroomAirConditioner String? @map("classroom_air_conditioner") @db.Text
+  allNightStudyRoom       String? @map("all_night_study_room") @db.Text
+  nightPowerCut           String? @map("night_power_cut") @db.Text
+  nightNetworkCut         String? @map("night_network_cut") @db.Text
+  dormInspection          String? @map("dorm_inspection") @db.Text
+  curfewTime              String? @map("curfew_time") @db.Text
+  morningEveningStudy     String? @map("morning_evening_study") @db.Text
+  morningRun              String? @map("morning_run") @db.Text
+  runningCheckIn          String? @map("running_check_in") @db.Text
+  campusNetworkSpeed      String? @map("campus_network_speed") @db.Text
+  campusNetworkPrice      String? @map("campus_network_price") @db.Text
+  freshmanComputer        String? @map("freshman_computer") @db.Text
+  hasSubway               String? @map("has_subway") @db.Text
+  distanceToCity          String? @map("distance_to_city") @db.Text
+  transportConvenience    String? @map("transport_convenience") @db.Text
+  foodDelivery            String? @map("food_delivery") @db.Text
+  canteenPrice            String? @map("canteen_price") @db.Text
+  supermarketPrice        String? @map("supermarket_price") @db.Text
+  expressDelivery         String? @map("express_delivery") @db.Text
+  sharedBikes             String? @map("shared_bikes") @db.Text
+
   campuses  UniversityCampus[]
   geoIssues UniversityGeoIssue[]
 
