@@ -459,6 +459,44 @@ describe('PlanService review notifications', () => {
     expect(result).toEqual({ id: 99, versionNo: 2, status: 'DRAFT' });
   });
 
+  it('deriveVersion: 全字段拷贝 PlanItem(含 fullMajorRanking/recommendedOrder), 专业选择不丢', async () => {
+    jest.spyOn(service, 'findById').mockResolvedValue({
+      id: 1, status: 'DRAFT', createdById: 20, studentId: 10, batchConfigId: 22,
+      versionNo: 1, name: 'X', notes: null,
+    } as any);
+    prisma.planItem.findMany.mockResolvedValue([
+      {
+        id: 555, planId: 1, createdAt: 'c', updatedAt: 'u',
+        sequence: 1, universityName: '成都理工大学', groupCode: '112',
+        fullMajorRanking: { selectedMajors: [{ enrollmentPlanId: 9, majorName: '统计学' }] },
+        recommendedOrder: '统计学>经济统计学', acceptAdjust: true,
+      },
+    ]);
+    prisma.volunteerPlan.findFirst.mockResolvedValue({ versionNo: 1 });
+    prisma.volunteerPlan.create.mockResolvedValue({ id: 99, versionNo: 2, status: 'DRAFT' });
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 1, status: 'OUTDATED' });
+
+    await service.deriveVersion(1, 20);
+
+    const row = (prisma.planItem.createMany as jest.Mock).mock.calls[0][0].data[0];
+    expect(row).toEqual(
+      expect.objectContaining({
+        planId: 99,
+        sequence: 1,
+        universityName: '成都理工大学',
+        groupCode: '112',
+        fullMajorRanking: { selectedMajors: [{ enrollmentPlanId: 9, majorName: '统计学' }] },
+        recommendedOrder: '统计学>经济统计学',
+        isManuallyModified: false,
+        originalItemId: 555,
+      }),
+    );
+    // 不应把自增主键/时间戳/旧 planId 带进新行
+    expect(row).not.toHaveProperty('id');
+    expect(row).not.toHaveProperty('createdAt');
+    expect(row).not.toHaveProperty('updatedAt');
+  });
+
   it('deriveVersion: 非出方案老师派生报 403', async () => {
     jest.spyOn(service, 'findById').mockResolvedValue({
       id: 1, status: 'DRAFT', createdById: 20, studentId: 10, name: 'X', versionNo: 1,
