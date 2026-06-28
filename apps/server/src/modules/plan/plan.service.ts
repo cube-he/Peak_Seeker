@@ -645,40 +645,16 @@ export class PlanService {
         },
       });
       if (items.length > 0) {
+        // 全字段复制(剔除自增/时间/旧外键): 早先手列字段漏了 fullMajorRanking/recommendedOrder 等,
+        // 导致派生出的二稿「专业」选择丢失、打印专业列空白。spread 原样带过所有标量字段,
+        // 以后新增 PlanItem 字段也自动跟随, 不再漏拷。
         await tx.planItem.createMany({
-          data: items.map((it) => ({
+          data: items.map(({ id, createdAt, updatedAt, planId: _planId, ...rest }) => ({
+            ...rest,
             planId: newPlan.id,
-            sequence: it.sequence,
-            gradient: it.gradient,
-            universityId: it.universityId,
-            universityName: it.universityName,
-            universityCode: it.universityCode,
-            groupCode: it.groupCode,
-            groupName: it.groupName,
-            majorId: it.majorId,
-            majorName: it.majorName,
-            majorCode: it.majorCode,
-            anchorMajor: it.anchorMajor,
-            groupMajorCount: it.groupMajorCount,
-            subjectRequirement: it.subjectRequirement,
-            acceptAdjust: it.acceptAdjust,
-            score25Group: it.score25Group,
-            rank25Group: it.rank25Group,
-            score25Major: it.score25Major,
-            rank25Major: it.rank25Major,
-            score24Major: it.score24Major,
-            rank24Major: it.rank24Major,
-            planCount: it.planCount,
-            tuition: it.tuition,
-            selectionReason: it.selectionReason,
-            riskWarning: it.riskWarning,
-            adjustmentAdvice: it.adjustmentAdvice,
-            overrideSoftFail: it.overrideSoftFail,
-            softFailReasons: it.softFailReasons as any,
-            overrideReason: it.overrideReason,
             isManuallyModified: false,
-            originalItemId: it.id,
-          })),
+            originalItemId: id,
+          })) as any,
         });
       }
       // 锁定初稿：仅当父版本为 DRAFT 时置 OUTDATED（自动只读，见 canEditItems）。
