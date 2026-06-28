@@ -7256,14 +7256,19 @@
 .wn-teacher-scope .pgv2-add-btn.tall.soft .ic, .wn-teacher-scope .pgv2-add-btn.tall.soft .ic svg { width: 18px; height: 18px; }
 .wn-teacher-scope .pgv2-add-btn.tall.added {
   background: var(--safe-fixed); color: var(--safe); border: 1px solid rgba(39,103,73,.28); box-shadow: none;
-  font-weight: 600;
+  font-weight: 600; cursor: pointer;
 }
 .wn-teacher-scope .pgv2-add-btn.tall.added .ic {
   width: 24px; height: 24px; border-radius: 999px;
   background: var(--safe); color: #fff; flex: 0 0 auto;
 }
 .wn-teacher-scope .pgv2-add-btn.tall.added .ic svg { width: 14px; height: 14px; }
-.wn-teacher-scope .pgv2-add-btn.tall.added:hover { transform: none; box-shadow: none; color: var(--safe); }
+/* 已加入态 hover: 变红 = 再次点击可取消加入(移出方案) */
+.wn-teacher-scope .pgv2-add-btn.tall.added:hover {
+  transform: none; box-shadow: none;
+  background: rgba(197,48,48,.1); color: #c53030; border-color: rgba(197,48,48,.32);
+}
+.wn-teacher-scope .pgv2-add-btn.tall.added:hover .ic { background: #c53030; }
 .wn-teacher-scope .pgv2-add-btn.tall.locked {
   background: var(--surface-dim); color: var(--text-faint); border: 1.5px solid var(--border);
   box-shadow: none; cursor: not-allowed;

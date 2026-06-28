@@ -249,6 +249,7 @@ export interface CandidateCardV3Props {
   onHide: () => void;
   onRestore: () => void;
   onAdd: () => void;
+  onRemove: () => void; // 已加入态再点 → 取消加入(移出方案)
   onTabChange: (tab: 'majors' | 'evidence' | 'school') => void;
   /** 展开态 Tab 内容(由父组件提供,复用现有真实字段渲染组件) */
   renderExpandedContent: (tab: 'majors' | 'evidence' | 'school') => React.ReactNode;
@@ -260,7 +261,7 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   const {
     group, isExpanded, isHidden, isCompare, isAdded,
     studentRankForDecision, preferredHitCount, expandedTab,
-    onToggleExpand, onToggleCompare, onHide, onRestore, onAdd,
+    onToggleExpand, onToggleCompare, onHide, onRestore, onAdd, onRemove,
     renderExpandedContent,
   } = props;
 
@@ -497,7 +498,12 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
               </div>
               <div className="pgv2-card-cta">
                 {isAdded ? (
-                  <button type="button" className="pgv2-add-btn tall added" disabled>
+                  <button
+                    type="button"
+                    className="pgv2-add-btn tall added"
+                    onClick={onRemove}
+                    title="已加入方案 · 再次点击取消加入"
+                  >
                     <span className="ic"><CheckOutlined /></span><span>已加入</span>
                   </button>
                 ) : (

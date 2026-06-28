@@ -1608,6 +1608,15 @@ export default function GeneratePlanPage() {
     },
   });
 
+  // 取消加入: 按 (院校id + 组代码) 找到方案里对应的志愿条目并移出(同口径 isCandidateGroupAlreadyAdded)。
+  const removeCandidateGroup = (group: any) => {
+    if (removeMutation.isPending) return;
+    const matches = (planItems as any[]).filter(
+      (item) => item.universityId === group.universityId && (item.groupCode || '') === (group.groupCode || ''),
+    );
+    matches.forEach((item) => removeMutation.mutate(item.id));
+  };
+
   // 清空当前方案全部志愿
   const clearItemsMutation = useMutation({
     mutationFn: () => planApi.clearItems(String(planId)),
@@ -3086,6 +3095,7 @@ export default function GeneratePlanPage() {
                           onHide={() => hideGroup(group.groupKey)}
                           onRestore={() => restoreGroup(group.groupKey)}
                           onAdd={() => anchor && addCandidateGroup(group, anchor)}
+                          onRemove={() => removeCandidateGroup(group)}
                           onTabChange={(tab) => setGroupExpandTab(group.groupKey, tab)}
                           renderExpandedContent={(tab) => {
                             if (tab === 'majors') {
