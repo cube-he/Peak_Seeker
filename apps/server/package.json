@@ -31,6 +31,7 @@
     "import:university-charters": "ts-node -r dotenv/config scripts/import-university-charters.ts",
     "import:university-employment": "ts-node -r dotenv/config scripts/import-university-employment.ts",
     "import:major-details": "ts-node -r dotenv/config scripts/import-major-details.ts",
+    "import:university-dormitory": "ts-node -r dotenv/config scripts/import-university-dormitory.ts",
     "import:civil-service": "ts-node -r dotenv/config scripts/import-civil-service-stats.ts"
   },
   "dependencies": {
