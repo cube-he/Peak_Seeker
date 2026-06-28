@@ -317,6 +317,10 @@ export const planApi = {
     return api.get(`/plans/${planId}/export-rows`) as any;
   },
 
+  getDormSheet(planId: number | string): Promise<any> {
+    return api.get(`/plans/${planId}/dorm-sheet`) as any;
+  },
+
   async getRisks(planId: number | string) {
     return (await api.get(`/plans/${planId}/risks`)) as unknown as Array<{
       id: number;
