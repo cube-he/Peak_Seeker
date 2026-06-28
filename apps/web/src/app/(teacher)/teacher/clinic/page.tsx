@@ -54,6 +54,32 @@ function fmtTimeHM(iso: string | null | undefined): string {
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
+function isToday(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const n = new Date();
+  return (
+    d.getFullYear() === n.getFullYear() &&
+    d.getMonth() === n.getMonth() &&
+    d.getDate() === n.getDate()
+  );
+}
+
+// 未来预约展示用: "6月29日 14:00"
+function fmtSchedule(iso: string | null | undefined): string {
+  if (!iso) return '--';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '--';
+  return d.toLocaleString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
 export default function ClinicPage() {
   const router = useRouter();
   const qc = useQueryClient();
@@ -92,9 +118,10 @@ export default function ClinicPage() {
       await consultationApi.enqueue(created.id);
       return created;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables: any) => {
       qc.invalidateQueries({ queryKey: ['clinic-state'] });
-      message.success('已为家长创建预约并加入等待队列');
+      // 提示带上预约时间: 未来日期不会立即进当天队列, 写清楚避免误以为"没生效"
+      message.success(`已预约 ${fmtSchedule(variables?.scheduledAt)},已加入队列(当天叫号)`);
       setInviteOpen(false);
       inviteForm.resetFields();
     },
@@ -122,6 +149,8 @@ export default function ClinicPage() {
 
   const inProgress = data.inProgress;
   const waiting = data.waiting ?? [];
+  // 等待队列含未来预约; 只有「当天」的号能被叫号/开始(callNext 后端也只取当天)
+  const todayWaiting = waiting.filter((w: any) => isToday(w.scheduledAt));
   const done = data.done ?? [];
 
   const todayMin = done.reduce((s: number, x: any) => s + (x.durationAct ?? 0), 0);
@@ -258,14 +287,14 @@ export default function ClinicPage() {
                   —
                 </div>
                 当前无进行中的沟通
-                {waiting.length > 0 ? (
+                {todayWaiting.length > 0 ? (
                   <button
                     type="button"
                     style={{ marginTop: 12 }}
                     className="qa primary"
                     onClick={() => setEndModalOpen(true)}
                   >
-                    叫第 #{String(waiting[0].queueNumber ?? 1).padStart(2, '0')} 号
+                    叫第 #{String(todayWaiting[0].queueNumber ?? 1).padStart(2, '0')} 号
                   </button>
                 ) : null}
               </div>
@@ -300,14 +329,17 @@ export default function ClinicPage() {
                 <div className="queue-list">
                   {waiting.map((q: any, i: number) => {
                     const name = q.student?.user?.realName ?? '学生';
+                    const upcoming = !isToday(q.scheduledAt);
+                    const isNext = q.id === todayWaiting[0]?.id;
                     return (
                       <div
-                        className={`queue-item ${i === 0 ? 'next' : ''}`}
+                        className={`queue-item ${isNext ? 'next' : ''}`}
                         key={q.id}
+                        style={upcoming ? { opacity: 0.66 } : undefined}
                         onClick={() => openStudent(q.studentId)}
                       >
                         <span className="no">
-                          {String(q.queueNumber ?? i + 1).padStart(2, '0')}
+                          {upcoming ? '约' : String(q.queueNumber ?? i + 1).padStart(2, '0')}
                         </span>
                         <Avatar
                           student={{
@@ -319,7 +351,21 @@ export default function ClinicPage() {
                           size={32}
                         />
                         <div className="who">
-                          <div className="nm">{name}</div>
+                          <div className="nm">
+                            {name}
+                            {upcoming ? (
+                              <span
+                                style={{
+                                  marginLeft: 6,
+                                  fontSize: 11,
+                                  color: 'var(--text-muted)',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                · {fmtSchedule(q.scheduledAt)}
+                              </span>
+                            ) : null}
+                          </div>
                           <div className="topic">{q.purpose ?? '—'}</div>
                         </div>
                         <span className="est">
@@ -340,25 +386,27 @@ export default function ClinicPage() {
                     );
                   })}
                 </div>
-                {inProgress ? (
-                  <button
-                    type="button"
-                    className="queue-action"
-                    onClick={() => setEndModalOpen(true)}
-                  >
-                    <TIcon.arrowRight /> 叫下一号 ·{' '}
-                    {waiting[0].student?.user?.realName ?? '学生'}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="queue-action"
-                    onClick={() => callNextMutation.mutate(undefined)}
-                  >
-                    <TIcon.arrowRight /> 开始 ·{' '}
-                    {waiting[0].student?.user?.realName ?? '学生'}
-                  </button>
-                )}
+                {todayWaiting.length > 0 ? (
+                  inProgress ? (
+                    <button
+                      type="button"
+                      className="queue-action"
+                      onClick={() => setEndModalOpen(true)}
+                    >
+                      <TIcon.arrowRight /> 叫下一号 ·{' '}
+                      {todayWaiting[0].student?.user?.realName ?? '学生'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="queue-action"
+                      onClick={() => callNextMutation.mutate(undefined)}
+                    >
+                      <TIcon.arrowRight /> 开始 ·{' '}
+                      {todayWaiting[0].student?.user?.realName ?? '学生'}
+                    </button>
+                  )
+                ) : null}
               </>
             )}
           </div>
@@ -428,11 +476,11 @@ export default function ClinicPage() {
                     ·{' '}
                     <strong>{inProgress.student?.user?.realName ?? '学生'}</strong>{' '}
                     的沟通
-                    {waiting[0] ? (
+                    {todayWaiting[0] ? (
                       <>
                         ,并开始下一个等待中的号 (
-                        <strong>{waiting[0].student?.user?.realName ?? '学生'}</strong>
-                        {waiting[0].purpose ? ` · ${waiting[0].purpose}` : ''})
+                        <strong>{todayWaiting[0].student?.user?.realName ?? '学生'}</strong>
+                        {todayWaiting[0].purpose ? ` · ${todayWaiting[0].purpose}` : ''})
                       </>
                     ) : null}
                     。
@@ -440,9 +488,9 @@ export default function ClinicPage() {
                 ) : (
                   <>
                     开始{' '}
-                    <strong>#{String(waiting[0]?.queueNumber ?? 1).padStart(2, '0')}</strong>{' '}
+                    <strong>#{String(todayWaiting[0]?.queueNumber ?? 1).padStart(2, '0')}</strong>{' '}
                     ·{' '}
-                    <strong>{waiting[0]?.student?.user?.realName ?? '学生'}</strong>{' '}
+                    <strong>{todayWaiting[0]?.student?.user?.realName ?? '学生'}</strong>{' '}
                     的沟通。
                   </>
                 )}
