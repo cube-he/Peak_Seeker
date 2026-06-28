@@ -1209,10 +1209,17 @@ export default function GeneratePlanPage() {
   const groups = candidateGroups?.groups ?? [];
   const candidateUniversities = candidateGroups?.universities ?? [];
 
-  // 前端筛选只剩"显示已隐藏" toggle; 梯度档位过滤已上移服务端(gradientBand, 全池口径+正确分页)
+  // 前端筛选: "显示已隐藏" toggle + excludeAdded 兜底隐藏已加入组。
+  // 加入/移出后候选列表不重新拉取(queryKey 不含 planItems, 避免每次加入都重建候选池),
+  // 仅 planItems 即时更新 → 默认(excludeAdded)模式下用客户端过滤即时移除刚加入的组,
+  // 否则它会带"已加入"残留在候选区(与"仅显示填报"按钮职责重复)。onlyShowAdded 模式不过滤。
   const visibleGroups = useMemo(() => {
-    return groups.filter((group) => showHidden || !hiddenGroupKeys.has(group.groupKey));
-  }, [groups, hiddenGroupKeys, showHidden]);
+    return groups.filter((group) => {
+      if (!showHidden && hiddenGroupKeys.has(group.groupKey)) return false;
+      if (excludeAdded && !onlyShowAdded && isCandidateGroupAlreadyAdded(group, planItems)) return false;
+      return true;
+    });
+  }, [groups, hiddenGroupKeys, showHidden, excludeAdded, onlyShowAdded, planItems]);
 
   // pgv2 设计稿 rail 三段统计: 把 planItem 3-tier (CHONG/WEN/BAO) 映射到 rush/stable/safe
   const tierStats = useMemo(() => {
