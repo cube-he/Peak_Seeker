@@ -375,10 +375,13 @@ export class ConsultationService {
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const end = new Date(start.getTime() + 86_400_000);
 
+    // 等待队列纳入「未来」预约(老师提前约的也能看到), 故不设当天上限。
+    // 按预约时间排序: 今天的在前(到点可叫号), 之后按日期顺延。
+    // 进行中/已完成仍只看当天(实时坐诊语义): 在内存里按当天窗口过滤。
     const all = await this.prisma.consultationAppointment.findMany({
       where: {
         teacherId,
-        scheduledAt: { gte: start, lt: end },
+        scheduledAt: { gte: start },
         queueNumber: { not: null },
       },
       include: {
@@ -386,14 +389,14 @@ export class ConsultationService {
           include: { user: { select: { realName: true, username: true } } },
         },
       },
-      orderBy: { queueNumber: 'asc' },
+      orderBy: [{ scheduledAt: 'asc' }, { queueNumber: 'asc' }],
     });
 
-    const inProgress = all.find((a) => a.status === 'in_progress') ?? null;
-    const waiting = all.filter(
-      (a) => a.status === 'scheduled' && a.id !== inProgress?.id,
-    );
-    const done = all.filter((a) => a.status === 'completed');
+    const isToday = (a: { scheduledAt: Date }) => a.scheduledAt < end; // scheduledAt>=start 已由 where 保证
+    const inProgress = all.find((a) => a.status === 'in_progress' && isToday(a)) ?? null;
+    // 等待 = 今天 + 未来的 scheduled (未来项前端只展示、不可叫号)
+    const waiting = all.filter((a) => a.status === 'scheduled' && a.id !== inProgress?.id);
+    const done = all.filter((a) => a.status === 'completed' && isToday(a));
 
     return { inProgress, waiting, done };
   }
