@@ -3865,6 +3865,35 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .wn-teacher-scope .queue-item .est { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+/* 取消 / 更改 行内操作: 默认半隐, 悬停整行(或下一号高亮项)时浮现 (坐诊面板为桌面端) */
+.wn-teacher-scope .queue-item .acts {
+  display: inline-flex; gap: 6px; flex-shrink: 0;
+  opacity: 0; transition: opacity var(--dur) var(--ease);
+}
+.wn-teacher-scope .queue-item:hover .acts,
+.wn-teacher-scope .queue-item.next .acts,
+/* 键盘 Tab 到 更改/取消 时整组浮现, 否则焦点落在不可见按钮上 (WCAG 2.4.7) */
+.wn-teacher-scope .queue-item:focus-within .acts { opacity: 1; }
+/* 触屏无 hover 态: 常驻显示, 否则非「下一号」行的 更改/取消 永远点不到 */
+@media (hover: none) {
+  .wn-teacher-scope .queue-item .acts { opacity: 1; }
+}
+.wn-teacher-scope .qi-act {
+  padding: 4px 10px;
+  font-size: 11.5px; line-height: 1.4;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all var(--dur) var(--ease);
+}
+.wn-teacher-scope .qi-act:hover { color: var(--text); border-color: var(--border); }
+.wn-teacher-scope .qi-act.danger:hover {
+  color: var(--rush);
+  border-color: var(--rush);
+  background: var(--rush-fixed);
+}
 
 .wn-teacher-scope .queue-action {
   margin-top: 14px;

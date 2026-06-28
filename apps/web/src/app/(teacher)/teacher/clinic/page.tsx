@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dayjs from 'dayjs';
 import {
   Button, DatePicker, Form, Input, Modal, Select, Spin, message,
 } from 'antd';
@@ -80,6 +81,93 @@ function fmtSchedule(iso: string | null | undefined): string {
   });
 }
 
+// 更改预约弹窗: 自带独立 Form 实例(父级按 key={appt.id} 重建本组件 → 实例全新、store 为空),
+// 故 initialValues 一定按当前 appt 干净回填, 不会串到上一次编辑的行。学生固定不可改。
+function EditAppointmentModal({
+  appt,
+  pending,
+  onCancel,
+  onSubmit,
+}: {
+  appt: any;
+  pending: boolean;
+  onCancel: () => void;
+  onSubmit: (payload: Record<string, unknown>) => void;
+}) {
+  const [form] = Form.useForm();
+  return (
+    <Modal
+      title="更改预约"
+      open
+      onCancel={onCancel}
+      onOk={() =>
+        form.validateFields().then((values) => {
+          const [start, end] = values.timeRange as [any, any];
+          const durationEst = Math.max(5, Math.round((end.valueOf() - start.valueOf()) / 60000));
+          onSubmit({
+            scheduledAt: start.toISOString(),
+            durationEst,
+            channel: values.channel,
+            purpose: values.purpose,
+            notes: values.notes,
+          });
+        })
+      }
+      okText="保存更改"
+      confirmLoading={pending}
+      destroyOnClose
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={{
+          timeRange: [
+            dayjs(appt.scheduledAt),
+            dayjs(appt.scheduledAt).add(appt.durationEst ?? 30, 'minute'),
+          ],
+          channel: appt.channel,
+          purpose: appt.purpose ?? undefined,
+          notes: appt.notes ?? undefined,
+        }}
+      >
+        <Form.Item label="学生">
+          <Input value={appt.student?.user?.realName ?? '学生'} disabled />
+        </Form.Item>
+        <Form.Item
+          name="timeRange"
+          label="预约时段 (开始 → 结束)"
+          rules={[{ required: true, message: '请选择时间段' }]}
+        >
+          <RangePicker
+            showTime={{ format: 'HH:mm', minuteStep: 5 }}
+            format="YYYY-MM-DD HH:mm"
+            style={{ width: '100%' }}
+            placeholder={['开始时间', '结束时间']}
+            // 禁选今天之前: 改到过去会被坐诊面板(scheduledAt>=今日0点)过滤掉而静默消失
+            disabledDate={(cur) => !!cur && cur < dayjs().startOf('day')}
+          />
+        </Form.Item>
+        <Form.Item name="channel" label="沟通方式" rules={[{ required: true }]}>
+          <Select
+            options={[
+              { label: '电话', value: 'phone' },
+              { label: '微信', value: 'wechat' },
+              { label: '线下', value: 'in_person' },
+              { label: '视频', value: 'video' },
+            ]}
+          />
+        </Form.Item>
+        <Form.Item name="purpose" label="沟通主题">
+          <Input placeholder="例: 讨论选校 / 强基备战 / 进度反馈" />
+        </Form.Item>
+        <Form.Item name="notes" label="备注 (可选)">
+          <Input.TextArea rows={2} />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}
+
 export default function ClinicPage() {
   const router = useRouter();
   const qc = useQueryClient();
@@ -87,6 +175,9 @@ export default function ClinicPage() {
   const [notesInput, setNotesInput] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteForm] = Form.useForm();
+  // 「更改预约」: 选中要编辑的等待项 (null = 关闭). 实际表单在 EditAppointmentModal 子组件里,
+  // 按 key={appt.id} 每次重建 → 全新 Form 实例(store 为空), 避免连续编辑不同行时回填上一行陈旧值。
+  const [editingAppt, setEditingAppt] = useState<any | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['clinic-state'],
@@ -138,6 +229,45 @@ export default function ClinicPage() {
       message.success('已切换到下一号');
     },
   });
+
+  // 更改预约: 改时间/时长/方式/主题/备注. 改期后端会做时段冲突检测 (excludeId 排除自身),
+  // 撞既有预约会回 409 → 弹出后端给的冲突文案, 不刷新队列.
+  const editMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      consultationApi.update(id, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['clinic-state'] });
+      // dashboard「今日沟通」用独立 query ['consultations-today'], 改期/取消后也要失效, 否则跨页看到旧数据.
+      qc.invalidateQueries({ queryKey: ['consultations-today'] });
+      message.success('预约已更新');
+      setEditingAppt(null);
+    },
+    onError: (e: any) => message.error(e?.response?.data?.message ?? '更新预约失败'),
+  });
+
+  // 取消预约 = 硬删除 (老师确认语义为「直接删除」, 不保留记录).
+  const cancelMutation = useMutation({
+    mutationFn: (id: number) => consultationApi.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['clinic-state'] });
+      qc.invalidateQueries({ queryKey: ['consultations-today'] });
+      message.success('预约已取消');
+    },
+    onError: (e: any) => message.error(e?.response?.data?.message ?? '取消预约失败'),
+  });
+
+  // 取消确认: 删除不可恢复, 用 Modal.confirm 二次确认.
+  const confirmCancel = (q: any) => {
+    const name = q.student?.user?.realName ?? '该学生';
+    Modal.confirm({
+      title: '取消预约?',
+      content: `将删除 ${name} 的预约（${fmtSchedule(q.scheduledAt)}），此操作不可恢复。`,
+      okText: '取消预约',
+      okType: 'danger',
+      cancelText: '再想想',
+      onOk: () => cancelMutation.mutateAsync(q.id),
+    });
+  };
 
   if (isLoading || !data) {
     return (
@@ -382,6 +512,23 @@ export default function ClinicPage() {
                           </span>
                           {q.durationEst ?? 30}m
                         </span>
+                        {/* 取消 / 更改: stopPropagation 防止触发整行的「打开档案」 */}
+                        <div className="acts" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="qi-act"
+                            onClick={() => setEditingAppt(q)}
+                          >
+                            更改
+                          </button>
+                          <button
+                            type="button"
+                            className="qi-act danger"
+                            onClick={() => confirmCancel(q)}
+                          >
+                            取消
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -620,6 +767,17 @@ export default function ClinicPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* —— 更改预约 Modal — key={id} 保证每次都是全新表单实例, 不串行回填上一行 —— */}
+      {editingAppt && (
+        <EditAppointmentModal
+          key={editingAppt.id}
+          appt={editingAppt}
+          pending={editMutation.isPending}
+          onCancel={() => setEditingAppt(null)}
+          onSubmit={(payload) => editMutation.mutate({ id: editingAppt.id, payload })}
+        />
+      )}
     </>
   );
 }
