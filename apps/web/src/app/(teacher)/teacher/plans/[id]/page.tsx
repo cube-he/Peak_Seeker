@@ -350,6 +350,13 @@ export default function PlanDetailPage() {
   });
   const versions = versionsData?.versions ?? [];
 
+  // 稿次文案(跟后端 max+1 对齐): v1=初稿,v2=二稿...; "另存为"用下一稿次, 避免在 v2 上还显示"另存为二稿"
+  const draftName = (n: number) =>
+    ['初稿', '二稿', '三稿', '四稿', '五稿', '六稿', '七稿', '八稿', '九稿', '十稿'][n - 1] ?? `第${n}稿`;
+  const currentVersionNo = plan?.versionNo ?? plan?.version ?? 1;
+  const nextVersionNo =
+    (versions.length ? Math.max(...versions.map((v: any) => v.versionNo)) : currentVersionNo) + 1;
+
   // 当用户选择对比版本时,加载该版本的 items
   const { data: compareData } = useQuery({
     queryKey: ['plan-compare', compareVersionId],
@@ -487,10 +494,10 @@ export default function PlanDetailPage() {
   const deriveMutation = useMutation({
     mutationFn: (note?: string) => planApi.deriveVersion(planId, note),
     onSuccess: (data: any) => {
-      void message.success('已另存为新一版,初稿已锁为只读,继续在工作台修改');
+      void message.success(`已另存为${draftName(data?.versionNo ?? nextVersionNo)},原版本已锁为只读,继续在工作台修改`);
       const newId = data?.id;
       if (newId) {
-        // 跳生成工作台改二稿(增删院校都在那里)
+        // 跳生成工作台改新稿(增删院校都在那里)
         router.push(`/teacher/plans/generate/${plan.studentId}?planId=${newId}`);
       } else {
         refresh();
@@ -499,24 +506,25 @@ export default function PlanDetailPage() {
     onError: (error: any) => message.error(error?.response?.data?.message ?? '另存新版本失败'),
   });
 
-  // 弹备注框 → 派生二稿
+  // 弹备注框 → 派生新一稿
   const openDeriveModal = () => {
     deriveNoteRef.current = '';
+    const label = draftName(nextVersionNo);
     Modal.confirm({
-      title: '另存为二稿',
+      title: `另存为${label}`,
       content: (
         <div>
-          <p style={{ marginBottom: 8 }}>会保留当前为只读初稿,复制一份可编辑的新版本继续修改。</p>
+          <p style={{ marginBottom: 8 }}>会保留当前 {draftName(currentVersionNo)} 为只读,复制一份可编辑的{label}继续修改。</p>
           <Input.TextArea
             rows={3}
             maxLength={500}
             showCount
-            placeholder="版本备注(可留空),如:二稿—按学生意见删某校、加某校"
+            placeholder={`版本备注(可留空),如:${label}—按学生意见删某校、加某校`}
             onChange={(e) => { deriveNoteRef.current = e.target.value; }}
           />
         </div>
       ),
-      okText: '另存为二稿',
+      okText: `另存为${label}`,
       cancelText: '取消',
       onOk: () => deriveMutation.mutate(deriveNoteRef.current || undefined),
     });
@@ -740,7 +748,7 @@ export default function PlanDetailPage() {
               loading={deriveMutation.isPending}
               onClick={openDeriveModal}
             >
-              另存为二稿
+              另存为{draftName(nextVersionNo)}
             </Button>
             <Button
               type="primary"
