@@ -5,13 +5,28 @@
  *   pnpm import:university-dormitory --file=... --overwrite
  *
  * file1 只有院校名称没有 code → 按规范化名匹配; 同名命中多个 id 时全部 patch(校级数据)。
- * 默认 NULL-safe: 只在 DB 字段为 NULL 时填; --overwrite 强制覆盖。
+ * 默认增量: 只写入源文件非空字段, 绝不把已有数据抹成 NULL; --overwrite 才用源值(含空)强制覆盖。
  */
 import * as ExcelJS from 'exceljs';
 import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
-import { parseArgs } from './lib/cli-utils';
 import { UniversityMatcher } from './lib/university-matcher';
+
+// parseArgs 内联(不复用 ./lib/cli-utils): cli-utils 顶部 import 'cli-progress'(devDep),
+// 生产 `pnpm install --prod` 不装 devDep → 在服务器上 npx ts-node 跑本脚本会因加载 cli-utils 而崩。
+// 内联后本脚本只依赖 exceljs/@prisma(prod 依赖)+ university-matcher(无额外依赖), 生产可直跑。
+function parseArgs(argv: string[]): Record<string, string | boolean> {
+  const out: Record<string, string | boolean> = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith('--')) continue;
+    const [k, v] = a.slice(2).split('=', 2);
+    if (v !== undefined) out[k] = v;
+    else if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) out[k] = argv[++i];
+    else out[k] = true;
+  }
+  return out;
+}
 
 const SHEET_NAME = 'Sheet1';
 
