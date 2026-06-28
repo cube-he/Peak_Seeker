@@ -7217,6 +7217,24 @@
 .wn-teacher-scope .pgv2-card-sub .pc.up   { background: var(--safe-fixed); color: var(--safe); }
 .wn-teacher-scope .pgv2-card-sub .pc.down { background: var(--rush-fixed); color: var(--rush); }
 
+/* 转专业政策行: 单行截断, 悬停(title)看全文 */
+.wn-teacher-scope .pgv3-transfer {
+  display: flex; align-items: baseline; gap: 6px;
+  margin-top: 3px;
+  font-size: 12px;
+  max-width: 100%;
+  min-width: 0;
+}
+.wn-teacher-scope .pgv3-transfer .t-label { flex: none; color: var(--text-faint); font-weight: 600; }
+.wn-teacher-scope .pgv3-transfer .t-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
 .wn-teacher-scope .pgv2-card-r {
   display: flex; flex-direction: column; align-items: stretch; gap: 8px;
   flex: 0 0 auto; width: 132px;

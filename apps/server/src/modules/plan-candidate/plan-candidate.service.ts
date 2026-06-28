@@ -47,6 +47,7 @@ import {
 } from '../../utils/preferred-majors';
 import { buildExportSheet, ExportSheet } from './plan-export-rows.builder';
 import { buildDormSheet, DORM_FIELD_KEYS } from './plan-dorm-sheet.builder';
+import { resolveTransferPolicy } from './transfer-policy';
 
 interface GetCandidatesQuery {
   page: number;
@@ -506,6 +507,8 @@ const CANDIDATE_ENROLLMENT_PLAN_SELECT = {
       level: true, // 院校层次 (本科/专科/职业本科)
       runningLevel: true, // 办学层次
       universityTier: true, // 院校档次标签
+      transferDifficulty: true, // 转专业情况/难度 (卡片转专业政策, 优先)
+      charterTransferLimit: true, // 招生章程转专业限制 (转专业政策回退源)
     },
   },
   major: {
@@ -2285,6 +2288,8 @@ export class PlanCandidateService {
           satisfactionCount: first.university?.satisfactionCount ?? null,
           universityBackground: first.university?.universityBackground ?? null,
           firstClassCategory: first.university?.firstClassCategory ?? null,
+          // 转专业政策: transfer_difficulty 优先, 空则回退 charter_transfer_limit, 皆空 null(卡片不显示)
+          transferPolicy: resolveTransferPolicy(first.university),
         },
         groupCode: first.groupCode,
         groupName: first.groupName,

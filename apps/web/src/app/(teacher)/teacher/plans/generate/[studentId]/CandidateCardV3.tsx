@@ -428,6 +428,14 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                     <span style={{ color: 'var(--text-muted)' }}>无历史录取线</span>
                   )}
                 </div>
+
+                {/* 转专业政策(院校级): transfer_difficulty 优先→charter 回退, 有才显示; 单行截断, 悬停看全文 */}
+                {uni.transferPolicy ? (
+                  <div className="pgv3-transfer" title={uni.transferPolicy}>
+                    <span className="t-label">转专业</span>
+                    <span className="t-text">{uni.transferPolicy}</span>
+                  </div>
+                ) : null}
               </div>
 
               {/* 决策要素(高权重·彩色)—— 填充中部 */}
