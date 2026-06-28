@@ -116,6 +116,13 @@ export default function UniversityCandidateCard({
           <span className="sp-wen">稳 {spread.wen}</span>
           <span className="sp-bao">保 {spread.bao}</span>
         </div>
+        {/* 转专业政策(院校级): 有才显示, 单行截断+悬停看全文(与专业优先卡 CardV3 同口径/同 CSS) */}
+        {u.transferPolicy ? (
+          <div className="pgv3-transfer" title={u.transferPolicy}>
+            <span className="t-label">转专业</span>
+            <span className="t-text">{u.transferPolicy}</span>
+          </div>
+        ) : null}
       </div>
 
       {/* —— 组子行(平铺, 无折叠) —— */}
