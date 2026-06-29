@@ -36,6 +36,7 @@ import { PlanCandidateModule } from './modules/plan-candidate/plan-candidate.mod
 import { StatsModule } from './modules/stats/stats.module';
 import { ConsultationModule } from './modules/consultation/consultation.module';
 import { HistoricalCasesModule } from './modules/historical-cases/historical-cases.module';
+import { PlanImportModule } from './modules/plan-import/plan-import.module';
 
 @Module({
   imports: [
@@ -90,6 +91,7 @@ import { HistoricalCasesModule } from './modules/historical-cases/historical-cas
     StatsModule,
     ConsultationModule,
     HistoricalCasesModule,
+    PlanImportModule,
   ],
   providers: [
     // 全局应用限流守卫
