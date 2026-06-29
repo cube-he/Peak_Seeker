@@ -16,6 +16,7 @@ export interface ParsedIdentity {
 export interface ParsedForm {
   identity: ParsedIdentity;
   batch: string;
+  examTypeHint?: 'PHYSICS' | 'HISTORY';
   volunteers: ParsedVolunteer[];
 }
 export interface ResolvedSelectedMajor {
