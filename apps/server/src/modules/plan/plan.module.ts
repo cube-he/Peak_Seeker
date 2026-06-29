@@ -19,6 +19,6 @@ import { RiskEngineService } from './risk-engine/risk-engine.service';
     PlanReviewDraftService,
     RiskEngineService,
   ],
-  exports: [PlanService, PlanReviewDraftService, RiskEngineService],
+  exports: [PlanService, PlanReviewDraftService, RiskEngineService, PlanItemService],
 })
 export class PlanModule {}

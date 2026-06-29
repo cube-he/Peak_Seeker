@@ -64,7 +64,8 @@
     "passport-local": "^1.0.0",
     "prisma": "^7.4.0",
     "reflect-metadata": "^0.2.1",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "unpdf": "^1.6.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.3.0",

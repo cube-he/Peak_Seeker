@@ -1,0 +1,94 @@
+import {
+  BadRequestException, Body, Controller, ForbiddenException, NotFoundException,
+  Post, UploadedFile, UseGuards, UseInterceptors, Req,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { PrismaService } from '../../prisma/prisma.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { VolunteerFormParserService } from './volunteer-form-parser.service';
+import { VolunteerFormResolverService } from './volunteer-form-resolver.service';
+import { StudentBatchMatcherService } from './student-batch-matcher.service';
+import { VolunteerFormImportService } from './volunteer-form-import.service';
+import { ResolvedGroup } from './volunteer-form.types';
+
+const SUBJECTS_MAP: Record<string, string> = { PHYSICS: '物理', HISTORY: '历史' };
+
+@UseGuards(JwtAuthGuard)
+@Controller('plan-import/volunteer-form')
+export class VolunteerFormImportController {
+  constructor(
+    private prisma: PrismaService,
+    private parser: VolunteerFormParserService,
+    private resolver: VolunteerFormResolverService,
+    private matcher: StudentBatchMatcherService,
+    private importSvc: VolunteerFormImportService,
+  ) {}
+
+  @Post('preview')
+  @UseInterceptors(FileInterceptor('file'))
+  async preview(@UploadedFile() file: any, @Req() req: any) {
+    if (!file?.buffer) throw new BadRequestException('未上传文件');
+    // req.user.id is set by JwtStrategy.validate() which returns { id: payload.sub, ... }
+    const actorUserId = req.user?.id;
+    if (!actorUserId) throw new ForbiddenException('未登录');
+
+    const text = await this.parser.extractPdfText(file.buffer);
+    const parsed = this.parser.parseFormText(text);
+    if (parsed.volunteers.length === 0) throw new BadRequestException('无法识别为志愿表');
+
+    const examType = parsed.examTypeHint ?? 'PHYSICS';
+    const candidateStudents = await this.matcher.findCandidateStudents(parsed.identity, actorUserId);
+    const year = (candidateStudents[0] as any)?.examYear ?? 2026;
+    const province = (candidateStudents[0] as any)?.province ?? '四川';
+    const bc = await this.matcher.matchBatchConfig(parsed.batch, examType, year, province);
+
+    const groups = bc
+      ? (await this.resolver.resolveGroups(parsed.volunteers, {
+          year: (bc as any).year, subjects: SUBJECTS_MAP[examType], batch: (bc as any).batch,
+        })).groups
+      : [];
+    const summary = bc
+      ? { total: groups.length, matched: groups.filter((g: any) => g.status === 'matched').length, unmatched: groups.filter((g: any) => g.status === 'unmatched').length }
+      : { total: parsed.volunteers.length, matched: 0, unmatched: parsed.volunteers.length };
+
+    return {
+      identity: parsed.identity, batch: parsed.batch, examTypeHint: examType,
+      batchConfig: bc ? { id: (bc as any).id, batch: (bc as any).batch } : null,
+      candidateStudents: candidateStudents.map((s: any) => ({ id: s.id, realName: s.user?.realName, classInfo: s.classInfo })),
+      groups, summary,
+    };
+  }
+
+  @Post('commit')
+  async commit(
+    @Body() body: { studentId: number; batchConfigId: number; resolvedGroups: ResolvedGroup[]; versionNote?: string },
+    @Req() req: any,
+  ) {
+    // req.user.id is set by JwtStrategy.validate() which returns { id: payload.sub, ... }
+    const actorUserId = req.user?.id;
+    if (!actorUserId) throw new ForbiddenException('未登录');
+    if (!body?.studentId || !body?.batchConfigId || !Array.isArray(body?.resolvedGroups)) {
+      throw new BadRequestException('参数缺失');
+    }
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { id: body.studentId },
+      include: { teacher: { select: { userId: true } } },
+    });
+    if (!student) throw new NotFoundException('学生不存在');
+    if ((student as any).teacher?.userId !== actorUserId) throw new ForbiddenException('无权操作该学生');
+
+    const plan = await this.importSvc.commit({
+      studentId: body.studentId,
+      batchConfigId: body.batchConfigId,
+      resolvedGroups: body.resolvedGroups,
+      actorUserId,
+      versionNote: body.versionNote,
+    });
+    return {
+      planId: (plan as any).id,
+      versionNo: (plan as any).versionNo,
+      importedCount: (plan as any).importedCount,
+      failures: (plan as any).failures,
+    };
+  }
+}
