@@ -2963,6 +2963,7 @@ export default function GeneratePlanPage() {
                           key={uni.universityId}
                           university={uni}
                           studentRank={studentRankForDecision}
+                          preferredMajorSet={preferredMajorSet}
                           isGroupAdded={(g) => isCandidateGroupAlreadyAdded(g, planItems)}
                           onAddGroup={(g) => {
                             const anchor = getAnchorMajor(g);

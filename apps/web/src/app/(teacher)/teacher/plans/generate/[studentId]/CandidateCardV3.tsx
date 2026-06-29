@@ -20,6 +20,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons';
 import UniversityLogo from '@/components/university/UniversityLogo';
+import { GroupSignalChips } from './candidate-group-signals';
 
 // 8 段动态梯度 — 与 page.tsx 的 GRADIENT_LABEL / gradientTone 保持一致
 // 无史线状态(NO_LINE)不进 grade-badge 显示, 信号统一交给 RankRuler is-noline + 展开 banner;
@@ -41,59 +42,8 @@ function tone8(tier: string): 'rush' | 'stable' | 'safe' {
   return 'stable';
 }
 
-// 客观纯净度档位 → 颜色 + 文案
-const PURITY_META: Record<string, { tone: string; label: string; desc: string }> = {
-  S: { tone: 'safe', label: '干净', desc: '专业组高度纯净，几乎无调剂风险' },
-  A: { tone: 'accent', label: '较纯', desc: '同门类、主导专业类 ≥70%' },
-  B: { tone: 'rush-soft', label: '较乱', desc: '跨 2 门类有主导，需注意调剂' },
-  C: { tone: 'rush', label: '混乱', desc: '冷热混装，调剂风险高' },
-};
-
-// 把 0~1 score 渲染为「X%」字符串。null/undefined → 空串(由调用方兜底)
-function purityPercent(score: number | null | undefined): string {
-  if (typeof score !== 'number' || Number.isNaN(score)) return '';
-  return `${Math.round(score * 100)}%`;
-}
-
-// 2026 vs 2025 专业组变动 chip 元数据。'未变' 不渲染 chip(用户决策, 仅有变动时提示老师对照)。
-const CHANGE_META: Record<string, { tone: string; label: string }> = {
-  '原组+新增':   { tone: 'safe-soft', label: '原组+新增' },
-  '变干净(拆分)': { tone: 'safe',      label: '拆分' },
-  '重组(合并)':  { tone: 'rush-soft', label: '重组' },
-  '新组无对应':   { tone: 'rush',      label: '新组' },
-};
-
-// tooltip: 列出 2025 老组的专业构成(重组组多串各一行,逐顿点呈现)
-function changeTitle(group: any): string {
-  const ct = group?.groupChangeType;
-  if (!ct || ct === '未变') return '';
-  const olds = (group.oldGroupMajors2025 as string[] | undefined) ?? [];
-  const parts: string[] = [`相对 2025: ${ct}`];
-  if (olds.length === 0) {
-    if (ct === '新组无对应') parts.push('2025 年无对应组, 2026 新设');
-  } else if (olds.length === 1) {
-    parts.push(`2025 老组专业: ${olds[0]}`);
-  } else {
-    olds.forEach((s, i) => parts.push(`2025 老组 ${i + 1}: ${s}`));
-  }
-  return parts.join(' · ');
-}
-
-function purityTitle(purity: any): string {
-  if (!purity) return '';
-  const m = PURITY_META[purity.level] ?? { desc: '' };
-  const parts: string[] = [m.desc];
-  if (typeof purity.score === 'number') parts.unshift(`专家版纯净度 ${Math.round(purity.score * 100)}%`);
-  if (purity.majorCount) parts.push(`组内 ${purity.majorCount} 个专业`);
-  if (purity.dominantDiscipline) {
-    const pct = Math.round((purity.dominantDisciplineRatio ?? 0) * 100);
-    parts.push(`主导 ${purity.dominantDiscipline} ${pct}%`);
-  }
-  if (purity.crossCategoryCount > 1) parts.push(`跨 ${purity.crossCategoryCount} 门类`);
-  if (purity.mixedForeign) parts.push('混入中外合作');
-  if (Array.isArray(purity.reasons) && purity.reasons[0]) parts.push(purity.reasons[0]);
-  return parts.filter(Boolean).join(' · ');
-}
+// 纯净度 / 组变动 / 招生 vs 2025 等组级信号 chip 已抽到 ./candidate-group-signals,
+// 与院校优先视图共用, 保证两模式口径一致(见 GroupSignalChips)。
 
 // ============ 小组件 ============
 
@@ -328,23 +278,6 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
   // 组内专业数 · 招生类别(设计稿 gid-meta)。recruitType 走后端真实字段。
   const recruitType: string = group?.recruitType?.trim?.() || '普通类';
 
-  // 2026 招生 vs 2025 同专业录取数 chip 元数据(组重组后唯一可比口径, 后端按 majorCode 回算 2025)。
-  // delta=0 → tone-muted + "持平", 避免「+0」绿色误读为扩招。
-  const admitVs2025 = (group?.currentPlanCount != null && group?.previousMajorsAdmissionSum2025 != null)
-    ? (() => {
-        const cur = group.currentPlanCount as number;
-        const prev = group.previousMajorsAdmissionSum2025 as number;
-        const delta = cur - prev;
-        return {
-          tone: delta === 0 ? 'muted' : delta > 0 ? 'safe' : 'rush',
-          label: delta === 0
-            ? `招生 ${cur} 人 (与 2025 持平)`
-            : `招生 ${cur} 人 (${delta > 0 ? '+' : ''}${delta} vs 2025 同专业)`,
-          title: `2026 招 ${cur} 人 vs 2025 同专业录取 ${prev} 人。口径: 取本组 2026 包含的专业, 在 2025 各自的录取人数求和`,
-        };
-      })()
-    : null;
-
   return (
     // 逐行照抄设计稿 plan-generate.jsx 940-1135 的 pgv2-card(专业优先 MAJOR 卡)DOM 树。
     // mock g.xxx → 真实 group.xxx; TIcon.x → @ant-design/icons; window 组件 → 现有 props。
@@ -438,48 +371,9 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
                 ) : null}
               </div>
 
-              {/* 决策要素(高权重·彩色)—— 填充中部 */}
+              {/* 决策要素(高权重·彩色)—— 与院校优先视图共用 GroupSignalChips, 口径一致 */}
               <div className="pgv2-decision-row tb-signals">
-                {group?.purity?.level && PURITY_META[group.purity.level] ? (
-                  <span className={`pgv2-dchip tone-${PURITY_META[group.purity.level].tone}`} title={purityTitle(group.purity)}>
-                    纯净度 {purityPercent(group.purity.score) || PURITY_META[group.purity.level].label}
-                  </span>
-                ) : null}
-                {typeof preferredHitCount === 'number' ? (
-                  <span
-                    className={`pgv2-dchip ${preferredHitCount > 0 ? 'tone-safe' : 'tone-rush'}`}
-                    title="组内命中学生意向的专业数 / 组内专业总数, 命中越少服从调剂落到非意向的风险越高"
-                  >
-                    意向命中 {preferredHitCount}/{groupMajorCount}
-                  </span>
-                ) : null}
-                {group?.supplementary && (group.supplementaryMaxSum ?? 0) > 0 ? (() => {
-                  // 征集人数口径: Σ每年(该年多轮里的最大单轮人数)。逐年明细(各取该年 max round)放 tooltip。
-                  const byYear = group.supplementary.byYear ?? {};
-                  const perYear = Object.keys(byYear)
-                    .filter((y) => Array.isArray(byYear[y]?.rounds) && byYear[y].rounds.length)
-                    .sort()
-                    .map((y) => {
-                      const mx = Math.max(...byYear[y].rounds.map((r: any) => r.count ?? 0));
-                      return `${String(y).slice(2)}年${mx}人`;
-                    });
-                  return (
-                    <span
-                      className="pgv2-dchip tone-safe-soft"
-                      title={`征集人数 = 各年取该年多轮里的最大单轮人数, 再跨年求和${perYear.length ? `：${perYear.join(' + ')} = ${group.supplementaryMaxSum}人` : ''}。征集=没招满需补录, 常伴随降分, 是可达性的积极信号`}
-                    >
-                      征集 {group.supplementaryMaxSum}人{perYear.length ? `（${perYear.join(' / ')}）` : ''}
-                    </span>
-                  );
-                })() : null}
-                {group?.groupChangeType && group.groupChangeType !== '未变' && CHANGE_META[group.groupChangeType] ? (
-                  <span className={`pgv2-dchip tone-${CHANGE_META[group.groupChangeType].tone}`} title={changeTitle(group)}>组变动 · {CHANGE_META[group.groupChangeType].label}</span>
-                ) : null}
-                {admitVs2025 ? (
-                  <span className={`pgv2-dchip tone-${admitVs2025.tone}`} title={admitVs2025.title}>{admitVs2025.label}</span>
-                ) : group?.currentPlanCount != null ? (
-                  <span className="pgv2-dchip tone-accent" title="本组 2026 招生计划及相对 2025 同专业增减">招生 {group.currentPlanCount} 人{group.planCountChange ? (group.planCountChange > 0 ? ` +${group.planCountChange}` : ` ${group.planCountChange}`) : ''}</span>
-                ) : null}
+                <GroupSignalChips group={group} preferredHitCount={preferredHitCount} />
               </div>
             </div>
 

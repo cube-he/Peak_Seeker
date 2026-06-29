@@ -12,22 +12,19 @@
 
 import { useState } from 'react';
 import { MatchRing, MBar, PrefDot, Sparkline } from './CandidateCardV3';
+import { GroupSignalChips } from './candidate-group-signals';
 import CandidateMajorSection from './candidate-major-section';
 
 const GRAD_LABEL: Record<string, string> = { CHONG: '冲', WEN: '稳', BAO: '保' };
 const GRAD_TONE: Record<string, string> = { CHONG: 'rush', WEN: 'stable', BAO: 'safe' };
-const PURITY_TONE: Record<string, { tone: string; label: string; desc: string }> = {
-  S: { tone: 'safe', label: '干净', desc: '专业组高度纯净, 几乎无调剂风险' },
-  A: { tone: 'safe-soft', label: '较纯', desc: '同门类、主导专业类 ≥70%' },
-  B: { tone: 'accent', label: '较乱', desc: '跨 2 门类有主导, 需注意调剂' },
-  C: { tone: 'rush', label: '混乱', desc: '冷热混装, 调剂风险高' },
-};
 
 interface Props {
   university: any; // CandidateUniversity (后端 rollup 结构)
   studentRank?: number | null; // 学生位次, 用于显示组末位差距
   isGroupAdded: (group: any) => boolean;
   onAddGroup: (group: any) => void;
+  // 学生意向专业集合(展平全部梯队), 用于算每组「意向命中」chip(与专业优先视图同口径)。空集 = 学生无意向, 不显示该 chip。
+  preferredMajorSet?: Set<string>;
 }
 
 const fmt = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString() : '—');
@@ -50,6 +47,7 @@ export default function UniversityCandidateCard({
   studentRank,
   isGroupAdded,
   onAddGroup,
+  preferredMajorSet,
 }: Props) {
   // 卡内内联展开: 同时只展开一个专业组 (点同组再次切换收起), 复刻候选卡(专业优先)的展开交互
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -137,7 +135,10 @@ export default function UniversityCandidateCard({
           const muted = reachFar || tooLow;
           const barTone = reachFar ? 't-reach' : tooLow ? 't-low'
             : GRAD_TONE[grad] === 'rush' ? 't-rush' : GRAD_TONE[grad] === 'safe' ? 't-safe' : 't-stable';
-          const pur = g.purity?.level ? PURITY_TONE[g.purity.level] : null;
+          // 组内命中学生意向的专业数(与专业优先卡同口径); 学生无意向 → undefined 不显示 chip
+          const hitCount = preferredMajorSet && preferredMajorSet.size > 0
+            ? (Array.isArray(g.majors) ? g.majors.filter((m: any) => preferredMajorSet.has(m.majorName)).length : 0)
+            : undefined;
           const adjusted = g.dynamicGradient?.adjustedMinRank;
           const basis = adjusted ?? g.groupMinRank;
           const gap = gapText(studentRank, basis);
@@ -148,11 +149,13 @@ export default function UniversityCandidateCard({
           const anchor = g.majorSections?.recommended?.[0]?.majorName ?? g.majors?.[0]?.majorName ?? null;
           const cnt = g.majorCount ?? g.majors?.length ?? 0;
           const smallBatch = typeof g.currentPlanCount === 'number' && g.currentPlanCount > 0 && g.currentPlanCount <= 5;
-          // grow-signals 行: 全用真实字段(纯净度/招生类别/招生计划 vs 去年同组), 不引入设计稿 mock(hit/chg)
-          const planNow = typeof g.currentPlanCount === 'number' ? g.currentPlanCount : null;
-          const planPrev = typeof g.previousPlanCount === 'number' ? g.previousPlanCount : null;
-          const planDelta = planNow != null && planPrev != null ? planNow - planPrev : null;
           const recruit = g.recruitType ? String(g.recruitType) : null;
+          // grow-signals 决策 chip(纯净度/意向命中/征集/组变动/招生 vs 2025)与专业优先卡共用 GroupSignalChips,
+          // 是否渲染该行 = 有招生类别 或 任一信号 chip 会出现
+          const hasSignals = !!recruit || g.purity?.level || g.currentPlanCount != null
+            || (g.supplementary && (g.supplementaryMaxSum ?? 0) > 0)
+            || (g.groupChangeType && g.groupChangeType !== '未变')
+            || typeof hitCount === 'number';
           const isExpanded = openKey === g.groupKey;
           // 趋势线: 院校组用 g.history3y (近 3 年录取), 缺则显"无历史录取线/需人工判断"
           const trend = Array.isArray(g.history3y) && g.history3y.length >= 2 ? g.history3y : null;
@@ -180,6 +183,11 @@ export default function UniversityCandidateCard({
               </span>
               <span className="grank">
                 末位 <b>{fmt(g.groupMinRank)}</b>
+                {/* 历史最低分(与专业优先卡「历史最低 X分/位次 Y」同字段, 让两视图信息一致)。
+                    与 V3 一致: 分与位次同源, 仅当位次也存在时才显示分, 避免出现「末位 — · 612分」。 */}
+                {typeof g.groupMinScore === 'number' && typeof g.groupMinRank === 'number' ? (
+                  <span style={{ color: 'var(--text-muted)' }}> · {g.groupMinScore}分</span>
+                ) : null}
                 {gap ? (
                   <span
                     className={`gdiff ${gap.ahead ? 'ahead' : 'behind'}`}
@@ -224,27 +232,13 @@ export default function UniversityCandidateCard({
                   </button>
                 )}
               </span>
-              {/* grow-signals: 纯净度 / 招生类别 / 招生计划增减 / 征集 —— 对齐设计稿 dchip 行, 数据全真 */}
-              {(pur || recruit || planNow != null || (g.supplementary?.totalPlanCount ?? 0) > 0) ? (
+              {/* grow-signals: 招生类别 + 决策 chip(纯净度/意向命中/征集/组变动/招生 vs 2025)。
+                  后者用 GroupSignalChips, 与专业优先卡 tb-signals 同源, 保证两视图口径一致。
+                  招生类别(recruitType)专业优先卡放在 gid-meta「N专业·类别」里, 院校优先无该行, 故单出一枚 chip 保留信息。 */}
+              {hasSignals ? (
                 <span className="grow-signals">
-                  {pur ? (
-                    <span className={`pgv2-dchip tone-${pur.tone}`} title={pur.desc}>纯净度 {pur.label}</span>
-                  ) : null}
-                  {planNow != null ? (
-                    <span className="pgv2-dchip tone-accent" title="本组 2026 招生计划及相对去年同组增减">
-                      招生 {planNow} 人{planDelta ? (planDelta > 0 ? ` +${planDelta}` : ` ${planDelta}`) : ''}
-                    </span>
-                  ) : null}
                   {recruit ? <span className="pgv2-dchip tone-neutral">{recruit}</span> : null}
-                  {g.supplementary && g.supplementary.totalPlanCount > 0 ? (() => {
-                    // 组级征集 (院校优先视图同样透出, 与专业优先 CandidateCardV3 口径一致)
-                    const sy = g.supplementary.sourceYear;
-                    const rounds = g.supplementary.byYear?.[sy]?.rounds;
-                    const perRound = Array.isArray(rounds) && rounds.length ? rounds.map((r: any) => r.count).join('/') : null;
-                    return (
-                      <span className="pgv2-dchip tone-safe-soft" title={`${sy} 年本组累计征集 ${g.supplementary.totalPlanCount} 人 / ${g.supplementary.totalRounds} 轮${perRound ? ` (分轮 ${rounds.map((r: any) => `第${r.round}轮 ${r.count}人`).join(' / ')})` : ''}。征集=没招满需补录, 常伴随降分, 是可达性的积极信号`}>征集 {g.supplementary.totalPlanCount}人{perRound ? ` (${perRound})` : `/${g.supplementary.totalRounds}轮`}</span>
-                    );
-                  })() : null}
+                  <GroupSignalChips group={g} preferredHitCount={hitCount} />
                 </span>
               ) : null}
             </div>
