@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import {
@@ -25,7 +25,17 @@ import {
 const { Title, Text } = Typography;
 const EXAM_TYPE_CN: Record<string, string> = { PHYSICS: '物理类', HISTORY: '历史类' };
 
+// useSearchParams 需要 Suspense 包裹才能通过 Next.js 静态预渲染 (CSR bailout)。
+// 把"读 query"的部分放进 Inner,默认导出做 Suspense 边界。
 export default function PlanImportPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24 }}>加载中…</div>}>
+      <PlanImportPageInner />
+    </Suspense>
+  );
+}
+
+function PlanImportPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const presetStudentId = Number(searchParams.get('studentId')) || undefined;
