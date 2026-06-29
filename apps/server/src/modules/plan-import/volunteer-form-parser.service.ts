@@ -37,13 +37,23 @@ export class VolunteerFormParserService {
       if (tokens.length < 5) continue;
       const schoolCode = tokens[0];
       if (!/^\d{4}$/.test(schoolCode)) continue;
-      const schoolName = tokens[1];
-      const groupCode = tokens[2];
-      if (!/^\d{3}$/.test(groupCode)) continue;
-      const adjustIdx = tokens.findIndex((t, i) => i >= 3 && (t === '是' || t === '否'));
+      // 院校名可能被 PDF 行内换行切成多 token (如 "南京财经大学红 山学院"),
+      // 不能假设 tokens[1] 就是完整院校名。扫第一个 3 位数字 token = 组代码位置,
+      // 院校名 = 中间所有 token 拼起来 (去空白)。
+      let groupIdx = -1;
+      for (let i = 1; i < tokens.length; i++) {
+        if (/^\d{3}$/.test(tokens[i])) {
+          groupIdx = i;
+          break;
+        }
+      }
+      if (groupIdx < 0 || groupIdx === 1) continue;
+      const schoolName = tokens.slice(1, groupIdx).join('');
+      const groupCode = tokens[groupIdx];
+      const adjustIdx = tokens.findIndex((t, i) => i > groupIdx && (t === '是' || t === '否'));
       if (adjustIdx < 0) continue;
       const acceptAdjust = tokens[adjustIdx] === '是';
-      const majorsStr = tokens.slice(3, adjustIdx).join(' ');
+      const majorsStr = tokens.slice(groupIdx + 1, adjustIdx).join(' ');
       const majors: ParsedMajor[] = majorsStr
         .split('；')
         .map(s => s.trim())

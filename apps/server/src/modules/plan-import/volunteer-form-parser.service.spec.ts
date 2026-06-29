@@ -62,6 +62,18 @@ describe('VolunteerFormParserService.parseFormText', () => {
     expect(r.volunteers.map(v => v.schoolCode)).toEqual(['5120', '5102']);
   });
 
+  it('院校名跨行被 PDF 切成多 token 仍解析对(组代码定位法; 兼容"南京财经大学红 山学院")', () => {
+    const text = HEADER + ' 第一志愿33 （平行志愿） 3916 南京财经大学红 山学院 102 0G 税收学 是 ' + IDENTITY;
+    const r = service.parseFormText(text);
+    expect(r.volunteers).toHaveLength(1);
+    const v = r.volunteers[0];
+    expect(v.seq).toBe(33);
+    expect(v.schoolCode).toBe('3916');
+    expect(v.schoolName).toBe('南京财经大学红山学院');
+    expect(v.groupCode).toBe('102');
+    expect(v.majors).toEqual([{ code: '0G', name: '税收学' }]);
+  });
+
   it('examTypeHint: 选科组合含历史 → HISTORY', () => {
     const IDENT_HIST = IDENTITY.replace('物理,化学,地理', '历史,政治,地理');
     const text = HEADER + ' 第一志愿01 （平行志愿） 5120 四川师范大学 111 0G 数学 是 ' + IDENT_HIST;
