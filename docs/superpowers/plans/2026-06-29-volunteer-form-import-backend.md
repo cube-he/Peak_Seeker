@@ -42,6 +42,14 @@ apps/server/scripts/fixtures/yuanjia-volunteers.json  # 袁嘉 41 组手写 fixt
 
 ## Task 1: 真实数据 go/no-go 探针(GATE)
 
+> **✅ 已执行(2026-06-29,生产只读),GATE 通过。结论(后续任务字面量以此为准):**
+> - **命中率 41/41**(含全部省外校),解析链 `院校码→University.code→universityId` + `(universityId, groupCode, batch, subjects, year)` 成立。
+> - **`batch` 确切串 = `本科批B段`**(PDF 的"本科批次B段"需去"次"归一化 → matcher `canon` 已处理)。
+> - **`subjects` 确切值 = `物理`**(resolver `opts.subjects` 用 `物理`,由 examType PHYSICS 映射)。
+> - **`major_code` 与 PDF 2 位代号一致**(如 5120/111 = `0G 数学与应用数学 / 13 物理学 / 0N 化学`)→ resolver「名优先码兜底」两条都命中。
+>
+> 下面的探针步骤为复现留档;实际已跑过,可直接进入 Task 2。
+
 **目的:** 在写任何解析逻辑前,用袁嘉几个代表性 `(院校码,组码)` 跑真实 2026 库,确认解析链成立 + 拿到 3 个关键事实:`本科批B段` 的确切 `batch` 串、`subjects` 确切值(预期 `'物理'`)、`EnrollmentPlan.major_code` 是否等于 PDF 2 位代号。
 
 **前置:** 需能连到含 2026 数据的库。本地 dev 库(`localhost:3306`)默认未启;两条路任选:① 启本地库并导入 2026 数据;② 在生产服务器只读跑(SSH `132.232.245.53`,`cd apps/server` 用其 `.env` 的 `DATABASE_URL`)。**只读,不写。**
@@ -492,9 +500,11 @@ export class StudentBatchMatcherService {
   }
 
   // 在该老师名下学生里按姓名匹配; 班级一致的排前。考生号未入库、证件号掩码, 故不参与唯一反查。
+  // 师生关联: StudentProfile.teacherId → TeacherProfile.id; 入参 teacherUserId 是老师的 User.id,
+  // 故经 teacher.userId 过滤。realName 在 User 上(user 关联)。
   async findCandidateStudents(identity: Pick<ParsedIdentity, 'name' | 'classInfo'>, teacherUserId: number) {
     const rows = await this.prisma.studentProfile.findMany({
-      where: { createdById: teacherUserId, user: { realName: identity.name } },
+      where: { teacher: { userId: teacherUserId }, user: { realName: identity.name } },
       include: { user: { select: { realName: true } } },
     });
     const classWanted = (identity.classInfo || '').replace(/\s/g, '');
@@ -507,7 +517,7 @@ export class StudentBatchMatcherService {
 }
 ```
 
-> **注意:** `studentProfile` 上「这个学生属于哪个老师」的字段名以 schema 实际为准(此处用 `createdById`)。实现时先核 `schema.prisma` 的 `StudentProfile`——若是 `teacherId`/`teacherProfileId`/经 `user.createdById` 关联,按实际改 where 与测试。`user.realName` 关联过滤同理核 relation 名。
+> **已核(schema.prisma:852)**:`StudentProfile.teacherId → TeacherProfile`,`userId → User`(`realName` 在 User 上),`examType` 为 `NewExamType` 枚举(`PHYSICS`/`HISTORY`)。故按 `teacher: { userId: teacherUserId }` + `user: { realName }` 过滤,无 `createdById` 字段。
 
 - [ ] **Step 4: 跑测试确认通过**
 
@@ -788,10 +798,13 @@ async function main() {
   const resolver = new VolunteerFormResolverService(prisma as any);
   const matcher = new StudentBatchMatcherService(prisma as any);
 
-  // 认人 → 取学生(此处脚本用显式 --student-id; 同时校验姓名一致)
-  const student = await (prisma as any).studentProfile.findUnique({ where: { id: studentId }, include: { user: { select: { realName: true } } } });
+  // 认人 → 取学生(此处脚本用显式 --student-id; 同时取出该生所属老师的 userId 作 actor)
+  const student = await (prisma as any).studentProfile.findUnique({
+    where: { id: studentId },
+    include: { user: { select: { realName: true } }, teacher: { select: { userId: true } } },
+  });
   if (!student) throw new Error(`学生 ${studentId} 不存在`);
-  console.log(`学生: ${student.user?.realName} (#${studentId}) examType=${student.examType}`);
+  console.log(`学生: ${student.user?.realName} (#${studentId}) examType=${student.examType} 老师userId=${student.teacher?.userId}`);
 
   // 认批次
   const bc = await matcher.matchBatchConfig(form.batch, student.examType, student.examYear ?? form.year ?? 2026, student.province ?? '四川');
@@ -811,7 +824,9 @@ async function main() {
     prisma as any,
     new PlanItemService(prisma as any, new PlanStateMachineService(), { recomputeForPlan: async () => ({}) } as any),
   );
-  const plan = await importSvc.commit({ studentId, batchConfigId: bc.id, resolvedGroups: r.groups, actorUserId: student.createdById ?? student.userId });
+  const actorUserId = student.teacher?.userId;
+  if (!actorUserId) throw new Error('该生未关联老师, 无法确定方案归属 actorUserId');
+  const plan = await importSvc.commit({ studentId, batchConfigId: bc.id, resolvedGroups: r.groups, actorUserId });
   console.log(`\n✓ 新版本 plan #${plan.id} v${plan.versionNo}, 写入 ${(plan as any).importedCount} 条`);
   if ((plan as any).failures?.length) console.log('失败:', (plan as any).failures);
   await prisma.$disconnect();
@@ -876,4 +891,4 @@ Expected: 构建成功,无 TS 错误。
 
 **3. Type consistency：** `ResolvedGroup`/`ResolvedSelectedMajor`/`ResolveResult` 在 Task 2 定义,Task 3/5/6 一致引用;`resolveGroups(volunteers, {year,subjects,batch})`、`commit({studentId,batchConfigId,resolvedGroups,actorUserId,versionNote?})`、`matchBatchConfig(parsedBatch,examType,year,province)`、`findCandidateStudents(identity,teacherUserId)` 各处签名一致;`PlanItemService.add(planId, dto, actorUserId)` 对齐 `plan-item.service.ts:100`。
 
-**4. 已知风险点(实现时盯):** ① Task 1 三事实(batch串/subjects/major_code)→ 校正 Task 6 的 `subjectsMap` 与 resolver 字面;② StudentProfile 师生关联字段名;③ `VolunteerPlan.create` 的字段(`batchName`/`recommendType`/`province`)以 schema 实际为准(已按 deriveVersion 的 create 对齐,见 `plan.service.ts:630`)。
+**4. 风险点状态:** ① Task 1 三事实(batch=`本科批B段`/subjects=`物理`/major_code 与 PDF 一致)→ **已实测确认**(见 Task 1 callout),Task 6 `subjectsMap`/resolver 字面已对;② StudentProfile 师生关联 = `teacherId→TeacherProfile`(经 `teacher.userId`)→ **已核改**(Task 4/6);③ `VolunteerPlan.create` 字段(`batchName`/`recommendType`/`province`/`parentVersionId`/`versionNote`)已按 `deriveVersion` 的 create 对齐(`plan.service.ts:630`)。
