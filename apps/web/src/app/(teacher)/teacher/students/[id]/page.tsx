@@ -980,6 +980,13 @@ export default function StudentDetailPage() {
             <button
               type="button"
               className="btn"
+              onClick={() => router.push(`/teacher/plan-import?studentId=${studentId}`)}
+            >
+              <TIcon.upload /> 导入志愿表
+            </button>
+            <button
+              type="button"
+              className="btn"
               style={{ color: '#dc2626' }}
               onClick={onDeleteStudent}
               disabled={deleteMutation.isPending}
