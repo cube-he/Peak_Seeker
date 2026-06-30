@@ -39,7 +39,10 @@ export class VolunteerFormImportController {
     const examType = parsed.examTypeHint ?? 'PHYSICS';
     const candidateStudents = await this.matcher.findCandidateStudents(parsed.identity, actorUserId);
     const year = (candidateStudents[0] as any)?.examYear ?? 2026;
-    const province = (candidateStudents[0] as any)?.province ?? '四川';
+    // 高考所在地省份, 不是户籍。批次/线/计划/录取/段表只有四川 (随迁子女户籍在外、
+    // 在川高考的常态: StudentProfile.province 是户籍, 不能用来查批次)。志愿表 PDF
+    // 本身写明是「四川省...考生志愿表」,该功能上下文锁定四川。
+    const province = '四川';
     const bc = await this.matcher.matchBatchConfig(parsed.batch, examType, year, province);
 
     const groups = bc
