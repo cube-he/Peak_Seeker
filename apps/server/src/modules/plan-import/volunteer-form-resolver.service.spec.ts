@@ -58,6 +58,52 @@ describe('VolunteerFormResolverService.resolveGroups', () => {
     expect(r.groups[0].acceptAdjust).toBe(true);
   });
 
+  it('高职批按招生计划实名高职(专科)批查询, 避免误报该批次无此专业组', async () => {
+    prisma.university.findMany.mockResolvedValue([{ id: 10714, code: '5156', name: '四川电力职业技术学院' }]);
+    prisma.enrollmentPlan.findMany.mockResolvedValue([
+      { id: 821978, majorId: 1, majorCode: '06', majorName: '发电厂及电力系统' },
+    ]);
+
+    const v: ParsedVolunteer = {
+      seq: 2,
+      schoolCode: '5156',
+      schoolName: '四川电力职业技术学院',
+      groupCode: '101',
+      acceptAdjust: true,
+      majors: [{ code: '06', name: '发电厂及电力系统' }],
+    };
+    const r = await service.resolveGroups([v], { year: 2026, subjects: '物理', batch: '高职批' });
+
+    expect(prisma.enrollmentPlan.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        universityId: 10714,
+        groupCode: '101',
+        year: 2026,
+        batch: '高职(专科)批',
+        subjects: '物理',
+      }),
+    }));
+    expect(r.groups[0].status).toBe('matched');
+    expect(r.groups[0].anchorEnrollmentPlanId).toBe(821978);
+  });
+
+  it('带招生类型约束的批次别名会同步收窄 recruitType', async () => {
+    prisma.university.findMany.mockResolvedValue([{ id: 11, code: '5120', name: '四川师范大学' }]);
+    prisma.enrollmentPlan.findMany.mockResolvedValue([
+      { id: 901, majorId: 1, majorCode: '0G', majorName: '数学与应用数学' },
+    ]);
+    const v: ParsedVolunteer = { seq: 1, schoolCode: '5120', schoolName: '四川师范大学', groupCode: '111', acceptAdjust: true, majors: [{ code: '0G', name: '数学与应用数学' }] };
+
+    await service.resolveGroups([v], { year: 2026, subjects: '物理', batch: '本科批A段（国家专项）' });
+
+    expect(prisma.enrollmentPlan.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        batch: '本科批A段',
+        recruitType: { contains: '国家专项' },
+      }),
+    }));
+  });
+
   it('专业全对不上 → 组仍 matched, 锚定取该组任一 EP, selectedMajors 空, note=专业未对齐', async () => {
     prisma.university.findMany.mockResolvedValue([{ id: 11, code: '5120', name: '四川师范大学' }]);
     prisma.enrollmentPlan.findMany.mockResolvedValue([{ id: 901, majorId: 1, majorCode: 'ZZ', majorName: '别的专业' }]);

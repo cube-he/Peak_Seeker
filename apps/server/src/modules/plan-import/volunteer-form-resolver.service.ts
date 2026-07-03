@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ParsedVolunteer, ParsedMajor, ResolvedGroup, ResolveResult, ResolvedSelectedMajor } from './volunteer-form.types';
+import { resolveBatchQueryShape } from '../plan-candidate/batch-alias';
 
 @Injectable()
 export class VolunteerFormResolverService {
@@ -10,6 +11,7 @@ export class VolunteerFormResolverService {
     volunteers: ParsedVolunteer[],
     opts: { year: number; subjects: string; batch: string },
   ): Promise<ResolveResult> {
+    const batchShape = resolveBatchQueryShape(opts.batch);
     const codes = [...new Set(volunteers.map(v => v.schoolCode))];
     const unis = await this.prisma.university.findMany({
       where: { code: { in: codes } },
@@ -23,7 +25,14 @@ export class VolunteerFormResolverService {
       if (!uni) { groups.push(this.unmatched(v, '院校代码不在库')); continue; }
 
       const eps = await this.prisma.enrollmentPlan.findMany({
-        where: { universityId: uni.id, groupCode: v.groupCode, year: opts.year, batch: opts.batch, subjects: opts.subjects },
+        where: {
+          universityId: uni.id,
+          groupCode: v.groupCode,
+          year: opts.year,
+          batch: batchShape.batches.length === 1 ? batchShape.batches[0] : { in: batchShape.batches },
+          subjects: opts.subjects,
+          ...(batchShape.recruitTypeContains ? { recruitType: { contains: batchShape.recruitTypeContains } } : {}),
+        },
         select: { id: true, majorId: true, majorCode: true, majorName: true },
       });
       if (eps.length === 0) { groups.push(this.unmatched(v, '该批次无此专业组')); continue; }
