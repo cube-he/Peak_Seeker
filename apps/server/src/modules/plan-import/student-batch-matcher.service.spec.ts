@@ -31,6 +31,23 @@ describe('StudentBatchMatcherService', () => {
     expect(prisma.batchConfig.findMany).toHaveBeenCalledWith({ where: { year: 2026, province: '四川', examType: '物理' } });
   });
 
+  it.each([
+    ['高职（专科）批次', '高职批', 17],
+    ['高职(专科)批', '高职批', 17],
+    ['专科批次', '高职批', 17],
+    ['高职（专科）提前批次', '高职提前批', 16],
+    ['专科提前批', '高职提前批', 16],
+  ])('matchBatchConfig: 专科类批次别名 %s == %s', async (parsedBatch, configuredBatch, expectedId) => {
+    prisma.batchConfig.findMany.mockResolvedValue([
+      { id: 16, year: 2026, province: '四川', batch: '高职提前批', examType: '物理' },
+      { id: 17, year: 2026, province: '四川', batch: '高职批', examType: '物理' },
+    ]);
+
+    const bc = await service.matchBatchConfig(parsedBatch, 'PHYSICS', 2026, '四川');
+
+    expect(bc).toMatchObject({ id: expectedId, batch: configuredBatch });
+  });
+
   it('matchBatchConfig: 找不到返回 null', async () => {
     prisma.batchConfig.findMany.mockResolvedValue([{ id: 8, batch: '本科批A段', examType: '物理' }]);
     const bc = await service.matchBatchConfig('本科批次B段', 'PHYSICS', 2026, '四川');

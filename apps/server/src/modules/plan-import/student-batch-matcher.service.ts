@@ -9,7 +9,19 @@ export class StudentBatchMatcherService {
   constructor(private prisma: PrismaService) {}
 
   private canon(s: string): string {
-    return (s || '').replace(/次/g, '').replace(/\s/g, '');
+    const normalized = (s || '')
+      .replace(/\s/g, '')
+      .replace(/[（(]专科[）)]/g, '')
+      .replace(/^普通类/, '')
+      .replace(/次/g, '');
+
+    const aliases: Record<string, string> = {
+      专科批: '高职批',
+      高职专科批: '高职批',
+      专科提前批: '高职提前批',
+      高职专科提前批: '高职提前批',
+    };
+    return aliases[normalized] ?? normalized;
   }
 
   async matchBatchConfig(parsedBatch: string, examType: string, year: number, province: string) {
