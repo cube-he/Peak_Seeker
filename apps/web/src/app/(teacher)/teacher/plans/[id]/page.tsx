@@ -55,7 +55,6 @@ import {
   type SortDir,
   type SortableItem,
 } from './plan-sort';
-import { diffPlanItems, type DiffKind, type DiffRow } from './plan-diff';
 import {
   getPlanItemMajorSelection,
   type PlanItemMajorSelectionLike,
@@ -150,6 +149,53 @@ function getHistoricalRank(item: any): number | null {
   return item?.rank25Major ?? item?.rank25Group ?? item?.lastYearMinRank ?? null;
 }
 
+type DiffKind = 'same' | 'modified' | 'added' | 'removed' | 'reordered';
+
+interface DiffRow {
+  sequence: number;
+  current: any | null;
+  compare: any | null;
+  kind: DiffKind;
+}
+
+function diffPlanItems(currentItems: any[], compareItems: any[]): DiffRow[] {
+  const currentBySeq = new Map<number, any>();
+  currentItems.forEach((it) => currentBySeq.set(it.sequence, it));
+  const compareBySeq = new Map<number, any>();
+  compareItems.forEach((it) => compareBySeq.set(it.sequence, it));
+
+  const allSeqs = new Set<number>([
+    ...Array.from(currentBySeq.keys()),
+    ...Array.from(compareBySeq.keys()),
+  ]);
+  const sortedSeqs = Array.from(allSeqs).sort((a, b) => a - b);
+
+  const currentKey = (it: any) => `${it.universityId}-${it.majorId}`;
+  const compareKey = (it: any) => `${it.universityId}-${it.majorId}`;
+  const currentKeys = new Set(currentItems.map(currentKey));
+  const compareKeys = new Set(compareItems.map(compareKey));
+
+  return sortedSeqs.map((seq) => {
+    const cur = currentBySeq.get(seq) ?? null;
+    const cmp = compareBySeq.get(seq) ?? null;
+    if (cur && cmp) {
+      if (currentKey(cur) === compareKey(cmp)) {
+        return { sequence: seq, current: cur, compare: cmp, kind: 'same' };
+      }
+      const curInCompare = compareKeys.has(currentKey(cur));
+      const cmpInCurrent = currentKeys.has(compareKey(cmp));
+      if (curInCompare && cmpInCurrent) {
+        return { sequence: seq, current: cur, compare: cmp, kind: 'reordered' };
+      }
+      return { sequence: seq, current: cur, compare: cmp, kind: 'modified' };
+    }
+    if (cur && !cmp) {
+      return { sequence: seq, current: cur, compare: null, kind: 'added' };
+    }
+    return { sequence: seq, current: null, compare: cmp, kind: 'removed' };
+  });
+}
+
 const DIFF_BG: Record<DiffKind, string> = {
   same: 'bg-surface',
   modified: 'bg-amber-50',
@@ -177,12 +223,7 @@ export default function PlanDetailPage() {
   // zustand hydrate 有 race, 用 subscribe 同步 (沿用 dashboard 的模式)。
   const [isSupervisor, setIsSupervisor] = useState(false);
   useEffect(() => {
-    const sync = () => {
-      const user = useAuthStore.getState().user as
-        | { teacherProfile?: { isSupervisor?: boolean } }
-        | null;
-      setIsSupervisor(user?.teacherProfile?.isSupervisor === true);
-    };
+    const sync = () => setIsSupervisor(useAuthStore.getState().user?.teacherProfile?.isSupervisor === true);
     sync();
     return useAuthStore.subscribe(sync);
   }, []);
@@ -1620,17 +1661,13 @@ function ComparePanel({
 
 function ComparePanelRow({ row }: { row: DiffRow }) {
   const bg = DIFF_BG[row.kind];
-  const label =
-    row.kind === 'reordered' && row.fromSequence && row.toSequence
-      ? `${DIFF_LABEL[row.kind]} #${row.fromSequence} -> #${row.toSequence}`
-      : DIFF_LABEL[row.kind];
   return (
     <>
       <div className={`flex items-start gap-1 rounded-l py-2 pl-2 ${bg}`}>
         <span className="text-text">{row.sequence}</span>
         {row.kind !== 'same' ? (
           <span className="rounded bg-text-muted/20 px-1 text-[10px] text-text-muted">
-            {label}
+            {DIFF_LABEL[row.kind]}
           </span>
         ) : null}
       </div>
