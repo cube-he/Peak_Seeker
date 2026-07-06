@@ -7522,6 +7522,63 @@
 .wn-teacher-scope .pgv2-star.rec  { color: var(--safe); }
 .wn-teacher-scope .pgv2-star.bak  { color: var(--text-muted); }
 .wn-teacher-scope .pgv2-star.risk { color: var(--rush); }
+.wn-teacher-scope .pd2-major-order {
+  min-width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--primary-fixed);
+  color: var(--primary);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.wn-teacher-scope .pd2-major-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.wn-teacher-scope .pd2-major-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1px;
+  white-space: nowrap;
+}
+.wn-teacher-scope .pd2-major-actions .ant-btn {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+}
+.wn-teacher-scope .pd2-major-actions .ant-btn-dangerous {
+  width: auto;
+  min-width: 32px;
+  padding: 0 4px;
+}
+.wn-teacher-scope .pd2-major-savebar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.wn-teacher-scope .pd2-major-savebar-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
 
 .wn-teacher-scope .pgv2-eval-chip {
   padding: 1px 5px;

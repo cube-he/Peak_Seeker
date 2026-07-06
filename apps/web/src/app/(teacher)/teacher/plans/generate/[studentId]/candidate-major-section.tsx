@@ -11,6 +11,7 @@
  * group/major 用 any: 与 CandidateCardV3 一致, 候选数据结构由调用方保证, 本组件只读字段。
  */
 
+import type { ReactNode } from 'react';
 import { PlusOutlined } from '@ant-design/icons';
 import styles from './candidate-pool-polished.module.css';
 
@@ -71,6 +72,12 @@ function majorSectionTone(section: string, major: any) {
   return major?.matchStatus === 'SOFT_FAIL' ? 'warn' : gradientTone(gradientTier(major));
 }
 
+type CandidateMajorSectionActionContext = {
+  section: string;
+  index: number;
+  isAdded: boolean;
+};
+
 export default function CandidateMajorSection({
   title,
   section,
@@ -78,6 +85,9 @@ export default function CandidateMajorSection({
   group,
   onAdd,
   addingMajorKey,
+  preserveOrder = false,
+  renderAction,
+  renderMarker,
 }: {
   title: string;
   section: string;
@@ -85,10 +95,13 @@ export default function CandidateMajorSection({
   group?: any;
   onAdd?: (group: any, major: any) => void;
   addingMajorKey?: number | null;
+  preserveOrder?: boolean;
+  renderAction?: (major: any, context: CandidateMajorSectionActionContext) => ReactNode;
+  renderMarker?: (major: any, context: Omit<CandidateMajorSectionActionContext, 'isAdded'>) => ReactNode;
 }) {
   if (!majors.length) return null;
   // 视觉排序优先级 (不改 anchor 持久语义): 意向梯队命中最前, 搜索命中次之
-  const sortedMajors = [...majors].sort((a, b) => {
+  const sortedMajors = preserveOrder ? [...majors] : [...majors].sort((a, b) => {
     const ap = a.matchesPreferredTier ? 1 : 0;
     const bp = b.matchesPreferredTier ? 1 : 0;
     if (ap !== bp) return bp - ap;
@@ -109,7 +122,7 @@ export default function CandidateMajorSection({
           <span>硕博</span>
           <span />
         </div>
-        {sortedMajors.map((major) => {
+        {sortedMajors.map((major, index) => {
           const isAdded = addingMajorKey === major.enrollmentPlanId;
           const evalText = major.disciplineEval && String(major.disciplineEval).trim() && String(major.disciplineEval).trim() !== '/' ? String(major.disciplineEval).trim() : null;
           const rankText = !evalText && major.majorRanking && String(major.majorRanking).trim() && String(major.majorRanking).trim() !== '/' ? String(major.majorRanking).trim() : null;
@@ -125,7 +138,9 @@ export default function CandidateMajorSection({
                 : undefined}
             >
               {/* 1 星标 */}
-              <span className={`pgv2-star ${section === 'RECOMMENDED' ? 'rec' : section === 'RISK' ? 'risk' : 'bak'}`}>★</span>
+              <span className={`pgv2-star ${section === 'RECOMMENDED' ? 'rec' : section === 'RISK' ? 'risk' : 'bak'}`}>
+                {renderMarker ? renderMarker(major, { section, index }) : '★'}
+              </span>
               {/* 2 专业名 + 评级/标签 + 学费/学制 + 招生报页码 + 备注 */}
               <span className="nm">
                 <b>{major.majorName}{major.majorCode ? <i className="mcode">{major.majorCode}</i> : null}</b>
@@ -213,7 +228,9 @@ export default function CandidateMajorSection({
               </span>
               {/* 6 操作 */}
               <span className="op">
-                {group && onAdd ? (
+                {renderAction ? (
+                  renderAction(major, { section, index, isAdded })
+                ) : group && onAdd ? (
                   <button
                     type="button"
                     className={`pgv2-add-btn major ${isAdded ? 'added' : ''}`}

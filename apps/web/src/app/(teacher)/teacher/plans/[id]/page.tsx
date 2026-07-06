@@ -21,7 +21,9 @@ import {
   message,
 } from 'antd';
 import {
+  ArrowDownOutlined,
   ArrowRightOutlined,
+  ArrowUpOutlined,
   CheckCircleOutlined,
   CopyOutlined,
   DeleteOutlined,
@@ -32,15 +34,16 @@ import {
   MoreOutlined,
   PlayCircleOutlined,
   RollbackOutlined,
+  SaveOutlined,
   SendOutlined,
   SortAscendingOutlined,
+  UndoOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
 import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
-import PlanMajorSelectionEditor from '../components/PlanMajorSelectionEditor';
 import PlanPreparationTable from '../components/PlanPreparationTable';
 import PlanSortPanel from './PlanSortPanel';
 import {
@@ -56,11 +59,13 @@ import {
 import { diffPlanItems, type DiffKind, type DiffRow } from './plan-diff';
 import {
   getPlanItemMajorSelection,
+  movePlanMajorSelection,
+  togglePlanMajorSelection,
   type PlanItemMajorSelectionLike,
   type SelectedPlanMajorPayload,
 } from '../generate/[studentId]/plan-workbench-utils';
 import { CandidateCardV3 } from '../generate/[studentId]/CandidateCardV3';
-import CandidateMajorSection, { getMajorSections } from '../generate/[studentId]/candidate-major-section';
+import CandidateMajorSection from '../generate/[studentId]/candidate-major-section';
 
 // 后端梯度枚举 → 设计稿 tier class (冲=rush / 稳=stable / 保=safe)
 const GRADIENT_TIER: Record<string, 'rush' | 'stable' | 'safe'> = {
@@ -282,6 +287,65 @@ function mergePlanItemCardGroup(item: any, richGroup: any | undefined, studentRa
       },
     },
     isRich: true,
+  };
+}
+
+function majorIdentityKey(major: any) {
+  return String(major?.enrollmentPlanId ?? major?.majorId ?? major?.majorCode ?? major?.majorName ?? '');
+}
+
+function normalizeMajorOrderKey(majors: SelectedPlanMajorPayload[]) {
+  return majors.map((major) => major.enrollmentPlanId).join(',');
+}
+
+function collectGroupMajors(group: any) {
+  const seen = new Set<string>();
+  const majors = [
+    ...(group?.majors ?? []),
+    ...(group?.majorSections?.recommended ?? []),
+    ...(group?.majorSections?.backup ?? []),
+    ...(group?.majorSections?.risk ?? []),
+  ];
+  return majors.filter((major) => {
+    const key = majorIdentityKey(major);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function toSelectedMajorPayload(major: any, order: number): SelectedPlanMajorPayload {
+  return {
+    order,
+    enrollmentPlanId: major.enrollmentPlanId,
+    majorId: major.majorId ?? major.enrollmentPlanId,
+    majorName: major.majorName,
+    majorCode: major.majorCode ?? null,
+    displaySection: major.displaySection ?? null,
+    displayReason: major.displayReason ?? null,
+    majorMinScore: major.majorMinScore ?? null,
+    majorMinRank: major.majorMinRank ?? null,
+    planCount: major.planCount ?? null,
+  };
+}
+
+function mergeMajorDisplay(
+  major: SelectedPlanMajorPayload,
+  sourceByKey: Map<string, any>,
+  index: number,
+  isSelected: boolean,
+) {
+  const source = sourceByKey.get(majorIdentityKey(major)) ?? {};
+  return {
+    ...source,
+    ...major,
+    majorMinScore: major.majorMinScore ?? source.majorMinScore ?? null,
+    majorMinRank: major.majorMinRank ?? source.majorMinRank ?? null,
+    planCount: major.planCount ?? source.planCount ?? null,
+    displaySection: major.displaySection ?? source.displaySection ?? (isSelected ? 'RECOMMENDED' : 'BACKUP'),
+    displayReason: major.displayReason ?? source.displayReason ?? null,
+    selectionOrder: isSelected ? index + 1 : null,
+    isSelectedMajor: isSelected,
   };
 }
 
@@ -1507,9 +1571,35 @@ function PlanRow({
   const [expanded, setExpanded] = useState(false);
   const [annotateOpen, setAnnotateOpen] = useState(false);
   const { group: cardGroup, isRich } = mergePlanItemCardGroup(item, richGroup, studentRank);
-  const majorSections = getMajorSections(cardGroup);
+  const selection = useMemo(() => getPlanItemMajorSelection(item as PlanItemMajorSelectionLike), [item]);
+  const [selectedMajors, setSelectedMajors] = useState<SelectedPlanMajorPayload[]>(selection.selectedMajors);
+  const savedMajorOrderKey = normalizeMajorOrderKey(selection.selectedMajors);
+  useEffect(() => {
+    setSelectedMajors(selection.selectedMajors);
+  }, [savedMajorOrderKey, selection.selectedMajors]);
+
+  const sourceMajors = useMemo(() => collectGroupMajors(cardGroup), [cardGroup]);
+  const sourceByKey = useMemo(() => {
+    const next = new Map<string, any>();
+    for (const major of sourceMajors) next.set(majorIdentityKey(major), major);
+    return next;
+  }, [sourceMajors]);
+  const selectedIds = useMemo(
+    () => new Set(selectedMajors.map((major) => major.enrollmentPlanId)),
+    [selectedMajors],
+  );
+  const candidateMajorRanking = selection.candidateMajorRanking.length
+    ? selection.candidateMajorRanking
+    : sourceMajors.map((major, index) => toSelectedMajorPayload(major, index + 1));
+  const selectedDisplayMajors = selectedMajors.map((major, index) =>
+    mergeMajorDisplay(major, sourceByKey, index, true),
+  );
+  const unselectedDisplayMajors = candidateMajorRanking
+    .filter((major) => !selectedIds.has(major.enrollmentPlanId))
+    .map((major, index) => mergeMajorDisplay(major, sourceByKey, index, false));
+  const canEditMajors = Boolean(editable && selection.canEdit && onSaveMajors);
+  const hasMajorChanges = normalizeMajorOrderKey(selectedMajors) !== savedMajorOrderKey;
   const hasMetaInfo = item.selectionReason || item.riskWarning || item.adjustmentAdvice;
-  const hasMajorEditor = item.fullMajorRanking || item.selectedMajors?.length || item.recommendedOrder;
   const sequenceNo = freeMode && displayPos ? displayPos : item.sequence;
   const sequenceLabel = String(sequenceNo ?? item.sequence ?? '').padStart(2, '0');
   const canMoveByNumber = Boolean(freeMode && onMoveToPos);
@@ -1592,6 +1682,59 @@ function PlanRow({
       </div>
     </>
   );
+  const renderMajorMarker = (major: any, context: { index: number }) => (
+    major.isSelectedMajor ? (
+      <span className="pd2-major-order">{String(major.selectionOrder ?? context.index + 1).padStart(2, '0')}</span>
+    ) : '★'
+  );
+  const renderMajorAction = (major: any) => {
+    const selected = selectedIds.has(major.enrollmentPlanId);
+    const selectedIndex = selectedMajors.findIndex((item) => item.enrollmentPlanId === major.enrollmentPlanId);
+    if (!canEditMajors) {
+      return <span className="pd2-major-state">{selected ? `已选 ${selectedIndex + 1}` : '未选'}</span>;
+    }
+    if (selected) {
+      return (
+        <Space size={4} className="pd2-major-actions">
+          <Button
+            size="small"
+            type="text"
+            icon={<ArrowUpOutlined />}
+            disabled={saving || selectedIndex <= 0}
+            title="上移"
+            onClick={() => setSelectedMajors((current) => movePlanMajorSelection(current, major.enrollmentPlanId, 'up'))}
+          />
+          <Button
+            size="small"
+            type="text"
+            icon={<ArrowDownOutlined />}
+            disabled={saving || selectedIndex >= selectedMajors.length - 1}
+            title="下移"
+            onClick={() => setSelectedMajors((current) => movePlanMajorSelection(current, major.enrollmentPlanId, 'down'))}
+          />
+          <Button
+            size="small"
+            danger
+            type="text"
+            disabled={saving || selectedMajors.length <= 1}
+            title="移出已选"
+            onClick={() => setSelectedMajors((current) => togglePlanMajorSelection(current, toSelectedMajorPayload(major, selectedIndex + 1), false))}
+          >
+            移出
+          </Button>
+        </Space>
+      );
+    }
+    return (
+      <Button
+        size="small"
+        disabled={saving || selectedMajors.length >= 6}
+        onClick={() => setSelectedMajors((current) => togglePlanMajorSelection(current, toSelectedMajorPayload(major, current.length + 1), true))}
+      >
+        选择
+      </Button>
+    );
+  };
 
   return (
     <>
@@ -1641,9 +1784,23 @@ function PlanRow({
                   正在同步生成页同款候选组数据...
                 </div>
               ) : null}
-              <CandidateMajorSection title="推荐填写" section="RECOMMENDED" majors={majorSections.recommended} group={cardGroup} />
-              <CandidateMajorSection title="可备选" section="BACKUP" majors={majorSections.backup} group={cardGroup} />
-              <CandidateMajorSection title="风险/不建议" section="RISK" majors={majorSections.risk} group={cardGroup} />
+              <CandidateMajorSection
+                title="已选择专业"
+                section="RECOMMENDED"
+                majors={selectedDisplayMajors}
+                group={cardGroup}
+                preserveOrder
+                renderMarker={renderMajorMarker}
+                renderAction={renderMajorAction}
+              />
+              <CandidateMajorSection
+                title="未选择专业"
+                section="BACKUP"
+                majors={unselectedDisplayMajors}
+                group={cardGroup}
+                preserveOrder
+                renderAction={renderMajorAction}
+              />
               {Array.isArray((cardGroup as any).hardFailMajors) && (cardGroup as any).hardFailMajors.length > 0 ? (
                 <div style={{ marginTop: 8 }}>
                   <div style={{ fontSize: 12, color: '#8c8c8c', margin: '6px 0 4px', fontWeight: 500 }}>
@@ -1676,14 +1833,37 @@ function PlanRow({
                   ) : null}
                 </div>
               ) : null}
-              {hasMajorEditor && onSaveMajors ? (
-                <PlanMajorSelectionEditor
-                  item={item}
-                  status={planStatus}
-                  editable={editable}
-                  saving={saving}
-                  onSave={onSaveMajors}
-                />
+              {selection.candidateMajorRanking.length ? (
+                <div className="pd2-major-savebar">
+                  <div className="pd2-major-savebar-notes">
+                    {planStatus === 'PENDING_REVIEW' && canEditMajors ? <span>保存后方案会退回草稿，需要重新提交审核。</span> : null}
+                    {selectedMajors.length < 6 ? <span>当前已选 {selectedMajors.length} 个专业，建议尽量填满 6 个并服从调剂。</span> : null}
+                    {!canEditMajors ? <span>当前状态仅展示专业顺序，暂不可编辑。</span> : null}
+                  </div>
+                  {editable ? (
+                    <Space size={8}>
+                      <Button
+                        icon={<UndoOutlined />}
+                        disabled={saving || !hasMajorChanges}
+                        onClick={() => setSelectedMajors(selection.selectedMajors)}
+                      >
+                        撤销
+                      </Button>
+                      <Button
+                        type="primary"
+                        icon={<SaveOutlined />}
+                        loading={saving}
+                        disabled={!canEditMajors || !hasMajorChanges || selectedMajors.length < 1}
+                        onClick={() => onSaveMajors?.({
+                          selectedMajors,
+                          candidateMajorRanking: selection.candidateMajorRanking,
+                        })}
+                      >
+                        保存专业选择
+                      </Button>
+                    </Space>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           )}
