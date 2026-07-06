@@ -5,6 +5,7 @@ jest.mock('../api', () => ({
   __esModule: true,
   default: {
     get: jest.fn(),
+    post: jest.fn(),
     put: jest.fn(),
   },
 }));
@@ -39,6 +40,26 @@ describe('adminApi student assignment helpers', () => {
 
     expect(api.put).toHaveBeenCalledWith('/students/12/assign', {
       teacherProfileId: null,
+    });
+  });
+
+  it('validates structured import files through the admin data endpoint', () => {
+    const formData = new FormData();
+
+    adminApi.validateImportFile(formData);
+
+    expect(api.post).toHaveBeenCalledWith('/admin/data/validate', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  });
+
+  it('imports structured data through the admin data endpoint', () => {
+    const formData = new FormData();
+
+    adminApi.importData(formData);
+
+    expect(api.post).toHaveBeenCalledWith('/admin/data/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
   });
 });

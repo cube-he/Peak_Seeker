@@ -80,13 +80,13 @@ export const adminApi = {
 
   // Data Import
   validateImportFile(formData: FormData): Promise<any> {
-    return api.post('/data-import/validate', formData, {
+    return api.post('/admin/data/validate', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }) as any;
   },
 
   importData(formData: FormData): Promise<any> {
-    return api.post('/data-import/import', formData, {
+    return api.post('/admin/data/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }) as any;
   },
