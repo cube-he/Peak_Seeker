@@ -177,7 +177,12 @@ export default function PlanDetailPage() {
   // zustand hydrate 有 race, 用 subscribe 同步 (沿用 dashboard 的模式)。
   const [isSupervisor, setIsSupervisor] = useState(false);
   useEffect(() => {
-    const sync = () => setIsSupervisor(useAuthStore.getState().user?.teacherProfile?.isSupervisor === true);
+    const sync = () => {
+      const user = useAuthStore.getState().user as
+        | { teacherProfile?: { isSupervisor?: boolean } }
+        | null;
+      setIsSupervisor(user?.teacherProfile?.isSupervisor === true);
+    };
     sync();
     return useAuthStore.subscribe(sync);
   }, []);
