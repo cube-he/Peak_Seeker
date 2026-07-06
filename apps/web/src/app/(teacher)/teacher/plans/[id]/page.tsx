@@ -349,6 +349,24 @@ function mergeMajorDisplay(
   };
 }
 
+function mergeCandidateMajorRanking(
+  savedRanking: SelectedPlanMajorPayload[],
+  sourceMajors: any[],
+) {
+  const byKey = new Map<string, SelectedPlanMajorPayload>();
+  for (const major of savedRanking) {
+    const key = majorIdentityKey(major);
+    if (key && !byKey.has(key)) byKey.set(key, major);
+  }
+  for (const major of sourceMajors) {
+    const key = majorIdentityKey(major);
+    if (key && !byKey.has(key)) {
+      byKey.set(key, toSelectedMajorPayload(major, byKey.size + 1));
+    }
+  }
+  return Array.from(byKey.values()).map((major, index) => ({ ...major, order: index + 1 }));
+}
+
 const DIFF_BG: Record<DiffKind, string> = {
   same: 'bg-surface',
   modified: 'bg-amber-50',
@@ -1588,9 +1606,10 @@ function PlanRow({
     () => new Set(selectedMajors.map((major) => major.enrollmentPlanId)),
     [selectedMajors],
   );
-  const candidateMajorRanking = selection.candidateMajorRanking.length
-    ? selection.candidateMajorRanking
-    : sourceMajors.map((major, index) => toSelectedMajorPayload(major, index + 1));
+  const candidateMajorRanking = useMemo(
+    () => mergeCandidateMajorRanking(selection.candidateMajorRanking, sourceMajors),
+    [selection.candidateMajorRanking, sourceMajors],
+  );
   const selectedDisplayMajors = selectedMajors.map((major, index) =>
     mergeMajorDisplay(major, sourceByKey, index, true),
   );
