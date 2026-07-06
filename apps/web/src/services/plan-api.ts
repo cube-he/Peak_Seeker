@@ -33,7 +33,10 @@ export type CandidateGroupSort =
   | 'UNIVERSITY_RANK'
   | 'MAJOR_STRENGTH'
   | 'PLAN_COUNT_CHANGE'
-  | 'SUPPLEMENTARY';
+  | 'PLAN_COUNT_DESC'
+  | 'SUPPLEMENTARY'
+  | 'SUPPLEMENTARY_RATE_DESC'
+  | 'SAFETY_DESC';
 
 // 排序方向: DESC = 该轴默认(好的/分高/最稳在前), ASC = 翻转
 export type CandidateSortDir = 'ASC' | 'DESC';
