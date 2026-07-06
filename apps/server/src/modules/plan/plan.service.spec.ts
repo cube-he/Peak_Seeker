@@ -183,10 +183,12 @@ describe('PlanService workflow gates', () => {
     const result = (service as any).toPlanItem({
       id: 1,
       sequence: 1,
+      universityId: 101,
       universityName: 'U',
       universityCode: 'UC',
       groupCode: 'G',
       groupName: 'GN',
+      majorId: 202,
       majorName: 'Computer Science',
       majorCode: '080901',
       gradient: 'WEN',
@@ -198,6 +200,8 @@ describe('PlanService workflow gates', () => {
     });
 
     expect(result.recommendedOrder).toBe('Computer Science、Software Engineering');
+    expect(result.universityId).toBe(101);
+    expect(result.majorId).toBe(202);
     expect(result.fullMajorRanking).toBe(fullMajorRanking);
     expect(result.selectedMajors).toEqual(fullMajorRanking.selectedMajors);
     expect(result.acceptAdjust).toBe(true);
