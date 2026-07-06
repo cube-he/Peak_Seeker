@@ -48,7 +48,8 @@ function tone8(tier: string): 'rush' | 'stable' | 'safe' {
 // ============ 小组件 ============
 
 export function MatchRing({ score }: { score?: number | null }) {
-  const pct = Math.max(0, Math.min(100, Math.round(score ?? 0)));
+  const hasScore = typeof score === 'number' && Number.isFinite(score);
+  const pct = hasScore ? Math.max(0, Math.min(100, Math.round(score))) : 0;
   const tone = pct >= 90 ? 'safe' : pct >= 75 ? 'accent' : 'rush';
   return (
     <div className={`pgv2-match-ring tone-${tone}`}>
@@ -61,7 +62,7 @@ export function MatchRing({ score }: { score?: number | null }) {
           className="ring-fg"
         />
       </svg>
-      <div className="pgv2-match-num">{pct}<span>匹配</span></div>
+      <div className="pgv2-match-num">{hasScore ? pct : '—'}<span>匹配</span></div>
     </div>
   );
 }
@@ -205,6 +206,10 @@ export interface CandidateCardV3Props {
   renderExpandedContent: (tab: 'majors' | 'evidence' | 'school') => React.ReactNode;
   /** 用于计算 rankGap 时拿调整后位次的辅助 (父组件提供) */
   adjustedRank?: number | null;
+  /** 详情页等复用场景可替换右侧操作区; 不传则保持候选池默认按钮。 */
+  actionSlot?: React.ReactNode;
+  /** 详情页快照数据没有完整匹配/就业指标时可关闭展开头部指标。默认保持候选池展示。 */
+  showExpandedOverview?: boolean;
 }
 
 export function CandidateCardV3(props: CandidateCardV3Props) {
@@ -213,6 +218,8 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
     studentRankForDecision, preferredHitCount, expandedTab,
     onToggleExpand, onToggleCompare, onHide, onRestore, onAdd, onRemove,
     renderExpandedContent,
+    actionSlot,
+    showExpandedOverview = true,
   } = props;
 
   const tier = tier8(group);
@@ -379,41 +386,47 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
 
             {/* 操作:对比 / 移除 + 加入 —— 在专业组层级内垂直居中 */}
             <div className="pgv3-group-actions" onClick={(e) => e.stopPropagation()}>
-              <div className="pgv2-card-iconcol">
-                <button
-                  type="button"
-                  className="pgv2-action-btn"
-                  title={isCompare ? '取消对比' : '加入对比'}
-                  onClick={onToggleCompare}
-                >
-                  {isCompare ? <span style={{ width: 12, height: 12, display: 'inline-flex' }}><CheckOutlined /></span> : '⚖'}
-                </button>
-                {isHidden ? (
-                  <button type="button" className="pgv2-action-btn" title="恢复" onClick={onRestore}>
-                    <span style={{ width: 12, height: 12, display: 'inline-flex' }}><RollbackOutlined /></span>
-                  </button>
-                ) : (
-                  <button type="button" className="pgv2-action-btn" title="不考虑此校" onClick={onHide}>
-                    <span style={{ width: 12, height: 12, display: 'inline-flex' }}><CloseOutlined /></span>
-                  </button>
-                )}
-              </div>
-              <div className="pgv2-card-cta">
-                {isAdded ? (
-                  <button
-                    type="button"
-                    className="pgv2-add-btn tall added"
-                    onClick={onRemove}
-                    title="已加入方案 · 再次点击取消加入"
-                  >
-                    <span className="ic"><CheckOutlined /></span><span>已加入</span>
-                  </button>
-                ) : (
-                  <button type="button" className="pgv2-add-btn tall" onClick={onAdd}>
-                    <span className="ic"><PlusOutlined /></span><span>加入方案</span>
-                  </button>
-                )}
-              </div>
+              {actionSlot !== undefined ? (
+                actionSlot
+              ) : (
+                <>
+                  <div className="pgv2-card-iconcol">
+                    <button
+                      type="button"
+                      className="pgv2-action-btn"
+                      title={isCompare ? '取消对比' : '加入对比'}
+                      onClick={onToggleCompare}
+                    >
+                      {isCompare ? <span style={{ width: 12, height: 12, display: 'inline-flex' }}><CheckOutlined /></span> : '⚖'}
+                    </button>
+                    {isHidden ? (
+                      <button type="button" className="pgv2-action-btn" title="恢复" onClick={onRestore}>
+                        <span style={{ width: 12, height: 12, display: 'inline-flex' }}><RollbackOutlined /></span>
+                      </button>
+                    ) : (
+                      <button type="button" className="pgv2-action-btn" title="不考虑此校" onClick={onHide}>
+                        <span style={{ width: 12, height: 12, display: 'inline-flex' }}><CloseOutlined /></span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="pgv2-card-cta">
+                    {isAdded ? (
+                      <button
+                        type="button"
+                        className="pgv2-add-btn tall added"
+                        onClick={onRemove}
+                        title="已加入方案 · 再次点击取消加入"
+                      >
+                        <span className="ic"><CheckOutlined /></span><span>已加入</span>
+                      </button>
+                    ) : (
+                      <button type="button" className="pgv2-add-btn tall" onClick={onAdd}>
+                        <span className="ic"><PlusOutlined /></span><span>加入方案</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -427,57 +440,61 @@ export function CandidateCardV3(props: CandidateCardV3Props) {
       {/* 展开区: MatchHeader + 就业指标(6 项) + 专业级信息(由父组件提供) */}
       {isExpanded ? (
         <div className="pgv2-card-body">
-          {/* —— 匹配分环 + 理由 + 偏好 + 趋势 —— */}
-          <div className="pgv2-match-header">
-            <MatchRing score={group?.matchScore} />
-            <div className="pgv2-match-body">
-              <div className="pgv2-match-reason">
-                {mutedReason ? <span style={{ color: '#8c8c8c', fontWeight: 600 }}>【{mutedReason}】 </span> : null}
-                {group?.matchReason ?? '—'}
-              </div>
-              <div className="pgv2-pref-row">
-                <PrefDot ok={group?.prefMatch?.province === 'match'} label="地域" />
-                <PrefDot ok={group?.prefMatch?.tuition === 'within'} label="学费" />
-                <PrefDot ok={group?.prefMatch?.career === 'strong'} label="职业" />
-                {/* 候选池已按选科过滤(选科恒符), "选科"dot 是噪音, 删除 */}
-              </div>
-            </div>
-            {trend ? (
-              <div className="pgv2-trend-mini">
-                <Sparkline data={trend} />
-                <div className="pgv2-trend-meta">
-                  <span className="t-range">{trend[0].score} → {trend[trend.length - 1].score}</span>
-                  {group?.predictedMinRank?.point != null ? (
-                    <span
-                      className="t-pred"
-                      title={predBand ? `预测今年录取位次区间 ${predBand}(乐观~保守), 区间越宽预测越不确定` : undefined}
-                    >
-                      ◇ 预测 {predBand ? `${predBand} 位` : `~${group.predictedMinRank.point.toLocaleString()} 位`}
-                      {confLabel ? <span className={`t-conf ${confCls}`}>{confLabel}</span> : null}
-                    </span>
-                  ) : null}
+          {showExpandedOverview ? (
+            <>
+              {/* —— 匹配分环 + 理由 + 偏好 + 趋势 —— */}
+              <div className="pgv2-match-header">
+                <MatchRing score={group?.matchScore} />
+                <div className="pgv2-match-body">
+                  <div className="pgv2-match-reason">
+                    {mutedReason ? <span style={{ color: '#8c8c8c', fontWeight: 600 }}>【{mutedReason}】 </span> : null}
+                    {group?.matchReason ?? '—'}
+                  </div>
+                  <div className="pgv2-pref-row">
+                    <PrefDot ok={group?.prefMatch?.province === 'match'} label="地域" />
+                    <PrefDot ok={group?.prefMatch?.tuition === 'within'} label="学费" />
+                    <PrefDot ok={group?.prefMatch?.career === 'strong'} label="职业" />
+                    {/* 候选池已按选科过滤(选科恒符), "选科"dot 是噪音, 删除 */}
+                  </div>
                 </div>
+                {trend ? (
+                  <div className="pgv2-trend-mini">
+                    <Sparkline data={trend} />
+                    <div className="pgv2-trend-meta">
+                      <span className="t-range">{trend[0].score} → {trend[trend.length - 1].score}</span>
+                      {group?.predictedMinRank?.point != null ? (
+                        <span
+                          className="t-pred"
+                          title={predBand ? `预测今年录取位次区间 ${predBand}(乐观~保守), 区间越宽预测越不确定` : undefined}
+                        >
+                          ◇ 预测 {predBand ? `${predBand} 位` : `~${group.predictedMinRank.point.toLocaleString()} 位`}
+                          {confLabel ? <span className={`t-conf ${confCls}`}>{confLabel}</span> : null}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pgv2-trend-mini">
+                    <div className="pgv2-trend-meta" style={{ textAlign: 'right' }}>
+                      <span className="t-range" style={{ color: 'var(--text-muted)' }}>无历史录取线</span>
+                      <span className="t-pred" style={{ color: 'var(--text-muted)' }}>需人工判断</span>
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="pgv2-trend-mini">
-                <div className="pgv2-trend-meta" style={{ textAlign: 'right' }}>
-                  <span className="t-range" style={{ color: 'var(--text-muted)' }}>无历史录取线</span>
-                  <span className="t-pred" style={{ color: 'var(--text-muted)' }}>需人工判断</span>
-                </div>
-              </div>
-            )}
-          </div>
 
-          {/* —— 就业 6 项(带进度条)——
-               注: postgradRate 字段实为「保研率」, furtherStudyRate 实为「升学率」(导入时如此映射), 此处沿用设计稿标签 */}
-          <div className="pgv2-metric-bar">
-            <MBar k="招生" v={group?.currentPlanCount} suffix="人" chg={group?.planCountChange} />
-            <MBar k="考研率" v={postgradPct} suffix="%" pct={postgradPct} />
-            <MBar k="深造率" v={furtherPct} suffix="%" pct={furtherPct} />
-            <MBar k="就业率" v={empPct} suffix="%" pct={empPct} />
-            <MBar k="平均薪资" v={avgSalaryK} suffix="k" pct={avgSalaryPct} />
-            <MBar k="满意度" v={satOverall} suffix={uni.satisfactionCount ? `/5 · ${uni.satisfactionCount}人` : '/5'} pct={satPct} />
-          </div>
+              {/* —— 就业 6 项(带进度条)——
+                   注: postgradRate 字段实为「保研率」, furtherStudyRate 实为「升学率」(导入时如此映射), 此处沿用设计稿标签 */}
+              <div className="pgv2-metric-bar">
+                <MBar k="招生" v={group?.currentPlanCount} suffix="人" chg={group?.planCountChange} />
+                <MBar k="考研率" v={postgradPct} suffix="%" pct={postgradPct} />
+                <MBar k="深造率" v={furtherPct} suffix="%" pct={furtherPct} />
+                <MBar k="就业率" v={empPct} suffix="%" pct={empPct} />
+                <MBar k="平均薪资" v={avgSalaryK} suffix="k" pct={avgSalaryPct} />
+                <MBar k="满意度" v={satOverall} suffix={uni.satisfactionCount ? `/5 · ${uni.satisfactionCount}人` : '/5'} pct={satPct} />
+              </div>
+            </>
+          ) : null}
 
           {/* —— 专业级信息(展开态专业列表, 含 P.XX 页码 / 4 年历史 / 征集 byYear)—— */}
           <div className="pgv2-card-tab-content">

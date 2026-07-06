@@ -25,14 +25,12 @@ import {
   CheckCircleOutlined,
   CopyOutlined,
   DeleteOutlined,
-  DownOutlined,
   EditOutlined,
   ExportOutlined,
   FileDoneOutlined,
   FullscreenOutlined,
   MoreOutlined,
   PlayCircleOutlined,
-  RightOutlined,
   RollbackOutlined,
   SendOutlined,
   SortAscendingOutlined,
@@ -59,13 +57,10 @@ import { diffPlanItems, type DiffKind, type DiffRow } from './plan-diff';
 import {
   getPlanItemMajorSelection,
   type PlanItemMajorSelectionLike,
+  type SelectedPlanMajorPayload,
 } from '../generate/[studentId]/plan-workbench-utils';
-
-const GRADIENT_LABEL: Record<string, string> = {
-  CHONG: '冲',
-  WEN: '稳',
-  BAO: '保',
-};
+import { CandidateCardV3 } from '../generate/[studentId]/CandidateCardV3';
+import CandidateMajorSection from '../generate/[studentId]/candidate-major-section';
 
 // 后端梯度枚举 → 设计稿 tier class (冲=rush / 稳=stable / 保=safe)
 const GRADIENT_TIER: Record<string, 'rush' | 'stable' | 'safe'> = {
@@ -148,6 +143,106 @@ function getHistoricalScore(item: any): HistoricalScoreResult | null {
 
 function getHistoricalRank(item: any): number | null {
   return item?.rank25Major ?? item?.rank25Group ?? item?.lastYearMinRank ?? null;
+}
+
+function normalizePlanGradient(gradient?: string | null) {
+  return gradient === 'CHONG' || gradient === 'WEN' || gradient === 'BAO' ? gradient : 'WEN';
+}
+
+function makeSyntheticEnrollmentPlanId(item: any, index: number) {
+  const base = Number(item?.id ?? item?.sequence ?? 0) || 0;
+  return -Math.abs(base * 100 + index + 1);
+}
+
+function toCardMajor(
+  major: Partial<SelectedPlanMajorPayload> | null | undefined,
+  item: any,
+  index: number,
+  isSelected: boolean,
+) {
+  const hist = getHistoricalScore(item);
+  const historicalRank = getHistoricalRank(item);
+  return {
+    enrollmentPlanId: major?.enrollmentPlanId ?? makeSyntheticEnrollmentPlanId(item, index),
+    majorId: major?.majorId ?? item.majorId ?? makeSyntheticEnrollmentPlanId(item, index),
+    majorName: major?.majorName ?? item.majorName ?? '未命名专业',
+    majorCode: major?.majorCode ?? item.majorCode ?? null,
+    displaySection: major?.displaySection ?? (isSelected ? 'RECOMMENDED' : 'BACKUP'),
+    displayReason: major?.displayReason ?? (isSelected ? '已填报专业' : '组内可选专业'),
+    majorMinScore: major?.majorMinScore ?? (isSelected ? hist?.score ?? null : null),
+    majorMinRank: major?.majorMinRank ?? (isSelected ? historicalRank : null),
+    planCount: major?.planCount ?? (isSelected ? item.planCount ?? null : null),
+    tuition: item.tuition ?? null,
+    suggestedGradient: normalizePlanGradient(item.gradient),
+    dynamicGradient: { tier: normalizePlanGradient(item.gradient) },
+    matchStatus: 'PASS',
+    isRecommendedAnchor: isSelected && index === 0,
+  };
+}
+
+function buildPlanItemCardGroup(item: any, studentRank: number | null) {
+  const selection = getPlanItemMajorSelection(item as PlanItemMajorSelectionLike);
+  const selectedIds = new Set(selection.selectedMajors.map((major) => major.enrollmentPlanId));
+  const selectedMajors = selection.selectedMajors.map((major, index) => toCardMajor(major, item, index, true));
+  const backupMajors = selection.candidateMajorRanking
+    .filter((major) => !selectedIds.has(major.enrollmentPlanId))
+    .map((major, index) => toCardMajor(major, item, selectedMajors.length + index, false));
+
+  const fallbackMajors = selectedMajors.length || backupMajors.length
+    ? []
+    : [toCardMajor(null, item, 0, true)];
+
+  const recommended = selectedMajors.length ? selectedMajors : fallbackMajors;
+  const majors = [...recommended, ...backupMajors];
+  const groupMinRank = item.rank25Group ?? item.rank25Major ?? item.lastYearMinRank ?? null;
+  const score = getHistoricalScore(item);
+  const groupMinScore = item.score25Group ?? item.score25Major ?? item.lastYearMinScore ?? score?.score ?? null;
+  const ratio = studentRank && groupMinRank ? (groupMinRank - studentRank) / studentRank : undefined;
+  const gradient = normalizePlanGradient(item.gradient);
+  const majorCount = selection.candidateMajorRanking.length || majors.length;
+
+  return {
+    groupKey: `plan-item-${item.id ?? item.sequence}`,
+    universityId: item.universityId,
+    universityName: item.universityName,
+    universityCode: item.universityCode,
+    groupCode: item.groupCode,
+    groupName: item.groupName || (item.groupCode ? `专业组 ${item.groupCode}` : '专业组'),
+    suggestedGradient: gradient,
+    dynamicGradient: {
+      gradient,
+      tier: gradient,
+      baseMinRank: groupMinRank,
+      adjustedMinRank: groupMinRank,
+      rankGapRatio: ratio,
+      reasons: [],
+    },
+    groupMinRank,
+    groupMinScore,
+    currentPlanCount: item.planCount ?? null,
+    planCountChange: null,
+    majorCount,
+    purity: { majorCount },
+    majors,
+    majorSections: {
+      recommended,
+      backup: backupMajors,
+      risk: [],
+    },
+    matchReason: item.selectionReason || item.riskWarning || item.adjustmentAdvice || null,
+    university: {
+      id: item.universityId,
+      name: item.universityName,
+      code: item.universityCode,
+      province: item.province ?? null,
+      city: item.city ?? null,
+      runningNature: item.schoolNature ?? null,
+      is985: Boolean(item.is985),
+      is211: Boolean(item.is211),
+      isDoubleFirstClass: Boolean(item.isDoubleFirstClass),
+      softRanking: item.softRanking ?? null,
+    },
+  };
 }
 
 const DIFF_BG: Record<DiffKind, string> = {
@@ -1093,48 +1188,42 @@ export default function PlanDetailPage() {
             )}
           </div>
         ) : null}
-        <div className="pl-tbl-head">
-          <span>顺位</span>
-          <span>梯度</span>
-          <span>院校</span>
-          <span>专业组</span>
-          <span>专业</span>
-          <span style={{ textAlign: 'right' }}>计划</span>
-          <span style={{ textAlign: 'right' }}>最低分</span>
-          <span style={{ textAlign: 'right' }}>最低位次</span>
-          <span>{isReviewing ? '批注' : ''}</span>
-        </div>
-
-        {localItems.length === 0 ? (
-          <div style={{ padding: '32px 22px' }}>
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无志愿明细" />
-          </div>
-        ) : freeSortMode ? (
-          // 自由排序: 扁平全表(不分冲稳保), 拖拽/序号跨段自由调; 预览态排序也作用于全表。
-          (sortPreview ? sortPlanItems(localItems as SortableItem[], sortRules, sortCtx) : localItems)
-            .map((item, pos) => renderPlanRow(item, pos, 'flat', true))
-        ) : (
-          tierMetaOrdered.map((meta) => {
-            const rawTierItems = localItems.filter((it) => GRADIENT_TIER[it.gradient] === meta.tier);
-            const tierItems = sortPreview
-              ? sortPlanItems(rawTierItems as SortableItem[], sortRules, sortCtx)
-              : rawTierItems;
-            if (tierItems.length === 0) return null;
-            return (
-              <div key={meta.tier}>
-                <div className={`pl-section t-${meta.tier}`}>
-                  <span className="lbl">
-                    ● {meta.ch} · {meta.label}
-                  </span>
-                  <span className="sub">
-                    {meta.en} · 本段 {tierItems.length} 条
-                  </span>
+        <div style={{ padding: '12px 18px 18px' }}>
+          {localItems.length === 0 ? (
+            <div style={{ padding: '32px 22px' }}>
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无志愿明细" />
+            </div>
+          ) : freeSortMode ? (
+            // 自由排序: 扁平全表(不分冲稳保), 拖拽/序号跨段自由调; 预览态排序也作用于全表。
+            <div className="pgv2-cards">
+              {(sortPreview ? sortPlanItems(localItems as SortableItem[], sortRules, sortCtx) : localItems)
+                .map((item, pos) => renderPlanRow(item, pos, 'flat', true))}
+            </div>
+          ) : (
+            tierMetaOrdered.map((meta) => {
+              const rawTierItems = localItems.filter((it) => GRADIENT_TIER[it.gradient] === meta.tier);
+              const tierItems = sortPreview
+                ? sortPlanItems(rawTierItems as SortableItem[], sortRules, sortCtx)
+                : rawTierItems;
+              if (tierItems.length === 0) return null;
+              return (
+                <div key={meta.tier} style={{ marginTop: meta.tier === tierMetaOrdered[0]?.tier ? 0 : 14 }}>
+                  <div className={`pl-section t-${meta.tier}`}>
+                    <span className="lbl">
+                      ● {meta.ch} · {meta.label}
+                    </span>
+                    <span className="sub">
+                      {meta.en} · 本段 {tierItems.length} 条
+                    </span>
+                  </div>
+                  <div className="pgv2-cards" style={{ marginTop: 10 }}>
+                    {tierItems.map((item, pos) => renderPlanRow(item, pos, meta.tier, false))}
+                  </div>
                 </div>
-                {tierItems.map((item, pos) => renderPlanRow(item, pos, meta.tier, false))}
-              </div>
-            );
-          })
-        )}
+              );
+            })
+          )}
+        </div>
       </div>
 
       {/* —— 审核与确认记录 Timeline (设计稿 pd2-timeline) —— */}
@@ -1337,41 +1426,96 @@ function PlanRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [annotateOpen, setAnnotateOpen] = useState(false);
-  const tier = GRADIENT_TIER[item.gradient] ?? 'rush';
-
-  // 已填报专业摘要 (设计稿 majors 列): 取已选专业名拼接, 回退到 majorName
-  const selection = getPlanItemMajorSelection(item as PlanItemMajorSelectionLike);
-  const selectedCount = selection.selectedMajors.length;
-  const poolCount = selection.candidateMajorRanking.length || selectedCount;
-  const fillTxt =
-    selectedCount > 0
-      ? selection.selectedMajors.map((m) => m.majorName).join(' / ')
-      : item.majorName || '—';
-
-  // 历史最低分 / 位次 (复用现有取数算法)
-  const hist = getHistoricalScore(item);
-  const histRank = getHistoricalRank(item);
-  // 最低位次相对学生位次差 (设计稿: 低 N=保险绿 / 高 N=偏险红)
-  let rankDiff: React.ReactNode = null;
-  if (histRank != null && studentRank != null) {
-    const diff = histRank - studentRank;
-    rankDiff =
-      diff > 0 ? (
-        <span style={{ color: 'var(--safe)' }}>低 {Math.abs(diff).toLocaleString()}</span>
-      ) : diff < 0 ? (
-        <span style={{ color: 'var(--rush)' }}>高 {Math.abs(diff).toLocaleString()}</span>
-      ) : (
-        <span>持平</span>
-      );
-  }
-
+  const cardGroup = buildPlanItemCardGroup(item, studentRank);
   const hasMetaInfo = item.selectionReason || item.riskWarning || item.adjustmentAdvice;
   const hasMajorEditor = item.fullMajorRanking || item.selectedMajors?.length || item.recommendedOrder;
+  const sequenceNo = freeMode && displayPos ? displayPos : item.sequence;
+  const sequenceLabel = String(sequenceNo ?? item.sequence ?? '').padStart(2, '0');
+  const canMoveByNumber = Boolean(freeMode && onMoveToPos);
+  const actionTitle = canDrag
+    ? '拖动卡片调整顺位'
+    : (planStatus === 'PENDING_REVIEW' ? '审核中 — 点「撤回修改」退回草稿后可调序' : '仅草稿状态可调序');
+  const actionSlot = (
+    <>
+      <div className="pgv2-card-iconcol">
+        <button
+          type="button"
+          className="pgv2-action-btn"
+          title={actionTitle}
+          style={{ cursor: canDrag ? 'grab' : 'not-allowed', fontWeight: 700 }}
+        >
+          ⋮⋮
+        </button>
+        {reviewMode ? (
+          <button
+            type="button"
+            className={`pd2-annotate-btn ${hasAnnotation ? 'has' : ''}`}
+            onClick={() => setAnnotateOpen((o) => !o)}
+            title={hasAnnotation ? '已批注' : '加批注'}
+            style={{ width: '100%', height: 34 }}
+          >
+            {hasAnnotation ? '已写' : '+'}
+          </button>
+        ) : canDelete && onDelete ? (
+          <Popconfirm
+            title="删除该院校专业组"
+            description={`确认从方案中删除「${item.universityName}${item.groupCode ? ' · ' + item.groupCode : ''}」？`}
+            okText="删除"
+            okButtonProps={{ danger: true }}
+            cancelText="取消"
+            onConfirm={onDelete}
+          >
+            <Button
+              size="small"
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deleting}
+              title="从方案中删除此院校专业组"
+              style={{ width: '100%', height: 34 }}
+            />
+          </Popconfirm>
+        ) : null}
+      </div>
+      <div className="pgv2-card-cta">
+        <div
+          className="pgv2-add-btn tall added"
+          title={canMoveByNumber ? '改数字回车或失焦 → 把该志愿移到第 N 位' : `第 ${sequenceNo} 顺位`}
+          style={{ cursor: canMoveByNumber ? 'text' : 'default' }}
+        >
+          <span className="ic" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {canMoveByNumber ? (
+              <input
+                key={`seq-${item.id}-${displayPos}`}
+                type="number"
+                className="pl-seq-input"
+                min={1}
+                defaultValue={displayPos}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = Number((e.target as HTMLInputElement).value);
+                    if (v >= 1) onMoveToPos?.(v);
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = Number(e.target.value);
+                  if (v >= 1 && v !== displayPos) onMoveToPos?.(v);
+                }}
+                style={{ width: 42, textAlign: 'center' }}
+              />
+            ) : sequenceLabel}
+          </span>
+          <span>已入选</span>
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <>
       <div
-        className={`pl-row ${expanded ? 'is-expanded' : ''} ${canDrag ? 'can-drag' : ''} ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-dragover' : ''}`}
+        className={`pd2-plan-card-wrap ${canDrag ? 'can-drag' : ''} ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-dragover' : ''}`}
         draggable={canDrag}
         onDragStart={(e) => {
           if (!canDrag) return;
@@ -1384,159 +1528,60 @@ function PlanRow({
           onDragOverRow?.();
         }}
         onDragEnd={() => onDragEndRow?.()}
-        onClick={(e) => {
-          // 批注按钮单独处理, 不触发展开
-          if ((e.target as HTMLElement).closest('.pd2-annotate-btn')) return;
-          setExpanded((v) => !v);
+        style={{
+          opacity: isDragging ? 0.56 : undefined,
+          outline: isDragOver ? '2px solid var(--primary)' : undefined,
+          outlineOffset: 2,
+          borderRadius: 8,
         }}
       >
-        <span className="idx">
-          <span
-            className="pl-grip"
-            title={canDrag ? '拖动调整顺位' : (planStatus === 'PENDING_REVIEW' ? '审核中 — 点「撤回修改」退回草稿后可调序' : '仅草稿状态可调序')}
-          >⋮⋮</span>
-          {freeMode && onMoveToPos ? (
-            <input
-              key={`seq-${item.id}-${displayPos}`}
-              type="number"
-              className="pl-seq-input"
-              min={1}
-              defaultValue={displayPos}
-              title="改这个数字回车 → 把该志愿移到第 N 位"
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const v = Number((e.target as HTMLInputElement).value);
-                  if (v >= 1) onMoveToPos(v);
-                }
-              }}
-              onBlur={(e) => {
-                const v = Number(e.target.value);
-                if (v >= 1 && v !== displayPos) onMoveToPos(v);
-              }}
-            />
-          ) : (
-            String(item.sequence).padStart(2, '0')
-          )}
-        </span>
-        <span className={`tier-dot t-${tier}`}>{GRADIENT_LABEL[item.gradient] ?? '-'}</span>
-        <div className="uni">
-          <div>
-            <div className="uname">{item.universityName}</div>
-            <div className="ucode">院校代码 {item.universityCode || '—'}</div>
-          </div>
-        </div>
-        <span className="grp">{item.groupCode || '—'}</span>
-        <div className="majors">
-          <span className={`pl-major-chev ${expanded ? 'is-open' : ''}`}>
-            <RightOutlined />
-          </span>
-          <span className="pl-major-txt">{fillTxt}</span>
-          <span className="pl-major-count">
-            已填 {selectedCount}/6 · 组内 {poolCount} 个
-          </span>
-          {item.selectionReason ? (
-            <div
-              style={{
-                fontSize: 10.5,
-                color: 'var(--text-faint)',
-                marginTop: 3,
-                fontStyle: 'italic',
-                flexBasis: '100%',
-              }}
-            >
-              理由 · {item.selectionReason}
-            </div>
-          ) : null}
-        </div>
-        <span className="plan">{item.planCount ?? '—'}</span>
-        <span className="score">{hist != null ? hist.score : '—'}</span>
-        <span className="rank">
-          {histRank != null ? histRank.toLocaleString() : '—'}
-          {rankDiff ? (
-            <>
-              <br />
-              <span style={{ fontSize: 10.5 }}>{rankDiff}</span>
-            </>
-          ) : null}
-        </span>
-        <span className="more">
-          {reviewMode ? (
-            <button
-              type="button"
-              className={`pd2-annotate-btn ${hasAnnotation ? 'has' : ''}`}
-              onClick={() => setAnnotateOpen((o) => !o)}
-              title={hasAnnotation ? '已批注' : '加批注'}
-            >
-              {hasAnnotation ? '已写' : '+'}
-            </button>
-          ) : (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              {canDelete && onDelete ? (
-                // 阻止冒泡: 否则点击会触发整行展开
-                <span onClick={(e) => e.stopPropagation()}>
-                  <Popconfirm
-                    title="删除该院校专业组"
-                    description={`确认从方案中删除「${item.universityName}${item.groupCode ? ' · ' + item.groupCode : ''}」？`}
-                    okText="删除"
-                    okButtonProps={{ danger: true }}
-                    cancelText="取消"
-                    onConfirm={onDelete}
-                  >
-                    <Button
-                      size="small"
-                      type="text"
-                      danger
-                      icon={<DeleteOutlined />}
-                      loading={deleting}
-                      title="从方案中删除此院校专业组"
-                    />
-                  </Popconfirm>
-                </span>
+        <CandidateCardV3
+          group={cardGroup}
+          isExpanded={expanded}
+          isHidden={false}
+          isCompare={false}
+          isAdded
+          studentRankForDecision={studentRank ?? undefined}
+          expandedTab="majors"
+          onToggleExpand={() => setExpanded((v) => !v)}
+          onToggleCompare={() => undefined}
+          onHide={() => undefined}
+          onRestore={() => undefined}
+          onAdd={() => undefined}
+          onRemove={() => undefined}
+          onTabChange={() => undefined}
+          actionSlot={actionSlot}
+          showExpandedOverview={false}
+          renderExpandedContent={() => (
+            <div className="space-y-4">
+              <CandidateMajorSection title="已填报专业" section="RECOMMENDED" majors={cardGroup.majorSections.recommended} group={cardGroup} />
+              <CandidateMajorSection title="组内可选" section="BACKUP" majors={cardGroup.majorSections.backup} group={cardGroup} />
+              {hasMetaInfo ? (
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {item.selectionReason ? (
+                    <InfoBlock label="推荐理由" tone="info" content={String(item.selectionReason)} />
+                  ) : null}
+                  {item.riskWarning ? (
+                    <InfoBlock label="风险提示" tone="warning" content={String(item.riskWarning)} />
+                  ) : null}
+                  {item.adjustmentAdvice ? (
+                    <InfoBlock label="调剂建议" tone="info" content={String(item.adjustmentAdvice)} />
+                  ) : null}
+                </div>
               ) : null}
-              <span className={`pl-row-chev ${expanded ? 'is-open' : ''}`} title={expanded ? '收起' : '查看组内专业'}>
-                <DownOutlined />
-              </span>
-            </span>
+              {hasMajorEditor && onSaveMajors ? (
+                <PlanMajorSelectionEditor
+                  item={item}
+                  status={planStatus}
+                  editable={editable}
+                  saving={saving}
+                  onSave={onSaveMajors}
+                />
+              ) : null}
+            </div>
           )}
-        </span>
+        />
       </div>
-
-      {expanded ? (
-        <div className="pl-majors-panel">
-          <div className="pl-majors-head">
-            组内专业 · 选择并排序填报
-            <span className="sub">
-              [{item.groupCode || '—'}] {item.universityName} · 平行志愿每组最多填 6 个，顺序即调剂优先级
-            </span>
-          </div>
-          <div className="space-y-4">
-            {hasMetaInfo ? (
-              <div className="grid gap-3 lg:grid-cols-3">
-                {item.selectionReason ? (
-                  <InfoBlock label="推荐理由" tone="info" content={String(item.selectionReason)} />
-                ) : null}
-                {item.riskWarning ? (
-                  <InfoBlock label="风险提示" tone="warning" content={String(item.riskWarning)} />
-                ) : null}
-                {item.adjustmentAdvice ? (
-                  <InfoBlock label="调剂建议" tone="info" content={String(item.adjustmentAdvice)} />
-                ) : null}
-              </div>
-            ) : null}
-
-            {hasMajorEditor && onSaveMajors ? (
-              <PlanMajorSelectionEditor
-                item={item}
-                status={planStatus}
-                editable={editable}
-                saving={saving}
-                onSave={onSaveMajors}
-              />
-            ) : null}
-          </div>
-        </div>
-      ) : null}
 
       {reviewMode && annotateOpen ? (
         <div className="pd2-annotate-row">
