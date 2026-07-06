@@ -1000,7 +1000,7 @@ export default function GeneratePlanPage() {
   useEffect(() => { setRailMounted(true); }, []);
   const [uniSort, setUniSort] = useState<UniversitySortValue>('UNIVERSITY_OVERALL');
   // 办学性质过滤 (两视图通用; null=全部):
-  // public=公办 / private=民办 / sinoForeign=中外合作 / hkMacau=港澳合作办学 / independent=独立学院
+  // public=公办 / private=民办 / sinoForeign=中外合作 / hkMacau=港澳合作办学 / independent=境外办学
   const [natureFilter, setNatureFilter] = useState<
     'public' | 'private' | 'sinoForeign' | 'hkMacau' | 'independent' | null
   >(null);
@@ -1086,6 +1086,14 @@ export default function GeneratePlanPage() {
     });
   const [candidatePage, setCandidatePage] = useState(1);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
+  const resetCandidateListView = useCallback(() => {
+    setCandidatePage(1);
+    setExpandedGroupKeys([]);
+  }, []);
+  const goCandidatePage = useCallback((page: number) => {
+    setCandidatePage(page);
+    setExpandedGroupKeys([]);
+  }, []);
   // pgv2 设计稿: profile 可折叠 + 显示已隐藏 toggle + 8 段梯度 chip 过滤
   const [profileOpen, setProfileOpen] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
@@ -1402,9 +1410,8 @@ export default function GeneratePlanPage() {
   }, [batches, existingPlans, planId, batchLoading, existingPlansLoading]);
 
   useEffect(() => {
-    setCandidatePage(1);
-    setExpandedGroupKeys([]);
-  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordPlanNotes, gradientFilter, includeSoftFails, includeRegionMismatch, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, onlyShowAdded, natureFilter, tagsFilter, backgroundsFilter, provincesFilter, citiesFilter, newItemFilter]);
+    resetCandidateListView();
+  }, [planId, viewMode, keyword, keywordUniversity, keywordMajor, keywordPlanNotes, gradientFilter, includeSoftFails, includeRegionMismatch, includeHardFails, includeOutOfReach, candidateSort, candidateSortDir, uniSort, appliedTier, excludeAdded, onlyShowAdded, purityFilter, natureFilter, sinoForeignFilter, scoreRange, recruitTypeFilter, tagsFilter, backgroundsFilter, provincesFilter, citiesFilter, newItemFilter, resetCandidateListView]);
 
   // 视图模式默认跟随 plan/student.priorityMode (仅在无 ?view= URL 参数时, 自动定一次)
   useEffect(() => {
@@ -1467,7 +1474,7 @@ export default function GeneratePlanPage() {
     recruitTypeAutoFilledForBatchRef.current = batchConfigId; // 不管选不选都标记, 避免反复触发
     if (avail.includes('普通类本科') && recruitTypeFilter.length === 0) {
       setRecruitTypeFilter(['普通类本科']);
-      setCandidatePage(1);
+      resetCandidateListView();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchConfigId, candidateGroups?.availableRecruitTypes]);
@@ -2218,10 +2225,10 @@ export default function GeneratePlanPage() {
               {/* —— 视图分段开关 + 距离/状态二维编码图例 —— */}
               <div className="pgv3-pool-bar">
                 <div className="pgv3-viewseg">
-                  <button className={viewMode === 'MAJOR' ? 'on' : ''} onClick={() => setViewMode('MAJOR')}>
+                  <button className={viewMode === 'MAJOR' ? 'on' : ''} onClick={() => { setViewMode('MAJOR'); resetCandidateListView(); }}>
                     专业优先 <span className="seg-sub">一卡=一组</span>
                   </button>
-                  <button className={viewMode === 'UNIVERSITY' ? 'on' : ''} onClick={() => setViewMode('UNIVERSITY')}>
+                  <button className={viewMode === 'UNIVERSITY' ? 'on' : ''} onClick={() => { setViewMode('UNIVERSITY'); resetCandidateListView(); }}>
                     院校优先 <span className="seg-sub">一卡=一校</span>
                   </button>
                 </div>
@@ -2250,23 +2257,26 @@ export default function GeneratePlanPage() {
                 <UniversitySearchAutoComplete
                   value={searchTextUniversity}
                   onChange={setSearchTextUniversity}
-                  onCommit={setKeywordUniversity}
+                  onCommit={(value) => { setKeywordUniversity(value); resetCandidateListView(); }}
                 />
                 <MajorSearchAutoComplete
                   value={searchTextMajor}
                   onChange={setSearchTextMajor}
-                  onCommit={setKeywordMajor}
+                  onCommit={(value) => { setKeywordMajor(value); resetCandidateListView(); }}
                 />
                 <PlanNotesSearchInput
                   value={searchTextPlanNotes}
                   onChange={setSearchTextPlanNotes}
-                  onCommit={setKeywordPlanNotes}
+                  onCommit={(value) => { setKeywordPlanNotes(value); resetCandidateListView(); }}
                 />
                 {viewMode === 'UNIVERSITY' ? (
                   <select
                     className="pgv3-sort"
                     value={uniSort}
-                    onChange={(event) => setUniSort(event.target.value as UniversitySortValue)}
+                    onChange={(event) => {
+                      setUniSort(event.target.value as UniversitySortValue);
+                      resetCandidateListView();
+                    }}
                   >
                     {UNIVERSITY_SORT_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>排序:{o.label}</option>
@@ -2280,6 +2290,7 @@ export default function GeneratePlanPage() {
                       onChange={(event) => {
                         setCandidateSort(event.target.value as CandidateGroupSort);
                         setCandidateSortDir('DESC'); // 切轴回到该轴默认方向
+                        resetCandidateListView();
                       }}
                     >
                       {CANDIDATE_SORT_OPTIONS.map((o) => (
@@ -2303,7 +2314,7 @@ export default function GeneratePlanPage() {
                               <button
                                 key={d}
                                 type="button"
-                                onClick={() => setCandidateSortDir(d)}
+                                onClick={() => { setCandidateSortDir(d); resetCandidateListView(); }}
                                 style={{
                                   border: 'none',
                                   cursor: 'pointer',
@@ -2363,7 +2374,7 @@ export default function GeneratePlanPage() {
                           setScoreRange(null);
                           setScoreSlider(null);
                         }
-                        setCandidatePage(1);
+                        resetCandidateListView();
                       }}
                     >
                       {isShowingAll ? '恢复默认' : '显示全部'}
@@ -2376,7 +2387,7 @@ export default function GeneratePlanPage() {
                   <input
                     type="checkbox"
                     checked={showHidden}
-                    onChange={(event) => setShowHidden(event.target.checked)}
+                    onChange={(event) => { setShowHidden(event.target.checked); resetCandidateListView(); }}
                   />
                   显示已隐藏 <span className="cnt">({hiddenGroupKeys.size})</span>
                 </label>
@@ -2387,7 +2398,7 @@ export default function GeneratePlanPage() {
                   <input
                     type="checkbox"
                     checked={includeSoftFails}
-                    onChange={(event) => setIncludeSoftFails(event.target.checked)}
+                    onChange={(event) => { setIncludeSoftFails(event.target.checked); resetCandidateListView(); }}
                   />
                   显示学费/办学性质不符
                 </label>
@@ -2398,7 +2409,7 @@ export default function GeneratePlanPage() {
                   <input
                     type="checkbox"
                     checked={includeHardFails}
-                    onChange={(event) => setIncludeHardFails(event.target.checked)}
+                    onChange={(event) => { setIncludeHardFails(event.target.checked); resetCandidateListView(); }}
                   />
                   显示资格不符
                 </label>
@@ -2410,7 +2421,7 @@ export default function GeneratePlanPage() {
                     <input
                       type="checkbox"
                       checked={includeRegionMismatch}
-                      onChange={(event) => setIncludeRegionMismatch(event.target.checked)}
+                      onChange={(event) => { setIncludeRegionMismatch(event.target.checked); resetCandidateListView(); }}
                     />
                     显示非意向地区 ({regionMismatchCount})
                   </label>
@@ -2419,7 +2430,7 @@ export default function GeneratePlanPage() {
                   <input
                     type="checkbox"
                     checked={onlyShowAdded}
-                    onChange={(event) => { setOnlyShowAdded(event.target.checked); setCandidatePage(1); }}
+                    onChange={(event) => { setOnlyShowAdded(event.target.checked); resetCandidateListView(); }}
                   />
                   仅显示填报的院校专业组
                 </label>
@@ -2456,7 +2467,7 @@ export default function GeneratePlanPage() {
                         key={o.value}
                         type="button"
                         className={`gseg ${tone} ${gradientFilter === o.value ? 'on' : ''}`}
-                        onClick={() => setGradientFilter(o.value)}
+                        onClick={() => { setGradientFilter(o.value); resetCandidateListView(); }}
                       >
                         {o.label} <i className="n">{n}</i>
                       </button>
@@ -2464,7 +2475,7 @@ export default function GeneratePlanPage() {
                   })}
                   </div>
                   <span className="pgv2-density-note">
-                    当前展示 <strong>{visibleGroups.length}</strong> 个候选, 按
+                    本页展示 <strong>{visibleGroups.length}</strong> 个 / 筛选后共 <strong>{candidateGroups?.total ?? 0}</strong> 个候选, 按
                     <strong> {currentSortLabel}</strong> 排序
                   </span>
                 </div>
@@ -2492,7 +2503,7 @@ export default function GeneratePlanPage() {
                       <button
                         type="button"
                         className={`pgv3-fchip ${appliedTier === 0 ? 'on' : ''}`}
-                        onClick={() => setAppliedTier(0)}
+                        onClick={() => { setAppliedTier(0); resetCandidateListView(); }}
                       >
                         全部
                       </button>
@@ -2505,7 +2516,7 @@ export default function GeneratePlanPage() {
                             key={t.tier}
                             type="button"
                             className={`pgv3-fchip ${appliedTier === t.tier ? 'on' : ''}`}
-                            onClick={() => setAppliedTier(t.tier)}
+                            onClick={() => { setAppliedTier(t.tier); resetCandidateListView(); }}
                             title={`${t.majors.join('、')} — 本批次候选 ${t.groupCount} 组`}
                             style={empty ? { opacity: 0.55 } : undefined}
                           >
@@ -2522,7 +2533,7 @@ export default function GeneratePlanPage() {
                     <button
                       type="button"
                       className={`pgv3-fchip ${purityFilter.length === 0 ? 'on' : ''}`}
-                      onClick={() => setPurityFilter([])}
+                      onClick={() => { setPurityFilter([]); resetCandidateListView(); }}
                     >
                       不限
                     </button>
@@ -2538,7 +2549,7 @@ export default function GeneratePlanPage() {
                           key={opt.lv}
                           type="button"
                           className={`pgv3-fchip ${active ? 'on' : ''}`}
-                          onClick={() => togglePurity(opt.lv)}
+                          onClick={() => { togglePurity(opt.lv); resetCandidateListView(); }}
                           title={`仅显示「${opt.label}」组（再点取消，全不选 = 全部显示）`}
                         >
                           {opt.label}
@@ -2565,7 +2576,7 @@ export default function GeneratePlanPage() {
                             const isFull = lo <= 150 && hi >= 750;
                             setScoreRange(isFull ? null : [lo, hi]);
                             setScoreSlider(null);
-                            setCandidatePage(1);
+                            resetCandidateListView();
                           }}
                         />
                         {/* 分数条下方: 当前两端分数 → 对应全省位次 (一分一段) */}
@@ -2594,7 +2605,7 @@ export default function GeneratePlanPage() {
                           type="button"
                           className="pgv3-fchip"
                           style={{ opacity: 0.7 }}
-                          onClick={() => { setScoreRange(null); setScoreSlider(null); setCandidatePage(1); }}
+                          onClick={() => { setScoreRange(null); setScoreSlider(null); resetCandidateListView(); }}
                         >
                           清除
                         </button>
@@ -2623,7 +2634,7 @@ export default function GeneratePlanPage() {
                         key={opt.label}
                         type="button"
                         className={`pgv3-fchip ${natureFilter === opt.v ? 'on' : ''}`}
-                        onClick={() => setNatureFilter(opt.v)}
+                        onClick={() => { setNatureFilter(opt.v); resetCandidateListView(); }}
                       >
                         {opt.label}
                       </button>
@@ -2644,7 +2655,7 @@ export default function GeneratePlanPage() {
                           key={opt.v}
                           type="button"
                           className={`pgv3-fchip ${active ? 'on' : ''}`}
-                          onClick={() => toggleTag(opt.v)}
+                          onClick={() => { toggleTag(opt.v); resetCandidateListView(); }}
                           title="多选 OR: 命中任一标签即显示（勾越多看越多）"
                         >
                           {opt.label}
@@ -2655,7 +2666,7 @@ export default function GeneratePlanPage() {
                       <button
                         type="button"
                         className="pgv3-fchip"
-                        onClick={() => setTagsFilter([])}
+                        onClick={() => { setTagsFilter([]); resetCandidateListView(); }}
                         style={{ opacity: 0.7 }}
                       >
                         清除
@@ -2684,7 +2695,7 @@ export default function GeneratePlanPage() {
                           key={b}
                           type="button"
                           className={`pgv3-fchip ${active ? 'on' : ''}`}
-                          onClick={() => toggleBackground(b)}
+                          onClick={() => { toggleBackground(b); resetCandidateListView(); }}
                           title="多选 OR: 命中任一即显示"
                         >
                           {b}
@@ -2695,7 +2706,7 @@ export default function GeneratePlanPage() {
                       <button
                         type="button"
                         className="pgv3-fchip"
-                        onClick={() => setBackgroundsFilter([])}
+                        onClick={() => { setBackgroundsFilter([]); resetCandidateListView(); }}
                         style={{ opacity: 0.7 }}
                       >
                         清除
@@ -2713,7 +2724,7 @@ export default function GeneratePlanPage() {
                           key={pr}
                           type="button"
                           className={`pgv3-fchip ${active ? 'on' : ''}`}
-                          onClick={() => { toggleProvince(pr); setCandidatePage(1); }}
+                          onClick={() => { toggleProvince(pr); resetCandidateListView(); }}
                         >
                           {pr}
                         </button>
@@ -2723,7 +2734,7 @@ export default function GeneratePlanPage() {
                       <button
                         type="button"
                         className="pgv3-fchip"
-                        onClick={() => setProvincesFilter([])}
+                        onClick={() => { setProvincesFilter([]); resetCandidateListView(); }}
                         style={{ opacity: 0.7 }}
                       >
                         清除
@@ -2742,6 +2753,7 @@ export default function GeneratePlanPage() {
                         if (e.key === 'Enter') {
                           e.preventDefault();
                           addCity();
+                          resetCandidateListView();
                         }
                       }}
                       placeholder="城市名回车添加(直辖市用省份)"
@@ -2759,7 +2771,7 @@ export default function GeneratePlanPage() {
                         key={c}
                         type="button"
                         className="pgv3-fchip on"
-                        onClick={() => removeCity(c)}
+                        onClick={() => { removeCity(c); resetCandidateListView(); }}
                         title="点击移除"
                       >
                         {c} ×
@@ -2769,7 +2781,7 @@ export default function GeneratePlanPage() {
                       <button
                         type="button"
                         className="pgv3-fchip"
-                        onClick={() => setCitiesFilter([])}
+                        onClick={() => { setCitiesFilter([]); resetCandidateListView(); }}
                         style={{ opacity: 0.7 }}
                       >
                         清除
@@ -2794,7 +2806,7 @@ export default function GeneratePlanPage() {
                               key={rt}
                               type="button"
                               className={`pgv3-fchip ${active ? 'on' : ''}`}
-                              onClick={() => { toggleRecruitType(rt); setCandidatePage(1); }}
+                              onClick={() => { toggleRecruitType(rt); resetCandidateListView(); }}
                               title={`仅显示「${rt}」(再点取消, 全不选 = 全部)`}
                             >
                               {rt}
@@ -2805,7 +2817,7 @@ export default function GeneratePlanPage() {
                           <button
                             type="button"
                             className="pgv3-fchip"
-                            onClick={() => { setRecruitTypeFilter([]); setCandidatePage(1); }}
+                            onClick={() => { setRecruitTypeFilter([]); resetCandidateListView(); }}
                             style={{ opacity: 0.7 }}
                           >
                             清除
@@ -2824,7 +2836,7 @@ export default function GeneratePlanPage() {
                           key={opt.label}
                           type="button"
                           className={sinoForeignFilter === opt.v ? 'on' : ''}
-                          onClick={() => { setSinoForeignFilter(opt.v); setCandidatePage(1); }}
+                          onClick={() => { setSinoForeignFilter(opt.v); resetCandidateListView(); }}
                         >
                           {opt.label}
                         </button>
@@ -2856,7 +2868,7 @@ export default function GeneratePlanPage() {
                         key={opt.label}
                         type="button"
                         className={`pgv3-fchip ${newItemFilter === opt.v ? 'on' : ''}`}
-                        onClick={() => setNewItemFilter(opt.v)}
+                        onClick={() => { setNewItemFilter(opt.v); resetCandidateListView(); }}
                       >
                         {opt.label}
                       </button>
@@ -2868,17 +2880,17 @@ export default function GeneratePlanPage() {
               {/* —— 已选条件 filterbar（仅在有激活筛选时出现） —— */}
               {(() => {
                 const chips: Array<{ id: string; label: string; value: string; clear: () => void }> = [];
-                if (viewMode === 'MAJOR' && appliedTier > 0) chips.push({ id: 'tier', label: '梯队', value: `梯队${appliedTier}`, clear: () => setAppliedTier(0) });
-                purityFilter.forEach((lv) => chips.push({ id: 'purity-' + lv, label: '纯净度', value: ({ S: '干净', A: '较纯', B: '较乱', C: '混乱' } as Record<string, string>)[lv] ?? lv, clear: () => togglePurity(lv) }));
-                if (scoreRange) chips.push({ id: 'score', label: '分数', value: `${scoreRange[0]}–${scoreRange[1]}`, clear: () => { setScoreRange(null); setScoreSlider(null); setCandidatePage(1); } });
-                if (natureFilter) chips.push({ id: 'nature', label: '办学性质', value: ({ public: '公办', private: '民办', sinoForeign: '中外合作', hkMacau: '港澳合作', independent: '独立学院' } as Record<string, string>)[natureFilter] ?? natureFilter, clear: () => setNatureFilter(null) });
-                tagsFilter.forEach((t) => chips.push({ id: 'tag-' + t, label: '标签', value: t === 'doubleFirstClass' ? '双一流' : t, clear: () => toggleTag(t) }));
-                backgroundsFilter.forEach((b) => chips.push({ id: 'bg-' + b, label: '背景', value: b, clear: () => toggleBackground(b) }));
-                provincesFilter.forEach((pr) => chips.push({ id: 'prov-' + pr, label: '省份', value: pr, clear: () => toggleProvince(pr) }));
-                citiesFilter.forEach((c) => chips.push({ id: 'city-' + c, label: '城市', value: c, clear: () => removeCity(c) }));
-                recruitTypeFilter.forEach((rt) => chips.push({ id: 'rt-' + rt, label: '招生类别', value: rt, clear: () => { toggleRecruitType(rt); setCandidatePage(1); } }));
-                if (sinoForeignFilter) chips.push({ id: 'sino', label: '中外合作', value: sinoForeignFilter === 'only' ? '只看' : '排除', clear: () => { setSinoForeignFilter(null); setCandidatePage(1); } });
-                if (newItemFilter) chips.push({ id: 'new', label: '新增', value: newItemFilter === 'major' ? '含新增专业' : '含新增院校', clear: () => setNewItemFilter(null) });
+                if (viewMode === 'MAJOR' && appliedTier > 0) chips.push({ id: 'tier', label: '梯队', value: `梯队${appliedTier}`, clear: () => { setAppliedTier(0); resetCandidateListView(); } });
+                purityFilter.forEach((lv) => chips.push({ id: 'purity-' + lv, label: '纯净度', value: ({ S: '干净', A: '较纯', B: '较乱', C: '混乱' } as Record<string, string>)[lv] ?? lv, clear: () => { togglePurity(lv); resetCandidateListView(); } }));
+                if (scoreRange) chips.push({ id: 'score', label: '分数', value: `${scoreRange[0]}–${scoreRange[1]}`, clear: () => { setScoreRange(null); setScoreSlider(null); resetCandidateListView(); } });
+                if (natureFilter) chips.push({ id: 'nature', label: '办学性质', value: ({ public: '公办', private: '民办', sinoForeign: '中外合作', hkMacau: '港澳合作', independent: '境外办学' } as Record<string, string>)[natureFilter] ?? natureFilter, clear: () => { setNatureFilter(null); resetCandidateListView(); } });
+                tagsFilter.forEach((t) => chips.push({ id: 'tag-' + t, label: '标签', value: t === 'doubleFirstClass' ? '双一流' : t, clear: () => { toggleTag(t); resetCandidateListView(); } }));
+                backgroundsFilter.forEach((b) => chips.push({ id: 'bg-' + b, label: '背景', value: b, clear: () => { toggleBackground(b); resetCandidateListView(); } }));
+                provincesFilter.forEach((pr) => chips.push({ id: 'prov-' + pr, label: '省份', value: pr, clear: () => { toggleProvince(pr); resetCandidateListView(); } }));
+                citiesFilter.forEach((c) => chips.push({ id: 'city-' + c, label: '城市', value: c, clear: () => { removeCity(c); resetCandidateListView(); } }));
+                recruitTypeFilter.forEach((rt) => chips.push({ id: 'rt-' + rt, label: '招生类别', value: rt, clear: () => { toggleRecruitType(rt); resetCandidateListView(); } }));
+                if (sinoForeignFilter) chips.push({ id: 'sino', label: '中外合作', value: sinoForeignFilter === 'only' ? '只看' : '排除', clear: () => { setSinoForeignFilter(null); resetCandidateListView(); } });
+                if (newItemFilter) chips.push({ id: 'new', label: '新增', value: newItemFilter === 'major' ? '含新增专业' : '含新增院校', clear: () => { setNewItemFilter(null); resetCandidateListView(); } });
                 if (chips.length === 0) return null;
                 const clearAll = () => {
                   setAppliedTier(0);
@@ -2892,7 +2904,7 @@ export default function GeneratePlanPage() {
                   setRecruitTypeFilter([]);
                   setSinoForeignFilter(null);
                   setNewItemFilter(null);
-                  setCandidatePage(1);
+                  resetCandidateListView();
                 };
                 return (
                   <div className="pgv3-filterbar">
@@ -2944,7 +2956,7 @@ export default function GeneratePlanPage() {
                         <div style={{ marginTop: 12 }}>
                           <button
                             type="button"
-                            onClick={() => setExcludeAdded(false)}
+                            onClick={() => { setExcludeAdded(false); resetCandidateListView(); }}
                             style={{ background: 'var(--primary, #1677ff)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 500 }}
                           >
                             显示已填报的院校 →
@@ -2981,7 +2993,7 @@ export default function GeneratePlanPage() {
                           total={candidateGroups.total}
                           showSizeChanger={false}
                           showTotal={(total) => `共 ${total} 所院校`}
-                          onChange={setCandidatePage}
+                          onChange={goCandidatePage}
                         />
                       </div>
                     ) : null}
@@ -3040,7 +3052,7 @@ export default function GeneratePlanPage() {
                           <div style={{ marginTop: 12, fontSize: 12 }}>
                             <button
                               type="button"
-                              onClick={() => setExcludeAdded(false)}
+                              onClick={() => { setExcludeAdded(false); resetCandidateListView(); }}
                               style={{
                                 background: 'var(--primary, #1677ff)',
                                 color: 'white',
@@ -3221,7 +3233,7 @@ export default function GeneratePlanPage() {
                         total={candidateGroups.total}
                         showSizeChanger={false}
                         showTotal={(total) => `共 ${total} 个专业组`}
-                        onChange={setCandidatePage}
+                        onChange={goCandidatePage}
                       />
                     </div>
                   ) : null}
