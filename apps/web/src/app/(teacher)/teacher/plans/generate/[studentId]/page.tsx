@@ -41,7 +41,7 @@ import {
   SendOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { studentApi, type EligibleBatch } from '@/services/student-api';
 import { planApi, type CandidateGroupSort, type CandidateSortDir } from '@/services/plan-api';
 import { scoreSegmentApi } from '@/services/score-segment';
@@ -1211,6 +1211,7 @@ export default function GeneratePlanPage() {
       maxScore: keywordUniversity ? undefined : (scoreRange ? scoreRange[1] : undefined),
     }),
     enabled: !!planId,
+    placeholderData: keepPreviousData,
   });
   const candidateGroups = unwrap<CandidateGroupListResult>(groupData);
   const regionMismatchCount = candidateGroups?.regionMismatchCount ?? 0;
