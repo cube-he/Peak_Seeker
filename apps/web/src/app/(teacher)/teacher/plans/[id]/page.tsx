@@ -60,7 +60,7 @@ import {
   type SelectedPlanMajorPayload,
 } from '../generate/[studentId]/plan-workbench-utils';
 import { CandidateCardV3 } from '../generate/[studentId]/CandidateCardV3';
-import CandidateMajorSection from '../generate/[studentId]/candidate-major-section';
+import CandidateMajorSection, { getMajorSections } from '../generate/[studentId]/candidate-major-section';
 
 // 后端梯度枚举 → 设计稿 tier class (冲=rush / 稳=stable / 保=safe)
 const GRADIENT_TIER: Record<string, 'rush' | 'stable' | 'safe'> = {
@@ -242,6 +242,46 @@ function buildPlanItemCardGroup(item: any, studentRank: number | null) {
       isDoubleFirstClass: Boolean(item.isDoubleFirstClass),
       softRanking: item.softRanking ?? null,
     },
+  };
+}
+
+function getPlanGroupIdentity(value: any) {
+  const universityId = value?.universityId ?? value?.university?.id ?? value?.schoolId ?? '';
+  const universityCode = value?.universityCode ?? value?.university?.code ?? '';
+  const groupCode = value?.groupCode ?? value?.group?.code ?? value?.code ?? '';
+  return `${universityId || universityCode}|${groupCode}`;
+}
+
+function mergePlanItemCardGroup(item: any, richGroup: any | undefined, studentRank: number | null) {
+  const fallback = buildPlanItemCardGroup(item, studentRank);
+  if (!richGroup) return { group: fallback, isRich: false };
+
+  return {
+    group: {
+      ...fallback,
+      ...richGroup,
+      groupKey: fallback.groupKey,
+      universityId: richGroup.universityId ?? fallback.universityId,
+      universityName: richGroup.universityName ?? fallback.universityName,
+      universityCode: richGroup.universityCode ?? fallback.universityCode,
+      groupCode: richGroup.groupCode ?? fallback.groupCode,
+      groupName: richGroup.groupName ?? fallback.groupName,
+      suggestedGradient: richGroup.suggestedGradient ?? fallback.suggestedGradient,
+      dynamicGradient: richGroup.dynamicGradient ?? fallback.dynamicGradient,
+      groupMinRank: richGroup.groupMinRank ?? fallback.groupMinRank,
+      groupMinScore: richGroup.groupMinScore ?? fallback.groupMinScore,
+      currentPlanCount: richGroup.currentPlanCount ?? fallback.currentPlanCount,
+      majorCount: richGroup.majorCount ?? fallback.majorCount,
+      purity: richGroup.purity ?? fallback.purity,
+      majors: richGroup.majors ?? fallback.majors,
+      majorSections: richGroup.majorSections ?? fallback.majorSections,
+      matchReason: richGroup.matchReason ?? fallback.matchReason,
+      university: {
+        ...fallback.university,
+        ...(richGroup.university ?? {}),
+      },
+    },
+    isRich: true,
   };
 }
 
@@ -448,7 +488,38 @@ export default function PlanDetailPage() {
   const currentIdx = reviewQueue.findIndex((p) => Number(p.id) === Number(planId));
   const nextInQueue = currentIdx >= 0 ? reviewQueue[currentIdx + 1] : reviewQueue[0];
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+  const planItemIdentityStamp = items
+    .map((item) => `${item.id}:${item.universityId ?? item.universityCode ?? ''}:${item.groupCode ?? ''}:${item.sequence ?? ''}`)
+    .join(',');
+  const { data: detailCandidateGroupData, isFetching: detailCandidateGroupsFetching } = useQuery({
+    queryKey: ['plan-detail-candidate-groups', planId, planItemIdentityStamp],
+    queryFn: () => planApi.getCandidateGroups(planId, {
+      page: 1,
+      pageSize: Math.max(20, items.length || 20),
+      onlyAdded: true,
+      excludeAdded: false,
+      includeSoftFails: true,
+      includeHardFails: true,
+      includeOutOfReach: true,
+      includeRegionMismatch: true,
+      sort: 'MAJOR_MATCH',
+    }),
+    enabled: !!plan && items.length > 0,
+    staleTime: 30_000,
+  });
+  const detailCandidateGroups = unwrap<any>(detailCandidateGroupData)?.groups ?? [];
+  const richGroupMap = useMemo(() => {
+    const next = new Map<string, any>();
+    for (const group of detailCandidateGroups) {
+      next.set(getPlanGroupIdentity(group), group);
+    }
+    return next;
+  }, [detailCandidateGroups]);
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ['plan-detail', planId] });
+    void queryClient.invalidateQueries({ queryKey: ['plan-detail-candidate-groups', planId] });
+  };
 
   // 草稿保存:由 debounce 触发,失败不打扰用户(返回 toast 即可)
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
@@ -732,7 +803,10 @@ export default function PlanDetailPage() {
       <PlanRow
         key={item.id}
         item={item}
+        richGroup={richGroupMap.get(getPlanGroupIdentity(item))}
+        richGroupLoading={detailCandidateGroupsFetching}
         studentRank={summary.studentRank}
+        studentScore={summary.studentScore}
         reviewMode={isReviewing}
         canDrag={canDragRows}
         isDragging={dragRow?.tier === dragTier && dragRow?.pos === pos}
@@ -1379,7 +1453,10 @@ export default function PlanDetailPage() {
 // ── 志愿行 (设计稿 pl-row div-grid): 院校/专业组/专业/计划/历史分位次 + 点击展开组内专业编辑 ──
 function PlanRow({
   item,
+  richGroup,
+  richGroupLoading,
   studentRank,
+  studentScore,
   reviewMode,
   annotation,
   hasAnnotation,
@@ -1402,7 +1479,10 @@ function PlanRow({
   onMoveToPos,
 }: {
   item: any;
+  richGroup?: any;
+  richGroupLoading?: boolean;
   studentRank: number | null;
+  studentScore?: number | null;
   reviewMode: boolean;
   annotation: string;
   hasAnnotation: boolean;
@@ -1426,7 +1506,8 @@ function PlanRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [annotateOpen, setAnnotateOpen] = useState(false);
-  const cardGroup = buildPlanItemCardGroup(item, studentRank);
+  const { group: cardGroup, isRich } = mergePlanItemCardGroup(item, richGroup, studentRank);
+  const majorSections = getMajorSections(cardGroup);
   const hasMetaInfo = item.selectionReason || item.riskWarning || item.adjustmentAdvice;
   const hasMajorEditor = item.fullMajorRanking || item.selectedMajors?.length || item.recommendedOrder;
   const sequenceNo = freeMode && displayPos ? displayPos : item.sequence;
@@ -1542,6 +1623,7 @@ function PlanRow({
           isCompare={false}
           isAdded
           studentRankForDecision={studentRank ?? undefined}
+          studentScoreForDecision={studentScore ?? undefined}
           expandedTab="majors"
           onToggleExpand={() => setExpanded((v) => !v)}
           onToggleCompare={() => undefined}
@@ -1551,11 +1633,36 @@ function PlanRow({
           onRemove={() => undefined}
           onTabChange={() => undefined}
           actionSlot={actionSlot}
-          showExpandedOverview={false}
+          showExpandedOverview={isRich}
           renderExpandedContent={() => (
             <div className="space-y-4">
-              <CandidateMajorSection title="已填报专业" section="RECOMMENDED" majors={cardGroup.majorSections.recommended} group={cardGroup} />
-              <CandidateMajorSection title="组内可选" section="BACKUP" majors={cardGroup.majorSections.backup} group={cardGroup} />
+              {!isRich && richGroupLoading ? (
+                <div className="rounded-md border border-dashed border-border bg-bg/40 px-3 py-2 text-xs text-text-muted">
+                  正在同步生成页同款候选组数据...
+                </div>
+              ) : null}
+              <CandidateMajorSection title="推荐填写" section="RECOMMENDED" majors={majorSections.recommended} group={cardGroup} />
+              <CandidateMajorSection title="可备选" section="BACKUP" majors={majorSections.backup} group={cardGroup} />
+              <CandidateMajorSection title="风险/不建议" section="RISK" majors={majorSections.risk} group={cardGroup} />
+              {Array.isArray((cardGroup as any).hardFailMajors) && (cardGroup as any).hardFailMajors.length > 0 ? (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 12, color: '#8c8c8c', margin: '6px 0 4px', fontWeight: 500 }}>
+                    资格不符 · 不可填（客观条件不符，填报会被退档）
+                  </div>
+                  {(cardGroup as any).hardFailMajors.map((major: any) => (
+                    <div
+                      key={major.enrollmentPlanId}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(0,0,0,0.035)', borderRadius: 6, marginBottom: 4, opacity: 0.78 }}
+                    >
+                      <span style={{ flex: 1, textDecoration: 'line-through', color: '#8c8c8c', fontSize: 13 }}>{major.majorName}</span>
+                      <span style={{ fontSize: 12, color: '#cf1322' }}>{(major.hardFailReasons ?? []).join('；') || '资格不符'}</span>
+                      <button type="button" disabled style={{ opacity: 0.5, cursor: 'not-allowed', fontSize: 12, padding: '2px 8px', border: '1px solid var(--border, #ddd)', borderRadius: 4, background: 'transparent', color: '#999' }}>
+                        不可填
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {hasMetaInfo ? (
                 <div className="grid gap-3 lg:grid-cols-3">
                   {item.selectionReason ? (

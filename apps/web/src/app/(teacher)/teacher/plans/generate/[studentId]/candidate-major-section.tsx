@@ -57,7 +57,7 @@ function tagClass(tone: 'rush' | 'stable' | 'safe' | 'muted' | 'warn' | 'extreme
   return cx(styles.tag, toneClass);
 }
 
-function getMajorSections(group: any): { recommended: any[]; backup: any[]; risk: any[] } {
+export function getMajorSections(group: any): { recommended: any[]; backup: any[]; risk: any[] } {
   return group?.majorSections ?? {
     recommended: group?.majors ?? [],
     backup: [],
@@ -235,5 +235,3 @@ export default function CandidateMajorSection({
     </div>
   );
 }
-
-export { getMajorSections };
