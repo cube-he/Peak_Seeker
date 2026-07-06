@@ -26,9 +26,12 @@ export interface CandidateListParams {
 // 排序「轴」(GROUP 视图); 方向由 sortDir 单独控制。MAJOR_MATCH 综合推荐无方向。
 export type CandidateGroupSort =
   | 'MAJOR_MATCH'
+  | 'RANK_FIT'
   | 'SAFETY'
   | 'MAJOR_MIN_SCORE'
+  | 'MAJOR_MIN_SCORE_DESC'
   | 'UNIVERSITY_RANK'
+  | 'MAJOR_STRENGTH'
   | 'PLAN_COUNT_CHANGE'
   | 'SUPPLEMENTARY';
 
