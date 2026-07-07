@@ -135,6 +135,23 @@ describe('Qualification rules', () => {
 
 describe('Gradient rules', () => {
   describe('FillDifferenceRule', () => {
+    it('uses group line before major line for plan-level score diff', () => {
+      const findings = FillDifferenceRule.evaluate(
+        mkCtx(
+          { gradient: 'CHONG', score25Group: 590, score25Major: 610 },
+          { totalScore: 580 },
+        ),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0].detail).toMatchObject({
+        studentScore: 580,
+        hist: 590,
+        diff: -10,
+        scoreSource: 'group25',
+      });
+      expect(findings[0].message).toContain('专业组线');
+    });
+
     it('moderate when CHONG diff is very aggressive', () => {
       const findings = FillDifferenceRule.evaluate(
         mkCtx({ gradient: 'CHONG', score25Major: 600 }, { totalScore: 580 }),
