@@ -75,6 +75,8 @@ import {
 } from '@/components/candidate-pool-v2';
 import { usePersistentCollapse } from '@/hooks/usePersistentCollapse';
 import { summarizePlanRisks } from '@/lib/plan-risks';
+import type { PlanRisk } from '@/lib/plan-risks';
+import PlanRiskPanel from '@/components/plan/PlanRiskPanel';
 
 type Gradient = 'CHONG' | 'WEN' | 'BAO';
 type DynamicGradientTier =
@@ -1074,6 +1076,7 @@ export default function GeneratePlanPage() {
 
   // 算法路径 Drawer
   const [algoDrawerOpen, setAlgoDrawerOpen] = useState(false);
+  const [riskDrawerOpen, setRiskDrawerOpen] = useState(false);
 
   // 多卡对比（最多 4 张）
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
@@ -1263,6 +1266,32 @@ export default function GeneratePlanPage() {
       queryClient.invalidateQueries({ queryKey: ['plan-risks', planId] });
     }, 1500);
   }, [queryClient, planId]);
+  const resolveSoftRiskMutation = useMutation({
+    mutationFn: (risk: PlanRisk) =>
+      planApi.resolveRisk(risk.id, 'accepted', '老师已知晓软风险,提交主管复核'),
+    onSuccess: () => {
+      void message.success('已确认软风险');
+      refreshRisks();
+    },
+    onError: (error: any) => {
+      void message.error(error?.response?.data?.message ?? '确认风险失败');
+    },
+  });
+  const resolveAllSoftRisksMutation = useMutation({
+    mutationFn: (risks: PlanRisk[]) =>
+      Promise.all(
+        risks.map((risk) =>
+          planApi.resolveRisk(risk.id, 'accepted', '老师已知晓软风险,提交主管复核'),
+        ),
+      ),
+    onSuccess: () => {
+      void message.success('已确认全部软风险');
+      refreshRisks();
+    },
+    onError: (error: any) => {
+      void message.error(error?.response?.data?.message ?? '确认风险失败');
+    },
+  });
   const submitReadiness = useMemo(() => {
     if (plan?.status !== 'DRAFT') return { ok: false, underfill: false, reason: '当前不是草稿状态' };
     if (!planItems.length) return { ok: false, underfill: false, reason: '尚未加入任何志愿' };
@@ -1972,6 +2001,9 @@ export default function GeneratePlanPage() {
             <>
               <Button onClick={() => router.push(`/teacher/plans/${planId}`)} icon={<FileTextOutlined />}>
                 查看详情
+              </Button>
+              <Button onClick={() => setRiskDrawerOpen(true)} icon={<WarningOutlined />}>
+                风险检查 硬 {riskSummary.blockingCount} / 软 {riskSummary.softCount}
               </Button>
               {plan?.status === 'PENDING_REVIEW' ? (
                 <Button danger loading={withdrawMutation.isPending} onClick={handleWithdrawClick}>
@@ -3447,6 +3479,14 @@ export default function GeneratePlanPage() {
                 </div>
 
                 <div className="pgv2-hints">
+                  <Button
+                    block
+                    style={{ marginTop: 12 }}
+                    icon={<WarningOutlined />}
+                    onClick={() => setRiskDrawerOpen(true)}
+                  >
+                    风险检查 硬 {riskSummary.blockingCount} / 软 {riskSummary.softCount}
+                  </Button>
                   {plan?.status === 'PENDING_REVIEW' ? (
                     <Button
                       danger
@@ -3749,6 +3789,27 @@ export default function GeneratePlanPage() {
       </Drawer>
 
       {/* —— Region 9: pgv2-drawer 算法路径 (复刻设计稿自定义 drawer) —— */}
+      <Drawer
+        open={riskDrawerOpen}
+        onClose={() => setRiskDrawerOpen(false)}
+        title={`风险检查 · 硬 ${riskSummary.blockingCount} / 软 ${riskSummary.softCount}`}
+        width={typeof window !== 'undefined' ? Math.min(760, window.innerWidth * 0.92) : 720}
+        placement="right"
+      >
+        <PlanRiskPanel
+          risks={riskData}
+          resolvingId={
+            resolveAllSoftRisksMutation.isPending
+              ? 'all'
+              : resolveSoftRiskMutation.isPending
+                ? resolveSoftRiskMutation.variables?.id
+                : undefined
+          }
+          onResolveSoft={(risk) => resolveSoftRiskMutation.mutate(risk)}
+          onResolveAllSoft={(risks) => resolveAllSoftRisksMutation.mutate(risks)}
+        />
+      </Drawer>
+
       {algoDrawerOpen ? (
         <>
           <div className="pgv2-drawer-mask" onClick={() => setAlgoDrawerOpen(false)} />

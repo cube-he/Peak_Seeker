@@ -8,6 +8,7 @@ import {
   Alert,
   Button,
   Collapse,
+  Drawer,
   Dropdown,
   Empty,
   Input,
@@ -67,6 +68,8 @@ import {
 import { CandidateCardV3 } from '../generate/[studentId]/CandidateCardV3';
 import CandidateMajorSection from '../generate/[studentId]/candidate-major-section';
 import { summarizePlanRisks } from '@/lib/plan-risks';
+import type { PlanRisk } from '@/lib/plan-risks';
+import PlanRiskPanel from '@/components/plan/PlanRiskPanel';
 
 // 后端梯度枚举 → 设计稿 tier class (冲=rush / 稳=stable / 保=safe)
 const GRADIENT_TIER: Record<string, 'rush' | 'stable' | 'safe'> = {
@@ -412,6 +415,7 @@ export default function PlanDetailPage() {
   const [now, setNow] = useState<Date | null>(null);
   // 对比模式:选另一版本对比当前版本
   const [compareVersionId, setCompareVersionId] = useState<number | null>(null);
+  const [riskDrawerOpen, setRiskDrawerOpen] = useState(false);
 
   useEffect(() => {
     setNow(new Date());
@@ -655,6 +659,35 @@ export default function PlanDetailPage() {
       refresh();
     },
     onError: (error: any) => message.error(error?.response?.data?.message ?? '提交失败'),
+  });
+
+  const refreshRisks = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['plan-risks', planId] });
+    refresh();
+  }, [planId, queryClient, refresh]);
+
+  const resolveSoftRiskMutation = useMutation({
+    mutationFn: (risk: PlanRisk) =>
+      planApi.resolveRisk(risk.id, 'accepted', '老师已知晓软风险,提交主管复核'),
+    onSuccess: () => {
+      void message.success('已确认软风险');
+      refreshRisks();
+    },
+    onError: (error: any) => message.error(error?.response?.data?.message ?? '确认风险失败'),
+  });
+
+  const resolveAllSoftRisksMutation = useMutation({
+    mutationFn: (risks: PlanRisk[]) =>
+      Promise.all(
+        risks.map((risk) =>
+          planApi.resolveRisk(risk.id, 'accepted', '老师已知晓软风险,提交主管复核'),
+        ),
+      ),
+    onSuccess: () => {
+      void message.success('已确认全部软风险');
+      refreshRisks();
+    },
+    onError: (error: any) => message.error(error?.response?.data?.message ?? '确认风险失败'),
   });
 
   const confirmSoftRiskAndSubmit = useCallback((underfillReason?: string) => {
@@ -1203,6 +1236,9 @@ export default function PlanDetailPage() {
         <div className="actions">
           {/* 主操作 / 次操作 保留原 antd 业务逻辑 (状态机 + 权限) */}
           <Space wrap>
+            <Button icon={<WarningOutlined />} onClick={() => setRiskDrawerOpen(true)}>
+              风险检查 硬 {riskSummary.blockingCount} / 软 {riskSummary.softCount}
+            </Button>
             {renderPrimaryActions()}
             {moreMenuItems.length > 0 ? (
               <Dropdown menu={{ items: moreMenuItems }} placement="bottomRight" trigger={['click']}>
@@ -1607,6 +1643,27 @@ export default function PlanDetailPage() {
           )}
         </div>
       ) : null}
+
+      <Drawer
+        open={riskDrawerOpen}
+        onClose={() => setRiskDrawerOpen(false)}
+        title={`风险检查 · 硬 ${riskSummary.blockingCount} / 软 ${riskSummary.softCount}`}
+        width={typeof window !== 'undefined' ? Math.min(760, window.innerWidth * 0.92) : 720}
+        placement="right"
+      >
+        <PlanRiskPanel
+          risks={riskData}
+          resolvingId={
+            resolveAllSoftRisksMutation.isPending
+              ? 'all'
+              : resolveSoftRiskMutation.isPending
+                ? resolveSoftRiskMutation.variables?.id
+                : undefined
+          }
+          onResolveSoft={(risk) => resolveSoftRiskMutation.mutate(risk)}
+          onResolveAllSoft={(risks) => resolveAllSoftRisksMutation.mutate(risks)}
+        />
+      </Drawer>
     </div>
   );
 }
