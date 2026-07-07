@@ -6,12 +6,50 @@ import {
 } from './rules/qualification.rule';
 import { FillDifferenceRule, StableDifferenceRule, SafeDifferenceRule } from './rules/gradient.rule';
 import type { RuleContext } from './risk-rule.interface';
+import { isBlockingRisk, normalizeRiskSeverity } from './risk-classification';
+import { RiskEngineService } from './risk-engine.service';
 
 const mkCtx = (item: any, student: any = {}): RuleContext => ({
   item,
   allItems: [item],
   student,
   plan: {},
+});
+
+describe('Risk classification', () => {
+  it('blocks only hard qualification risks', () => {
+    expect(isBlockingRisk('SUBJECT_MISMATCH')).toBe(true);
+    expect(isBlockingRisk('COLOR_BLIND_RESTRICTION')).toBe(true);
+    expect(isBlockingRisk('ZERO_PLAN_COUNT')).toBe(true);
+    expect(isBlockingRisk('FILL_DIFF_TOO_HIGH')).toBe(false);
+    expect(isBlockingRisk('MISSING_HISTORICAL_DATA')).toBe(false);
+  });
+
+  it('downgrades old critical soft-risk rows for submit gating', () => {
+    expect(normalizeRiskSeverity('FILL_DIFF_TOO_HIGH', 'critical')).toBe('moderate');
+    expect(normalizeRiskSeverity('SUBJECT_MISMATCH', 'critical')).toBe('critical');
+  });
+});
+
+describe('RiskEngineService submit counts', () => {
+  it('dedupes rows and counts only hard risks as critical blockers', async () => {
+    const prisma = {
+      planItemRisk: {
+        findMany: jest.fn().mockResolvedValue([
+          { planItemId: 1, ruleCode: 'FILL_DIFF_TOO_HIGH', severity: 'critical', message: '冲分差 20 分' },
+          { planItemId: 1, ruleCode: 'FILL_DIFF_TOO_HIGH', severity: 'critical', message: '冲分差 20 分' },
+          { planItemId: 2, ruleCode: 'SUBJECT_MISMATCH', severity: 'critical', message: '选科不符' },
+        ]),
+      },
+    };
+    const service = new RiskEngineService(prisma as any);
+
+    await expect(service.countByPlan(7)).resolves.toEqual({
+      critical: 1,
+      moderate: 1,
+      minor: 0,
+    });
+  });
 });
 
 describe('Qualification rules', () => {
@@ -25,6 +63,7 @@ describe('Qualification rules', () => {
       );
       expect(findings).toHaveLength(1);
       expect(findings[0].severity).toBe('critical');
+      expect(isBlockingRisk(findings[0].ruleCode)).toBe(true);
     });
 
     it('passes when subjects match', () => {
@@ -51,6 +90,8 @@ describe('Qualification rules', () => {
         mkCtx({ riskWarning: '色盲色弱不予录取' }, { colorBlind: true }),
       );
       expect(findings).toHaveLength(1);
+      expect(findings[0].severity).toBe('critical');
+      expect(isBlockingRisk(findings[0].ruleCode)).toBe(true);
     });
 
     it('skips non-color-blind student', () => {
@@ -62,9 +103,11 @@ describe('Qualification rules', () => {
   });
 
   describe('MissingHistoricalDataRule', () => {
-    it('flags when no historical data', () => {
+    it('flags missing historical data as a soft risk', () => {
       const findings = MissingHistoricalDataRule.evaluate(mkCtx({}));
       expect(findings).toHaveLength(1);
+      expect(findings[0].severity).toBe('moderate');
+      expect(isBlockingRisk(findings[0].ruleCode)).toBe(false);
     });
 
     it('passes when has any data', () => {
@@ -76,9 +119,11 @@ describe('Qualification rules', () => {
   });
 
   describe('ZeroPlanCountRule', () => {
-    it('flags planCount=0', () => {
+    it('flags planCount=0 as hard blocking', () => {
       const findings = ZeroPlanCountRule.evaluate(mkCtx({ planCount: 0 }));
       expect(findings).toHaveLength(1);
+      expect(findings[0].severity).toBe('critical');
+      expect(isBlockingRisk(findings[0].ruleCode)).toBe(true);
     });
 
     it('passes planCount>0', () => {
@@ -90,15 +135,16 @@ describe('Qualification rules', () => {
 
 describe('Gradient rules', () => {
   describe('FillDifferenceRule', () => {
-    it('critical when diff > 15 (CHONG)', () => {
+    it('moderate when CHONG diff is very aggressive', () => {
       const findings = FillDifferenceRule.evaluate(
         mkCtx({ gradient: 'CHONG', score25Major: 600 }, { totalScore: 580 }),
       );
       expect(findings).toHaveLength(1);
-      expect(findings[0].severity).toBe('critical');
+      expect(findings[0].severity).toBe('moderate');
+      expect(isBlockingRisk(findings[0].ruleCode)).toBe(false);
     });
 
-    it('moderate when diff 7-15 (CHONG)', () => {
+    it('moderate when CHONG diff is 7-15', () => {
       const findings = FillDifferenceRule.evaluate(
         mkCtx({ gradient: 'CHONG', score25Major: 590 }, { totalScore: 580 }),
       );
@@ -144,6 +190,7 @@ describe('Gradient rules', () => {
         mkCtx({ gradient: 'BAO', score25Major: 579 }, { totalScore: 580 }),
       );
       expect(findings).toHaveLength(1);
+      expect(findings[0].severity).toBe('moderate');
     });
 
     it('passes when diff >= 2', () => {

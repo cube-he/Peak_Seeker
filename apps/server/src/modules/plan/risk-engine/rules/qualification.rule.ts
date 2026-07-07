@@ -1,4 +1,4 @@
-import { RiskRule, RiskFinding, RuleContext } from '../risk-rule.interface';
+import { RiskFinding, RiskRule } from '../risk-rule.interface';
 
 export const SubjectMismatchRule: RiskRule = {
   ruleCode: 'SUBJECT_MISMATCH',
@@ -15,18 +15,19 @@ export const SubjectMismatchRule: RiskRule = {
     const studentSubjects = new Set<string>();
     if (studentExamType === 'PHYSICS') studentSubjects.add('物理');
     else if (studentExamType === 'HISTORY') studentSubjects.add('历史');
-    for (const c of studentReChoices) studentSubjects.add(c);
+    for (const choice of studentReChoices) studentSubjects.add(choice);
 
     const candidates = ['物理', '历史', '化学', '生物', '地理', '政治'];
     const missing = candidates.filter(
-      (s) => required.includes(s) && !studentSubjects.has(s),
+      (subject) => required.includes(subject) && !studentSubjects.has(subject),
     );
+
     if (missing.length > 0) {
       findings.push({
         ruleCode: 'SUBJECT_MISMATCH',
         severity: 'critical',
         category: 'qualification',
-        message: `选科不符:该专业要求 ${required},学生未选 ${missing.join('、')}`,
+        message: `选科不符:该专业要求${required},学生未选${missing.join('、')}`,
         detail: { required, studentSubjects: Array.from(studentSubjects), missing },
       });
     }
@@ -77,7 +78,7 @@ export const MissingHistoricalDataRule: RiskRule = {
     if (!has25Major && !has25Group && !has24Major && !hasLegacy) {
       findings.push({
         ruleCode: 'MISSING_HISTORICAL_DATA',
-        severity: 'critical',
+        severity: 'moderate',
         category: 'qualification',
         message: '历史无录取数据,无法评估梯度合理性',
         detail: { itemId: ctx.item?.id },

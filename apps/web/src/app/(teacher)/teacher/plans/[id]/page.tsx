@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -66,6 +66,7 @@ import {
 } from '../generate/[studentId]/plan-workbench-utils';
 import { CandidateCardV3 } from '../generate/[studentId]/CandidateCardV3';
 import CandidateMajorSection from '../generate/[studentId]/candidate-major-section';
+import { summarizePlanRisks } from '@/lib/plan-risks';
 
 // 后端梯度枚举 → 设计稿 tier class (冲=rush / 稳=stable / 保=safe)
 const GRADIENT_TIER: Record<string, 'rush' | 'stable' | 'safe'> = {
@@ -422,6 +423,24 @@ export default function PlanDetailPage() {
   });
   const plan = unwrap<Record<string, any>>(data);
   const items: any[] = plan?.items ?? [];
+  const { data: riskData } = useQuery({
+    queryKey: ['plan-risks', planId],
+    queryFn: () => planApi.getRisks(planId),
+    enabled: !!planId,
+  });
+  const riskSummary = useMemo(() => summarizePlanRisks(riskData), [riskData]);
+  const maxGroupCount = plan?.batchConfig?.maxGroupCount as number | undefined;
+  const submitReadiness = useMemo(() => {
+    if (plan?.status !== 'DRAFT') return { ok: false, underfill: false, reason: '当前不是草稿状态' };
+    if (!items.length) return { ok: false, underfill: false, reason: '尚未加入任何志愿' };
+    if (riskSummary.blockingCount > 0) {
+      return { ok: false, underfill: false, reason: `有 ${riskSummary.blockingCount} 条硬性不符未处理,需先调整方案` };
+    }
+    if (maxGroupCount != null && items.length < maxGroupCount) {
+      return { ok: true, underfill: true, reason: `当前 ${items.length}/${maxGroupCount} 组,提交时需填写不足额理由` };
+    }
+    return { ok: true, underfill: false, reason: '' };
+  }, [items.length, maxGroupCount, plan?.status, riskSummary.blockingCount]);
 
   // —— 志愿行段内拖拽排序 (与生成页同口径: 仅 DRAFT 可拖; 持久化到 sequence) ——
   const [localItems, setLocalItems] = useState<any[]>([]);
@@ -630,13 +649,76 @@ export default function PlanDetailPage() {
   );
 
   const submitMutation = useMutation({
-    mutationFn: () => planApi.submitForReview(planId),
+    mutationFn: (underfillReason?: string) => planApi.submitForReview(planId, underfillReason),
     onSuccess: () => {
       void message.success('已提交审核');
       refresh();
     },
     onError: (error: any) => message.error(error?.response?.data?.message ?? '提交失败'),
   });
+
+  const confirmSoftRiskAndSubmit = useCallback((underfillReason?: string) => {
+    if (riskSummary.softCount <= 0) {
+      submitMutation.mutate(underfillReason);
+      return;
+    }
+    const examples = riskSummary.soft
+      .slice(0, 3)
+      .map((risk) => {
+        const prefix = risk.planItem ? `第 ${risk.planItem.sequence} 志愿 ` : '';
+        return `${prefix}${risk.message}`;
+      });
+
+    Modal.confirm({
+      title: `确认提交含 ${riskSummary.softCount} 条软风险的方案?`,
+      content: (
+        <div>
+          <p style={{ marginBottom: 8 }}>
+            分数、地域、专业偏好或历史数据不足属于可沟通风险，不会阻断提交；主管审核时会一并看到。
+          </p>
+          {examples.length ? (
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {examples.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ),
+      okText: '已知晓,提交主管审核',
+      cancelText: '再检查一下',
+      onOk: () => submitMutation.mutate(underfillReason),
+    });
+  }, [riskSummary.soft, riskSummary.softCount, submitMutation]);
+
+  const handleSubmitClick = useCallback(() => {
+    if (!submitReadiness.underfill) {
+      confirmSoftRiskAndSubmit(undefined);
+      return;
+    }
+    let reason = '';
+    Modal.confirm({
+      title: `不足额提交(${items.length}/${maxGroupCount} 组)`,
+      content: (
+        <div>
+          <p style={{ marginBottom: 8 }}>
+            该批次未填满。若确需不足额提交，请说明理由，主管审核时可见。
+          </p>
+          <Input.TextArea rows={3} onChange={(e) => { reason = e.target.value; }} />
+        </div>
+      ),
+      okText: '确认提交',
+      cancelText: '再检查一下',
+      onOk: () => {
+        if (reason.trim().length < 10) {
+          void message.warning('不足额理由至少 10 字');
+          return Promise.reject(new Error('reason-too-short'));
+        }
+        confirmSoftRiskAndSubmit(reason.trim());
+        return undefined;
+      },
+    });
+  }, [confirmSoftRiskAndSubmit, items.length, maxGroupCount, submitReadiness.underfill]);
 
   const startReviewMutation = useMutation({
     mutationFn: () => planApi.startReview(planId),
@@ -958,9 +1040,9 @@ export default function PlanDetailPage() {
             <Button
               type="primary"
               icon={<SendOutlined />}
-              disabled={!items.length}
+              disabled={!submitReadiness.ok || submitMutation.isPending}
               loading={submitMutation.isPending}
-              onClick={() => submitMutation.mutate()}
+              onClick={handleSubmitClick}
             >
               提交审核
             </Button>

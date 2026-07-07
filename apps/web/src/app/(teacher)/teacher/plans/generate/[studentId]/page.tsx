@@ -74,6 +74,7 @@ import {
   HiddenCard, ComparePanel,
 } from '@/components/candidate-pool-v2';
 import { usePersistentCollapse } from '@/hooks/usePersistentCollapse';
+import { summarizePlanRisks } from '@/lib/plan-risks';
 
 type Gradient = 'CHONG' | 'WEN' | 'BAO';
 type DynamicGradientTier =
@@ -1253,9 +1254,7 @@ export default function GeneratePlanPage() {
     queryFn: () => planApi.getRisks(planId!),
     enabled: !!planId,
   });
-  const criticalUnresolved = Array.isArray(riskData)
-    ? riskData.filter((r) => r.severity === 'critical' && !r.resolvedAt).length
-    : 0;
+  const riskSummary = useMemo(() => summarizePlanRisks(riskData), [riskData]);
   // 后端在增删/重排后异步重算风险, 立即 refetch 可能拿到旧数据 →
   // 立即刷一次 + 1.5s 后补刷一次, 否则就绪度按 stale 数据放行, 提交时才撞后端闸门
   const refreshRisks = useCallback(() => {
@@ -1268,15 +1267,15 @@ export default function GeneratePlanPage() {
     if (plan?.status !== 'DRAFT') return { ok: false, underfill: false, reason: '当前不是草稿状态' };
     if (!planItems.length) return { ok: false, underfill: false, reason: '尚未加入任何志愿' };
     // 上限改为软上限: 超额(> maxGroupCount)不再挡提交, 老师可多备选, 正式填报时再精简
-    if (criticalUnresolved > 0) {
-      return { ok: false, underfill: false, reason: `有 ${criticalUnresolved} 条严重风险未处理,去方案详情逐条处理` };
+    if (riskSummary.blockingCount > 0) {
+      return { ok: false, underfill: false, reason: `有 ${riskSummary.blockingCount} 条硬性不符未处理,需先调整方案` };
     }
     // 组数不足不再挡死: 提前批/专项"只填想去的组"是专业做法, 提交时填不足额理由即可
     if (maxGroupCount != null && planItems.length < maxGroupCount) {
       return { ok: true, underfill: true, reason: `当前 ${planItems.length}/${maxGroupCount} 组,提交时需填写不足额理由` };
     }
     return { ok: true, underfill: false, reason: '' };
-  }, [plan?.status, planItems.length, maxGroupCount, criticalUnresolved]);
+  }, [plan?.status, planItems.length, maxGroupCount, riskSummary.blockingCount]);
 
   const isUsingFallbackYear = Boolean(candidateGroups?.isFallbackYear && candidateGroups.sourceYear && candidateGroups.planYear);
   // 录取线/位次换算用的基准年早于招生计划年(典型: 2026计划已入库但录取线止于2025) → 提示老师这是历史线预测
@@ -1562,6 +1561,41 @@ export default function GeneratePlanPage() {
   });
 
   // 撤回审核: 主管认领前可拉回草稿调序/改组 (PENDING_REVIEW → DRAFT)
+  const confirmSoftRiskAndSubmit = useCallback((underfillReason?: string) => {
+    if (riskSummary.softCount <= 0) {
+      submitMutation.mutate(underfillReason);
+      return;
+    }
+
+    const examples = riskSummary.soft
+      .slice(0, 3)
+      .map((risk) => {
+        const prefix = risk.planItem ? `第 ${risk.planItem.sequence} 志愿 ` : '';
+        return `${prefix}${risk.message}`;
+      });
+
+    Modal.confirm({
+      title: `确认提交含 ${riskSummary.softCount} 条软风险的方案?`,
+      content: (
+        <div>
+          <p style={{ marginBottom: 8 }}>
+            分数、地域、专业偏好或历史数据不足属于可沟通风险，不会阻断提交；主管审核时会一并看到。
+          </p>
+          {examples.length ? (
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {examples.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ),
+      okText: '已知晓,提交主管审核',
+      cancelText: '再检查一下',
+      onOk: () => submitMutation.mutate(underfillReason),
+    });
+  }, [riskSummary.soft, riskSummary.softCount, submitMutation]);
+
   const withdrawMutation = useMutation({
     mutationFn: () => planApi.withdrawReview(String(planId)),
     onSuccess: () => {
@@ -1586,7 +1620,7 @@ export default function GeneratePlanPage() {
   // 不足额提交: 弹窗收理由再发请求 (提前批/专项只填想去的组是专业做法)
   const handleSubmitClick = useCallback(() => {
     if (!submitReadiness.underfill) {
-      submitMutation.mutate(undefined);
+      confirmSoftRiskAndSubmit(undefined);
       return;
     }
     let reason = '';
@@ -1605,11 +1639,11 @@ export default function GeneratePlanPage() {
           void message.warning('不足额理由至少 10 字');
           return Promise.reject(new Error('reason-too-short'));
         }
-        submitMutation.mutate(reason.trim());
+        confirmSoftRiskAndSubmit(reason.trim());
         return undefined;
       },
     });
-  }, [submitReadiness.underfill, planItems.length, maxGroupCount, submitMutation]);
+  }, [submitReadiness.underfill, planItems.length, maxGroupCount, confirmSoftRiskAndSubmit]);
 
   const removeMutation = useMutation({
     mutationFn: (itemId: number) => planApi.deleteItem(String(planId), itemId),
@@ -3424,6 +3458,7 @@ export default function GeneratePlanPage() {
                       撤回修改(调序/改组)
                     </Button>
                   ) : (
+                    <>
                     <Tooltip title={submitReadiness.ok ? '' : submitReadiness.reason}>
                       <Button
                         type="primary"
@@ -3436,6 +3471,12 @@ export default function GeneratePlanPage() {
                         提交主管审核
                       </Button>
                     </Tooltip>
+                    {submitReadiness.ok && riskSummary.softCount > 0 ? (
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#8a6a18', lineHeight: 1.5 }}>
+                        {riskSummary.softCount} 条软风险会随方案提交给主管复核
+                      </div>
+                    ) : null}
+                    </>
                   )}
                 </div>
               </div>

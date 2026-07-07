@@ -332,6 +332,8 @@ export const planApi = {
       detail: any;
       resolvedAt: string | null;
       resolution: string | null;
+      isBlocking?: boolean;
+      duplicateCount?: number;
       planItem: { sequence: number; universityName: string; majorName: string };
     }>;
   },

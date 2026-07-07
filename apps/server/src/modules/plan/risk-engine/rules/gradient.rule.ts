@@ -1,4 +1,4 @@
-import { RiskRule, RiskFinding, RuleContext } from '../risk-rule.interface';
+import { RiskFinding, RiskRule } from '../risk-rule.interface';
 
 function getHistScore(item: any): number | null {
   if (item?.score25Major != null) return item.score25Major;
@@ -23,7 +23,7 @@ export const FillDifferenceRule: RiskRule = {
     if (diff < -15) {
       findings.push({
         ruleCode: 'FILL_DIFF_TOO_HIGH',
-        severity: 'critical',
+        severity: 'moderate',
         category: 'gradient',
         message: `冲分差 ${Math.abs(diff)} 分,过激进可能录不上`,
         detail: { studentScore, hist, diff },
