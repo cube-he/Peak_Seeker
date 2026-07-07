@@ -32,22 +32,6 @@ module.exports = {
       error_file: './logs/vh-web-error.log',
       out_file: './logs/vh-web-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss'
-    },
-    {
-      name: 'vh-ocr',
-      cwd: './services/ocr-service',
-      script: 'venv/bin/python',
-      args: 'main.py',
-      instances: 1,
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '1G',
-      env: {
-        OCR_SERVICE_PORT: 8100
-      },
-      error_file: './logs/vh-ocr-error.log',
-      out_file: './logs/vh-ocr-out.log',
-      log_date_format: 'YYYY-MM-DD HH:mm:ss'
     }
   ]
 };
