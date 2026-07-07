@@ -55,6 +55,11 @@ describe('diffPlanItems', () => {
       [2, 'reordered', 1, 2],
       [3, 'same', undefined, undefined],
     ]);
+    expect(rows.map((r) => [r.sequence, r.current?.id, r.compare?.id])).toEqual([
+      [1, 201, 101],
+      [2, 202, 102],
+      [3, 203, 103],
+    ]);
   });
 
   it('does not steal a moved compare row for a same-sequence replacement', () => {
@@ -69,6 +74,10 @@ describe('diffPlanItems', () => {
     expect(rows.map((r) => [r.sequence, r.kind, r.fromSequence, r.toSequence])).toEqual([
       [1, 'added', undefined, undefined],
       [2, 'reordered', 1, 2],
+    ]);
+    expect(rows.map((r) => [r.sequence, r.current?.id, r.compare?.id])).toEqual([
+      [1, 201, 101],
+      [2, 202, 101],
     ]);
   });
 

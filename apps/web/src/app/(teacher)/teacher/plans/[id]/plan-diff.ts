@@ -43,10 +43,10 @@ function takeBestCompare(current: any, compareByKey: Map<string, any[]>, usedCom
   return candidates.find((item) => item.sequence === current.sequence) ?? candidates[0];
 }
 
-function buildCompareBySeq(compareItems: any[], usedCompareItems: Set<any>) {
+function buildCompareBySeq(compareItems: any[]) {
   const bySeq = new Map<number, any>();
   for (const item of sortedBySequence(compareItems)) {
-    if (!usedCompareItems.has(item) && !bySeq.has(item.sequence)) {
+    if (!bySeq.has(item.sequence)) {
       bySeq.set(item.sequence, item);
     }
   }
@@ -55,40 +55,40 @@ function buildCompareBySeq(compareItems: any[], usedCompareItems: Set<any>) {
 
 export function diffPlanItems(currentItems: any[], compareItems: any[]): DiffRow[] {
   const compareByKey = groupCompareItems(compareItems);
+  const compareBySeq = buildCompareBySeq(compareItems);
+  const currentKeys = new Set(currentItems.map((item) => planItemIdentity(item)));
   const usedCompareItems = new Set<any>();
   const rows: DiffRow[] = [];
-  const unmatchedCurrent: any[] = [];
 
   for (const cur of sortedBySequence(currentItems)) {
+    const sameSeqCompare = compareBySeq.get(cur.sequence) ?? null;
     const matchedCompare = takeBestCompare(cur, compareByKey, usedCompareItems);
-    if (!matchedCompare) {
-      unmatchedCurrent.push(cur);
+
+    if (matchedCompare) {
+      usedCompareItems.add(matchedCompare);
+      const reordered = matchedCompare.sequence !== cur.sequence;
+      rows.push({
+        sequence: cur.sequence,
+        current: cur,
+        // UI 对比按序号位置展示；reordered 只用 matchedCompare 提供原序号。
+        compare: sameSeqCompare ?? matchedCompare,
+        kind: reordered ? 'reordered' : 'same',
+        fromSequence: reordered ? matchedCompare.sequence : undefined,
+        toSequence: reordered ? cur.sequence : undefined,
+      });
       continue;
     }
 
-    usedCompareItems.add(matchedCompare);
-    const reordered = matchedCompare.sequence !== cur.sequence;
-    rows.push({
-      sequence: cur.sequence,
-      current: cur,
-      compare: matchedCompare,
-      kind: reordered ? 'reordered' : 'same',
-      fromSequence: reordered ? matchedCompare.sequence : undefined,
-      toSequence: reordered ? cur.sequence : undefined,
-    });
-  }
-
-  const compareBySeq = buildCompareBySeq(compareItems, usedCompareItems);
-  for (const cur of unmatchedCurrent) {
-    const sameSeqCompare = compareBySeq.get(cur.sequence);
     if (sameSeqCompare) {
-      usedCompareItems.add(sameSeqCompare);
-      compareBySeq.delete(cur.sequence);
+      const sameSeqCompareStillExists = currentKeys.has(planItemIdentity(sameSeqCompare));
+      if (!sameSeqCompareStillExists) {
+        usedCompareItems.add(sameSeqCompare);
+      }
       rows.push({
         sequence: cur.sequence,
         current: cur,
         compare: sameSeqCompare,
-        kind: 'modified',
+        kind: sameSeqCompareStillExists ? 'added' : 'modified',
       });
       continue;
     }
