@@ -2882,15 +2882,33 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
           ))}
         </div>
       </div>
-      <div className="collapse" data-open="true" style={{ marginTop: 16 }}>
-        <div className="collapse-head" style={{ cursor: 'default' }}>
+      <div
+        style={{
+          marginTop: 16,
+          marginBottom: 16,
+          borderTop: '1px solid var(--border-subtle)',
+          paddingTop: 14,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginBottom: 8,
+          }}
+        >
           <h4>
             <span className="ic"><TIcon.upload /></span>
-            归档附件
+            已归档材料
           </h4>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {attachments.length} 个附件
           </span>
+        </div>
+        <div style={{ marginBottom: 10, fontSize: 12, color: 'var(--text-muted)' }}>
+          图片可直接点缩略图预览，PDF 可点“预览”打开查看。
         </div>
 
         <div style={{ padding: '0 8px 12px' }}>
