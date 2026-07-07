@@ -247,6 +247,16 @@ export class StudentService {
     return EXTENSION_MIME_TYPE[ext] ?? null;
   }
 
+  private normalizeAttachmentOriginalName(name: string | null | undefined, fallback = 'attachment') {
+    const value = (name || fallback).trim() || fallback;
+    if (!/[\u0080-\u00ff]/.test(value)) {
+      return value;
+    }
+
+    const decoded = Buffer.from(value, 'latin1').toString('utf8');
+    return /[\u4e00-\u9fff]/.test(decoded) && !decoded.includes('\uFFFD') ? decoded : value;
+  }
+
   private validateAttachmentFile(file: Express.Multer.File) {
     if (!file?.buffer || file.size <= 0) {
       throw new BadRequestException('请上传文件');
@@ -287,7 +297,7 @@ export class StudentService {
 
   async listAttachments(studentId: number, requester: JwtPayloadUser) {
     await this.assertStudentAccess(studentId, requester, 'read');
-    return this.prisma.studentAttachment.findMany({
+    const attachments = await this.prisma.studentAttachment.findMany({
       where: { studentId },
       orderBy: [{ category: 'asc' }, { createdAt: 'desc' }],
       select: {
@@ -302,6 +312,10 @@ export class StudentService {
         uploadedById: true,
       },
     });
+    return attachments.map((attachment) => ({
+      ...attachment,
+      originalName: this.normalizeAttachmentOriginalName(attachment.originalName),
+    }));
   }
 
   async uploadAttachment(
@@ -322,15 +336,16 @@ export class StudentService {
     const originalExt = path.extname(file.originalname || '').toLowerCase();
     const ext = ALLOWED_ATTACHMENT_EXTENSIONS.has(originalExt) ? originalExt : '';
     const storedName = `${normalizedCategory}_${Date.now()}_${randomUUID()}${ext}`;
+    const originalName = this.normalizeAttachmentOriginalName(file.originalname, storedName).slice(0, 255);
     const targetPath = path.join(targetDir, storedName);
     await fs.promises.writeFile(targetPath, file.buffer);
 
     const storagePath = path.join(relativeDir, storedName).replace(/\\/g, '/');
-    return this.prisma.studentAttachment.create({
+    const created = await this.prisma.studentAttachment.create({
       data: {
         studentId,
         category: normalizedCategory,
-        originalName: (file.originalname || storedName).slice(0, 255),
+        originalName,
         storagePath,
         mimeType: this.inferMimeType(file) ?? file.mimetype ?? null,
         fileSize: file.size,
@@ -348,6 +363,11 @@ export class StudentService {
         uploadedById: true,
       },
     });
+
+    return {
+      ...created,
+      originalName: this.normalizeAttachmentOriginalName(created.originalName),
+    };
   }
 
   async getAttachmentForStudentAccess(
@@ -360,7 +380,10 @@ export class StudentService {
       where: { id: attachmentId, studentId },
     });
     if (!attachment) throw new NotFoundException('附件不存在');
-    return attachment;
+    return {
+      ...attachment,
+      originalName: this.normalizeAttachmentOriginalName(attachment.originalName),
+    };
   }
 
   async deleteAttachment(

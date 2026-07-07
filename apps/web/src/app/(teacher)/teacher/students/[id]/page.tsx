@@ -2682,6 +2682,20 @@ function isImageAttachment(attachment: StudentAttachment) {
   return attachment.mimeType?.startsWith('image/') ?? false;
 }
 
+function normalizeAttachmentDisplayName(name: string) {
+  if (!name || !/[\u0080-\u00ff]/.test(name) || typeof TextDecoder === 'undefined') {
+    return name;
+  }
+
+  try {
+    const bytes = Uint8Array.from(Array.from(name).map((char) => char.charCodeAt(0) & 0xff));
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return /[\u4e00-\u9fff]/.test(decoded) ? decoded : name;
+  } catch {
+    return name;
+  }
+}
+
 function AttachmentPreviewModal({
   preview,
   onClose,
@@ -2809,7 +2823,7 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
               type="button"
               className="qa"
               disabled={!hasStudentId || uploadMutation.isPending}
-              style={{ width: '100%', justifyContent: 'space-between' }}
+              style={{ width: '100%', minHeight: 42, justifyContent: 'space-between', borderRadius: 8 }}
               onClick={() => archiveInputRefs.current[item.category]?.click()}
             >
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -2820,74 +2834,11 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
           </div>
         ))}
       </div>
-      <div className="collapse" data-open="true">
-        <div className="collapse-head" style={{ cursor: 'default' }}>
-          <h4>
-            <span className="ic"><TIcon.excel /></span>
-            方案 Excel
-          </h4>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{plans.length} 个方案</span>
-        </div>
-        <div style={{ padding: '0 22px 16px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: -4 }}>
-          按版本独立导出 · A3 横版 24 列 · 冲稳保彩色分组 · 可在 Excel 内继续微调
-        </div>
-        <div style={{ padding: '0 8px 12px' }}>
-          {plans.length === 0 ? (
-            <div style={{ padding: '24px 14px', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
-              暂无方案 · 先去出第一版
-            </div>
-          ) : null}
-          {plans.map((p) => (
-            <div
-              key={p.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '10px 14px',
-                borderBottom: '1px solid var(--border-subtle)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16 }}>
-                  v{p.versionNo}
-                </span>
-                <PlanStatusChip status={p.status} dict={PLAN_STATUS_LABEL} toneDict={PLAN_STATUS_TONE} />
-                {p.versionNote ? (
-                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{p.versionNote}</span>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="qa"
-                disabled={exporting === `plan-${p.id}`}
-                onClick={async () => {
-                  const key = `plan-${p.id}`;
-                  setExporting(key);
-                  try {
-                    const blob = await planApi.exportExcel(p.id);
-                    const name = student?.user?.realName ?? 'student';
-                    downloadBlob(blob, `${name}-v${p.versionNo}-方案.xlsx`);
-                    message.success('方案 Excel 已导出');
-                  } catch (e: any) {
-                    message.error(`导出失败:${e?.message ?? '未知错误'}`);
-                  } finally {
-                    setExporting(null);
-                  }
-                }}
-              >
-                <TIcon.download /> 导出 Excel
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
       <div
         style={{
-          marginTop: 16,
-          marginBottom: 16,
           borderTop: '1px solid var(--border-subtle)',
-          paddingTop: 14,
+          paddingTop: 18,
+          marginBottom: 20,
         }}
       >
         <div
@@ -2896,14 +2847,26 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 12,
-            marginBottom: 8,
+            marginBottom: 6,
           }}
         >
-          <h4>
-            <span className="ic"><TIcon.upload /></span>
-            已归档材料
-          </h4>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          <div>
+            <div style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
+              归档列表
+            </div>
+            <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
+              已归档材料
+            </h4>
+          </div>
+          <span
+            style={{
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 999,
+              color: 'var(--text-muted)',
+              fontSize: 12,
+              padding: '4px 10px',
+            }}
+          >
             {attachments.length} 个附件
           </span>
         </div>
@@ -2928,6 +2891,7 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
               const downloadUrl = studentApi.attachmentDownloadUrl(studentId, attachment.id);
               const size = formatAttachmentSize(attachment.fileSize);
               const isImage = isImageAttachment(attachment);
+              const displayName = normalizeAttachmentDisplayName(attachment.originalName);
               return (
                 <div
                   key={attachment.id}
@@ -2944,7 +2908,7 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
                     {isImage ? (
                       <Image
                         src={previewUrl}
-                        alt={attachment.originalName}
+                        alt={displayName}
                         width={42}
                         height={42}
                         style={{ objectFit: 'cover', borderRadius: 6 }}
@@ -2982,9 +2946,9 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
                           fontSize: 12,
                           color: 'var(--text-muted)',
                         }}
-                        title={attachment.originalName}
+                        title={displayName}
                       >
-                        {attachment.originalName}
+                        {displayName}
                         {size ? ` · ${size}` : ''}
                       </span>
                     </span>
@@ -2994,7 +2958,7 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
                       <button
                         type="button"
                         className="qa"
-                        onClick={() => setPreview({ url: previewUrl, name: attachment.originalName })}
+                        onClick={() => setPreview({ url: previewUrl, name: displayName })}
                       >
                         预览
                       </button>
@@ -3024,6 +2988,89 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
             })
           )}
         </div>
+      </div>
+      <div
+        style={{
+          borderTop: '1px solid var(--border-subtle)',
+          paddingTop: 16,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+          <div>
+            <div style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
+              方案导出
+            </div>
+            <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
+              方案 Excel
+            </h4>
+          </div>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{plans.length} 个方案</span>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 8 }}>
+          按版本独立导出 A3 横版 Excel，可继续微调后留档。
+        </div>
+        {plans.length === 0 ? (
+          <div style={{ padding: '14px 0', fontSize: 13, color: 'var(--text-muted)' }}>
+            暂无方案，先生成方案后再导出。
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {plans.map((p) => (
+              <div
+                key={p.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: '10px 0',
+                  borderBottom: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                  <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 15 }}>
+                    v{p.versionNo}
+                  </span>
+                  <PlanStatusChip status={p.status} dict={PLAN_STATUS_LABEL} toneDict={PLAN_STATUS_TONE} />
+                  {p.versionNote ? (
+                    <span
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontSize: 12,
+                        color: 'var(--text-tertiary)',
+                      }}
+                    >
+                      {p.versionNote}
+                    </span>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="qa"
+                  disabled={exporting === `plan-${p.id}`}
+                  onClick={async () => {
+                    const key = `plan-${p.id}`;
+                    setExporting(key);
+                    try {
+                      const blob = await planApi.exportExcel(p.id);
+                      const name = student?.user?.realName ?? 'student';
+                      downloadBlob(blob, `${name}-v${p.versionNo}-方案.xlsx`);
+                      message.success('方案 Excel 已导出');
+                    } catch (e: any) {
+                      message.error(`导出失败:${e?.message ?? '未知错误'}`);
+                    } finally {
+                      setExporting(null);
+                    }
+                  }}
+                >
+                  <TIcon.download /> 导出
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <AttachmentPreviewModal preview={preview} onClose={() => setPreview(null)} />
     </div>
