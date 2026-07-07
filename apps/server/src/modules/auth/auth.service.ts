@@ -155,6 +155,7 @@ export class AuthService {
       teacherProfileId: user.teacherProfile?.id ?? null,
       studentProfileId: user.studentProfile?.id ?? null,
       isSupervisor: user.teacherProfile?.isSupervisor ?? false,
+      isPrimarySupervisor: user.teacherProfile?.isPrimarySupervisor ?? false,
     };
 
     const accessToken = this.jwtService.sign(payload, {

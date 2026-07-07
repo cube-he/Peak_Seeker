@@ -47,19 +47,30 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
-    // Load fresh permissionOverrides from DB so admin changes take effect immediately
+    // Load fresh permissions and teacher flags from DB so admin changes take effect immediately.
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { permissionOverrides: true },
+      select: {
+        permissionOverrides: true,
+        teacherProfile: {
+          select: {
+            id: true,
+            isSupervisor: true,
+            isPrimarySupervisor: true,
+          },
+        },
+      },
     });
 
     return {
       id: payload.sub,
       username: payload.username,
       role: payload.role,
-      teacherProfileId: payload.teacherProfileId ?? undefined,
+      teacherProfileId: user?.teacherProfile?.id ?? payload.teacherProfileId ?? undefined,
       studentProfileId: payload.studentProfileId ?? undefined,
-      isSupervisor: payload.isSupervisor ?? false,
+      isSupervisor: user?.teacherProfile?.isSupervisor ?? payload.isSupervisor ?? false,
+      isPrimarySupervisor:
+        user?.teacherProfile?.isPrimarySupervisor ?? payload.isPrimarySupervisor ?? false,
       permissionOverrides: (user?.permissionOverrides as PermissionOverride[] | null) ?? undefined,
     };
   }

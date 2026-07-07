@@ -64,11 +64,11 @@ export class TeacherService {
   }
 
   /**
-   * Update teacher profile fields (school, isSupervisor).
+   * Update teacher profile fields (school, isSupervisor, isPrimarySupervisor).
    */
   async updateProfile(
     id: number,
-    data: { school?: string; isSupervisor?: boolean },
+    data: { school?: string; isSupervisor?: boolean; isPrimarySupervisor?: boolean },
   ) {
     const teacher = await this.prisma.teacherProfile.findUnique({
       where: { id },
@@ -78,18 +78,35 @@ export class TeacherService {
       throw new NotFoundException('教师不存在');
     }
 
-    return this.prisma.teacherProfile.update({
-      where: { id },
-      data,
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            realName: true,
+    const updateData = { ...data };
+    if (updateData.isPrimarySupervisor === true) {
+      updateData.isSupervisor = true;
+    }
+    if (updateData.isSupervisor === false) {
+      updateData.isPrimarySupervisor = false;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (updateData.isPrimarySupervisor === true) {
+        await tx.teacherProfile.updateMany({
+          where: { id: { not: id } },
+          data: { isPrimarySupervisor: false },
+        });
+      }
+
+      return tx.teacherProfile.update({
+        where: { id },
+        data: updateData,
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              realName: true,
+            },
           },
         },
-      },
+      });
     });
   }
 

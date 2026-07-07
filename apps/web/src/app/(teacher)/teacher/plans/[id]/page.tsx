@@ -397,8 +397,13 @@ export default function PlanDetailPage() {
   // 普通老师看到这些按钮点了必 403,误以为系统坏了 → 按角色分流。
   // zustand hydrate 有 race, 用 subscribe 同步 (沿用 dashboard 的模式)。
   const [isSupervisor, setIsSupervisor] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   useEffect(() => {
-    const sync = () => setIsSupervisor(useAuthStore.getState().user?.teacherProfile?.isSupervisor === true);
+    const sync = () => {
+      const user = useAuthStore.getState().user;
+      setIsSupervisor(user?.teacherProfile?.isSupervisor === true);
+      setCurrentUserId(user?.id ?? null);
+    };
     sync();
     return useAuthStore.subscribe(sync);
   }, []);
@@ -550,6 +555,17 @@ export default function PlanDetailPage() {
   const currentVersionNo = plan?.versionNo ?? plan?.version ?? 1;
   const nextVersionNo =
     (versions.length ? Math.max(...versions.map((v: any) => v.versionNo)) : currentVersionNo) + 1;
+  const currentReviewerId =
+    plan?.currentReviewerId != null ? Number(plan.currentReviewerId) : null;
+  const isAssignedReviewer =
+    isSupervisor && currentUserId != null && currentReviewerId === currentUserId;
+  const canStartReview =
+    isSupervisor &&
+    plan?.status === 'PENDING_REVIEW' &&
+    (currentReviewerId == null || isAssignedReviewer);
+  const canSubmitReviewAction =
+    isSupervisor && plan?.status === 'REVIEWING' && isAssignedReviewer;
+  const canReviewThisPlan = canStartReview || canSubmitReviewAction;
 
   // 当用户选择对比版本时,加载该版本的 items
   const { data: compareData } = useQuery({
@@ -565,7 +581,7 @@ export default function PlanDetailPage() {
     queryKey: ['plan-review-draft', planId],
     queryFn: () => planApi.getReviewDraft(planId),
     // 只在能审核的状态拉取,避免 DRAFT 状态(老师做方案中)误拉
-    enabled: !!plan && (plan.status === 'PENDING_REVIEW' || plan.status === 'REVIEWING'),
+    enabled: !!plan && canReviewThisPlan,
   });
 
   // 从服务端 draft 恢复:仅首次加载时填入,之后用户编辑不被覆盖
@@ -585,9 +601,14 @@ export default function PlanDetailPage() {
 
   // 「审下一份」依赖当前教师 PENDING_REVIEW 队列；只在审核相关状态拉
   const { data: queueData } = useQuery({
-    queryKey: ['teacher-review-queue'],
-    queryFn: () => planApi.getTeacherPlans({ status: 'PENDING_REVIEW', pageSize: 100 }),
-    enabled: !!plan && (plan.status === 'REVIEWING' || plan.status === 'PENDING_REVIEW'),
+    queryKey: ['teacher-review-queue', currentUserId],
+    queryFn: () =>
+      planApi.getTeacherPlans({
+        status: 'PENDING_REVIEW,REVIEWING',
+        reviewScope: 'mine',
+        pageSize: 100,
+      }),
+    enabled: !!plan && canReviewThisPlan,
   });
   const reviewQueue: any[] = queueData?.data?.data ?? queueData?.data ?? [];
   const currentIdx = reviewQueue.findIndex((p) => Number(p.id) === Number(planId));
@@ -1049,7 +1070,7 @@ export default function PlanDetailPage() {
   const status: string = plan.status;
   const studentName = plan.studentName || '学生';
   // 逐项批注框与"审下一份"队列只对主管开放 (普通老师没有审核权, 写了也提交不出去)
-  const isReviewing = isSupervisor && (status === 'REVIEWING' || status === 'PENDING_REVIEW');
+  const isReviewing = canReviewThisPlan;
 
   // ── 主动作按钮（按 status 只突出一组） ──
   function renderPrimaryActions() {
@@ -1082,8 +1103,8 @@ export default function PlanDetailPage() {
           </>
         );
       case 'PENDING_REVIEW':
-        // 仅主管能认领; 普通老师可在主管认领前撤回修改 (归属校验由后端兜底, 非本人撤回返回 403)
-        return isSupervisor ? (
+        // 仅主责主管能认领; 普通老师可在主管认领前撤回修改 (归属校验由后端兜底, 非本人撤回返回 403)
+        return canStartReview ? (
           <Button
             type="primary"
             icon={<PlayCircleOutlined />}
@@ -1092,6 +1113,8 @@ export default function PlanDetailPage() {
           >
             认领审核
           </Button>
+        ) : isSupervisor ? (
+          <Tag color="processing">已指派主责主管审核</Tag>
         ) : (
           <>
             <Tag color="processing">已提交,等待主管认领审核</Tag>
@@ -1114,7 +1137,7 @@ export default function PlanDetailPage() {
           </>
         );
       case 'REVIEWING':
-        return isSupervisor ? (
+        return canSubmitReviewAction ? (
           <>
             <Button danger onClick={() => confirmReview('REJECT', '驳回方案')}>
               驳回
@@ -1130,6 +1153,8 @@ export default function PlanDetailPage() {
               通过
             </Button>
           </>
+        ) : isSupervisor ? (
+          <Tag color="processing">主责主管审核中</Tag>
         ) : (
           <Tag color="processing">主管审核中</Tag>
         );

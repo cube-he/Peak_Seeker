@@ -41,5 +41,6 @@ export interface JwtPayloadUser {
   teacherProfileId?: number;
   studentProfileId?: number;
   isSupervisor?: boolean;
+  isPrimarySupervisor?: boolean;
   permissionOverrides?: PermissionOverride[];
 }

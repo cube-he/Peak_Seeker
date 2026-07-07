@@ -26,7 +26,9 @@ const BATCH_OPTIONS = [
 
 const STATUS_OPTIONS = [
   { label: '草稿', value: 'DRAFT' },
+  { label: '待/审中', value: 'PENDING_REVIEW,REVIEWING' },
   { label: '待审核', value: 'PENDING_REVIEW' },
+  { label: '审核中', value: 'REVIEWING' },
   { label: '已通过', value: 'APPROVED' },
   { label: '已定稿', value: 'FINALIZED' },
   { label: '已退回', value: 'REJECTED' },
@@ -40,6 +42,7 @@ interface Plan {
   batch: string;
   examSource: string;
   status: string;
+  currentReviewerId?: number | null;
   version: number;
   itemCount: number;
   createdAt: string;
@@ -142,11 +145,20 @@ function TeacherPlansPageInner() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(
     () => searchParams.get('status') ?? undefined,
   );
+  const [reviewScope] = useState<'mine' | undefined>(() =>
+    searchParams.get('reviewScope') === 'mine' ? 'mine' : undefined,
+  );
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['teacher-plans', search, batchFilter, statusFilter],
-    queryFn: () => planApi.getTeacherPlans({ search, batch: batchFilter, status: statusFilter }),
+    queryKey: ['teacher-plans', search, batchFilter, statusFilter, reviewScope],
+    queryFn: () =>
+      planApi.getTeacherPlans({
+        search,
+        batch: batchFilter,
+        status: statusFilter,
+        reviewScope,
+      }),
   });
 
   const plans: Plan[] = data?.data || [];
@@ -154,7 +166,7 @@ function TeacherPlansPageInner() {
   const counts = useMemo(
     () => ({
       all: plans.length,
-      pending: plans.filter((plan) => plan.status === 'PENDING_REVIEW').length,
+      pending: plans.filter((plan) => plan.status === 'PENDING_REVIEW' || plan.status === 'REVIEWING').length,
       approved: plans.filter((plan) => plan.status === 'APPROVED').length,
       finalized: plans.filter((plan) => plan.status === 'FINALIZED').length,
       rejected: plans.filter((plan) => plan.status === 'REJECTED').length,

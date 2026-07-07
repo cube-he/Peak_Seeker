@@ -61,7 +61,7 @@ export class TeacherController {
   @CheckPolicies((ability) => ability.can('manage', 'TeacherProfile'))
   async update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { school?: string; isSupervisor?: boolean },
+    @Body() body: { school?: string; isSupervisor?: boolean; isPrimarySupervisor?: boolean },
   ) {
     return this.teacherService.updateProfile(id, body);
   }

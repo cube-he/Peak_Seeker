@@ -83,6 +83,7 @@ interface PendingPlan {
   studentName: string;
   studentId: number;
   status: string;
+  currentReviewerId?: number | null;
   updatedAt: string;
 }
 
@@ -276,7 +277,7 @@ export default function TeacherDashboardPage() {
   const { data: plansData, isLoading: plansLoading } = useQuery({
     queryKey: ['teacher-dashboard-pending-plans'],
     queryFn: () =>
-      planApi.getTeacherPlans({ status: 'PENDING_REVIEW', pageSize: 100 }),
+      planApi.getTeacherPlans({ status: 'PENDING_REVIEW,REVIEWING', reviewScope: 'mine', pageSize: 100 }),
   });
   const { data: timelineData } = useQuery({
     queryKey: ['timeline', new Date().getFullYear()],
@@ -462,7 +463,7 @@ export default function TeacherDashboardPage() {
       <div className="qa-row fade-up d3">
         {isSupervisor ? (
           <>
-            <Link href="/teacher/plans?status=PENDING_REVIEW" className="qa primary">
+            <Link href="/teacher/plans?status=PENDING_REVIEW,REVIEWING&reviewScope=mine" className="qa primary">
               <TIcon.shield /> 处理 {pendingPlans.length} 份待审
             </Link>
             <Link href="/teacher/insights/team" className="qa">

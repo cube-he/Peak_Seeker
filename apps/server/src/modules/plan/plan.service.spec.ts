@@ -406,6 +406,15 @@ describe('PlanService review notifications', () => {
     await service.startReview(7, 99);
     expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'plan_review_started', refId: 7 }));
   });
+  it('非主责主管不能认领已指派的待审方案', async () => {
+    prisma.teacherProfile.findUnique.mockResolvedValue({ isSupervisor: true });
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 7,
+      status: 'PENDING_REVIEW',
+      currentReviewerId: 40,
+    });
+    await expect(service.startReview(7, 41)).rejects.toBeInstanceOf(ForbiddenException);
+  });
   it('家长确认后通知出方案老师', async () => {
     prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, status: 'APPROVED', createdById: 20, studentId: 10, name: 'X', student: { userId: 30 } });
     prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'PARENT_CONFIRMED' });
@@ -425,15 +434,23 @@ describe('PlanService review notifications', () => {
     await service.parentRequestChange(7, 30, '想换个城市');
     expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 20, type: 'parent_change_requested', refId: 7 }));
   });
-  it('submitReview 广播全部主管', async () => {
+  it('submitReview 指派主责主管并通知其他主管选审', async () => {
     // findById 走 volunteerPlan.findUnique (含 student/planItems/reviews); batchConfigId=null 跳过批次查询
     prisma.volunteerPlan.findUnique.mockResolvedValue({ id: 7, status: 'DRAFT', createdById: 20, studentId: 10, name: 'X', batchConfigId: null, student: { user: {} }, planItems: [], reviews: [] });
     prisma.planItem.count.mockResolvedValue(0);
-    prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'PENDING_REVIEW' });
-    prisma.teacherProfile.findMany.mockResolvedValue([{ userId: 40 }, { userId: 41 }]);
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 7, status: 'PENDING_REVIEW', currentReviewerId: 40 });
+    prisma.teacherProfile.findMany.mockResolvedValue([
+      { userId: 40, isPrimarySupervisor: true, user: { realName: '主责主管', username: 'primary' } },
+      { userId: 41, isPrimarySupervisor: false, user: { realName: '选审主管', username: 'optional' } },
+    ]);
     await service.submitReview(7, 20);
+    expect(prisma.volunteerPlan.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ currentReviewerId: 40 }),
+      }),
+    );
     expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 40, type: 'plan_submitted' }));
-    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 41, type: 'plan_submitted' }));
+    expect(notifications.send).toHaveBeenCalledWith(expect.objectContaining({ userId: 41, type: 'plan_submitted_optional' }));
   });
 
   it('deriveVersion: 从 DRAFT 初稿派生二稿并把初稿置 OUTDATED', async () => {

@@ -18,6 +18,7 @@ interface User {
     id?: number;
     school?: string | null;
     isSupervisor?: boolean;
+    isPrimarySupervisor?: boolean;
   } | null;
 }
 

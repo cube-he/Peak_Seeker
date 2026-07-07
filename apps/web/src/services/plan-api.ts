@@ -92,6 +92,7 @@ export interface TeacherPlanListParams {
   search?: string;
   batch?: string;
   status?: string;
+  reviewScope?: 'mine';
   studentId?: string;
   page?: number;
   pageSize?: number;
@@ -110,6 +111,7 @@ export const planApi = {
         search: params?.search?.trim() || undefined,
         batch: params?.batch || undefined,
         status: params?.status || undefined,
+        reviewScope: params?.reviewScope || undefined,
         studentId: params?.studentId || undefined,
         page: params?.page,
         pageSize: params?.pageSize,

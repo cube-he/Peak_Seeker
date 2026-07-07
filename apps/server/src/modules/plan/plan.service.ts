@@ -34,13 +34,60 @@ export class PlanService {
     }
   }
 
-  /** 提交审核时还没有认领人，广播给所有主管 */
-  private async notifySupervisors(event: Omit<NotificationEvent, 'userId'>): Promise<void> {
-    const sups = await this.prisma.teacherProfile.findMany({
-      where: { isSupervisor: true },
-      select: { userId: true },
+  private async listSupervisors() {
+    return this.prisma.teacherProfile.findMany({
+      where: { isSupervisor: true, user: { role: 'TEACHER' } },
+      select: {
+        userId: true,
+        isPrimarySupervisor: true,
+        user: { select: { realName: true, username: true } },
+      },
+      orderBy: [{ isPrimarySupervisor: 'desc' }, { id: 'asc' }],
     });
-    await Promise.all(sups.map((s) => this.notify({ ...event, userId: s.userId })));
+  }
+
+  private async getPrimarySupervisor() {
+    const supervisors = await this.listSupervisors();
+    const primary = supervisors.find((s) => s.isPrimarySupervisor) ?? supervisors[0];
+    if (!primary) {
+      throw new ConflictException('尚未设置主管账号,无法提交审核');
+    }
+    return primary;
+  }
+
+  private async notifyReviewAssignees(
+    plan: { id: number; name: string },
+    primarySupervisor: {
+      userId: number;
+      user: { realName: string | null; username: string };
+    },
+  ): Promise<void> {
+    const primaryName = primarySupervisor.user.realName ?? primarySupervisor.user.username;
+    const supervisors = await this.listSupervisors();
+
+    await this.notify({
+      userId: primarySupervisor.userId,
+      type: 'plan_submitted',
+      title: '有新方案待你主责审核',
+      content: `方案「${plan.name}」已提交,已指派给你作为主责主管审核`,
+      refType: 'plan',
+      refId: plan.id,
+    });
+
+    await Promise.all(
+      supervisors
+        .filter((s) => s.userId !== primarySupervisor.userId)
+        .map((s) =>
+          this.notify({
+            userId: s.userId,
+            type: 'plan_submitted_optional',
+            title: '有新方案可选审查看',
+            content: `方案「${plan.name}」已提交,主责主管为 ${primaryName};你可协助查看,但不能抢占审核`,
+            refType: 'plan',
+            refId: plan.id,
+          }),
+        ),
+    );
   }
 
   async create(userId: number, dto: CreatePlanDto) {
@@ -105,14 +152,34 @@ export class PlanService {
     where.isHistorical = false;
     const search = query.search?.trim();
     if (query.batch) where.batchName = query.batch;
-    if (query.status) where.status = query.status;
+    const statusList = query.status
+      ?.split(',')
+      .map((status) => status.trim())
+      .filter(Boolean);
+    if (statusList?.length) {
+      where.status = statusList.length === 1 ? statusList[0] : { in: statusList };
+    }
     if (query.studentId) where.studentId = Number(query.studentId);
+    const andFilters: any[] = [];
+    if (user.isSupervisor && query.reviewScope === 'mine') {
+      andFilters.push({
+        OR: [
+          { currentReviewerId: user.id },
+          { status: 'PENDING_REVIEW', currentReviewerId: null },
+        ],
+      });
+    }
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { student: { user: { realName: { contains: search } } } },
-        { student: { user: { username: { contains: search } } } },
-      ];
+      andFilters.push({
+        OR: [
+          { name: { contains: search } },
+          { student: { user: { realName: { contains: search } } } },
+          { student: { user: { username: { contains: search } } } },
+        ],
+      });
+    }
+    if (andFilters.length) {
+      where.AND = andFilters;
     }
 
     const plans = await this.prisma.volunteerPlan.findMany({
@@ -143,6 +210,7 @@ export class PlanService {
       batch: plan.batchName ?? plan.batch ?? '',
       examSource: plan.examSource ?? 'MOCK',
       status: plan.status,
+      currentReviewerId: plan.currentReviewerId,
       version: plan.versionNo ?? 1,
       itemCount: plan._count?.planItems ?? plan.planItems?.length ?? 0,
       isFinal: plan.isFinal,
@@ -474,10 +542,25 @@ export class PlanService {
       throw new ForbiddenException('仅主管可认领审核');
     }
 
+    const planBefore = await this.prisma.volunteerPlan.findUnique({
+      where: { id: planId },
+      select: { currentReviewerId: true, status: true },
+    });
+    if (!planBefore) throw new NotFoundException('方案不存在');
+    if (
+      planBefore.status === 'PENDING_REVIEW' &&
+      planBefore.currentReviewerId != null &&
+      planBefore.currentReviewerId !== supervisorUserId
+    ) {
+      throw new ForbiddenException('该方案已指派给主责主管审核,你可查看但不能认领');
+    }
+
     const result = await this.prisma.$executeRaw`
       UPDATE volunteer_plans
       SET status = 'REVIEWING', current_reviewer_id = ${supervisorUserId}
-      WHERE id = ${planId} AND status = 'PENDING_REVIEW'
+      WHERE id = ${planId}
+        AND status = 'PENDING_REVIEW'
+        AND (current_reviewer_id IS NULL OR current_reviewer_id = ${supervisorUserId})
     `;
     if (result === 0) {
       throw new ConflictException('方案已被他人认领或不在 PENDING_REVIEW 状态');
@@ -526,10 +609,12 @@ export class PlanService {
     // 不足额提交的理由进 notes, 主管审核时可见
     const underfilled = itemCount < maxGroupCount && (underfillReason ?? '').trim().length >= 10;
     const underfillNote = `[不足额提交 ${itemCount}/${maxGroupCount}] ${underfillReason?.trim()}`;
+    const primarySupervisor = await this.getPrimarySupervisor();
     const updated = await this.prisma.volunteerPlan.update({
       where: { id: planId },
       data: {
         status: next,
+        currentReviewerId: primarySupervisor.userId,
         parentConfirmedAt: null,
         parentChangeRequestedAt: null,
         parentChangeRequest: null,
@@ -538,7 +623,7 @@ export class PlanService {
           : {}),
       },
     });
-    await this.notifySupervisors({ type: 'plan_submitted', title: '有新方案待审核', content: `方案「${plan.name}」已提交，待主管认领审核`, refType: 'plan', refId: planId });
+    await this.notifyReviewAssignees({ id: planId, name: plan.name }, primarySupervisor);
     return updated;
   }
 
