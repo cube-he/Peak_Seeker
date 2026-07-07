@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { hasRankedPreferredMajors } from '@/components/plan/PrerequisiteCheckModal';
-import { Alert, Cascader, Checkbox, DatePicker, Form, Image, Input, InputNumber, Modal, Popconfirm, Select, Spin, Upload, message } from 'antd';
+import { Alert, Cascader, Checkbox, DatePicker, Form, Image, Input, InputNumber, Modal, Popconfirm, Select, Spin, message } from 'antd';
 import dayjs from 'dayjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -2713,6 +2713,7 @@ function AttachmentPreviewModal({
 function ExternalMaterialsTabContent({ student }: { student: any }) {
   const [exporting, setExporting] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+  const archiveInputRefs = useRef<Partial<Record<StudentAttachmentCategory, HTMLInputElement | null>>>({});
   const queryClient = useQueryClient();
   const studentId = Number(student?.id);
   const hasStudentId = Number.isFinite(studentId) && studentId > 0;
@@ -2762,12 +2763,62 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
   const plans: any[] = student?.volunteerPlans ?? [];
   const attachments = attachmentsData ?? [];
 
+  const handleArchiveFileChange = (
+    category: StudentAttachmentCategory,
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+    if (file.size > MAX_ARCHIVE_ATTACHMENT_SIZE) {
+      message.error('单个附件不能超过 20MB');
+      return;
+    }
+    uploadMutation.mutate({ category, file });
+  };
+
   return (
     <div>
       <div className="pf-sechead">
         <div className="pf-sechead-eyebrow">交付归档</div>
         <h3>材料归档</h3>
         <p>方案导出、咨询单、志愿填报截图与录取截图</p>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+          gap: 10,
+          marginBottom: 16,
+        }}
+      >
+        {ARCHIVE_ATTACHMENT_UPLOADS.map((item) => (
+          <div key={item.category}>
+            <input
+              ref={(node) => {
+                archiveInputRefs.current[item.category] = node;
+              }}
+              type="file"
+              accept=".pdf,image/*"
+              style={{ display: 'none' }}
+              onChange={(event) => handleArchiveFileChange(item.category, event)}
+            />
+            <button
+              type="button"
+              className="qa"
+              disabled={!hasStudentId || uploadMutation.isPending}
+              style={{ width: '100%', justifyContent: 'space-between' }}
+              onClick={() => archiveInputRefs.current[item.category]?.click()}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <TIcon.upload /> {item.title}
+              </span>
+              <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{item.note}</span>
+            </button>
+          </div>
+        ))}
       </div>
       <div className="collapse" data-open="true">
         <div className="collapse-head" style={{ cursor: 'default' }}>
@@ -2840,45 +2891,6 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {attachments.length} 个附件
           </span>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-            gap: 10,
-            padding: '0 14px 14px',
-          }}
-        >
-          {ARCHIVE_ATTACHMENT_UPLOADS.map((item) => (
-            <Upload
-              key={item.category}
-              accept=".pdf,image/*"
-              maxCount={1}
-              showUploadList={false}
-              disabled={!hasStudentId || uploadMutation.isPending}
-              beforeUpload={(file) => {
-                if (file.size > MAX_ARCHIVE_ATTACHMENT_SIZE) {
-                  message.error('单个附件不能超过 20MB');
-                  return Upload.LIST_IGNORE;
-                }
-                uploadMutation.mutate({ category: item.category, file });
-                return false;
-              }}
-            >
-              <button
-                type="button"
-                className="qa"
-                disabled={!hasStudentId || uploadMutation.isPending}
-                style={{ width: '100%', justifyContent: 'space-between' }}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <TIcon.upload /> {item.title}
-                </span>
-                <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{item.note}</span>
-              </button>
-            </Upload>
-          ))}
         </div>
 
         <div style={{ padding: '0 8px 12px' }}>
