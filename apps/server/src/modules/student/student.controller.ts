@@ -5,15 +5,21 @@ import {
   Put,
   Delete,
   BadRequestException,
+  NotFoundException,
   Body,
   Param,
   Query,
   Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
   ParseIntPipe,
   ForbiddenException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsInt, IsOptional, Min } from 'class-validator';
@@ -34,6 +40,8 @@ class AssignStudentTeacherDto {
   @Min(1)
   teacherProfileId?: number | null;
 }
+
+const MAX_STUDENT_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024;
 
 @ApiTags('学生管理')
 @Controller('students')
@@ -177,6 +185,69 @@ export class StudentController {
     });
   }
 
+  @Get(':id/attachments')
+  @ApiOperation({ summary: '获取学生归档附件列表' })
+  @CheckPolicies((ability) => ability.can('read', 'StudentProfile'))
+  async listAttachments(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.studentService.listAttachments(id, user);
+  }
+
+  @Post(':id/attachments')
+  @ApiOperation({ summary: '上传学生归档附件' })
+  @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_STUDENT_ATTACHMENT_SIZE_BYTES } }))
+  async uploadAttachment(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body('category') category: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!category) throw new BadRequestException('缺少附件分类');
+    if (!file) throw new BadRequestException('请上传文件');
+    if (file.size > MAX_STUDENT_ATTACHMENT_SIZE_BYTES) {
+      throw new BadRequestException('单个附件不能超过 20MB');
+    }
+    return this.studentService.uploadAttachment(id, category, file, user);
+  }
+
+  @Get(':id/attachments/:attachmentId/download')
+  @ApiOperation({ summary: '下载学生归档附件' })
+  @CheckPolicies((ability) => ability.can('read', 'StudentProfile'))
+  async downloadAttachment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('attachmentId', ParseIntPipe) attachmentId: number,
+    @CurrentUser() user: JwtPayloadUser,
+    @Res() res: Response,
+  ) {
+    return this.streamAttachment(id, attachmentId, user, res, 'attachment');
+  }
+
+  @Get(':id/attachments/:attachmentId/preview')
+  @ApiOperation({ summary: '预览学生归档附件' })
+  @CheckPolicies((ability) => ability.can('read', 'StudentProfile'))
+  async previewAttachment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('attachmentId', ParseIntPipe) attachmentId: number,
+    @CurrentUser() user: JwtPayloadUser,
+    @Res() res: Response,
+  ) {
+    return this.streamAttachment(id, attachmentId, user, res, 'inline');
+  }
+
+  @Delete(':id/attachments/:attachmentId')
+  @ApiOperation({ summary: '删除学生归档附件' })
+  @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
+  async deleteAttachment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('attachmentId', ParseIntPipe) attachmentId: number,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.studentService.deleteAttachment(id, attachmentId, user);
+  }
+
   @Put(':id')
   @ApiOperation({ summary: 'Update student profile through legacy route' })
   @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
@@ -203,6 +274,33 @@ export class StudentController {
       user.id,
       user.role === 'ADMIN' ? undefined : user.teacherProfileId ?? undefined,
     );
+  }
+
+  private async streamAttachment(
+    studentId: number,
+    attachmentId: number,
+    user: JwtPayloadUser,
+    res: Response,
+    disposition: 'attachment' | 'inline',
+  ) {
+    const attachment = await this.studentService.getAttachmentForStudentAccess(
+      studentId,
+      attachmentId,
+      user,
+    );
+    const uploadsRoot = path.resolve(
+      process.env.UPLOADS_ROOT || path.join(process.cwd(), 'uploads'),
+    );
+    const filePath = path.resolve(uploadsRoot, attachment.storagePath);
+    if (!filePath.startsWith(`${uploadsRoot}${path.sep}`) || !fs.existsSync(filePath)) {
+      throw new NotFoundException('文件不存在');
+    }
+
+    res.set({
+      'Content-Type': attachment.mimeType ?? 'application/octet-stream',
+      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(attachment.originalName)}`,
+    });
+    fs.createReadStream(filePath).pipe(res);
   }
 
   @Put(':id/assign')

@@ -4,10 +4,16 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { hasRankedPreferredMajors } from '@/components/plan/PrerequisiteCheckModal';
-import { Alert, Cascader, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Spin, message } from 'antd';
+import { Alert, Cascader, Checkbox, DatePicker, Form, Image, Input, InputNumber, Modal, Popconfirm, Select, Spin, Upload, message } from 'antd';
 import dayjs from 'dayjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { studentApi, type BonusItem, type UpdateStudentDto } from '@/services/student-api';
+import {
+  studentApi,
+  type BonusItem,
+  type StudentAttachment,
+  type StudentAttachmentCategory,
+  type UpdateStudentDto,
+} from '@/services/student-api';
 import { planApi } from '@/services/plan-api';
 import { consultationApi, type Consultation } from '@/services/consultation-api';
 import {
@@ -1123,7 +1129,7 @@ export default function StudentDetailPage() {
             { k: 'profile', label: '资料', badge: missingFieldsList.length },
             { k: 'comm', label: '沟通记录' },
             { k: 'plan', label: '方案' },
-            { k: 'external', label: '对外材料' },
+            { k: 'external', label: '材料归档' },
             { k: 'log', label: '变更日志' },
           ] as const
         ).map((t) => (
@@ -2647,12 +2653,100 @@ function ChangeLogTabContent({ studentId }: { studentId: string | number }) {
   );
 }
 
-function ExternalMaterialsTabContent({
-  student,
+const ARCHIVE_ATTACHMENT_LABEL: Record<StudentAttachmentCategory, string> = {
+  consultation: '咨询单',
+  submission_screenshot: '志愿填报截图',
+  admission_proof: '录取截图/凭证',
+  other: '其他材料',
+};
+
+const ARCHIVE_ATTACHMENT_UPLOADS: Array<{
+  category: StudentAttachmentCategory;
+  title: string;
+  note: string;
+}> = [
+  { category: 'consultation', title: '上传咨询单', note: 'PDF / 图片' },
+  { category: 'submission_screenshot', title: '上传志愿填报截图', note: 'PDF / 图片' },
+  { category: 'admission_proof', title: '上传录取截图', note: 'PDF / 图片' },
+];
+
+const MAX_ARCHIVE_ATTACHMENT_SIZE = 20 * 1024 * 1024;
+
+function formatAttachmentSize(size: number | null | undefined) {
+  if (!size) return '';
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function isImageAttachment(attachment: StudentAttachment) {
+  return attachment.mimeType?.startsWith('image/') ?? false;
+}
+
+function AttachmentPreviewModal({
+  preview,
+  onClose,
 }: {
-  student: any;
+  preview: { url: string; name: string } | null;
+  onClose: () => void;
 }) {
+  return (
+    <Modal
+      open={!!preview}
+      title={preview?.name}
+      width="80vw"
+      style={{ top: 20 }}
+      footer={null}
+      destroyOnClose
+      onCancel={onClose}
+    >
+      {preview ? (
+        <iframe
+          src={preview.url}
+          title={preview.name}
+          style={{ width: '100%', height: '78vh', border: 'none' }}
+        />
+      ) : null}
+    </Modal>
+  );
+}
+
+function ExternalMaterialsTabContent({ student }: { student: any }) {
   const [exporting, setExporting] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+  const queryClient = useQueryClient();
+  const studentId = Number(student?.id);
+  const hasStudentId = Number.isFinite(studentId) && studentId > 0;
+
+  const { data: attachmentsData, isLoading: attachmentsLoading } = useQuery({
+    queryKey: ['student-attachments', studentId],
+    queryFn: () => studentApi.listAttachments(studentId),
+    enabled: hasStudentId,
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: ({ category, file }: { category: StudentAttachmentCategory; file: File }) =>
+      studentApi.uploadAttachment(studentId, category, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student-attachments', studentId] });
+      message.success('附件已上传');
+    },
+    onError: (e: any) => {
+      const raw = e?.response?.data?.message;
+      message.error(Array.isArray(raw) ? raw.join('、') : raw ?? '上传失败');
+    },
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: (attachmentId: number) => studentApi.deleteAttachment(studentId, attachmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student-attachments', studentId] });
+      message.success('附件已删除');
+    },
+    onError: (e: any) => {
+      const raw = e?.response?.data?.message;
+      message.error(Array.isArray(raw) ? raw.join('、') : raw ?? '删除失败');
+    },
+  });
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -2666,13 +2760,14 @@ function ExternalMaterialsTabContent({
   };
 
   const plans: any[] = student?.volunteerPlans ?? [];
+  const attachments = attachmentsData ?? [];
 
   return (
     <div>
       <div className="pf-sechead">
-        <div className="pf-sechead-eyebrow">交付物</div>
-        <h3>对外材料</h3>
-        <p>导出给学生 / 家长的方案 Excel</p>
+        <div className="pf-sechead-eyebrow">交付归档</div>
+        <h3>材料归档</h3>
+        <p>方案导出、咨询单、志愿填报截图与录取截图</p>
       </div>
       <div className="collapse" data-open="true">
         <div className="collapse-head" style={{ cursor: 'default' }}>
@@ -2736,6 +2831,171 @@ function ExternalMaterialsTabContent({
           ))}
         </div>
       </div>
+      <div className="collapse" data-open="true" style={{ marginTop: 16 }}>
+        <div className="collapse-head" style={{ cursor: 'default' }}>
+          <h4>
+            <span className="ic"><TIcon.upload /></span>
+            归档附件
+          </h4>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {attachments.length} 个附件
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+            gap: 10,
+            padding: '0 14px 14px',
+          }}
+        >
+          {ARCHIVE_ATTACHMENT_UPLOADS.map((item) => (
+            <Upload
+              key={item.category}
+              accept=".pdf,image/*"
+              maxCount={1}
+              showUploadList={false}
+              disabled={!hasStudentId || uploadMutation.isPending}
+              beforeUpload={(file) => {
+                if (file.size > MAX_ARCHIVE_ATTACHMENT_SIZE) {
+                  message.error('单个附件不能超过 20MB');
+                  return Upload.LIST_IGNORE;
+                }
+                uploadMutation.mutate({ category: item.category, file });
+                return false;
+              }}
+            >
+              <button
+                type="button"
+                className="qa"
+                disabled={!hasStudentId || uploadMutation.isPending}
+                style={{ width: '100%', justifyContent: 'space-between' }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <TIcon.upload /> {item.title}
+                </span>
+                <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{item.note}</span>
+              </button>
+            </Upload>
+          ))}
+        </div>
+
+        <div style={{ padding: '0 8px 12px' }}>
+          {attachmentsLoading ? (
+            <div style={{ padding: '28px 14px', textAlign: 'center' }}>
+              <Spin />
+            </div>
+          ) : attachments.length === 0 ? (
+            <WnEmpty
+              icon="plans"
+              title="暂无归档附件"
+              sub="咨询单、志愿填报截图、录取截图上传后会在这里留档"
+            />
+          ) : (
+            attachments.map((attachment) => {
+              const previewUrl = studentApi.attachmentPreviewUrl(studentId, attachment.id);
+              const downloadUrl = studentApi.attachmentDownloadUrl(studentId, attachment.id);
+              const size = formatAttachmentSize(attachment.fileSize);
+              const isImage = isImageAttachment(attachment);
+              return (
+                <div
+                  key={attachment.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    padding: '10px 14px',
+                    borderBottom: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    {isImage ? (
+                      <Image
+                        src={previewUrl}
+                        alt={attachment.originalName}
+                        width={42}
+                        height={42}
+                        style={{ objectFit: 'cover', borderRadius: 6 }}
+                        preview={{ src: previewUrl, mask: '预览' }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 6,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'var(--accent)',
+                          background: 'var(--accent-fixed)',
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        PDF
+                      </span>
+                    )}
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 600 }}>
+                        {ARCHIVE_ATTACHMENT_LABEL[attachment.category] ?? attachment.category}
+                      </span>
+                      <span
+                        style={{
+                          display: 'block',
+                          maxWidth: 360,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          fontSize: 12,
+                          color: 'var(--text-muted)',
+                        }}
+                        title={attachment.originalName}
+                      >
+                        {attachment.originalName}
+                        {size ? ` · ${size}` : ''}
+                      </span>
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    {!isImage ? (
+                      <button
+                        type="button"
+                        className="qa"
+                        onClick={() => setPreview({ url: previewUrl, name: attachment.originalName })}
+                      >
+                        预览
+                      </button>
+                    ) : null}
+                    <a className="qa" href={downloadUrl} target="_blank" rel="noreferrer">
+                      <TIcon.download /> 下载
+                    </a>
+                    <Popconfirm
+                      title="删除这个附件?"
+                      okText="删除"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true }}
+                      onConfirm={() => deleteAttachmentMutation.mutate(attachment.id)}
+                    >
+                      <button
+                        type="button"
+                        className="qa"
+                        disabled={deleteAttachmentMutation.isPending}
+                        style={{ color: 'var(--rush)' }}
+                      >
+                        删除
+                      </button>
+                    </Popconfirm>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+      <AttachmentPreviewModal preview={preview} onClose={() => setPreview(null)} />
     </div>
   );
 }

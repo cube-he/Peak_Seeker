@@ -141,6 +141,24 @@ export interface EligibleBatch {
   admissionOrder: number;
 }
 
+export type StudentAttachmentCategory =
+  | 'consultation'
+  | 'submission_screenshot'
+  | 'admission_proof'
+  | 'other';
+
+export interface StudentAttachment {
+  id: number;
+  studentId: number;
+  category: StudentAttachmentCategory;
+  originalName: string;
+  mimeType: string | null;
+  fileSize: number | null;
+  createdAt: string;
+  updatedAt: string;
+  uploadedById: number | null;
+}
+
 /**
  * 双轨完整度响应（与后端 ProgressService.compute 输出对齐）
  */
@@ -179,6 +197,35 @@ export const studentApi = {
 
   update(id: string, data: UpdateStudentDto): Promise<any> {
     return api.put(`/students/${id}/profile`, data) as any;
+  },
+
+  listAttachments(id: string | number): Promise<StudentAttachment[]> {
+    return api.get(`/students/${id}/attachments`) as unknown as Promise<StudentAttachment[]>;
+  },
+
+  uploadAttachment(
+    id: string | number,
+    category: StudentAttachmentCategory,
+    file: File,
+  ): Promise<StudentAttachment> {
+    const formData = new FormData();
+    formData.append('category', category);
+    formData.append('file', file);
+    return api.post(`/students/${id}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }) as unknown as Promise<StudentAttachment>;
+  },
+
+  deleteAttachment(id: string | number, attachmentId: number): Promise<{ deleted: true }> {
+    return api.delete(`/students/${id}/attachments/${attachmentId}`) as unknown as Promise<{ deleted: true }>;
+  },
+
+  attachmentDownloadUrl(id: string | number, attachmentId: number) {
+    return `/api/v1/students/${id}/attachments/${attachmentId}/download`;
+  },
+
+  attachmentPreviewUrl(id: string | number, attachmentId: number) {
+    return `/api/v1/students/${id}/attachments/${attachmentId}/preview`;
   },
 
   reviewIntake(id: string, data: { action: 'VERIFY' | 'REQUEST_CHANGE'; comment?: string }): Promise<any> {

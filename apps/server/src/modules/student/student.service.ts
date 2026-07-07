@@ -6,6 +6,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
@@ -29,6 +32,31 @@ import {
 
 const USER_LEVEL_FIELD_SET = new Set<string>(USER_LEVEL_FIELDS);
 const TEMPORARY_RANK_FALLBACK_YEAR = 2025;
+export const STUDENT_ATTACHMENT_CATEGORIES = [
+  'consultation',
+  'submission_screenshot',
+  'admission_proof',
+  'other',
+] as const;
+export type StudentAttachmentCategory = (typeof STUDENT_ATTACHMENT_CATEGORIES)[number];
+
+const STUDENT_ATTACHMENT_CATEGORY_SET = new Set<string>(STUDENT_ATTACHMENT_CATEGORIES);
+const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+const ALLOWED_ATTACHMENT_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const EXTENSION_MIME_TYPE: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+};
 
 export interface RankCheck {
   calculatedRank: number | null;
@@ -198,6 +226,168 @@ export class StudentService {
       profile.examYear,
       rankComputation?.sourceYear ?? null,
     );
+  }
+
+  private getUploadsRoot(): string {
+    return process.env.UPLOADS_ROOT || path.join(process.cwd(), 'uploads');
+  }
+
+  private normalizeStudentAttachmentCategory(category: string): StudentAttachmentCategory {
+    if (!STUDENT_ATTACHMENT_CATEGORY_SET.has(category)) {
+      throw new BadRequestException('附件分类不正确');
+    }
+    return category as StudentAttachmentCategory;
+  }
+
+  private inferMimeType(file: Express.Multer.File): string | null {
+    if (ALLOWED_ATTACHMENT_MIME_TYPES.has(file.mimetype)) {
+      return file.mimetype;
+    }
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    return EXTENSION_MIME_TYPE[ext] ?? null;
+  }
+
+  private validateAttachmentFile(file: Express.Multer.File) {
+    if (!file?.buffer || file.size <= 0) {
+      throw new BadRequestException('请上传文件');
+    }
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(file.mimetype) && !ALLOWED_ATTACHMENT_EXTENSIONS.has(ext)) {
+      throw new BadRequestException('仅支持 PDF、JPG、PNG、WEBP、GIF 格式');
+    }
+  }
+
+  private async assertStudentAccess(
+    studentId: number,
+    requester: JwtPayloadUser,
+    action: 'read' | 'update',
+  ) {
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      select: { id: true, teacherId: true, userId: true },
+    });
+    if (!profile) throw new NotFoundException('学生不存在');
+
+    const isAdmin = requester.role === 'ADMIN';
+    const isOwnerTeacher =
+      requester.role === 'TEACHER' &&
+      requester.teacherProfileId != null &&
+      profile.teacherId === requester.teacherProfileId;
+    const isStudentSelf =
+      action === 'read' &&
+      requester.role === 'STUDENT' &&
+      requester.studentProfileId === studentId;
+
+    if (!isAdmin && !isOwnerTeacher && !isStudentSelf) {
+      throw new ForbiddenException(action === 'read' ? '无权查看该学生资料' : '无权修改不属于自己的学生资料');
+    }
+
+    return profile;
+  }
+
+  async listAttachments(studentId: number, requester: JwtPayloadUser) {
+    await this.assertStudentAccess(studentId, requester, 'read');
+    return this.prisma.studentAttachment.findMany({
+      where: { studentId },
+      orderBy: [{ category: 'asc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        studentId: true,
+        category: true,
+        originalName: true,
+        mimeType: true,
+        fileSize: true,
+        createdAt: true,
+        updatedAt: true,
+        uploadedById: true,
+      },
+    });
+  }
+
+  async uploadAttachment(
+    studentId: number,
+    category: string,
+    file: Express.Multer.File,
+    requester: JwtPayloadUser,
+  ) {
+    await this.assertStudentAccess(studentId, requester, 'update');
+    const normalizedCategory = this.normalizeStudentAttachmentCategory(category);
+    this.validateAttachmentFile(file);
+
+    const uploadsRoot = this.getUploadsRoot();
+    const relativeDir = path.join('students', String(studentId));
+    const targetDir = path.join(uploadsRoot, relativeDir);
+    await fs.promises.mkdir(targetDir, { recursive: true });
+
+    const originalExt = path.extname(file.originalname || '').toLowerCase();
+    const ext = ALLOWED_ATTACHMENT_EXTENSIONS.has(originalExt) ? originalExt : '';
+    const storedName = `${normalizedCategory}_${Date.now()}_${randomUUID()}${ext}`;
+    const targetPath = path.join(targetDir, storedName);
+    await fs.promises.writeFile(targetPath, file.buffer);
+
+    const storagePath = path.join(relativeDir, storedName).replace(/\\/g, '/');
+    return this.prisma.studentAttachment.create({
+      data: {
+        studentId,
+        category: normalizedCategory,
+        originalName: (file.originalname || storedName).slice(0, 255),
+        storagePath,
+        mimeType: this.inferMimeType(file) ?? file.mimetype ?? null,
+        fileSize: file.size,
+        uploadedById: requester.id,
+      },
+      select: {
+        id: true,
+        studentId: true,
+        category: true,
+        originalName: true,
+        mimeType: true,
+        fileSize: true,
+        createdAt: true,
+        updatedAt: true,
+        uploadedById: true,
+      },
+    });
+  }
+
+  async getAttachmentForStudentAccess(
+    studentId: number,
+    attachmentId: number,
+    requester: JwtPayloadUser,
+  ) {
+    await this.assertStudentAccess(studentId, requester, 'read');
+    const attachment = await this.prisma.studentAttachment.findFirst({
+      where: { id: attachmentId, studentId },
+    });
+    if (!attachment) throw new NotFoundException('附件不存在');
+    return attachment;
+  }
+
+  async deleteAttachment(
+    studentId: number,
+    attachmentId: number,
+    requester: JwtPayloadUser,
+  ) {
+    await this.assertStudentAccess(studentId, requester, 'update');
+    const attachment = await this.prisma.studentAttachment.findFirst({
+      where: { id: attachmentId, studentId },
+    });
+    if (!attachment) throw new NotFoundException('附件不存在');
+
+    const expectedPrefix = `students/${studentId}/`;
+    if (!attachment.storagePath.startsWith(expectedPrefix)) {
+      throw new BadRequestException('该附件不是学生管理页上传的归档附件');
+    }
+
+    await this.prisma.studentAttachment.delete({ where: { id: attachmentId } });
+
+    const uploadsRoot = path.resolve(this.getUploadsRoot());
+    const filePath = path.resolve(uploadsRoot, attachment.storagePath);
+    if (filePath.startsWith(`${uploadsRoot}${path.sep}`)) {
+      await fs.promises.rm(filePath, { force: true });
+    }
+
+    return { deleted: true };
   }
 
   /**
