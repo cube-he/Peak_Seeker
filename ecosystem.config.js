@@ -45,6 +45,7 @@ module.exports = {
       max_memory_restart: '700M',
       env: {
         OCR_SERVICE_PORT: 8100,
+        OCR_ENGINE: 'paddleocr_vl',
         PYTHONUNBUFFERED: '1'
       },
       error_file: './logs/vh-ocr-error.log',
