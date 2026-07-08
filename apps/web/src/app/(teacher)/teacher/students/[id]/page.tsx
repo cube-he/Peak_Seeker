@@ -684,6 +684,7 @@ export default function StudentDetailPage() {
     );
     return {
       activePlanCount: plans.length,
+      latestPlanId: latest?.id ?? null,
       latestPlanStatus: latest?.status ?? null,
       latestPlanVersionNo: latest?.versionNo ?? null,
     };
@@ -913,6 +914,21 @@ export default function StudentDetailPage() {
             >
               <TIcon.excel /> 导出登记表
             </button>
+            {plansSummary?.latestPlanId ? (
+              <Link
+                href={`/teacher/plans/${plansSummary.latestPlanId}`}
+                className={`btn ${
+                  ['PENDING_REVIEW', 'REVIEWING'].includes(plansSummary.latestPlanStatus ?? '')
+                    ? 'primary'
+                    : ''
+                }`}
+              >
+                <TIcon.shield />{' '}
+                {['PENDING_REVIEW', 'REVIEWING'].includes(plansSummary.latestPlanStatus ?? '')
+                  ? '去审核方案'
+                  : '查看方案'}
+              </Link>
+            ) : null}
             {/* 推荐批次入口 — SUBMITTED/NEEDS_CHANGES/VERIFIED 可见, DRAFT 不显示 */}
             {(intakeStatus === 'SUBMITTED' ||
               intakeStatus === 'NEEDS_CHANGES' ||
@@ -2509,7 +2525,9 @@ function PlanListTabContent({ student }: { student: any }) {
               </span>
               <span className="when">{new Date(p.updatedAt).toLocaleDateString('zh-CN')}</span>
               <span className="actions">
-                <span className="go">查看 →</span>
+                <span className="go">
+                  {['PENDING_REVIEW', 'REVIEWING'].includes(p.status) ? '去审核 →' : '查看 →'}
+                </span>
               </span>
             </Link>
           ))}

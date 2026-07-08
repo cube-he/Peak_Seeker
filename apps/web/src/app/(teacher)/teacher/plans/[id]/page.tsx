@@ -43,6 +43,7 @@ import {
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
+import { authService } from '@/services/auth';
 import { planApi } from '@/services/plan-api';
 import PlanStatusBadge from '@/components/plan/PlanStatusBadge';
 import PlanPreparationTable from '../components/PlanPreparationTable';
@@ -405,7 +406,18 @@ export default function PlanDetailPage() {
       setCurrentUserId(user?.id ?? null);
     };
     sync();
-    return useAuthStore.subscribe(sync);
+    let cancelled = false;
+    void authService.getMe().then((freshUser: any) => {
+      if (cancelled || !freshUser) return;
+      useAuthStore.getState().updateUser(freshUser);
+      setIsSupervisor(freshUser?.teacherProfile?.isSupervisor === true);
+      setCurrentUserId(freshUser?.id ?? null);
+    }).catch(() => undefined);
+    const unsubscribe = useAuthStore.subscribe(sync);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, []);
 
   const [reviewComment, setReviewComment] = useState('');
