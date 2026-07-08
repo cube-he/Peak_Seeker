@@ -64,6 +64,7 @@ export class VolunteerFormImportService {
             enrollmentPlanId: g.anchorEnrollmentPlanId!,
             sequence: g.seq,
             acceptAdjust: g.acceptAdjust,
+            allowDuplicateGroup: true,
             selectedMajors: g.selectedMajors,
             candidateMajorRanking: g.selectedMajors,
           } as any,

@@ -121,17 +121,19 @@ export class PlanItemService {
     });
     if (!ep) throw new NotFoundException('招生计划不存在');
 
-    const duplicateGroup = await this.prisma.planItem.findFirst({
-      where: {
-        planId,
-        universityId: ep.universityId,
-        groupCode: ep.groupCode,
-      },
-    });
-    if (duplicateGroup) {
-      throw new ConflictException(
-        `该方案已包含 ${ep.university.name} 专业组 ${ep.groupCode || '-'}，不可重复加入同一专业组`,
-      );
+    if (!dto.allowDuplicateGroup) {
+      const duplicateGroup = await this.prisma.planItem.findFirst({
+        where: {
+          planId,
+          universityId: ep.universityId,
+          groupCode: ep.groupCode,
+        },
+      });
+      if (duplicateGroup) {
+        throw new ConflictException(
+          `该方案已包含 ${ep.university.name} 专业组 ${ep.groupCode || '-'}，不可重复加入同一专业组`,
+        );
+      }
     }
 
     // 录取快照: 先按专业全键匹配; miss 时回退同组任意行的组线 —— 提前批/专项的

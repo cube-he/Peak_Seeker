@@ -57,6 +57,7 @@ export class AddPlanItemDto {
   softFailReasons?: SoftFailReasonDto[];
   @IsOptional() @IsBoolean() softFailOverrideConfirmed?: boolean;
   @IsOptional() @IsString() overrideReason?: string;
+  @IsOptional() @IsBoolean() allowDuplicateGroup?: boolean;
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(6)

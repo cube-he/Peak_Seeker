@@ -60,6 +60,7 @@ describe('VolunteerFormImportService.commit', () => {
     expect(planId).toBe(201);
     expect(dto.enrollmentPlanId).toBe(902);
     expect(dto.acceptAdjust).toBe(true);
+    expect(dto.allowDuplicateGroup).toBe(true);
     expect(dto.selectedMajors).toHaveLength(1);
     expect(prisma.__tx.volunteerPlan.update).toHaveBeenCalledWith({ where: { id: 200 }, data: { status: 'OUTDATED' } });
   });
