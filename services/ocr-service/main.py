@@ -2238,13 +2238,16 @@ def _parse_ocr_volunteer_rows(items: List[Dict]) -> List[VolunteerFormVolunteer]
     volunteers: List[VolunteerFormVolunteer] = []
     for idx, marker in enumerate(seq_markers):
         next_marker = seq_markers[idx + 1] if idx + 1 < len(seq_markers) else None
+        row_end_y = marker["y1"] + 95
+        if next_marker and next_marker["page"] == marker["page"]:
+            row_end_y = next_marker["y1"] - 8
         row_items = []
         for item in items:
             if item["page"] != marker["page"]:
                 continue
             if item["y1"] < marker["y1"] - 8:
                 continue
-            if next_marker and next_marker["page"] == marker["page"] and item["y1"] >= next_marker["y1"] - 8:
+            if item["y1"] >= row_end_y:
                 continue
             row_items.append(item)
 
