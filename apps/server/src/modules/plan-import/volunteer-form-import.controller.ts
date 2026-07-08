@@ -26,19 +26,40 @@ export class VolunteerFormImportController {
 
   @Post('preview')
   @UseInterceptors(FileInterceptor('file'))
-  async preview(@UploadedFile() file: any, @Req() req: any) {
+  async preview(
+    @UploadedFile() file: any,
+    @Req() req: any,
+    @Body() body?: { studentId?: string | number },
+  ) {
     if (!file?.buffer) throw new BadRequestException('未上传文件');
     // req.user.id is set by JwtStrategy.validate() which returns { id: payload.sub, ... }
     const actorUserId = req.user?.id;
     if (!actorUserId) throw new ForbiddenException('未登录');
 
     const text = await this.parser.extractPdfText(file.buffer);
+    if (this.isBlankText(text)) {
+      throw new BadRequestException('当前 PDF 没有可读取文字，可能是截图或扫描件。请上传志愿填报系统导出的文字版 PDF。');
+    }
     const parsed = this.parser.parseFormText(text);
-    if (parsed.volunteers.length === 0) throw new BadRequestException('无法识别为志愿表');
+    if (parsed.volunteers.length === 0) {
+      throw new BadRequestException('无法识别为志愿表：请上传志愿填报系统导出的文字版 PDF，截图或扫描件暂不能自动解析。');
+    }
 
-    const examType = parsed.examTypeHint ?? 'PHYSICS';
-    const candidateStudents = await this.matcher.findCandidateStudents(parsed.identity, actorUserId);
-    const year = (candidateStudents[0] as any)?.examYear ?? 2026;
+    const requestedStudentId = this.parseOptionalPositiveInt(body?.studentId);
+    const presetStudent = requestedStudentId
+      ? await this.prisma.studentProfile.findFirst({
+          where: { id: requestedStudentId, teacher: { userId: actorUserId } },
+          include: { user: { select: { realName: true } } },
+        })
+      : null;
+    if (requestedStudentId && !presetStudent) throw new ForbiddenException('无权操作该学生');
+
+    const candidateStudents = presetStudent
+      ? [presetStudent]
+      : await this.matcher.findCandidateStudents(parsed.identity, actorUserId);
+    const firstCandidate = candidateStudents[0] as any;
+    const examType = parsed.examTypeHint ?? this.normalizeExamType(firstCandidate?.examType) ?? 'PHYSICS';
+    const year = firstCandidate?.examYear ?? 2026;
     // 高考所在地省份, 不是户籍。批次/线/计划/录取/段表只有四川 (随迁子女户籍在外、
     // 在川高考的常态: StudentProfile.province 是户籍, 不能用来查批次)。志愿表 PDF
     // 本身写明是「四川省...考生志愿表」,该功能上下文锁定四川。
@@ -60,6 +81,23 @@ export class VolunteerFormImportController {
       candidateStudents: candidateStudents.map((s: any) => ({ id: s.id, realName: s.user?.realName, classInfo: s.classInfo })),
       groups, summary,
     };
+  }
+
+  private isBlankText(text: string | null | undefined) {
+    return !text || text.replace(/\s/g, '').length === 0;
+  }
+
+  private parseOptionalPositiveInt(value: string | number | undefined) {
+    if (value == null || value === '') return undefined;
+    const n = Number(value);
+    return Number.isInteger(n) && n > 0 ? n : undefined;
+  }
+
+  private normalizeExamType(value: unknown): 'PHYSICS' | 'HISTORY' | undefined {
+    if (value === 'PHYSICS' || value === 'HISTORY') return value;
+    if (value === '物理' || value === '物理类') return 'PHYSICS';
+    if (value === '历史' || value === '历史类') return 'HISTORY';
+    return undefined;
   }
 
   @Post('commit')

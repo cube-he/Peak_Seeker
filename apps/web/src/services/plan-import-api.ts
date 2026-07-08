@@ -54,9 +54,10 @@ export interface CommitResponse {
 export const planImportApi = {
   // 注意: api.ts 的 response 拦截器已经把 axios response 脱壳为 response.data,
   // 这里直接 return 即可, 不要再 .then(r => r.data) (否则 r 是 undefined)。
-  preview(file: File): Promise<PreviewResponse> {
+  preview(file: File, studentId?: number): Promise<PreviewResponse> {
     const fd = new FormData();
     fd.append('file', file);
+    if (studentId) fd.append('studentId', String(studentId));
     return api.post('/plan-import/volunteer-form/preview', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }) as unknown as Promise<PreviewResponse>;

@@ -45,7 +45,7 @@ function PlanImportPageInner() {
   const [selectedStudentId, setSelectedStudentId] = useState<number | undefined>(undefined);
 
   const previewMutation = useMutation({
-    mutationFn: (f: File) => planImportApi.preview(f),
+    mutationFn: (f: File) => planImportApi.preview(f, presetStudentId),
     onSuccess: (data) => {
       setPreview(data);
       // 预选:① query 的 studentId 在候选里 ② 候选只有 1 个
