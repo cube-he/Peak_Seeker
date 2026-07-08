@@ -242,6 +242,10 @@ export const planApi = {
     return api.post(`/plans/${id}/derive-version`, versionNote ? { versionNote } : undefined) as any;
   },
 
+  publishPlan(id: string | number): Promise<any> {
+    return api.post(`/plans/${id}/publish`) as any;
+  },
+
   startReview(id: string): Promise<any> {
     return api.post(`/plans/${id}/start-review`) as any;
   },

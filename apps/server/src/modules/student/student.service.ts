@@ -40,6 +40,20 @@ export const STUDENT_ATTACHMENT_CATEGORIES = [
 ] as const;
 export type StudentAttachmentCategory = (typeof STUDENT_ATTACHMENT_CATEGORIES)[number];
 
+export interface SaveAdmissionResultInput {
+  admittedUniName?: string | null;
+  admittedUniId?: number | null;
+  admittedMinScore?: number | null;
+  admittedMinRank?: number | null;
+  sequenceNo?: number | null;
+  proofAttachmentId?: number | null;
+  batchName?: string | null;
+  admittedMajorGroupCode?: string | null;
+  admittedMajorCode?: string | null;
+  admittedMajorName?: string | null;
+  admittedMajorId?: number | null;
+}
+
 const STUDENT_ATTACHMENT_CATEGORY_SET = new Set<string>(STUDENT_ATTACHMENT_CATEGORIES);
 const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
   'application/pdf',
@@ -257,6 +271,21 @@ export class StudentService {
     return /[\u4e00-\u9fff]/.test(decoded) && !decoded.includes('\uFFFD') ? decoded : value;
   }
 
+  private normalizeOptionalString(value: unknown): string | null {
+    if (value == null) return null;
+    const text = String(value).trim();
+    return text.length > 0 ? text : null;
+  }
+
+  private normalizeOptionalInt(value: unknown, label: string): number | null {
+    if (value == null || value === '') return null;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      throw new BadRequestException(`${label}格式不正确`);
+    }
+    return Math.trunc(parsed);
+  }
+
   private validateAttachmentFile(file: Express.Multer.File) {
     if (!file?.buffer || file.size <= 0) {
       throw new BadRequestException('请上传文件');
@@ -413,6 +442,121 @@ export class StudentService {
     return { deleted: true };
   }
 
+  async getAdmissionResult(studentId: number, requester: JwtPayloadUser) {
+    await this.assertStudentAccess(studentId, requester, 'read');
+    return this.prisma.studentAdmissionResult.findUnique({
+      where: { studentId },
+    });
+  }
+
+  async saveAdmissionResult(
+    studentId: number,
+    dto: SaveAdmissionResultInput,
+    requester: JwtPayloadUser,
+  ) {
+    await this.assertStudentAccess(studentId, requester, 'update');
+
+    const admittedUniName = this.normalizeOptionalString(dto.admittedUniName);
+    if (!admittedUniName) {
+      throw new BadRequestException('请填写录取院校');
+    }
+
+    const proofAttachmentId = this.normalizeOptionalInt(dto.proofAttachmentId, '录取截图');
+    if (proofAttachmentId != null) {
+      const proof = await this.prisma.studentAttachment.findFirst({
+        where: { id: proofAttachmentId, studentId, category: 'admission_proof' },
+        select: { id: true },
+      });
+      if (!proof) {
+        throw new BadRequestException('请选择该学生名下的录取截图作为凭证');
+      }
+    }
+
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      select: { totalScore: true },
+    });
+    if (!student) throw new NotFoundException('学生不存在');
+
+    const admittedMinScore = this.normalizeOptionalInt(dto.admittedMinScore, '录取最低分');
+    const scoreDiff =
+      student.totalScore != null && admittedMinScore != null
+        ? student.totalScore - admittedMinScore
+        : null;
+
+    const data = {
+      admittedUniName,
+      admittedUniId: this.normalizeOptionalInt(dto.admittedUniId, '录取院校ID'),
+      admittedMinScore,
+      admittedMinRank: this.normalizeOptionalInt(dto.admittedMinRank, '录取最低位次'),
+      scoreDiff,
+      sequenceNo: this.normalizeOptionalInt(dto.sequenceNo, '录取志愿顺序'),
+      proofAttachmentId,
+      batchName: this.normalizeOptionalString(dto.batchName),
+      admittedMajorGroupCode: this.normalizeOptionalString(dto.admittedMajorGroupCode),
+      admittedMajorCode: this.normalizeOptionalString(dto.admittedMajorCode),
+      admittedMajorName: this.normalizeOptionalString(dto.admittedMajorName),
+      admittedMajorId: this.normalizeOptionalInt(dto.admittedMajorId, '录取专业ID'),
+    };
+
+    return this.prisma.studentAdmissionResult.upsert({
+      where: { studentId },
+      create: { studentId, ...data },
+      update: data,
+    });
+  }
+
+  async archiveStudent(studentId: number, requester: JwtPayloadUser) {
+    await this.assertStudentAccess(studentId, requester, 'update');
+
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      include: { admissionResult: true },
+    });
+    if (!profile) throw new NotFoundException('学生不存在');
+    if (!profile.admissionResult?.admittedUniName) {
+      throw new BadRequestException('请先填写录取院校和录取结果');
+    }
+
+    const publishedPlan = await this.prisma.volunteerPlan.findFirst({
+      where: { studentId, status: 'PUBLISHED' },
+      orderBy: { versionNo: 'desc' },
+      select: { id: true },
+    });
+    if (!publishedPlan) {
+      throw new BadRequestException('请先确认终稿已提交考试院');
+    }
+
+    const admissionProof = await this.prisma.studentAttachment.findFirst({
+      where: { studentId, category: 'admission_proof' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (!admissionProof) {
+      throw new BadRequestException('请先上传录取截图');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (profile.admissionResult?.proofAttachmentId == null) {
+        await tx.studentAdmissionResult.update({
+          where: { studentId },
+          data: { proofAttachmentId: admissionProof.id },
+        });
+      }
+
+      await tx.volunteerPlan.update({
+        where: { id: publishedPlan.id },
+        data: { isHistorical: true },
+      });
+
+      return tx.studentProfile.update({
+        where: { id: studentId },
+        data: { isArchived: true },
+        include: { admissionResult: true },
+      });
+    });
+  }
+
   /**
    * Create a student account (User + StudentProfile) assigned to a teacher.
    */
@@ -549,7 +693,7 @@ export class StudentService {
             // 用 updatedAt 排序会把过期初稿当成最新方案, versionNo 才稳。
             orderBy: { versionNo: 'desc' },
             take: 1,
-            select: { id: true, status: true, updatedAt: true, versionNo: true },
+            select: { id: true, status: true, updatedAt: true, versionNo: true, batchName: true },
           },
           _count: {
             select: { volunteerPlans: true },
@@ -564,7 +708,7 @@ export class StudentService {
 
     // 列表也需要 progress 显示双进度列 + 筛选
     const dataWithProgress = data.map((p) => {
-      const latestPlan = p.volunteerPlans[0];
+      const latestPlan = p.volunteerPlans?.[0];
       return {
         ...p,
         progress: this.progressService.compute({
@@ -576,7 +720,7 @@ export class StudentService {
           birthDate: (p as any).user?.birthDate,
         }),
         workflowStatus: deriveWorkflowStatus(p.intakeStatus, latestPlan?.status),
-        planCount: p._count.volunteerPlans,
+        planCount: p._count?.volunteerPlans ?? p.volunteerPlans?.length ?? 0,
         latestPlanStatus: latestPlan?.status ?? null,
         latestPlanId: latestPlan?.id ?? null,
         latestPlanVersionNo: latestPlan?.versionNo ?? null,
@@ -620,8 +764,9 @@ export class StudentService {
           // 同上: 取最新版本(versionNo)而非最近改动, 避免被置 OUTDATED 的初稿盖过新版。
           orderBy: { versionNo: 'desc' },
           take: 1,
-          select: { id: true, status: true, updatedAt: true, versionNo: true },
+          select: { id: true, status: true, updatedAt: true, versionNo: true, batchName: true },
         },
+        admissionResult: true,
         _count: {
           select: { volunteerPlans: true },
         },
@@ -646,7 +791,7 @@ export class StudentService {
 
     const eligibleLevel = await this.computeEligibleLevel(profile);
 
-    const latestPlan = profile.volunteerPlans[0];
+    const latestPlan = profile.volunteerPlans?.[0];
 
     return {
       ...profile,
@@ -654,7 +799,7 @@ export class StudentService {
       rankCheck,
       eligibleLevel,
       workflowStatus: deriveWorkflowStatus(profile.intakeStatus, latestPlan?.status),
-      planCount: profile._count.volunteerPlans,
+      planCount: profile._count?.volunteerPlans ?? profile.volunteerPlans?.length ?? 0,
       latestPlanStatus: latestPlan?.status ?? null,
       latestPlanId: latestPlan?.id ?? null,
       latestPlanVersionNo: latestPlan?.versionNo ?? null,

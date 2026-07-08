@@ -10,6 +10,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   studentApi,
   type BonusItem,
+  type SaveAdmissionResultDto,
+  type StudentAdmissionResult,
   type StudentAttachment,
   type StudentAttachmentCategory,
   type UpdateStudentDto,
@@ -2745,7 +2747,9 @@ function AttachmentPreviewModal({
 function ExternalMaterialsTabContent({ student }: { student: any }) {
   const [exporting, setExporting] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+  const [admissionForm] = Form.useForm<SaveAdmissionResultDto>();
   const archiveInputRefs = useRef<Partial<Record<StudentAttachmentCategory, HTMLInputElement | null>>>({});
+  const router = useRouter();
   const queryClient = useQueryClient();
   const studentId = Number(student?.id);
   const hasStudentId = Number.isFinite(studentId) && studentId > 0;
@@ -2754,6 +2758,13 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
     queryKey: ['student-attachments', studentId],
     queryFn: () => studentApi.listAttachments(studentId),
     enabled: hasStudentId,
+  });
+
+  const { data: admissionResultData } = useQuery({
+    queryKey: ['student-admission-result', studentId],
+    queryFn: () => studentApi.getAdmissionResult(studentId),
+    enabled: hasStudentId,
+    initialData: (student?.admissionResult ?? null) as StudentAdmissionResult | null,
   });
 
   const uploadMutation = useMutation({
@@ -2781,6 +2792,45 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
     },
   });
 
+  const publishMutation = useMutation({
+    mutationFn: (planId: string | number) => planApi.publishPlan(planId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student-detail', String(studentId)] });
+      message.success('已确认提交考试院');
+    },
+    onError: (e: any) => {
+      const raw = e?.response?.data?.message;
+      message.error(Array.isArray(raw) ? raw.join('、') : raw ?? '确认提交失败');
+    },
+  });
+
+  const saveAdmissionMutation = useMutation({
+    mutationFn: (values: SaveAdmissionResultDto) => studentApi.saveAdmissionResult(studentId, values),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['student-admission-result', studentId], data);
+      queryClient.invalidateQueries({ queryKey: ['student-detail', String(studentId)] });
+      message.success('录取结果已保存');
+    },
+    onError: (e: any) => {
+      const raw = e?.response?.data?.message;
+      message.error(Array.isArray(raw) ? raw.join('、') : raw ?? '保存录取结果失败');
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: () => studentApi.archiveStudent(studentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student-detail', String(studentId)] });
+      queryClient.invalidateQueries({ queryKey: ['teacher-students'] });
+      message.success('已完成归档');
+      router.push(`/teacher/historical-cases/${studentId}`);
+    },
+    onError: (e: any) => {
+      const raw = e?.response?.data?.message;
+      message.error(Array.isArray(raw) ? raw.join('、') : raw ?? '归档失败');
+    },
+  });
+
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2794,6 +2844,36 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
 
   const plans: any[] = student?.volunteerPlans ?? [];
   const attachments = attachmentsData ?? [];
+  const latestPlan = plans[0];
+  const admissionResult = (admissionResultData ?? student?.admissionResult ?? null) as StudentAdmissionResult | null;
+  const submissionScreenshots = attachments.filter((item) => item.category === 'submission_screenshot');
+  const admissionProofs = attachments.filter((item) => item.category === 'admission_proof');
+  const firstAdmissionProofId = admissionProofs[0]?.id;
+  const isSubmitted = latestPlan?.status === 'PUBLISHED';
+  const canPublish = latestPlan?.status === 'FINALIZED' && submissionScreenshots.length > 0;
+  const canArchive = isSubmitted && !!admissionResult?.admittedUniName && admissionProofs.length > 0;
+  const publishHint =
+    !latestPlan ? '暂无可提交方案'
+    : latestPlan.status === 'PUBLISHED' ? '已确认提交考试院'
+    : latestPlan.status !== 'FINALIZED' ? '需先完成终稿'
+    : submissionScreenshots.length === 0 ? '请先上传志愿填报截图'
+    : '截图已上传，可确认提交';
+
+  useEffect(() => {
+    admissionForm.setFieldsValue({
+      admittedUniName: admissionResult?.admittedUniName ?? undefined,
+      admittedUniId: admissionResult?.admittedUniId ?? undefined,
+      admittedMinScore: admissionResult?.admittedMinScore ?? undefined,
+      admittedMinRank: admissionResult?.admittedMinRank ?? undefined,
+      sequenceNo: admissionResult?.sequenceNo ?? undefined,
+      proofAttachmentId: admissionResult?.proofAttachmentId ?? firstAdmissionProofId,
+      batchName: admissionResult?.batchName ?? latestPlan?.batchName ?? undefined,
+      admittedMajorGroupCode: admissionResult?.admittedMajorGroupCode ?? undefined,
+      admittedMajorCode: admissionResult?.admittedMajorCode ?? undefined,
+      admittedMajorName: admissionResult?.admittedMajorName ?? undefined,
+      admittedMajorId: admissionResult?.admittedMajorId ?? undefined,
+    });
+  }, [admissionForm, admissionResult, firstAdmissionProofId, latestPlan?.batchName]);
 
   const handleArchiveFileChange = (
     category: StudentAttachmentCategory,
@@ -2811,6 +2891,31 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
     uploadMutation.mutate({ category, file });
   };
 
+  const statPill = (label: string, value: string | number, tone: 'blue' | 'green' | 'gold' = 'blue') => {
+    const color =
+      tone === 'green' ? 'var(--safe)'
+      : tone === 'gold' ? 'var(--accent)'
+      : 'var(--brand)';
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 999,
+          padding: '5px 10px',
+          color,
+          fontSize: 12,
+          background: 'var(--surface)',
+        }}
+      >
+        <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+        <strong>{value}</strong>
+      </span>
+    );
+  };
+
   return (
     <div>
       <div className="pf-sechead">
@@ -2818,6 +2923,149 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
         <h3>材料归档</h3>
         <p>方案导出、咨询单、志愿填报截图与录取截图</p>
       </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: 14,
+          marginBottom: 18,
+        }}
+      >
+        <section
+          style={{
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 8,
+            padding: 16,
+            background: 'var(--surface)',
+          }}
+        >
+          <div style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 700, marginBottom: 6 }}>
+            第 7 步
+          </div>
+          <h4 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>
+            提交入档确认
+          </h4>
+          <p style={{ margin: '8px 0 14px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+            终稿提交到考试院后，上传填报截图并点击确认，第 7 步才会显示为已提交。
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            {statPill('当前方案', latestPlan ? `v${latestPlan.versionNo}` : '无', 'blue')}
+            {latestPlan ? (
+              <PlanStatusChip status={latestPlan.status} dict={PLAN_STATUS_LABEL} toneDict={PLAN_STATUS_TONE} />
+            ) : null}
+            {statPill('填报截图', submissionScreenshots.length, submissionScreenshots.length > 0 ? 'green' : 'gold')}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="qa primary"
+              disabled={!latestPlan || !canPublish || publishMutation.isPending}
+              onClick={() => latestPlan && publishMutation.mutate(latestPlan.id)}
+            >
+              <TIcon.check /> {isSubmitted ? '已提交' : '确认已提交'}
+            </button>
+            <span style={{ fontSize: 12, color: isSubmitted ? 'var(--safe)' : 'var(--text-muted)' }}>
+              {publishHint}
+            </span>
+          </div>
+        </section>
+
+        <section
+          style={{
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 8,
+            padding: 16,
+            background: 'var(--surface)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+            <div>
+              <div style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 700, marginBottom: 6 }}>
+                录取回收
+              </div>
+              <h4 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>
+                录取结果
+              </h4>
+            </div>
+            {statPill('录取截图', admissionProofs.length, admissionProofs.length > 0 ? 'green' : 'gold')}
+          </div>
+
+          <Form form={admissionForm} layout="vertical" size="small" onFinish={(values) => saveAdmissionMutation.mutate(values)}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0 12px' }}>
+              <Form.Item name="batchName" label="录取批次">
+                <Input placeholder="如：本科批" />
+              </Form.Item>
+              <Form.Item
+                name="admittedUniName"
+                label="录取院校"
+                rules={[{ required: true, message: '请填写录取院校' }]}
+              >
+                <Input placeholder="院校名称" />
+              </Form.Item>
+              <Form.Item name="admittedMajorGroupCode" label="院校专业组">
+                <Input placeholder="如：101" />
+              </Form.Item>
+              <Form.Item name="admittedMajorName" label="录取专业">
+                <Input placeholder="专业名称" />
+              </Form.Item>
+              <Form.Item name="admittedMajorCode" label="专业代码">
+                <Input placeholder="如：37" />
+              </Form.Item>
+              <Form.Item name="sequenceNo" label="录取志愿顺序">
+                <InputNumber min={1} precision={0} style={{ width: '100%' }} placeholder="第几个志愿" />
+              </Form.Item>
+              <Form.Item name="admittedMinScore" label="录取最低分">
+                <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item name="admittedMinRank" label="录取最低位次">
+                <InputNumber min={1} precision={0} style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item name="proofAttachmentId" label="凭证截图">
+                <Select
+                  allowClear
+                  placeholder={admissionProofs.length > 0 ? '选择录取截图' : '先上传录取截图'}
+                  options={admissionProofs.map((item) => ({
+                    value: item.id,
+                    label: normalizeAttachmentDisplayName(item.originalName),
+                  }))}
+                />
+              </Form.Item>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                分差由系统按“学生总分 - 录取最低分”自动计算。
+                {admissionResult?.scoreDiff != null ? ` 当前分差：${admissionResult.scoreDiff}` : ''}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button type="submit" className="qa" disabled={saveAdmissionMutation.isPending}>
+                  <TIcon.save /> 保存录取结果
+                </button>
+                <Popconfirm
+                  title="完成归档后，学生会进入历史案例"
+                  okText="完成归档"
+                  cancelText="取消"
+                  onConfirm={() => archiveMutation.mutate()}
+                >
+                  <button
+                    type="button"
+                    className="qa primary"
+                    disabled={!canArchive || archiveMutation.isPending}
+                  >
+                    <TIcon.check /> 完成归档
+                  </button>
+                </Popconfirm>
+              </div>
+            </div>
+            {!canArchive ? (
+              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-tertiary)' }}>
+                归档条件：已确认提交、已保存录取院校、已上传录取截图。
+              </div>
+            ) : null}
+          </Form>
+        </section>
+      </div>
+
       <div
         style={{
           display: 'grid',

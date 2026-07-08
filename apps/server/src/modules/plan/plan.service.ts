@@ -689,6 +689,29 @@ export class PlanService {
     });
   }
 
+  async publish(planId: number, userId: number) {
+    const plan = await this.findById(planId, userId);
+    if (plan.createdById !== userId) {
+      throw new ForbiddenException('只有出方案老师可以确认已提交考试院');
+    }
+
+    const next = this.sm.transition(plan.status, 'PUBLISH');
+    const screenshotCount = await this.prisma.studentAttachment.count({
+      where: {
+        studentId: plan.studentId,
+        category: 'submission_screenshot',
+      },
+    });
+    if (screenshotCount <= 0) {
+      throw new BadRequestException('请先上传志愿填报截图，再确认已提交');
+    }
+
+    return this.prisma.volunteerPlan.update({
+      where: { id: planId },
+      data: { status: next },
+    });
+  }
+
   async deriveVersion(planId: number, userId: number, versionNote?: string) {
     const parent = await this.findById(planId, userId);
     if (parent.createdById !== userId) {

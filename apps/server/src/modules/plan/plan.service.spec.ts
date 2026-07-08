@@ -28,6 +28,7 @@ describe('PlanService workflow gates', () => {
         updateMany: jest.fn(),
       },
       planItem: { count: jest.fn(), findMany: jest.fn() },
+      studentAttachment: { count: jest.fn() },
       planItemRisk: {
         deleteMany: jest.fn(),
         createMany: jest.fn(),
@@ -167,6 +168,47 @@ describe('PlanService workflow gates', () => {
     });
 
     await expect(service.finalize(1, 99)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('publish requires a submission screenshot', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1,
+      studentId: 10,
+      createdById: 20,
+      userId: null,
+      status: 'FINALIZED',
+      batchConfigId: null,
+      student: { userId: 100, user: { realName: 'student', username: 'student' } },
+      planItems: [],
+      reviews: [],
+    });
+    prisma.studentAttachment.count.mockResolvedValue(0);
+
+    await expect(service.publish(1, 20)).rejects.toThrow(BadRequestException);
+  });
+
+  it('publish moves a finalized plan to PUBLISHED after screenshot upload', async () => {
+    prisma.volunteerPlan.findUnique.mockResolvedValue({
+      id: 1,
+      studentId: 10,
+      createdById: 20,
+      userId: null,
+      status: 'FINALIZED',
+      batchConfigId: null,
+      student: { userId: 100, user: { realName: 'student', username: 'student' } },
+      planItems: [],
+      reviews: [],
+    });
+    prisma.studentAttachment.count.mockResolvedValue(1);
+    prisma.volunteerPlan.update.mockResolvedValue({ id: 1, status: 'PUBLISHED' });
+
+    const result = await service.publish(1, 20);
+
+    expect(result).toHaveProperty('status', 'PUBLISHED');
+    expect(prisma.volunteerPlan.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { status: 'PUBLISHED' },
+    });
   });
 
   it('exposes selected majors and adjustment status in plan item details', () => {

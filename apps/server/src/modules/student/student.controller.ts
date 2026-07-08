@@ -185,6 +185,37 @@ export class StudentController {
     });
   }
 
+  @Get(':id/admission-result')
+  @ApiOperation({ summary: '获取学生录取结果' })
+  @CheckPolicies((ability) => ability.can('read', 'StudentProfile'))
+  async getAdmissionResult(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.studentService.getAdmissionResult(id, user);
+  }
+
+  @Put(':id/admission-result')
+  @ApiOperation({ summary: '保存学生录取结果' })
+  @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
+  async saveAdmissionResult(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.studentService.saveAdmissionResult(id, body as any, user);
+  }
+
+  @Post(':id/archive')
+  @ApiOperation({ summary: '完成学生历史归档' })
+  @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
+  async archiveStudent(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+  ) {
+    return this.studentService.archiveStudent(id, user);
+  }
+
   @Get(':id/attachments')
   @ApiOperation({ summary: '获取学生归档附件列表' })
   @CheckPolicies((ability) => ability.can('read', 'StudentProfile'))

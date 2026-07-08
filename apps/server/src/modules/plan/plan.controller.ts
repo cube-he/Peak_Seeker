@@ -155,6 +155,16 @@ export class PlanController {
     return this.planService.finalize(id, req.user.id);
   }
 
+  @Post(':id/publish')
+  @ApiOperation({ summary: '确认终稿已提交考试院（FINALIZED -> PUBLISHED）' })
+  @ApiParam({ name: 'id', type: Number })
+  async publish(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
+    return this.planService.publish(id, req.user.id);
+  }
+
   @Post(':id/parent-confirm')
   @ApiOperation({ summary: '家长确认主管已通过的方案' })
   @ApiParam({ name: 'id', type: Number })

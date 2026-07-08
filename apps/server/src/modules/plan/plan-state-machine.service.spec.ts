@@ -74,6 +74,10 @@ describe('PlanStateMachineService', () => {
     expect(sm.transition('PARENT_CONFIRMED', 'FINALIZE')).toBe('FINALIZED');
   });
 
+  it('FINALIZED -> publish -> PUBLISHED', () => {
+    expect(sm.transition('FINALIZED', 'PUBLISH')).toBe('PUBLISHED');
+  });
+
   it('APPROVED -> finalize requires parent confirmation', () => {
     expect(() => sm.transition('APPROVED', 'FINALIZE')).toThrow(/不允许/);
   });

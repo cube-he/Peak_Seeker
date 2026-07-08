@@ -32,8 +32,24 @@ describe('StudentService', () => {
       count: jest.Mock;
       update: jest.Mock;
     };
+    volunteerPlan: {
+      findFirst: jest.Mock;
+      update: jest.Mock;
+    };
+    studentAdmissionResult: {
+      findUnique: jest.Mock;
+      upsert: jest.Mock;
+      update: jest.Mock;
+    };
+    studentAttachment: {
+      findFirst: jest.Mock;
+      count: jest.Mock;
+    };
     batchConfig: {
       findMany: jest.Mock;
+    };
+    batchLine: {
+      findFirst: jest.Mock;
     };
     studentFieldChangeLog: {
       createMany: jest.Mock;
@@ -56,6 +72,19 @@ describe('StudentService', () => {
         count: jest.fn(),
         update: jest.fn(),
       },
+      volunteerPlan: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+      studentAdmissionResult: {
+        findUnique: jest.fn(),
+        upsert: jest.fn(),
+        update: jest.fn(),
+      },
+      studentAttachment: {
+        findFirst: jest.fn(),
+        count: jest.fn(),
+      },
       batchConfig: {
         // C1 修复: confirmBatches 改用 batchConfig 真值源校验批次名 (不再硬编码白名单).
         // 默认返回代表性批次集合 (含旧白名单 5 项 + 强基计划等旧白名单遗漏的真实批次).
@@ -68,6 +97,9 @@ describe('StudentService', () => {
           { batch: '高职提前批' },
           { batch: '高职批' },
         ]),
+      },
+      batchLine: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       studentFieldChangeLog: {
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -170,6 +202,77 @@ describe('StudentService', () => {
   });
 
   // ── findByTeacher ───────────────────────────────────────
+
+  describe('admission archive workflow', () => {
+    const teacher = { id: 20, role: 'TEACHER', teacherProfileId: 5 } as any;
+
+    it('saves admission result and calculates scoreDiff from student total score', async () => {
+      prisma.studentProfile.findUnique
+        .mockResolvedValueOnce({ id: 10, teacherId: 5, userId: 100 })
+        .mockResolvedValueOnce({ totalScore: 520 });
+      prisma.studentAttachment.findFirst.mockResolvedValue({ id: 7 });
+      prisma.studentAdmissionResult.upsert.mockResolvedValue({
+        id: 1,
+        studentId: 10,
+        admittedUniName: '四川大学',
+        admittedMinScore: 500,
+        scoreDiff: 20,
+      });
+
+      const result = await service.saveAdmissionResult(
+        10,
+        {
+          admittedUniName: '四川大学',
+          admittedMinScore: 500,
+          proofAttachmentId: 7,
+        },
+        teacher,
+      );
+
+      expect(result).toHaveProperty('scoreDiff', 20);
+      expect(prisma.studentAdmissionResult.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { studentId: 10 },
+          create: expect.objectContaining({ scoreDiff: 20 }),
+          update: expect.objectContaining({ scoreDiff: 20 }),
+        }),
+      );
+    });
+
+    it('archives a submitted student and marks the published plan as historical', async () => {
+      prisma.studentProfile.findUnique
+        .mockResolvedValueOnce({ id: 10, teacherId: 5, userId: 100 })
+        .mockResolvedValueOnce({
+          id: 10,
+          teacherId: 5,
+          userId: 100,
+          admissionResult: { admittedUniName: '四川大学' },
+        });
+      prisma.volunteerPlan.findFirst.mockResolvedValue({ id: 99 });
+      prisma.studentAttachment.findFirst.mockResolvedValue({ id: 7 });
+      prisma.studentAdmissionResult.update.mockResolvedValue({ id: 1, proofAttachmentId: 7 });
+      prisma.volunteerPlan.update.mockResolvedValue({ id: 99, isHistorical: true });
+      prisma.studentProfile.update.mockResolvedValue({ id: 10, isArchived: true });
+
+      const result = await service.archiveStudent(10, teacher);
+
+      expect(result).toHaveProperty('isArchived', true);
+      expect(prisma.volunteerPlan.update).toHaveBeenCalledWith({
+        where: { id: 99 },
+        data: { isHistorical: true },
+      });
+      expect(prisma.studentAdmissionResult.update).toHaveBeenCalledWith({
+        where: { studentId: 10 },
+        data: { proofAttachmentId: 7 },
+      });
+      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 10 },
+          data: { isArchived: true },
+        }),
+      );
+    });
+  });
 
   describe('findByTeacher', () => {
     it('should return paginated results for a teacher (with progress per item)', async () => {

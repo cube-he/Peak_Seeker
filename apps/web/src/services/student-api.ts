@@ -159,6 +159,42 @@ export interface StudentAttachment {
   uploadedById: number | null;
 }
 
+export interface StudentAdmissionResult {
+  id: number;
+  studentId: number;
+  admittedUniName: string;
+  admittedUniId: number | null;
+  admittedMinScore: number | null;
+  admittedMinRank: number | null;
+  scoreDiff: number | null;
+  sequenceNo: number | null;
+  proofAttachmentId: number | null;
+  batchName: string | null;
+  admittedMajorGroupCode: string | null;
+  admittedMajorCode: string | null;
+  admittedMajorName: string | null;
+  admittedMajorId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SaveAdmissionResultDto = Partial<
+  Pick<
+    StudentAdmissionResult,
+    | 'admittedUniName'
+    | 'admittedUniId'
+    | 'admittedMinScore'
+    | 'admittedMinRank'
+    | 'sequenceNo'
+    | 'proofAttachmentId'
+    | 'batchName'
+    | 'admittedMajorGroupCode'
+    | 'admittedMajorCode'
+    | 'admittedMajorName'
+    | 'admittedMajorId'
+  >
+>;
+
 /**
  * 双轨完整度响应（与后端 ProgressService.compute 输出对齐）
  */
@@ -226,6 +262,21 @@ export const studentApi = {
 
   attachmentPreviewUrl(id: string | number, attachmentId: number) {
     return `/api/v1/students/${id}/attachments/${attachmentId}/preview`;
+  },
+
+  getAdmissionResult(id: string | number): Promise<StudentAdmissionResult | null> {
+    return api.get(`/students/${id}/admission-result`) as unknown as Promise<StudentAdmissionResult | null>;
+  },
+
+  saveAdmissionResult(
+    id: string | number,
+    data: SaveAdmissionResultDto,
+  ): Promise<StudentAdmissionResult> {
+    return api.put(`/students/${id}/admission-result`, data) as unknown as Promise<StudentAdmissionResult>;
+  },
+
+  archiveStudent(id: string | number): Promise<any> {
+    return api.post(`/students/${id}/archive`) as any;
   },
 
   reviewIntake(id: string, data: { action: 'VERIFY' | 'REQUEST_CHANGE'; comment?: string }): Promise<any> {

@@ -4,7 +4,7 @@ import { PlanStatus } from '@prisma/client';
 export type PlanAction =
   | 'SUBMIT_REVIEW' | 'START_REVIEW' | 'APPROVE' | 'REJECT'
   | 'REQUEST_CHANGE' | 'COMMENT' | 'PARENT_CONFIRM'
-  | 'PARENT_REQUEST_CHANGE' | 'FINALIZE' | 'WITHDRAW';
+  | 'PARENT_REQUEST_CHANGE' | 'FINALIZE' | 'PUBLISH' | 'WITHDRAW';
 
 interface TransitionContext {
   itemCount?: number;
@@ -43,6 +43,9 @@ export class PlanStateMachineService {
     }
     if (from === 'PARENT_CONFIRMED' && action === 'FINALIZE') {
       return 'FINALIZED';
+    }
+    if (from === 'FINALIZED' && action === 'PUBLISH') {
+      return 'PUBLISHED';
     }
     throw new BadRequestException(`不允许的状态转移：${from} -- ${action}`);
   }
