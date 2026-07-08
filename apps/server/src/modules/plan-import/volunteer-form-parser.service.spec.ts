@@ -36,6 +36,59 @@ describe('VolunteerFormParserService.parseFormText', () => {
     ]);
   });
 
+  it('兼容下载版 PDF 的半角括号、志愿编号空格和半角身份字段冒号', () => {
+    const identity = IDENTITY
+      .replace('考生号：', '考生号:')
+      .replace('考生姓名：', '考生姓名:')
+      .replace('证件号：', '证件号:')
+      .replace('选科组合：', '选科组合:');
+    const text = HEADER + ' 第一志愿 05 (平行志愿) 5002 重庆交通大学 501 40 新能源材料;44 低空技术 是 ' + identity;
+    const r = service.parseFormText(text);
+
+    expect(r.identity.name).toBe('测试');
+    expect(r.identity.examNumber).toBe('26510108150957');
+    expect(r.volunteers).toHaveLength(1);
+    expect(r.volunteers[0]).toMatchObject({
+      seq: 5,
+      schoolCode: '5002',
+      schoolName: '重庆交通大学',
+      groupCode: '501',
+      acceptAdjust: true,
+    });
+    expect(r.volunteers[0].majors).toEqual([
+      { code: '40', name: '新能源材料' },
+      { code: '44', name: '低空技术' },
+    ]);
+  });
+
+  it('兼容第1志愿、全角数字和顺序志愿标记', () => {
+    const text = HEADER + ' 第1志愿０６（顺序志愿） 5120 四川师范大学 111 0G 数学与应用数学 服从 ' + IDENTITY;
+    const r = service.parseFormText(text);
+
+    expect(r.volunteers).toHaveLength(1);
+    expect(r.volunteers[0]).toMatchObject({
+      seq: 6,
+      schoolCode: '5120',
+      schoolName: '四川师范大学',
+      groupCode: '111',
+      acceptAdjust: true,
+    });
+  });
+
+  it('兼容志愿标记内被 PDF 插入空格的情况', () => {
+    const text = HEADER + ' 第 一 志 愿 07 （ 平 行 志 愿 ） 5102 成都理工大学 112 1M 数学 否 ' + IDENTITY;
+    const r = service.parseFormText(text);
+
+    expect(r.volunteers).toHaveLength(1);
+    expect(r.volunteers[0]).toMatchObject({
+      seq: 7,
+      schoolCode: '5102',
+      schoolName: '成都理工大学',
+      groupCode: '112',
+      acceptAdjust: false,
+    });
+  });
+
   it('行内换行空格清理: "水利水 电工程" → "水利水电工程"; "电子商 务" → "电子商务"', () => {
     const text = HEADER + ' 第一志愿01 （平行志愿） 5002 重庆交通大学 501 11 水利水 电工程；45 电子商 务 是 ' + IDENTITY;
     const r = service.parseFormText(text);
