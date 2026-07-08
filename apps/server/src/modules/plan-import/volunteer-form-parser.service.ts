@@ -1,13 +1,40 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { extractText, getDocumentProxy } from 'unpdf';
 import { ParsedForm, ParsedVolunteer, ParsedMajor } from './volunteer-form.types';
 
 @Injectable()
 export class VolunteerFormParserService {
+  constructor(private config: ConfigService) {}
+
   async extractPdfText(buffer: Buffer): Promise<string> {
     const pdf = await getDocumentProxy(new Uint8Array(buffer));
     const { text } = await extractText(pdf, { mergePages: true });
     return text;
+  }
+
+  async parsePdfWithOcr(buffer: Buffer, filename = 'volunteer-form.pdf'): Promise<ParsedForm> {
+    const ocrServiceUrl = this.config.get<string>('OCR_SERVICE_URL') || 'http://127.0.0.1:8100';
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(buffer)], { type: 'application/pdf' }), filename);
+
+    const resp = await fetch(`${ocrServiceUrl}/parse-volunteer-form`, {
+      method: 'POST',
+      body: form as any,
+      signal: AbortSignal.timeout(3 * 60_000),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `OCR 服务请求失败: ${resp.status}`);
+    }
+
+    const parsed = await resp.json() as ParsedForm;
+    return {
+      identity: parsed.identity ?? { name: '' },
+      batch: parsed.batch ?? '',
+      examTypeHint: parsed.examTypeHint === 'PHYSICS' || parsed.examTypeHint === 'HISTORY' ? parsed.examTypeHint : undefined,
+      volunteers: Array.isArray(parsed.volunteers) ? parsed.volunteers : [],
+    };
   }
 
   parseFormText(text: string): ParsedForm {

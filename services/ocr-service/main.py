@@ -17,6 +17,9 @@ import re
 import json
 import hashlib
 import logging
+import subprocess
+import tempfile
+import unicodedata
 from typing import Optional, List, Tuple, Dict
 from enum import Enum
 from contextlib import asynccontextmanager
@@ -27,7 +30,7 @@ load_dotenv()
 
 import requests as http_requests
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import mysql.connector
@@ -99,6 +102,35 @@ class OcrRequest(BaseModel):
     ai_model: str = Field("", description="AI 模型名称")
     # 图像预处理增强选项
     enable_preprocess: bool = Field(False, description="是否启用图像预处理增强（多变体投票）")
+
+
+class VolunteerFormMajor(BaseModel):
+    code: str
+    name: str
+
+
+class VolunteerFormVolunteer(BaseModel):
+    seq: int
+    schoolCode: str
+    schoolName: str
+    groupCode: str
+    majors: List[VolunteerFormMajor]
+    acceptAdjust: bool
+
+
+class VolunteerFormIdentity(BaseModel):
+    name: str = ""
+    examNumber: str = ""
+    idMasked: str = ""
+    classInfo: str = ""
+
+
+class VolunteerFormParseResponse(BaseModel):
+    identity: VolunteerFormIdentity
+    batch: str = ""
+    examTypeHint: str = ""
+    volunteers: List[VolunteerFormVolunteer]
+    source: str = "ocr"
 
 class ScoreRow(BaseModel):
     score: int
@@ -2070,6 +2102,198 @@ def validate_data(rows: List[tuple]) -> Tuple[bool, List[str]]:
 
 # ==================== Web Scraping ====================
 
+# ==================== 志愿表 OCR 解析 ====================
+
+def _norm_text(text: str) -> str:
+    return unicodedata.normalize("NFKC", (text or "").strip())
+
+
+def _ocr_bounds(box) -> Tuple[float, float, float, float]:
+    xs = [p[0] for p in box]
+    ys = [p[1] for p in box]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _render_pdf_pages(pdf_path: str, work_dir: str) -> List[str]:
+    prefix = os.path.join(work_dir, "volunteer-page")
+    subprocess.run(
+        ["pdftoppm", "-png", "-r", "180", pdf_path, prefix],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=90,
+    )
+    return [
+        os.path.join(work_dir, name)
+        for name in sorted(os.listdir(work_dir))
+        if name.startswith("volunteer-page-") and name.endswith(".png")
+    ]
+
+
+def _volunteer_images_from_upload(file_path: str, work_dir: str) -> List[str]:
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == ".pdf":
+        return _render_pdf_pages(file_path, work_dir)
+    if ext in (".png", ".jpg", ".jpeg", ".webp", ".bmp"):
+        return [file_path]
+    raise ValueError("仅支持 PDF 或图片文件")
+
+
+def _collect_volunteer_ocr_items(image_paths: List[str], engine: str = "") -> List[Dict]:
+    items: List[Dict] = []
+    for page_no, image_path in enumerate(image_paths, start=1):
+        for box, text, confidence in run_ocr_with_engine(image_path, engine):
+            clean = _norm_text(text)
+            if not clean:
+                continue
+            x1, y1, x2, y2 = _ocr_bounds(box)
+            items.append({
+                "page": page_no,
+                "x1": x1,
+                "y1": y1,
+                "x2": x2,
+                "y2": y2,
+                "xc": (x1 + x2) / 2,
+                "yc": (y1 + y2) / 2,
+                "text": clean,
+                "confidence": confidence,
+            })
+    return sorted(items, key=lambda item: (item["page"], item["y1"], item["x1"]))
+
+
+def _match_after(label: str, joined_text: str) -> str:
+    m = re.search(label + r"\s*[:：]\s*([^\s]+)", joined_text)
+    return m.group(1).strip() if m else ""
+
+
+def _parse_volunteer_identity(items: List[Dict]) -> VolunteerFormIdentity:
+    joined = " ".join(item["text"] for item in items)
+    return VolunteerFormIdentity(
+        name=_match_after("考生姓名", joined),
+        examNumber=_match_after("考生号", joined),
+        idMasked=_match_after("证件号", joined),
+        classInfo=(re.search(r"(\d{1,2}班)", joined) or ["", ""])[1],
+    )
+
+
+def _parse_volunteer_batch(items: List[Dict]) -> str:
+    for item in items:
+        text = item["text"]
+        if "批次" in text and "志愿" not in text and len(text) <= 30:
+            return text
+    return ""
+
+
+def _parse_volunteer_exam_type(items: List[Dict]) -> str:
+    joined = " ".join(item["text"] for item in items)
+    subjects = _match_after("选科组合", joined)
+    if "物理" in subjects:
+        return "PHYSICS"
+    if "历史" in subjects:
+        return "HISTORY"
+    head = joined[:500]
+    if "物理类" in head:
+        return "PHYSICS"
+    if "历史类" in head:
+        return "HISTORY"
+    return ""
+
+
+def _seq_from_text(text: str) -> Optional[int]:
+    compact = re.sub(r"\s+", "", _norm_text(text))
+    m = re.search(r"第(?:一|1)志愿(\d{1,3})", compact)
+    return int(m.group(1)) if m else None
+
+
+def _text_by_position(items: List[Dict], left: float, right: float) -> str:
+    parts = [
+        item["text"]
+        for item in sorted(items, key=lambda item: (item["y1"], item["x1"]))
+        if left <= item["xc"] < right
+    ]
+    return "".join(parts)
+
+
+def _parse_major_list(text: str) -> List[VolunteerFormMajor]:
+    compact = _norm_text(text).replace(" ", "")
+    majors: List[VolunteerFormMajor] = []
+    for entry in re.split(r"[;；]", compact):
+        entry = entry.strip(" ,，、")
+        if not entry:
+            continue
+        m = re.match(r"^([0-9A-Z]{1,3})(.+)$", entry)
+        if not m:
+            continue
+        majors.append(VolunteerFormMajor(code=m.group(1), name=m.group(2)))
+    return majors
+
+
+def _parse_ocr_volunteer_rows(items: List[Dict]) -> List[VolunteerFormVolunteer]:
+    seq_markers = []
+    for item in items:
+        seq = _seq_from_text(item["text"])
+        if seq is not None:
+            seq_markers.append({**item, "seq": seq})
+
+    volunteers: List[VolunteerFormVolunteer] = []
+    for idx, marker in enumerate(seq_markers):
+        next_marker = seq_markers[idx + 1] if idx + 1 < len(seq_markers) else None
+        row_items = []
+        for item in items:
+            if item["page"] != marker["page"]:
+                continue
+            if item["y1"] < marker["y1"] - 8:
+                continue
+            if next_marker and next_marker["page"] == marker["page"] and item["y1"] >= next_marker["y1"] - 8:
+                continue
+            row_items.append(item)
+
+        school_text = _text_by_position(row_items, 180, 490)
+        school_match = re.match(r"^(\d{4})(.+)$", school_text)
+        if not school_match:
+            continue
+
+        group_texts = [
+            item["text"]
+            for item in sorted(row_items, key=lambda item: (item["y1"], item["x1"]))
+            if 480 <= item["xc"] < 570 and re.fullmatch(r"\d{3}", item["text"])
+        ]
+        if not group_texts:
+            continue
+
+        major_text = _text_by_position(row_items, 560, 1365)
+        accept_text = _text_by_position(row_items, 1365, 1500)
+        accept_adjust = "否" not in accept_text
+
+        volunteers.append(VolunteerFormVolunteer(
+            seq=marker["seq"],
+            schoolCode=school_match.group(1),
+            schoolName=school_match.group(2),
+            groupCode=group_texts[0],
+            majors=_parse_major_list(major_text),
+            acceptAdjust=accept_adjust,
+        ))
+
+    deduped: Dict[int, VolunteerFormVolunteer] = {}
+    for volunteer in volunteers:
+        deduped[volunteer.seq] = volunteer
+    return [deduped[seq] for seq in sorted(deduped)]
+
+
+def parse_volunteer_form_file(file_path: str, engine: str = "") -> VolunteerFormParseResponse:
+    with tempfile.TemporaryDirectory(prefix="vh-volunteer-ocr-") as work_dir:
+        image_paths = _volunteer_images_from_upload(file_path, work_dir)
+        items = _collect_volunteer_ocr_items(image_paths, engine)
+        volunteers = _parse_ocr_volunteer_rows(items)
+        return VolunteerFormParseResponse(
+            identity=_parse_volunteer_identity(items),
+            batch=_parse_volunteer_batch(items),
+            examTypeHint=_parse_volunteer_exam_type(items),
+            volunteers=volunteers,
+            source="ocr",
+        )
+
+
 def fetch_page_images(url: str) -> Tuple[str, List[str]]:
     """
     抓取目标网页，提取页面中的图片 URL。
@@ -2295,6 +2519,30 @@ def health():
         "qianfan_configured": bool(QIANFAN_API_KEY),
         "paddleocr_url": PADDLEOCR_SERVICE_URL if engine == "paddleocr" else None
     }
+
+
+@app.post("/parse-volunteer-form", response_model=VolunteerFormParseResponse)
+async def parse_volunteer_form(file: UploadFile = File(...), engine: str = ""):
+    """解析四川省考生志愿表 PDF/图片，优先用于图片型 PDF 兜底。"""
+    suffix = os.path.splitext(file.filename or "")[1].lower() or ".pdf"
+    try:
+        with tempfile.TemporaryDirectory(prefix="vh-volunteer-upload-") as work_dir:
+            upload_path = os.path.join(work_dir, f"upload{suffix}")
+            content = await file.read()
+            with open(upload_path, "wb") as f:
+                f.write(content)
+            result = parse_volunteer_form_file(upload_path, engine)
+            if not result.volunteers:
+                raise HTTPException(status_code=400, detail="OCR 未识别到志愿条目")
+            return result
+    except HTTPException:
+        raise
+    except subprocess.CalledProcessError as e:
+        logger.error(f"志愿表 PDF 渲染失败: {e.stderr.decode('utf-8', errors='ignore') if e.stderr else e}", exc_info=True)
+        raise HTTPException(status_code=400, detail="PDF 渲染失败，无法进行 OCR")
+    except Exception as e:
+        logger.error(f"志愿表 OCR 解析失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"志愿表 OCR 解析失败: {str(e)}")
 
 
 @app.post("/fetch", response_model=FetchResponse)

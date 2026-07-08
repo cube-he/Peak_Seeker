@@ -2,7 +2,7 @@ import { VolunteerFormParserService } from './volunteer-form-parser.service';
 
 describe('VolunteerFormParserService.parseFormText', () => {
   let service: VolunteerFormParserService;
-  beforeEach(() => { service = new VolunteerFormParserService(); });
+  beforeEach(() => { service = new VolunteerFormParserService({ get: jest.fn() } as any); });
 
   const HEADER = '本科批次B段 序号 院校 专业组 专业 是否服从 专业调剂';
   const PAGE_FOOTER = '26510108150957-测试-9班 2026-6-29';

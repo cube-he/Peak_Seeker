@@ -37,12 +37,18 @@ export class VolunteerFormImportController {
     if (!actorUserId) throw new ForbiddenException('未登录');
 
     const text = await this.parser.extractPdfText(file.buffer);
-    if (this.isBlankText(text)) {
-      throw new BadRequestException('当前 PDF 没有可读取文字，可能是截图或扫描件。请上传志愿填报系统导出的文字版 PDF。');
+    let parsed = this.isBlankText(text) ? null : this.parser.parseFormText(text);
+    let parseSource: 'pdf-text' | 'ocr' = 'pdf-text';
+    if (!parsed || parsed.volunteers.length === 0) {
+      try {
+        parsed = await this.parser.parsePdfWithOcr(file.buffer, file.originalname || 'volunteer-form.pdf');
+        parseSource = 'ocr';
+      } catch (e: any) {
+        throw new BadRequestException(e?.message || 'OCR 未能识别该志愿表');
+      }
     }
-    const parsed = this.parser.parseFormText(text);
     if (parsed.volunteers.length === 0) {
-      throw new BadRequestException('无法识别为志愿表：请上传志愿填报系统导出的文字版 PDF，截图或扫描件暂不能自动解析。');
+      throw new BadRequestException('无法识别为志愿表：未识别到志愿条目。');
     }
 
     const requestedStudentId = this.parseOptionalPositiveInt(body?.studentId);
@@ -79,7 +85,7 @@ export class VolunteerFormImportController {
       identity: parsed.identity, batch: parsed.batch, examTypeHint: examType,
       batchConfig: bc ? { id: (bc as any).id, batch: (bc as any).batch } : null,
       candidateStudents: candidateStudents.map((s: any) => ({ id: s.id, realName: s.user?.realName, classInfo: s.classInfo })),
-      groups, summary,
+      groups, summary, parseSource,
     };
   }
 

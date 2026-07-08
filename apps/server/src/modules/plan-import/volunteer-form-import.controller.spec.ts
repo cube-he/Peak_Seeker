@@ -16,6 +16,7 @@ describe('VolunteerFormImportController.preview', () => {
     parser = {
       extractPdfText: jest.fn(),
       parseFormText: jest.fn(),
+      parsePdfWithOcr: jest.fn(),
     };
     resolver = {
       resolveGroups: jest.fn(),
@@ -28,17 +29,40 @@ describe('VolunteerFormImportController.preview', () => {
     controller = new VolunteerFormImportController(prisma, parser, resolver, matcher, importSvc);
   });
 
-  it('文本层为空的截图/扫描 PDF 返回明确提示', async () => {
+  it('文本层为空的截图/扫描 PDF 走 OCR 兜底', async () => {
     parser.extractPdfText.mockResolvedValue('   \n  ');
+    parser.parsePdfWithOcr.mockResolvedValue({
+      identity: { name: '袁梓萌' },
+      batch: '高职（专科）批次',
+      examTypeHint: 'HISTORY',
+      volunteers: [
+        { seq: 1, schoolCode: '5051', schoolName: '重庆航天职业技术学院', groupCode: '101', majors: [], acceptAdjust: true },
+      ],
+    });
+    matcher.findCandidateStudents.mockResolvedValue([]);
+    matcher.matchBatchConfig.mockResolvedValue(null);
+
+    const result = await controller.preview(
+      { buffer: Buffer.from('pdf') },
+      { user: { id: 42 } },
+      undefined,
+    );
+
+    expect(result.parseSource).toBe('ocr');
+    expect(parser.parsePdfWithOcr).toHaveBeenCalledWith(Buffer.from('pdf'), 'volunteer-form.pdf');
+    expect(parser.parseFormText).not.toHaveBeenCalled();
+  });
+
+  it('文本层为空且 OCR 失败时返回 OCR 错误', async () => {
+    parser.extractPdfText.mockResolvedValue('   \n  ');
+    parser.parsePdfWithOcr.mockRejectedValue(new Error('OCR 未识别到志愿条目'));
 
     await expect(
       controller.preview({ buffer: Buffer.from('pdf') }, { user: { id: 42 } }, undefined),
     ).rejects.toThrow(BadRequestException);
     await expect(
       controller.preview({ buffer: Buffer.from('pdf') }, { user: { id: 42 } }, undefined),
-    ).rejects.toThrow('当前 PDF 没有可读取文字');
-
-    expect(parser.parseFormText).not.toHaveBeenCalled();
+    ).rejects.toThrow('OCR 未识别到志愿条目');
   });
 
   it('从学生详情进入时优先锁定该学生, 用该学生科类和年份匹配批次', async () => {
