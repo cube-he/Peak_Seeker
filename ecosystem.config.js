@@ -36,8 +36,9 @@ module.exports = {
     {
       name: 'vh-ocr',
       cwd: './services/ocr-service',
-      script: 'main.py',
-      interpreter: 'venv/bin/python',
+      script: 'venv/bin/python',
+      args: 'main.py',
+      interpreter: 'none',
       instances: 1,
       autorestart: true,
       watch: false,
