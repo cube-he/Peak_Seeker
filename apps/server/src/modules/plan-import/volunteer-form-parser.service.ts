@@ -25,7 +25,9 @@ export class VolunteerFormParserService {
     const subjectsRaw = (text.match(/选科组合：(\S+?)\s/) || [])[1] || '';
     const examTypeHint: 'PHYSICS' | 'HISTORY' | undefined =
       subjectsRaw.includes('物理') ? 'PHYSICS' :
-      subjectsRaw.includes('历史') ? 'HISTORY' : undefined;
+      subjectsRaw.includes('历史') ? 'HISTORY' :
+      /物理类/.test(`${batch} ${text.slice(0, 300)}`) ? 'PHYSICS' :
+      /历史类/.test(`${batch} ${text.slice(0, 300)}`) ? 'HISTORY' : undefined;
 
     // 志愿条目: 用 matchAll 取 seq + 块体
     const re = /第一志愿(\d+)\s*（平行志愿）([\s\S]*?)(?=第一志愿\d+\s*（平行志愿）|$)/g;

@@ -35,8 +35,11 @@ describe('StudentBatchMatcherService', () => {
     ['高职（专科）批次', '高职批', 17],
     ['高职(专科)批', '高职批', 17],
     ['专科批次', '高职批', 17],
+    ['物理类专科批次', '高职批', 17],
+    ['普通类物理类高职（专科）批次', '高职批', 17],
     ['高职（专科）提前批次', '高职提前批', 16],
     ['专科提前批', '高职提前批', 16],
+    ['历史类专科提前批', '高职提前批', 16],
   ])('matchBatchConfig: 专科类批次别名 %s == %s', async (parsedBatch, configuredBatch, expectedId) => {
     prisma.batchConfig.findMany.mockResolvedValue([
       { id: 16, year: 2026, province: '四川', batch: '高职提前批', examType: '物理' },

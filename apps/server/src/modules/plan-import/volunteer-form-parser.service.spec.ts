@@ -79,4 +79,17 @@ describe('VolunteerFormParserService.parseFormText', () => {
     const text = HEADER + ' 第一志愿01 （平行志愿） 5120 四川师范大学 111 0G 数学 是 ' + IDENT_HIST;
     expect(service.parseFormText(text).examTypeHint).toBe('HISTORY');
   });
+
+  it('examTypeHint: 身份块缺选科时, 可从 PDF 表头的物理类/历史类推断', () => {
+    const identityWithoutSubjects = '四川省2026年普通高校招生考生志愿表 考生号：26510108150957 考生姓名：测试 证件号：510181****0029';
+    const text = '物理类专科批次 序号 院校 专业组 专业 是否服从 专业调剂'
+      + ' 第一志愿01 （平行志愿） 5120 四川师范大学 111 0G 数学 是 '
+      + identityWithoutSubjects;
+
+    const r = service.parseFormText(text);
+
+    expect(r.batch).toBe('物理类专科批次');
+    expect(r.examTypeHint).toBe('PHYSICS');
+    expect(r.volunteers).toHaveLength(1);
+  });
 });

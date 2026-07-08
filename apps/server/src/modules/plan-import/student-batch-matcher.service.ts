@@ -13,6 +13,8 @@ export class StudentBatchMatcherService {
       .replace(/\s/g, '')
       .replace(/[（(]专科[）)]/g, '')
       .replace(/^普通类/, '')
+      .replace(/^(物理类|历史类|物理|历史)/, '')
+      .replace(/(物理类|历史类)$/, '')
       .replace(/次/g, '');
 
     const aliases: Record<string, string> = {
