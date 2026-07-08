@@ -299,6 +299,34 @@ describe('StudentService', () => {
       );
     });
 
+    it('prioritizes active review plans over newer drafts for list status', async () => {
+      prisma.studentProfile.findMany.mockResolvedValue([
+        {
+          id: 81,
+          intakeStatus: 'VERIFIED',
+          volunteerPlans: [
+            { id: 97, status: 'DRAFT', versionNo: 4 },
+            { id: 104, status: 'PENDING_REVIEW', versionNo: 3 },
+          ],
+          _count: { volunteerPlans: 2 },
+          user: { realName: '袁梓萌', username: 'yuanzimeng' },
+        },
+      ]);
+      prisma.studentProfile.count.mockResolvedValue(1);
+
+      const result = await service.findByTeacher(10, {
+        page: 1,
+        pageSize: 20,
+      });
+
+      expect(result.data[0]).toMatchObject({
+        latestPlanStatus: 'PENDING_REVIEW',
+        latestPlanId: 104,
+        latestPlanVersionNo: 3,
+        workflowStatus: 'REVIEWING',
+      });
+    });
+
     it('should filter by status and keyword', async () => {
       prisma.studentProfile.findMany.mockResolvedValue([]);
       prisma.studentProfile.count.mockResolvedValue(0);

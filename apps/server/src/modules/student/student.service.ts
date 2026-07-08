@@ -691,8 +691,9 @@ export class StudentService {
           volunteerPlans: {
             // 取最新版本(versionNo)而非最近改动: 派生二稿时初稿被置 OUTDATED 会刷新 @updatedAt,
             // 用 updatedAt 排序会把过期初稿当成最新方案, versionNo 才稳。
+            where: { isHistorical: false, status: { not: 'OUTDATED' } },
             orderBy: { versionNo: 'desc' },
-            take: 1,
+            take: 8,
             select: { id: true, status: true, updatedAt: true, versionNo: true, batchName: true },
           },
           _count: {
@@ -708,7 +709,10 @@ export class StudentService {
 
     // 列表也需要 progress 显示双进度列 + 筛选
     const dataWithProgress = data.map((p) => {
-      const latestPlan = p.volunteerPlans?.[0];
+      const latestPlan =
+        p.volunteerPlans?.find((plan) =>
+          plan.status === 'PENDING_REVIEW' || plan.status === 'REVIEWING',
+        ) ?? p.volunteerPlans?.[0];
       return {
         ...p,
         progress: this.progressService.compute({
