@@ -255,6 +255,9 @@ describe('StudentService', () => {
           update: expect.objectContaining({ scoreDiff: 20 }),
         }),
       );
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
     });
 
     it('archives a submitted student and marks the published plan as historical', async () => {
@@ -525,12 +528,26 @@ describe('StudentService', () => {
     });
 
     it('keeps logical deletion successful when physical cleanup must be retried', async () => {
-      prisma.studentAttachment.findFirst.mockResolvedValue({
-        id: 7,
-        studentId: 10,
-        category: 'admission_proof',
-        storagePath: 'students/10/admission_proof.png',
-      });
+      const firstStoragePath = 'students/10/admission_proof.png';
+      const secondStoragePath = 'students/10/other.png';
+      const firstFilePath = path.join(uploadsRoot, firstStoragePath);
+      const secondFilePath = path.join(uploadsRoot, secondStoragePath);
+      await fs.promises.mkdir(path.dirname(firstFilePath), { recursive: true });
+      await fs.promises.writeFile(firstFilePath, pngBuffer());
+      await fs.promises.writeFile(secondFilePath, pngBuffer());
+      prisma.studentAttachment.findFirst
+        .mockResolvedValueOnce({
+          id: 7,
+          studentId: 10,
+          category: 'admission_proof',
+          storagePath: firstStoragePath,
+        })
+        .mockResolvedValueOnce({
+          id: 8,
+          studentId: 10,
+          category: 'other',
+          storagePath: secondStoragePath,
+        });
       const removeSpy = jest
         .spyOn(fs.promises, 'rm')
         .mockRejectedValueOnce(new Error('file locked'));
@@ -540,8 +557,157 @@ describe('StudentService', () => {
         fileDeleted: false,
         cleanupPending: true,
       });
+      await expect(fs.promises.access(firstFilePath)).rejects.toThrow();
 
       removeSpy.mockRestore();
+
+      await expect(service.deleteAttachment(10, 8, teacher)).resolves.toEqual({
+        deleted: true,
+      });
+      const pendingDirectory = path.join(
+        uploadsRoot,
+        '.student-attachment-quarantine',
+        'pending',
+      );
+      await expect(fs.promises.readdir(pendingDirectory)).resolves.toEqual([]);
+    });
+
+    it('restores an isolated attachment when the database transaction fails', async () => {
+      const storagePath = 'students/10/admission_proof.png';
+      const filePath = path.join(uploadsRoot, storagePath);
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.promises.writeFile(filePath, pngBuffer());
+      prisma.studentAttachment.findFirst.mockResolvedValue({
+        id: 7,
+        studentId: 10,
+        category: 'admission_proof',
+        storagePath,
+      });
+      prisma.$transaction.mockRejectedValueOnce(
+        new Error('database unavailable'),
+      );
+
+      await expect(service.deleteAttachment(10, 7, teacher)).rejects.toThrow(
+        'database unavailable',
+      );
+
+      await expect(fs.promises.readFile(filePath)).resolves.toEqual(
+        pngBuffer(),
+      );
+    });
+
+    it('rejects traversal into another student directory without touching that file', async () => {
+      const otherStudentPath = path.join(
+        uploadsRoot,
+        'students',
+        '11',
+        'private.png',
+      );
+      await fs.promises.mkdir(path.dirname(otherStudentPath), {
+        recursive: true,
+      });
+      await fs.promises.writeFile(otherStudentPath, pngBuffer());
+      prisma.studentAttachment.findFirst.mockResolvedValue({
+        id: 7,
+        studentId: 10,
+        category: 'admission_proof',
+        storagePath: 'students/10/../11/private.png',
+      });
+
+      await expect(service.deleteAttachment(10, 7, teacher)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(fs.promises.readFile(otherStudentPath)).resolves.toEqual(
+        pngBuffer(),
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('permanently deletes the student directory and safe referenced files only', async () => {
+      const studentFilePath = path.join(
+        uploadsRoot,
+        'students',
+        '10',
+        'orphan.png',
+      );
+      const historicalFilePath = path.join(
+        uploadsRoot,
+        'historical',
+        '10',
+        'admission.png',
+      );
+      const otherStudentPath = path.join(
+        uploadsRoot,
+        'students',
+        '11',
+        'private.png',
+      );
+      for (const filePath of [
+        studentFilePath,
+        historicalFilePath,
+        otherStudentPath,
+      ]) {
+        await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.promises.writeFile(filePath, pngBuffer());
+      }
+      prisma.studentAttachment.findMany.mockResolvedValue([
+        { storagePath: 'historical/10/admission.png' },
+        { storagePath: 'students/11/private.png' },
+      ]);
+      prisma.$transaction.mockResolvedValueOnce(undefined);
+
+      await expect(
+        service.deleteStudentPermanently(10, teacher),
+      ).resolves.toEqual({
+        message: '学生已彻底删除',
+      });
+
+      await expect(
+        fs.promises.access(path.join(uploadsRoot, 'students', '10')),
+      ).rejects.toThrow();
+      await expect(fs.promises.access(historicalFilePath)).rejects.toThrow();
+      await expect(fs.promises.readFile(otherStudentPath)).resolves.toEqual(
+        pngBuffer(),
+      );
+      expect(prisma.studentAttachment.findMany).toHaveBeenCalledWith({
+        where: { studentId: 10 },
+        select: { storagePath: true },
+      });
+    });
+
+    it('restores all student files when permanent deletion transaction fails', async () => {
+      const studentFilePath = path.join(
+        uploadsRoot,
+        'students',
+        '10',
+        'orphan.png',
+      );
+      const historicalFilePath = path.join(
+        uploadsRoot,
+        'historical',
+        '10',
+        'admission.png',
+      );
+      for (const filePath of [studentFilePath, historicalFilePath]) {
+        await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.promises.writeFile(filePath, pngBuffer());
+      }
+      prisma.studentAttachment.findMany.mockResolvedValue([
+        { storagePath: 'historical/10/admission.png' },
+      ]);
+      prisma.$transaction.mockRejectedValueOnce(
+        new Error('database unavailable'),
+      );
+
+      await expect(
+        service.deleteStudentPermanently(10, teacher),
+      ).rejects.toThrow('database unavailable');
+      await expect(fs.promises.readFile(studentFilePath)).resolves.toEqual(
+        pngBuffer(),
+      );
+      await expect(fs.promises.readFile(historicalFilePath)).resolves.toEqual(
+        pngBuffer(),
+      );
     });
   });
 

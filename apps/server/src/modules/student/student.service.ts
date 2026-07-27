@@ -70,6 +70,21 @@ interface ValidatedAttachmentFormat {
   extension: string;
 }
 
+interface AttachmentQuarantineSource {
+  sourcePath: string;
+  allowDirectory: boolean;
+}
+
+interface QuarantinedAttachmentPath {
+  sourcePath: string;
+  isolatedPath: string;
+}
+
+interface AttachmentQuarantineOperation {
+  activeDirectory: string;
+  entries: QuarantinedAttachmentPath[];
+}
+
 export interface RankCheck {
   calculatedRank: number | null;
   currentRank: number | null;
@@ -228,6 +243,236 @@ export class StudentService {
 
   private getUploadsRoot(): string {
     return process.env.UPLOADS_ROOT || path.join(process.cwd(), 'uploads');
+  }
+
+  private isPathInside(parentPath: string, candidatePath: string, allowEqual = false): boolean {
+    const relativePath = path.relative(parentPath, candidatePath);
+    if (relativePath === '') return allowEqual;
+    return relativePath !== '..' && !relativePath.startsWith(`..${path.sep}`) && !path.isAbsolute(relativePath);
+  }
+
+  private resolveUploadsStoragePath(uploadsRoot: string, storagePath: string): string | null {
+    if (typeof storagePath !== 'string' || storagePath.trim() === '') return null;
+
+    const segments = storagePath.split(/[\\/]+/);
+    if (segments.length === 0 || segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+      return null;
+    }
+
+    const candidatePath = path.resolve(uploadsRoot, ...segments);
+    return this.isPathInside(uploadsRoot, candidatePath) ? candidatePath : null;
+  }
+
+  private resolveManagedAttachmentPath(uploadsRoot: string, studentId: number, storagePath: string): string | null {
+    const candidatePath = this.resolveUploadsStoragePath(uploadsRoot, storagePath);
+    if (!candidatePath) return null;
+
+    const studentDirectory = path.resolve(uploadsRoot, 'students', String(studentId));
+    return this.isPathInside(studentDirectory, candidatePath) ? candidatePath : null;
+  }
+
+  private resolveStudentOwnedReferencedPath(
+    uploadsRoot: string,
+    studentId: number,
+    storagePath: string,
+  ): string | null {
+    const candidatePath = this.resolveUploadsStoragePath(uploadsRoot, storagePath);
+    if (!candidatePath) return null;
+
+    const ownedDirectories = [
+      path.resolve(uploadsRoot, 'students', String(studentId)),
+      path.resolve(uploadsRoot, 'historical', String(studentId)),
+    ];
+    return ownedDirectories.some((directory) => this.isPathInside(directory, candidatePath)) ? candidatePath : null;
+  }
+
+  private getAttachmentQuarantineDirectories(uploadsRoot: string) {
+    const root = path.resolve(uploadsRoot, '.student-attachment-quarantine');
+    return {
+      root,
+      active: path.join(root, 'active'),
+      pending: path.join(root, 'pending'),
+    };
+  }
+
+  private async retryPendingAttachmentCleanup(uploadsRoot: string): Promise<void> {
+    const quarantine = this.getAttachmentQuarantineDirectories(uploadsRoot);
+
+    const cleanupChildren = async (directory: string, requireMarker: boolean) => {
+      let children: fs.Dirent[];
+      try {
+        children = await fs.promises.readdir(directory, {
+          withFileTypes: true,
+        });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+        this.logger.error(`无法扫描附件待清理目录: ${directory}`, error instanceof Error ? error.stack : undefined);
+        return;
+      }
+
+      for (const child of children) {
+        if (!child.isDirectory()) continue;
+        const cleanupPath = path.resolve(directory, child.name);
+        if (!this.isPathInside(directory, cleanupPath)) continue;
+
+        if (requireMarker) {
+          try {
+            await fs.promises.access(path.join(cleanupPath, '.cleanup-ready'));
+          } catch {
+            continue;
+          }
+        }
+
+        try {
+          await fs.promises.rm(cleanupPath, { recursive: true, force: true });
+        } catch (error) {
+          this.logger.error(
+            `附件隔离文件自动清理失败，将在后续操作重试: ${cleanupPath}`,
+            error instanceof Error ? error.stack : undefined,
+          );
+        }
+      }
+    };
+
+    await cleanupChildren(quarantine.pending, false);
+    await cleanupChildren(quarantine.active, true);
+  }
+
+  private async quarantineAttachmentPaths(
+    uploadsRoot: string,
+    sources: AttachmentQuarantineSource[],
+  ): Promise<AttachmentQuarantineOperation> {
+    const quarantine = this.getAttachmentQuarantineDirectories(uploadsRoot);
+    await fs.promises.mkdir(quarantine.active, { recursive: true });
+
+    const activeDirectory = path.join(quarantine.active, randomUUID());
+    await fs.promises.mkdir(activeDirectory);
+    const entries: QuarantinedAttachmentPath[] = [];
+
+    try {
+      for (const source of sources) {
+        const sourcePath = path.resolve(source.sourcePath);
+        if (
+          !this.isPathInside(uploadsRoot, sourcePath) ||
+          this.isPathInside(quarantine.root, sourcePath, true) ||
+          entries.some((entry) => entry.sourcePath === sourcePath || this.isPathInside(entry.sourcePath, sourcePath))
+        ) {
+          continue;
+        }
+
+        let sourceStats: fs.Stats;
+        try {
+          sourceStats = await fs.promises.lstat(sourcePath);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+          throw error;
+        }
+
+        if (sourceStats.isDirectory() && !source.allowDirectory) {
+          throw new BadRequestException('附件存储路径不能指向目录');
+        }
+
+        if (!sourceStats.isSymbolicLink()) {
+          const [realUploadsRoot, realSourcePath] = await Promise.all([
+            fs.promises.realpath(uploadsRoot),
+            fs.promises.realpath(sourcePath),
+          ]);
+          if (!this.isPathInside(realUploadsRoot, realSourcePath)) {
+            throw new BadRequestException('附件存储路径超出上传目录');
+          }
+        }
+
+        const isolatedPath = path.join(activeDirectory, String(entries.length));
+        await fs.promises.rename(sourcePath, isolatedPath);
+        entries.push({ sourcePath, isolatedPath });
+      }
+    } catch (error) {
+      await this.restoreAttachmentQuarantine({ activeDirectory, entries });
+      throw error;
+    }
+
+    if (entries.length === 0) {
+      await fs.promises.rm(activeDirectory, { recursive: true, force: true });
+    }
+    return { activeDirectory, entries };
+  }
+
+  private async restoreAttachmentQuarantine(operation: AttachmentQuarantineOperation): Promise<void> {
+    let restoreError: unknown = null;
+
+    for (const entry of [...operation.entries].reverse()) {
+      try {
+        await fs.promises.mkdir(path.dirname(entry.sourcePath), {
+          recursive: true,
+        });
+        await fs.promises.rename(entry.isolatedPath, entry.sourcePath);
+      } catch (error) {
+        restoreError ??= error;
+        this.logger.error(`附件隔离回滚失败: ${entry.sourcePath}`, error instanceof Error ? error.stack : undefined);
+      }
+    }
+
+    if (restoreError) {
+      this.logger.error(
+        `附件未能完整恢复，保留隔离目录供人工恢复: ${operation.activeDirectory}`,
+        restoreError instanceof Error ? restoreError.stack : undefined,
+      );
+      throw new Error('数据库操作失败，且附件文件未能完整恢复');
+    }
+
+    try {
+      await fs.promises.rm(operation.activeDirectory, {
+        recursive: true,
+        force: true,
+      });
+    } catch (error) {
+      this.logger.error(
+        `附件隔离临时目录清理失败: ${operation.activeDirectory}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+  }
+
+  private async finalizeAttachmentQuarantine(
+    uploadsRoot: string,
+    operation: AttachmentQuarantineOperation,
+  ): Promise<boolean> {
+    if (operation.entries.length === 0) return true;
+
+    const quarantine = this.getAttachmentQuarantineDirectories(uploadsRoot);
+    await fs.promises.mkdir(quarantine.pending, { recursive: true });
+    const pendingDirectory = path.join(quarantine.pending, path.basename(operation.activeDirectory));
+    let cleanupPath = pendingDirectory;
+
+    try {
+      await fs.promises.rename(operation.activeDirectory, pendingDirectory);
+    } catch (error) {
+      cleanupPath = operation.activeDirectory;
+      try {
+        await fs.promises.writeFile(path.join(cleanupPath, '.cleanup-ready'), '');
+      } catch (markerError) {
+        this.logger.error(
+          `附件隔离目录无法标记为待清理，保留目录供人工清理: ${cleanupPath}`,
+          markerError instanceof Error ? markerError.stack : undefined,
+        );
+        return false;
+      }
+      this.logger.error(
+        `附件隔离目录状态切换失败: ${operation.activeDirectory}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+
+    try {
+      await fs.promises.rm(cleanupPath, { recursive: true, force: true });
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `附件物理文件清理失败，将在后续操作重试: ${cleanupPath}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      return false;
+    }
   }
 
   private normalizeStudentAttachmentCategory(category: string): StudentAttachmentCategory {
@@ -462,39 +707,40 @@ export class StudentService {
 
   async deleteAttachment(studentId: number, attachmentId: number, requester: JwtPayloadUser) {
     await this.assertStudentAccess(studentId, requester, 'update');
+    const uploadsRoot = path.resolve(this.getUploadsRoot());
+    await this.retryPendingAttachmentCleanup(uploadsRoot);
+
     const attachment = await this.prisma.studentAttachment.findFirst({
       where: { id: attachmentId, studentId },
     });
     if (!attachment) throw new NotFoundException('附件不存在');
 
-    const expectedPrefix = `students/${studentId}/`;
-    if (!attachment.storagePath.startsWith(expectedPrefix)) {
+    const filePath = this.resolveManagedAttachmentPath(uploadsRoot, studentId, attachment.storagePath);
+    if (!filePath) {
       throw new BadRequestException('该附件不是学生管理页上传的归档附件');
     }
 
-    const uploadsRoot = path.resolve(this.getUploadsRoot());
-    const filePath = path.resolve(uploadsRoot, attachment.storagePath);
-    if (!filePath.startsWith(`${uploadsRoot}${path.sep}`)) {
-      throw new BadRequestException('附件存储路径不正确');
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      if (attachment.category === 'admission_proof') {
-        await tx.studentAdmissionResult.updateMany({
-          where: { studentId, proofAttachmentId: attachmentId },
-          data: { proofAttachmentId: null },
-        });
-      }
-      await tx.studentAttachment.delete({ where: { id: attachmentId } });
-    });
+    const quarantine = await this.quarantineAttachmentPaths(uploadsRoot, [
+      { sourcePath: filePath, allowDirectory: false },
+    ]);
 
     try {
-      await fs.promises.rm(filePath, { force: true });
+      await this.prisma.$transaction(async (tx) => {
+        if (attachment.category === 'admission_proof') {
+          await tx.studentAdmissionResult.updateMany({
+            where: { studentId, proofAttachmentId: attachmentId },
+            data: { proofAttachmentId: null },
+          });
+        }
+        await tx.studentAttachment.delete({ where: { id: attachmentId } });
+      });
     } catch (error) {
-      this.logger.error(
-        `附件记录已删除，但物理文件清理失败: ${filePath}`,
-        error instanceof Error ? error.stack : undefined,
-      );
+      await this.restoreAttachmentQuarantine(quarantine);
+      throw error;
+    }
+
+    const fileDeleted = await this.finalizeAttachmentQuarantine(uploadsRoot, quarantine);
+    if (!fileDeleted) {
       return {
         deleted: true,
         fileDeleted: false,
@@ -524,53 +770,69 @@ export class StudentService {
       min: 1,
       max: 2_147_483_647,
     });
-    if (proofAttachmentId != null) {
-      const proof = await this.prisma.studentAttachment.findFirst({
-        where: {
-          id: proofAttachmentId,
-          studentId,
-          category: 'admission_proof',
-        },
-        select: { id: true },
-      });
-      if (!proof) {
-        throw new BadRequestException('请选择该学生名下的录取截图作为凭证');
-      }
-    }
-
-    const student = await this.prisma.studentProfile.findUnique({
-      where: { id: studentId },
-      select: { totalScore: true },
-    });
-    if (!student) throw new NotFoundException('学生不存在');
-
     const admittedMinScore = this.normalizeOptionalInt(dto.admittedMinScore, '录取最低分', { min: 0, max: 750 });
-    const scoreDiff =
-      student.totalScore != null && admittedMinScore != null ? student.totalScore - admittedMinScore : null;
 
-    const data = {
-      admittedUniName,
-      admittedUniId: this.normalizeOptionalInt(dto.admittedUniId, '录取院校ID', { min: 1, max: 2_147_483_647 }),
-      admittedMinScore,
-      admittedMinRank: this.normalizeOptionalInt(dto.admittedMinRank, '录取最低位次', { min: 1, max: 100_000_000 }),
-      scoreDiff,
-      sequenceNo: this.normalizeOptionalInt(dto.sequenceNo, '录取志愿顺序', {
-        min: 1,
-        max: 1_000,
-      }),
-      proofAttachmentId,
-      batchName: this.normalizeOptionalString(dto.batchName, '录取批次', 100),
-      admittedMajorGroupCode: this.normalizeOptionalString(dto.admittedMajorGroupCode, '录取院校专业组代码', 10),
-      admittedMajorCode: this.normalizeOptionalString(dto.admittedMajorCode, '录取专业代码', 10),
-      admittedMajorName: this.normalizeOptionalString(dto.admittedMajorName, '录取专业名称', 200),
-      admittedMajorId: this.normalizeOptionalInt(dto.admittedMajorId, '录取专业ID', { min: 1, max: 2_147_483_647 }),
-    };
+    return this.prisma.$transaction(
+      async (tx) => {
+        // SERIALIZABLE 让“校验凭证存在”和“写入凭证 ID”成为一个原子操作。
+        // 与删除附件事务并发时，删除或保存至多一个成功，不会写回已删除附件 ID。
+        if (proofAttachmentId != null) {
+          const proof = await tx.studentAttachment.findFirst({
+            where: {
+              id: proofAttachmentId,
+              studentId,
+              category: 'admission_proof',
+            },
+            select: { id: true },
+          });
+          if (!proof) {
+            throw new BadRequestException('请选择该学生名下的录取截图作为凭证');
+          }
+        }
 
-    return this.prisma.studentAdmissionResult.upsert({
-      where: { studentId },
-      create: { studentId, ...data },
-      update: data,
-    });
+        const student = await tx.studentProfile.findUnique({
+          where: { id: studentId },
+          select: { totalScore: true },
+        });
+        if (!student) throw new NotFoundException('学生不存在');
+
+        const scoreDiff =
+          student.totalScore != null && admittedMinScore != null ? student.totalScore - admittedMinScore : null;
+        const data = {
+          admittedUniName,
+          admittedUniId: this.normalizeOptionalInt(dto.admittedUniId, '录取院校ID', {
+            min: 1,
+            max: 2_147_483_647,
+          }),
+          admittedMinScore,
+          admittedMinRank: this.normalizeOptionalInt(dto.admittedMinRank, '录取最低位次', {
+            min: 1,
+            max: 100_000_000,
+          }),
+          scoreDiff,
+          sequenceNo: this.normalizeOptionalInt(dto.sequenceNo, '录取志愿顺序', {
+            min: 1,
+            max: 1_000,
+          }),
+          proofAttachmentId,
+          batchName: this.normalizeOptionalString(dto.batchName, '录取批次', 100),
+          admittedMajorGroupCode: this.normalizeOptionalString(dto.admittedMajorGroupCode, '录取院校专业组代码', 10),
+          admittedMajorCode: this.normalizeOptionalString(dto.admittedMajorCode, '录取专业代码', 10),
+          admittedMajorName: this.normalizeOptionalString(dto.admittedMajorName, '录取专业名称', 200),
+          admittedMajorId: this.normalizeOptionalInt(dto.admittedMajorId, '录取专业ID', {
+            min: 1,
+            max: 2_147_483_647,
+          }),
+        };
+
+        return tx.studentAdmissionResult.upsert({
+          where: { studentId },
+          create: { studentId, ...data },
+          update: data,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 
   async archiveStudent(studentId: number, requester: JwtPayloadUser) {
@@ -1215,26 +1477,60 @@ export class StudentService {
     }
 
     const { userId } = profile;
+    const uploadsRoot = path.resolve(this.getUploadsRoot());
+    await this.retryPendingAttachmentCleanup(uploadsRoot);
 
-    await this.prisma.$transaction(async (tx) => {
-      // 1. 先删方案（VolunteerPlan→StudentProfile 未级联），其子表随 plan 级联
-      await tx.volunteerPlan.deleteMany({ where: { studentId } });
-      await tx.volunteerPlan.deleteMany({ where: { userId } }); // 旧 legacyUser 方案
-
-      // 2. 清该用户名下的子表（均未级联）
-      await tx.searchHistory.deleteMany({ where: { userId } });
-      await tx.favorite.deleteMany({ where: { userId } });
-      await tx.comparison.deleteMany({ where: { userId } });
-      await tx.order.deleteMany({ where: { userId } });
-      await tx.notification.deleteMany({ where: { userId } });
-      await tx.auditLog.deleteMany({ where: { userId } });
-
-      // 3. 删档案（录取记录/附件等随档案级联），再删登录账号
-      await tx.studentProfile.delete({ where: { id: studentId } });
-      await tx.user.delete({ where: { id: userId } });
+    const referencedAttachments = await this.prisma.studentAttachment.findMany({
+      where: { studentId },
+      select: { storagePath: true },
     });
+    const quarantineSources: AttachmentQuarantineSource[] = [
+      {
+        sourcePath: path.resolve(uploadsRoot, 'students', String(studentId)),
+        allowDirectory: true,
+      },
+    ];
+    for (const attachment of referencedAttachments) {
+      const referencedPath = this.resolveStudentOwnedReferencedPath(uploadsRoot, studentId, attachment.storagePath);
+      if (!referencedPath) {
+        this.logger.warn(
+          `跳过不属于学生安全目录的附件路径，防止误删: student=${studentId}, path=${attachment.storagePath}`,
+        );
+        continue;
+      }
+      quarantineSources.push({
+        sourcePath: referencedPath,
+        allowDirectory: false,
+      });
+    }
 
-    return { message: '学生已彻底删除' };
+    const quarantine = await this.quarantineAttachmentPaths(uploadsRoot, quarantineSources);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // 1. 先删方案（VolunteerPlan→StudentProfile 未级联），其子表随 plan 级联
+        await tx.volunteerPlan.deleteMany({ where: { studentId } });
+        await tx.volunteerPlan.deleteMany({ where: { userId } }); // 旧 legacyUser 方案
+
+        // 2. 清该用户名下的子表（均未级联）
+        await tx.searchHistory.deleteMany({ where: { userId } });
+        await tx.favorite.deleteMany({ where: { userId } });
+        await tx.comparison.deleteMany({ where: { userId } });
+        await tx.order.deleteMany({ where: { userId } });
+        await tx.notification.deleteMany({ where: { userId } });
+        await tx.auditLog.deleteMany({ where: { userId } });
+
+        // 3. 删档案（录取记录/附件等随档案级联），再删登录账号
+        await tx.studentProfile.delete({ where: { id: studentId } });
+        await tx.user.delete({ where: { id: userId } });
+      });
+    } catch (error) {
+      await this.restoreAttachmentQuarantine(quarantine);
+      throw error;
+    }
+
+    const filesDeleted = await this.finalizeAttachmentQuarantine(uploadsRoot, quarantine);
+    return filesDeleted ? { message: '学生已彻底删除' } : { message: '学生已彻底删除', cleanupPending: true };
   }
 
   /**

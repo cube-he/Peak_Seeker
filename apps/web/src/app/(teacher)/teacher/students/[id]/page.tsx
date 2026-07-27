@@ -3082,7 +3082,14 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
                 {admissionResult?.scoreDiff != null ? ` 当前分差：${admissionResult.scoreDiff}` : ''}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button type="submit" className="qa" disabled={saveAdmissionMutation.isPending}>
+                <button
+                  type="submit"
+                  className="qa"
+                  disabled={
+                    saveAdmissionMutation.isPending ||
+                    deleteAttachmentMutation.isPending
+                  }
+                >
                   <TIcon.save /> 保存录取结果
                 </button>
                 <Popconfirm
@@ -3094,7 +3101,12 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
                   <button
                     type="button"
                     className="qa primary"
-                    disabled={!canArchive || archiveMutation.isPending}
+                    disabled={
+                      !canArchive ||
+                      archiveMutation.isPending ||
+                      saveAdmissionMutation.isPending ||
+                      deleteAttachmentMutation.isPending
+                    }
                   >
                     <TIcon.check /> 完成归档
                   </button>
@@ -3286,7 +3298,10 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
                       <button
                         type="button"
                         className="qa"
-                        disabled={deleteAttachmentMutation.isPending}
+                        disabled={
+                          deleteAttachmentMutation.isPending ||
+                          saveAdmissionMutation.isPending
+                        }
                         style={{ color: 'var(--rush)' }}
                       >
                         删除
