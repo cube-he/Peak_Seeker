@@ -9,6 +9,9 @@ import { StudentService } from './student.service';
 import { ProgressService } from './progress.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma, StudentStatus } from '@prisma/client';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 // Mock bcrypt — keep hash deterministic for tests
 jest.mock('bcrypt', () => ({
@@ -40,9 +43,13 @@ describe('StudentService', () => {
       findUnique: jest.Mock;
       upsert: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
     };
     studentAttachment: {
       findFirst: jest.Mock;
+      findMany: jest.Mock;
+      create: jest.Mock;
+      delete: jest.Mock;
       count: jest.Mock;
     };
     batchConfig: {
@@ -80,23 +87,29 @@ describe('StudentService', () => {
         findUnique: jest.fn(),
         upsert: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
       },
       studentAttachment: {
         findFirst: jest.fn(),
+        findMany: jest.fn(),
+        create: jest.fn(),
+        delete: jest.fn(),
         count: jest.fn(),
       },
       batchConfig: {
         // C1 修复: confirmBatches 改用 batchConfig 真值源校验批次名 (不再硬编码白名单).
         // 默认返回代表性批次集合 (含旧白名单 5 项 + 强基计划等旧白名单遗漏的真实批次).
-        findMany: jest.fn().mockResolvedValue([
-          { batch: '本科提前批A段' },
-          { batch: '本科提前批B段' },
-          { batch: '本科批B段' },
-          { batch: '本科批A段（国家专项）' },
-          { batch: '强基计划' },
-          { batch: '高职提前批' },
-          { batch: '高职批' },
-        ]),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { batch: '本科提前批A段' },
+            { batch: '本科提前批B段' },
+            { batch: '本科批B段' },
+            { batch: '本科批A段（国家专项）' },
+            { batch: '强基计划' },
+            { batch: '高职提前批' },
+            { batch: '高职批' },
+          ]),
       },
       batchLine: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -109,7 +122,11 @@ describe('StudentService', () => {
 
     scoreSegmentService = {
       scoreToRank: jest.fn().mockResolvedValue({
-        year: 2026, examType: '物理', score: 600, rank: 28500, percentile: 0.04,
+        year: 2026,
+        examType: '物理',
+        score: 600,
+        rank: 28500,
+        percentile: 0.04,
       }),
     };
 
@@ -135,7 +152,8 @@ describe('StudentService', () => {
           },
         },
         {
-          provide: require('../score-segment/score-segment.service').ScoreSegmentService,
+          provide: require('../score-segment/score-segment.service')
+            .ScoreSegmentService,
           useValue: scoreSegmentService,
         },
       ],
@@ -240,19 +258,29 @@ describe('StudentService', () => {
     });
 
     it('archives a submitted student and marks the published plan as historical', async () => {
-      prisma.studentProfile.findUnique
-        .mockResolvedValueOnce({ id: 10, teacherId: 5, userId: 100 })
-        .mockResolvedValueOnce({
-          id: 10,
-          teacherId: 5,
-          userId: 100,
-          admissionResult: { admittedUniName: '四川大学' },
-        });
+      prisma.studentProfile.findUnique.mockResolvedValueOnce({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+      });
+      prisma.studentAdmissionResult.findUnique.mockResolvedValue({
+        admittedUniName: '四川大学',
+        proofAttachmentId: null,
+      });
       prisma.volunteerPlan.findFirst.mockResolvedValue({ id: 99 });
       prisma.studentAttachment.findFirst.mockResolvedValue({ id: 7 });
-      prisma.studentAdmissionResult.update.mockResolvedValue({ id: 1, proofAttachmentId: 7 });
-      prisma.volunteerPlan.update.mockResolvedValue({ id: 99, isHistorical: true });
-      prisma.studentProfile.update.mockResolvedValue({ id: 10, isArchived: true });
+      prisma.studentAdmissionResult.update.mockResolvedValue({
+        id: 1,
+        proofAttachmentId: 7,
+      });
+      prisma.volunteerPlan.update.mockResolvedValue({
+        id: 99,
+        isHistorical: true,
+      });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 10,
+        isArchived: true,
+      });
 
       const result = await service.archiveStudent(10, teacher);
 
@@ -271,6 +299,249 @@ describe('StudentService', () => {
           data: { isArchived: true },
         }),
       );
+    });
+
+    it('replaces a stale or foreign proof reference with the latest valid admission proof', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+      });
+      prisma.studentAdmissionResult.findUnique.mockResolvedValue({
+        admittedUniName: '四川大学',
+        proofAttachmentId: 999,
+      });
+      prisma.volunteerPlan.findFirst.mockResolvedValue({ id: 99 });
+      prisma.studentAttachment.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 7 });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 10,
+        isArchived: true,
+      });
+
+      await service.archiveStudent(10, teacher);
+
+      expect(prisma.studentAttachment.findFirst).toHaveBeenNthCalledWith(1, {
+        where: {
+          id: 999,
+          studentId: 10,
+          category: 'admission_proof',
+        },
+        select: { id: true },
+      });
+      expect(prisma.studentAttachment.findFirst).toHaveBeenNthCalledWith(2, {
+        where: { studentId: 10, category: 'admission_proof' },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+      expect(prisma.studentAdmissionResult.update).toHaveBeenCalledWith({
+        where: { studentId: 10 },
+        data: { proofAttachmentId: 7 },
+      });
+    });
+  });
+
+  describe('student attachment hardening', () => {
+    const teacher = { id: 20, role: 'TEACHER', teacherProfileId: 5 } as any;
+    let uploadsRoot: string;
+    let previousUploadsRoot: string | undefined;
+
+    function uploadFile(
+      originalname: string,
+      mimetype: string,
+      buffer: Buffer,
+    ): Express.Multer.File {
+      return {
+        fieldname: 'file',
+        originalname,
+        encoding: '7bit',
+        mimetype,
+        size: buffer.length,
+        buffer,
+      } as Express.Multer.File;
+    }
+
+    function pngBuffer() {
+      return Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        Buffer.from('test-payload'),
+      ]);
+    }
+
+    function jpegBuffer() {
+      return Buffer.concat([
+        Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+        Buffer.from('test-payload'),
+      ]);
+    }
+
+    beforeEach(async () => {
+      previousUploadsRoot = process.env.UPLOADS_ROOT;
+      uploadsRoot = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'volunteer-helper-attachments-'),
+      );
+      process.env.UPLOADS_ROOT = uploadsRoot;
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+      });
+    });
+
+    afterEach(async () => {
+      if (previousUploadsRoot === undefined) {
+        delete process.env.UPLOADS_ROOT;
+      } else {
+        process.env.UPLOADS_ROOT = previousUploadsRoot;
+      }
+      await fs.promises.rm(uploadsRoot, { recursive: true, force: true });
+    });
+
+    it('uses the real signature and safely normalizes a generic MIME and missing extension', async () => {
+      prisma.studentAttachment.create.mockImplementation(async ({ data }) => ({
+        id: 7,
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
+      const result = await service.uploadAttachment(
+        10,
+        'admission_proof',
+        uploadFile('录取通知书', 'application/octet-stream', pngBuffer()),
+        teacher,
+      );
+
+      expect(prisma.studentAttachment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            category: 'admission_proof',
+            originalName: '录取通知书.png',
+            mimeType: 'image/png',
+            fileSize: pngBuffer().length,
+          }),
+        }),
+      );
+      expect(result.originalName).toBe('录取通知书.png');
+      const storagePath =
+        prisma.studentAttachment.create.mock.calls[0][0].data.storagePath;
+      await expect(
+        fs.promises.readFile(path.join(uploadsRoot, storagePath)),
+      ).resolves.toEqual(pngBuffer());
+    });
+
+    it('accepts the common JFIF filename extension as JPEG content', async () => {
+      prisma.studentAttachment.create.mockImplementation(async ({ data }) => ({
+        id: 8,
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
+      await service.uploadAttachment(
+        10,
+        'admission_proof',
+        uploadFile('录取通知书.jfif', 'image/jpeg', jpegBuffer()),
+        teacher,
+      );
+
+      expect(prisma.studentAttachment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            originalName: '录取通知书.jfif',
+            mimeType: 'image/jpeg',
+          }),
+        }),
+      );
+    });
+
+    it('rejects a file whose extension or declared MIME disguises its actual content', async () => {
+      await expect(
+        service.uploadAttachment(
+          10,
+          'admission_proof',
+          uploadFile('录取通知书.jpg', 'image/jpeg', pngBuffer()),
+          teacher,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.uploadAttachment(
+          10,
+          'admission_proof',
+          uploadFile('录取通知书.png', 'image/jpeg', pngBuffer()),
+          teacher,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.studentAttachment.create).not.toHaveBeenCalled();
+    });
+
+    it('removes the physical file when creating its database record fails', async () => {
+      prisma.studentAttachment.create.mockRejectedValue(
+        new Error('database unavailable'),
+      );
+
+      await expect(
+        service.uploadAttachment(
+          10,
+          'admission_proof',
+          uploadFile('录取通知书.png', 'image/png', pngBuffer()),
+          teacher,
+        ),
+      ).rejects.toThrow('database unavailable');
+
+      const storagePath =
+        prisma.studentAttachment.create.mock.calls[0][0].data.storagePath;
+      await expect(
+        fs.promises.access(path.join(uploadsRoot, storagePath)),
+      ).rejects.toThrow();
+    });
+
+    it('clears an admission result proof reference transactionally before deleting the record', async () => {
+      const storagePath = 'students/10/admission_proof.png';
+      const filePath = path.join(uploadsRoot, storagePath);
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.promises.writeFile(filePath, pngBuffer());
+      prisma.studentAttachment.findFirst.mockResolvedValue({
+        id: 7,
+        studentId: 10,
+        category: 'admission_proof',
+        storagePath,
+      });
+
+      await expect(service.deleteAttachment(10, 7, teacher)).resolves.toEqual({
+        deleted: true,
+      });
+
+      expect(prisma.studentAdmissionResult.updateMany).toHaveBeenCalledWith({
+        where: { studentId: 10, proofAttachmentId: 7 },
+        data: { proofAttachmentId: null },
+      });
+      expect(prisma.studentAttachment.delete).toHaveBeenCalledWith({
+        where: { id: 7 },
+      });
+      await expect(fs.promises.access(filePath)).rejects.toThrow();
+    });
+
+    it('keeps logical deletion successful when physical cleanup must be retried', async () => {
+      prisma.studentAttachment.findFirst.mockResolvedValue({
+        id: 7,
+        studentId: 10,
+        category: 'admission_proof',
+        storagePath: 'students/10/admission_proof.png',
+      });
+      const removeSpy = jest
+        .spyOn(fs.promises, 'rm')
+        .mockRejectedValueOnce(new Error('file locked'));
+
+      await expect(service.deleteAttachment(10, 7, teacher)).resolves.toEqual({
+        deleted: true,
+        fileDeleted: false,
+        cleanupPending: true,
+      });
+
+      removeSpy.mockRestore();
     });
   });
 
@@ -435,9 +706,13 @@ describe('StudentService', () => {
         teacher: null,
       });
 
-      const result = await service.findById(10) as any;
+      const result = (await service.findById(10)) as any;
 
-      expect(scoreSegmentService.scoreToRank).toHaveBeenCalledWith(2026, '物理', 600);
+      expect(scoreSegmentService.scoreToRank).toHaveBeenCalledWith(
+        2026,
+        '物理',
+        600,
+      );
       expect(result.rankCheck).toEqual(
         expect.objectContaining({
           calculatedRank: 28500,
@@ -448,12 +723,20 @@ describe('StudentService', () => {
     });
 
     it('uses 2025 score segment data as the temporary source for 2026 rank checks', async () => {
-      scoreSegmentService.scoreToRank.mockImplementation(async (year: number) => {
-        if (year === 2026) {
-          throw new Error('2026 score segment data not found');
-        }
-        return { year: 2025, examType: '物理', score: 479, rank: 156000, percentile: 0.55 };
-      });
+      scoreSegmentService.scoreToRank.mockImplementation(
+        async (year: number) => {
+          if (year === 2026) {
+            throw new Error('2026 score segment data not found');
+          }
+          return {
+            year: 2025,
+            examType: '物理',
+            score: 479,
+            rank: 156000,
+            percentile: 0.55,
+          };
+        },
+      );
       prisma.studentProfile.findUnique.mockResolvedValue({
         id: 10,
         dataVersion: 1,
@@ -474,10 +757,20 @@ describe('StudentService', () => {
         teacher: null,
       });
 
-      const result = await service.findById(10) as any;
+      const result = (await service.findById(10)) as any;
 
-      expect(scoreSegmentService.scoreToRank).toHaveBeenNthCalledWith(1, 2026, '物理', 479);
-      expect(scoreSegmentService.scoreToRank).toHaveBeenNthCalledWith(2, 2025, '物理', 479);
+      expect(scoreSegmentService.scoreToRank).toHaveBeenNthCalledWith(
+        1,
+        2026,
+        '物理',
+        479,
+      );
+      expect(scoreSegmentService.scoreToRank).toHaveBeenNthCalledWith(
+        2,
+        2025,
+        '物理',
+        479,
+      );
       expect(result.rankCheck).toEqual(
         expect.objectContaining({
           calculatedRank: 156000,
@@ -565,7 +858,11 @@ describe('StudentService', () => {
       prisma.studentProfile.findUnique.mockResolvedValue(current);
       const p2002 = new Prisma.PrismaClientKnownRequestError(
         'Unique constraint failed on the constraint: `users_phone_key`',
-        { code: 'P2002', clientVersion: '7.4.2', meta: { target: 'users_phone_key' } },
+        {
+          code: 'P2002',
+          clientVersion: '7.4.2',
+          meta: { target: 'users_phone_key' },
+        },
       );
       prisma.studentProfile.update.mockRejectedValue(p2002);
 
@@ -588,7 +885,11 @@ describe('StudentService', () => {
         careerPlan: null,
       };
       prisma.studentProfile.findUnique.mockResolvedValue(current);
-      prisma.studentProfile.update.mockResolvedValue({ ...current, totalScore: 750, dataVersion: 8 });
+      prisma.studentProfile.update.mockResolvedValue({
+        ...current,
+        totalScore: 750,
+        dataVersion: 8,
+      });
 
       await expect(
         service.updateProfile(10, { totalScore: 750 } as any),
@@ -628,12 +929,16 @@ describe('StudentService', () => {
         dataVersion: 2,
       });
 
-      const result = await service.updateProfile(10, {
+      const result = (await service.updateProfile(10, {
         dataVersion: 1,
         provincialRank: 1,
-      } as any) as any;
+      } as any)) as any;
 
-      expect(scoreSegmentService.scoreToRank).toHaveBeenCalledWith(2026, '物理', 600);
+      expect(scoreSegmentService.scoreToRank).toHaveBeenCalledWith(
+        2026,
+        '物理',
+        600,
+      );
       const call = prisma.studentProfile.update.mock.calls[0][0] as any;
       expect(call.data.provincialRank).toBe(1);
       expect(result.rankCheck).toEqual(
@@ -723,7 +1028,10 @@ describe('StudentService', () => {
     });
 
     it('can clear the assigned teacher', async () => {
-      prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 10 });
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 1,
+        teacherId: 10,
+      });
       prisma.studentProfile.update.mockResolvedValue({
         id: 1,
         teacherId: null,
@@ -744,7 +1052,9 @@ describe('StudentService', () => {
       prisma.studentProfile.findUnique.mockResolvedValue({ id: 1 });
       prisma.teacherProfile.findUnique.mockResolvedValue(null);
 
-      await expect(service.assignTeacher(1, 99)).rejects.toThrow(NotFoundException);
+      await expect(service.assignTeacher(1, 99)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -802,19 +1112,28 @@ describe('StudentService', () => {
         id: 1,
         userId: 100,
         formFiller: 'STUDENT',
-        user: { id: 100, realName: '小王', phone: '13800000000', gender: 'MALE' },
+        user: {
+          id: 100,
+          realName: '小王',
+          phone: '13800000000',
+          gender: 'MALE',
+        },
       });
 
       const result = await service.getMyProfile(100);
       expect(result).toHaveProperty('progress');
-      expect((result as any).progress).toHaveProperty('studentSelfCompleteness');
+      expect((result as any).progress).toHaveProperty(
+        'studentSelfCompleteness',
+      );
       expect((result as any).progress).toHaveProperty('stageProgress');
       expect((result as any).progress).toHaveProperty('isRecommendable');
     });
 
     it('找不到时抛 NotFoundException', async () => {
       prisma.studentProfile.findUnique.mockResolvedValue(null);
-      await expect(service.getMyProfile(999)).rejects.toThrow(NotFoundException);
+      await expect(service.getMyProfile(999)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -839,9 +1158,17 @@ describe('StudentService', () => {
         userId: 100,
         intakeStatus: 'DRAFT',
         preferredBatches: [],
-        user: { id: 100, realName: '小王', phone: '13800000000', gender: 'MALE' },
+        user: {
+          id: 100,
+          realName: '小王',
+          phone: '13800000000',
+          gender: 'MALE',
+        },
       });
-      prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'SUBMITTED' });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 1,
+        intakeStatus: 'SUBMITTED',
+      });
 
       const result = await (service as any).submitMyIntake(100);
 
@@ -862,9 +1189,16 @@ describe('StudentService', () => {
           examType: 'PHYSICS',
           county: '叙永县',
           isRural: true,
-          user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' },
+          user: {
+            birthDate: new Date('2008-01-01'),
+            ethnicity: '汉族',
+            gender: 'MALE',
+          },
         });
-        prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'VERIFIED' });
+        prisma.studentProfile.update.mockResolvedValue({
+          id: 1,
+          intakeStatus: 'VERIFIED',
+        });
 
         const result = await (service as any).confirmBatches(1, {
           teacherProfileId: 5,
@@ -890,7 +1224,19 @@ describe('StudentService', () => {
       });
 
       it('校验失败: preferredBatches 为空数组 → BadRequest', async () => {
-        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED', examType: 'PHYSICS', county: '叙永县', isRural: true, user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' } });
+        prisma.studentProfile.findUnique.mockResolvedValue({
+          id: 1,
+          teacherId: 5,
+          intakeStatus: 'SUBMITTED',
+          examType: 'PHYSICS',
+          county: '叙永县',
+          isRural: true,
+          user: {
+            birthDate: new Date('2008-01-01'),
+            ethnicity: '汉族',
+            gender: 'MALE',
+          },
+        });
         await expect(
           (service as any).confirmBatches(1, {
             teacherProfileId: 5,
@@ -901,7 +1247,19 @@ describe('StudentService', () => {
       });
 
       it('校验失败: preferredBatches 含 batchConfig 外的批次 → BadRequest', async () => {
-        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED', examType: 'PHYSICS', county: '叙永县', isRural: true, user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' } });
+        prisma.studentProfile.findUnique.mockResolvedValue({
+          id: 1,
+          teacherId: 5,
+          intakeStatus: 'SUBMITTED',
+          examType: 'PHYSICS',
+          county: '叙永县',
+          isRural: true,
+          user: {
+            birthDate: new Date('2008-01-01'),
+            ethnicity: '汉族',
+            gender: 'MALE',
+          },
+        });
         await expect(
           (service as any).confirmBatches(1, {
             teacherProfileId: 5,
@@ -915,11 +1273,22 @@ describe('StudentService', () => {
       // 修复后改用 batchConfig 真值源, 强基计划等应可正常提交.
       it('C1 修复: 旧白名单外但 batchConfig 内的批次 (强基计划) 应可提交成功', async () => {
         prisma.studentProfile.findUnique.mockResolvedValue({
-          id: 1, teacherId: 5, intakeStatus: 'SUBMITTED', examType: 'PHYSICS',
-          county: '叙永县', isRural: true,
-          user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' },
+          id: 1,
+          teacherId: 5,
+          intakeStatus: 'SUBMITTED',
+          examType: 'PHYSICS',
+          county: '叙永县',
+          isRural: true,
+          user: {
+            birthDate: new Date('2008-01-01'),
+            ethnicity: '汉族',
+            gender: 'MALE',
+          },
         });
-        prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'VERIFIED' });
+        prisma.studentProfile.update.mockResolvedValue({
+          id: 1,
+          intakeStatus: 'VERIFIED',
+        });
 
         const result = await (service as any).confirmBatches(1, {
           teacherProfileId: 5,
@@ -936,7 +1305,19 @@ describe('StudentService', () => {
       });
 
       it('校验失败: 学生 intakeStatus = DRAFT → Conflict', async () => {
-        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'DRAFT', examType: 'PHYSICS', county: '叙永县', isRural: true, user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' } });
+        prisma.studentProfile.findUnique.mockResolvedValue({
+          id: 1,
+          teacherId: 5,
+          intakeStatus: 'DRAFT',
+          examType: 'PHYSICS',
+          county: '叙永县',
+          isRural: true,
+          user: {
+            birthDate: new Date('2008-01-01'),
+            ethnicity: '汉族',
+            gender: 'MALE',
+          },
+        });
         await expect(
           (service as any).confirmBatches(1, {
             teacherProfileId: 5,
@@ -947,7 +1328,19 @@ describe('StudentService', () => {
       });
 
       it('权限: 非所属老师 → Forbidden', async () => {
-        prisma.studentProfile.findUnique.mockResolvedValue({ id: 1, teacherId: 5, intakeStatus: 'SUBMITTED', examType: 'PHYSICS', county: '叙永县', isRural: true, user: { birthDate: new Date('2008-01-01'), ethnicity: '汉族', gender: 'MALE' } });
+        prisma.studentProfile.findUnique.mockResolvedValue({
+          id: 1,
+          teacherId: 5,
+          intakeStatus: 'SUBMITTED',
+          examType: 'PHYSICS',
+          county: '叙永县',
+          isRural: true,
+          user: {
+            birthDate: new Date('2008-01-01'),
+            ethnicity: '汉族',
+            gender: 'MALE',
+          },
+        });
         await expect(
           (service as any).confirmBatches(1, {
             teacherProfileId: 99,
@@ -999,7 +1392,9 @@ describe('StudentService', () => {
         teacherId: 5,
         batchesConfirmedAt: new Date('2026-06-01'),
       });
-      await expect((service as any).unlockBatches(1, 30, 99)).rejects.toThrow(/无权/);
+      await expect((service as any).unlockBatches(1, 30, 99)).rejects.toThrow(
+        /无权/,
+      );
       expect(prisma.studentProfile.update).not.toHaveBeenCalled();
     });
 
@@ -1009,7 +1404,10 @@ describe('StudentService', () => {
         teacherId: 5,
         intakeStatus: 'SUBMITTED',
       });
-      prisma.studentProfile.update.mockResolvedValue({ id: 1, intakeStatus: 'VERIFIED' });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 1,
+        intakeStatus: 'VERIFIED',
+      });
 
       const result = await (service as any).reviewIntake(1, {
         teacherProfileId: 5,
@@ -1035,13 +1433,25 @@ describe('StudentService', () => {
   describe('updateMyProfile (2026-05-06 redesign)', () => {
     it('accepts province/city/county and writes hukouUpdatedBy=student', async () => {
       const profileId = 100;
-      prisma.studentProfile.findUnique.mockResolvedValue({ id: profileId, userId: 1, dataVersion: 0 });
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: profileId,
+        userId: 1,
+        dataVersion: 0,
+      });
       prisma.studentProfile.update.mockResolvedValue({
-        id: profileId, userId: 1, province: '四川', city: '成都', dataVersion: 1,
+        id: profileId,
+        userId: 1,
+        province: '四川',
+        city: '成都',
+        dataVersion: 1,
         user: { id: 1, realName: '小王' },
       });
 
-      await service.updateMyProfile(1, { dataVersion: 0, province: '四川', city: '成都' } as any);
+      await service.updateMyProfile(1, {
+        dataVersion: 0,
+        province: '四川',
+        city: '成都',
+      } as any);
 
       expect(prisma.studentProfile.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1056,13 +1466,23 @@ describe('StudentService', () => {
     });
 
     it('accepts bonusPolicyStatus and writes bonusUpdatedBy=student', async () => {
-      prisma.studentProfile.findUnique.mockResolvedValue({ id: 100, userId: 1, dataVersion: 0 });
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 100,
+        userId: 1,
+        dataVersion: 0,
+      });
       prisma.studentProfile.update.mockResolvedValue({
-        id: 100, userId: 1, bonusPolicyStatus: 'MINORITY', dataVersion: 1,
+        id: 100,
+        userId: 1,
+        bonusPolicyStatus: 'MINORITY',
+        dataVersion: 1,
         user: { id: 1, realName: '小王' },
       });
 
-      await service.updateMyProfile(1, { dataVersion: 0, bonusPolicyStatus: 'MINORITY' } as any);
+      await service.updateMyProfile(1, {
+        dataVersion: 0,
+        bonusPolicyStatus: 'MINORITY',
+      } as any);
 
       expect(prisma.studentProfile.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1082,13 +1502,22 @@ describe('StudentService', () => {
     });
 
     it('does NOT write provenance when no STUDENT_NEWLY_WRITABLE field is in dto', async () => {
-      prisma.studentProfile.findUnique.mockResolvedValue({ id: 100, userId: 1, dataVersion: 0 });
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 100,
+        userId: 1,
+        dataVersion: 0,
+      });
       prisma.studentProfile.update.mockResolvedValue({
-        id: 100, userId: 1, dataVersion: 1,
+        id: 100,
+        userId: 1,
+        dataVersion: 1,
         user: { id: 1, realName: 'X' },
       });
 
-      await service.updateMyProfile(1, { dataVersion: 0, realName: 'X' } as any);
+      await service.updateMyProfile(1, {
+        dataVersion: 0,
+        realName: 'X',
+      } as any);
 
       const call = prisma.studentProfile.update.mock.calls[0][0] as any;
       expect(call.data.hukouUpdatedBy).toBeUndefined();
@@ -1113,10 +1542,15 @@ describe('StudentService', () => {
 
     it('包含 province 字段时正常通过（2026-05-06 重新放权给学生）', async () => {
       prisma.studentProfile.findUnique.mockResolvedValue({
-        id: 1, userId: 100, dataVersion: 0,
+        id: 1,
+        userId: 100,
+        dataVersion: 0,
       });
       prisma.studentProfile.update.mockResolvedValue({
-        id: 1, userId: 100, province: '四川', dataVersion: 1,
+        id: 1,
+        userId: 100,
+        province: '四川',
+        dataVersion: 1,
         user: { id: 100, realName: '小王' },
       });
       const result = await service.updateMyProfile(100, {
@@ -1128,10 +1562,15 @@ describe('StudentService', () => {
 
     it('包含 totalScore 字段时正常通过（②，学生自填）', async () => {
       prisma.studentProfile.findUnique.mockResolvedValue({
-        id: 1, userId: 100, dataVersion: 0,
+        id: 1,
+        userId: 100,
+        dataVersion: 0,
       });
       prisma.studentProfile.update.mockResolvedValue({
-        id: 1, userId: 100, totalScore: 600, dataVersion: 1,
+        id: 1,
+        userId: 100,
+        totalScore: 600,
+        dataVersion: 1,
         user: { id: 100, realName: '小王' },
       });
       const result = await service.updateMyProfile(100, {

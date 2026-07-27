@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { JwtPayloadUser } from '../casl/types';
 
 interface ListQuery {
   examYear?: number;
@@ -162,8 +163,11 @@ export class HistoricalCasesService {
     });
   }
 
-  /** 附件下载 (校验老师身份, 不允许学生看其他人的) */
-  async getAttachmentForDownload(attachmentId: number, requesterUserId: number) {
+  /** 附件下载 (教师共享历史案例；学生只能查看自己的附件) */
+  async getAttachmentForDownload(
+    attachmentId: number,
+    requester: JwtPayloadUser,
+  ) {
     const att = await this.prisma.studentAttachment.findUnique({
       where: { id: attachmentId },
       include: {
@@ -176,13 +180,19 @@ export class HistoricalCasesService {
       },
     });
     if (!att) throw new NotFoundException('附件不存在');
+    if (!att.student.isArchived) {
+      throw new NotFoundException('附件不存在');
+    }
 
-    // 校验: 必须是档案归属老师 / 主管 / 学生本人 才能下载
-    const isOwner = att.student.teacher?.userId === requesterUserId;
-    const isStudentSelf = att.student.userId === requesterUserId;
-    // 简化: 主管也允许 (前端按 isSupervisor 决定显示)
-    if (!isOwner && !isStudentSelf) {
-      // 主管 / 别的老师 — 暂允许所有 TEACHER 访问 (历史案例参考场景广泛使用)
+    const isAdmin = requester.role === 'ADMIN';
+    // 历史案例是教师共享资料，保持任意教师可查看的现有业务语义。
+    const isTeacher = requester.role === 'TEACHER';
+    const isStudentSelf =
+      requester.role === 'STUDENT' &&
+      (requester.studentProfileId === att.studentId ||
+        requester.id === att.student.userId);
+    if (!isAdmin && !isTeacher && !isStudentSelf) {
+      throw new ForbiddenException('无权查看该附件');
     }
     return att;
   }

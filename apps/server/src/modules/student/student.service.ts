@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -13,22 +14,15 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
+import { SaveAdmissionResultDto } from './dto/save-admission-result.dto';
 import { Role, StudentStatus, Prisma } from '@prisma/client';
 import { ProgressService } from './progress.service';
 import { eligibleLevelFromScore } from './eligible-level';
-import {
-  TEACHER_ONLY_FIELDS,
-  FIELD_TO_PROVENANCE_GROUP,
-  USER_LEVEL_FIELDS,
-} from './field-policy';
+import { TEACHER_ONLY_FIELDS, FIELD_TO_PROVENANCE_GROUP, USER_LEVEL_FIELDS } from './field-policy';
 import { ScoreSegmentService } from '../score-segment/score-segment.service';
 import type { ExamType } from '../score-segment/exam-type.helper';
 import type { JwtPayloadUser } from '../casl/types';
-import {
-  TRACKED_FIELD_KEYS,
-  serializeFieldValue,
-  valuesEqual,
-} from './student-change-log.config';
+import { TRACKED_FIELD_KEYS, serializeFieldValue, valuesEqual } from './student-change-log.config';
 
 const USER_LEVEL_FIELD_SET = new Set<string>(USER_LEVEL_FIELDS);
 const TEMPORARY_RANK_FALLBACK_YEAR = 2025;
@@ -39,38 +33,42 @@ export const STUDENT_ATTACHMENT_CATEGORIES = [
   'other',
 ] as const;
 export type StudentAttachmentCategory = (typeof STUDENT_ATTACHMENT_CATEGORIES)[number];
-
-export interface SaveAdmissionResultInput {
-  admittedUniName?: string | null;
-  admittedUniId?: number | null;
-  admittedMinScore?: number | null;
-  admittedMinRank?: number | null;
-  sequenceNo?: number | null;
-  proofAttachmentId?: number | null;
-  batchName?: string | null;
-  admittedMajorGroupCode?: string | null;
-  admittedMajorCode?: string | null;
-  admittedMajorName?: string | null;
-  admittedMajorId?: number | null;
-}
+export const MAX_STUDENT_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024;
 
 const STUDENT_ATTACHMENT_CATEGORY_SET = new Set<string>(STUDENT_ATTACHMENT_CATEGORIES);
-const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-]);
-const ALLOWED_ATTACHMENT_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const ALLOWED_ATTACHMENT_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.jpe', '.jfif', '.png', '.webp', '.gif']);
 const EXTENSION_MIME_TYPE: Record<string, string> = {
   '.pdf': 'application/pdf',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.jpe': 'image/jpeg',
+  '.jfif': 'image/jpeg',
   '.png': 'image/png',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
 };
+const MIME_TYPE_ALIASES: Record<string, string> = {
+  'application/pdf': 'application/pdf',
+  'image/jpeg': 'image/jpeg',
+  'image/jpg': 'image/jpeg',
+  'image/pjpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+  'image/gif': 'image/gif',
+};
+const MIME_TYPE_CANONICAL_EXTENSION: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+const GENERIC_ATTACHMENT_MIME_TYPES = new Set(['', 'application/octet-stream']);
+
+interface ValidatedAttachmentFormat {
+  mimeType: string;
+  extension: string;
+}
 
 export interface RankCheck {
   calculatedRank: number | null;
@@ -89,12 +87,7 @@ interface RankComputation {
   sourceYear: number;
 }
 
-export type WorkflowStatus =
-  | 'COLLECTING'
-  | 'GENERATING'
-  | 'REVIEWING'
-  | 'FINALIZED'
-  | 'SUBMITTED';
+export type WorkflowStatus = 'COLLECTING' | 'GENERATING' | 'REVIEWING' | 'FINALIZED' | 'SUBMITTED';
 
 /**
  * 教师工作流状态派生
@@ -129,6 +122,8 @@ export function deriveWorkflowStatus(
 
 @Injectable()
 export class StudentService {
+  private readonly logger = new Logger(StudentService.name);
+
   constructor(
     private prisma: PrismaService,
     private progressService: ProgressService,
@@ -165,12 +160,7 @@ export class StudentService {
     if (primary) return primary;
 
     if (examYear === 2026) {
-      return this.tryComputeRankForYear(
-        TEMPORARY_RANK_FALLBACK_YEAR,
-        mapped,
-        totalScore,
-        examYear,
-      );
+      return this.tryComputeRankForYear(TEMPORARY_RANK_FALLBACK_YEAR, mapped, totalScore, examYear);
     }
 
     return null;
@@ -199,10 +189,7 @@ export class StudentService {
     sourceYear: number | null = null,
   ): RankCheck {
     const normalizedCurrent = currentRank ?? null;
-    const difference =
-      normalizedCurrent != null && calculatedRank != null
-        ? normalizedCurrent - calculatedRank
-        : null;
+    const difference = normalizedCurrent != null && calculatedRank != null ? normalizedCurrent - calculatedRank : null;
 
     return {
       calculatedRank,
@@ -211,7 +198,8 @@ export class StudentService {
       difference,
       requestedYear,
       sourceYear,
-      isEstimated: source === 'score-segment' && requestedYear != null && sourceYear != null && requestedYear !== sourceYear,
+      isEstimated:
+        source === 'score-segment' && requestedYear != null && sourceYear != null && requestedYear !== sourceYear,
       source,
     };
   }
@@ -227,11 +215,7 @@ export class StudentService {
       return this.makeRankCheck(currentRank, null, 'missing-input', profile.examYear ?? null);
     }
 
-    const rankComputation = await this.tryComputeRank(
-      profile.examType,
-      profile.examYear,
-      profile.totalScore,
-    );
+    const rankComputation = await this.tryComputeRank(profile.examType, profile.examYear, profile.totalScore);
 
     return this.makeRankCheck(
       currentRank,
@@ -253,14 +237,6 @@ export class StudentService {
     return category as StudentAttachmentCategory;
   }
 
-  private inferMimeType(file: Express.Multer.File): string | null {
-    if (ALLOWED_ATTACHMENT_MIME_TYPES.has(file.mimetype)) {
-      return file.mimetype;
-    }
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    return EXTENSION_MIME_TYPE[ext] ?? null;
-  }
-
   private normalizeAttachmentOriginalName(name: string | null | undefined, fallback = 'attachment') {
     const value = (name || fallback).trim() || fallback;
     if (!/[\u0080-\u00ff]/.test(value)) {
@@ -271,36 +247,99 @@ export class StudentService {
     return /[\u4e00-\u9fff]/.test(decoded) && !decoded.includes('\uFFFD') ? decoded : value;
   }
 
-  private normalizeOptionalString(value: unknown): string | null {
+  private normalizeOptionalString(value: unknown, label = '字段', maxLength?: number): string | null {
     if (value == null) return null;
-    const text = String(value).trim();
+    if (typeof value !== 'string') {
+      throw new BadRequestException(`${label}格式不正确`);
+    }
+    const text = value.trim();
+    if (maxLength != null && text.length > maxLength) {
+      throw new BadRequestException(`${label}不能超过 ${maxLength} 个字符`);
+    }
     return text.length > 0 ? text : null;
   }
 
-  private normalizeOptionalInt(value: unknown, label: string): number | null {
+  private normalizeOptionalInt(value: unknown, label: string, range: { min: number; max: number }): number | null {
     if (value == null || value === '') return null;
     const parsed = Number(value);
-    if (!Number.isFinite(parsed)) {
+    if (!Number.isInteger(parsed)) {
       throw new BadRequestException(`${label}格式不正确`);
     }
-    return Math.trunc(parsed);
+    if (parsed < range.min || parsed > range.max) {
+      throw new BadRequestException(`${label}超出有效范围`);
+    }
+    return parsed;
   }
 
-  private validateAttachmentFile(file: Express.Multer.File) {
-    if (!file?.buffer || file.size <= 0) {
+  private detectAttachmentMimeType(buffer: Buffer): string | null {
+    if (buffer.length >= 5 && buffer.subarray(0, 5).equals(Buffer.from('%PDF-', 'ascii'))) {
+      return 'application/pdf';
+    }
+    if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+      return 'image/jpeg';
+    }
+    if (
+      buffer.length >= 8 &&
+      buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    ) {
+      return 'image/png';
+    }
+    if (
+      buffer.length >= 12 &&
+      buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+    ) {
+      return 'image/webp';
+    }
+    if (buffer.length >= 6) {
+      const signature = buffer.subarray(0, 6).toString('ascii');
+      if (signature === 'GIF87a' || signature === 'GIF89a') {
+        return 'image/gif';
+      }
+    }
+    return null;
+  }
+
+  private validateAttachmentFile(file: Express.Multer.File): ValidatedAttachmentFormat {
+    if (!file?.buffer || file.buffer.length <= 0) {
       throw new BadRequestException('请上传文件');
     }
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(file.mimetype) && !ALLOWED_ATTACHMENT_EXTENSIONS.has(ext)) {
+    if (file.buffer.length > MAX_STUDENT_ATTACHMENT_SIZE_BYTES) {
+      throw new BadRequestException('单个附件不能超过 20MB');
+    }
+
+    const detectedMimeType = this.detectAttachmentMimeType(file.buffer);
+    if (!detectedMimeType) {
       throw new BadRequestException('仅支持 PDF、JPG、PNG、WEBP、GIF 格式');
     }
+
+    const originalExtension = path.extname(file.originalname || '').toLowerCase();
+    if (originalExtension && !ALLOWED_ATTACHMENT_EXTENSIONS.has(originalExtension)) {
+      throw new BadRequestException('仅支持 PDF、JPG、PNG、WEBP、GIF 格式');
+    }
+    if (originalExtension && EXTENSION_MIME_TYPE[originalExtension] !== detectedMimeType) {
+      throw new BadRequestException('文件扩展名与实际内容不一致');
+    }
+
+    const declaredMimeType = String(file.mimetype || '')
+      .split(';', 1)[0]
+      .trim()
+      .toLowerCase();
+    const normalizedDeclaredMimeType = MIME_TYPE_ALIASES[declaredMimeType];
+    if (!GENERIC_ATTACHMENT_MIME_TYPES.has(declaredMimeType) && !normalizedDeclaredMimeType) {
+      throw new BadRequestException('仅支持 PDF、JPG、PNG、WEBP、GIF 格式');
+    }
+    if (normalizedDeclaredMimeType && normalizedDeclaredMimeType !== detectedMimeType) {
+      throw new BadRequestException('文件 MIME 类型与实际内容不一致');
+    }
+
+    return {
+      mimeType: detectedMimeType,
+      extension: originalExtension || MIME_TYPE_CANONICAL_EXTENSION[detectedMimeType],
+    };
   }
 
-  private async assertStudentAccess(
-    studentId: number,
-    requester: JwtPayloadUser,
-    action: 'read' | 'update',
-  ) {
+  private async assertStudentAccess(studentId: number, requester: JwtPayloadUser, action: 'read' | 'update') {
     const profile = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
       select: { id: true, teacherId: true, userId: true },
@@ -312,10 +351,7 @@ export class StudentService {
       requester.role === 'TEACHER' &&
       requester.teacherProfileId != null &&
       profile.teacherId === requester.teacherProfileId;
-    const isStudentSelf =
-      action === 'read' &&
-      requester.role === 'STUDENT' &&
-      requester.studentProfileId === studentId;
+    const isStudentSelf = action === 'read' && requester.role === 'STUDENT' && requester.studentProfileId === studentId;
 
     if (!isAdmin && !isOwnerTeacher && !isStudentSelf) {
       throw new ForbiddenException(action === 'read' ? '无权查看该学生资料' : '无权修改不属于自己的学生资料');
@@ -347,15 +383,10 @@ export class StudentService {
     }));
   }
 
-  async uploadAttachment(
-    studentId: number,
-    category: string,
-    file: Express.Multer.File,
-    requester: JwtPayloadUser,
-  ) {
+  async uploadAttachment(studentId: number, category: string, file: Express.Multer.File, requester: JwtPayloadUser) {
     await this.assertStudentAccess(studentId, requester, 'update');
     const normalizedCategory = this.normalizeStudentAttachmentCategory(category);
-    this.validateAttachmentFile(file);
+    const validatedFormat = this.validateAttachmentFile(file);
 
     const uploadsRoot = this.getUploadsRoot();
     const relativeDir = path.join('students', String(studentId));
@@ -363,47 +394,61 @@ export class StudentService {
     await fs.promises.mkdir(targetDir, { recursive: true });
 
     const originalExt = path.extname(file.originalname || '').toLowerCase();
-    const ext = ALLOWED_ATTACHMENT_EXTENSIONS.has(originalExt) ? originalExt : '';
+    const ext = originalExt || validatedFormat.extension;
     const storedName = `${normalizedCategory}_${Date.now()}_${randomUUID()}${ext}`;
-    const originalName = this.normalizeAttachmentOriginalName(file.originalname, storedName).slice(0, 255);
+    const normalizedOriginalName = this.normalizeAttachmentOriginalName(file.originalname, storedName);
+    const originalDisplayExtension = path.extname(normalizedOriginalName);
+    const displayExtension = originalDisplayExtension || ext;
+    const displayBaseName = originalDisplayExtension
+      ? normalizedOriginalName.slice(0, -originalDisplayExtension.length)
+      : normalizedOriginalName;
+    const originalName = `${displayBaseName.slice(0, 255 - displayExtension.length)}${displayExtension}`;
     const targetPath = path.join(targetDir, storedName);
-    await fs.promises.writeFile(targetPath, file.buffer);
-
     const storagePath = path.join(relativeDir, storedName).replace(/\\/g, '/');
-    const created = await this.prisma.studentAttachment.create({
-      data: {
-        studentId,
-        category: normalizedCategory,
-        originalName,
-        storagePath,
-        mimeType: this.inferMimeType(file) ?? file.mimetype ?? null,
-        fileSize: file.size,
-        uploadedById: requester.id,
-      },
-      select: {
-        id: true,
-        studentId: true,
-        category: true,
-        originalName: true,
-        mimeType: true,
-        fileSize: true,
-        createdAt: true,
-        updatedAt: true,
-        uploadedById: true,
-      },
-    });
 
-    return {
-      ...created,
-      originalName: this.normalizeAttachmentOriginalName(created.originalName),
-    };
+    try {
+      await fs.promises.writeFile(targetPath, file.buffer);
+      const created = await this.prisma.studentAttachment.create({
+        data: {
+          studentId,
+          category: normalizedCategory,
+          originalName,
+          storagePath,
+          mimeType: validatedFormat.mimeType,
+          fileSize: file.buffer.length,
+          uploadedById: requester.id,
+        },
+        select: {
+          id: true,
+          studentId: true,
+          category: true,
+          originalName: true,
+          mimeType: true,
+          fileSize: true,
+          createdAt: true,
+          updatedAt: true,
+          uploadedById: true,
+        },
+      });
+
+      return {
+        ...created,
+        originalName: this.normalizeAttachmentOriginalName(created.originalName),
+      };
+    } catch (error) {
+      try {
+        await fs.promises.rm(targetPath, { force: true });
+      } catch (cleanupError) {
+        this.logger.error(
+          `上传附件失败后无法清理文件: ${targetPath}`,
+          cleanupError instanceof Error ? cleanupError.stack : undefined,
+        );
+      }
+      throw error;
+    }
   }
 
-  async getAttachmentForStudentAccess(
-    studentId: number,
-    attachmentId: number,
-    requester: JwtPayloadUser,
-  ) {
+  async getAttachmentForStudentAccess(studentId: number, attachmentId: number, requester: JwtPayloadUser) {
     await this.assertStudentAccess(studentId, requester, 'read');
     const attachment = await this.prisma.studentAttachment.findFirst({
       where: { id: attachmentId, studentId },
@@ -415,11 +460,7 @@ export class StudentService {
     };
   }
 
-  async deleteAttachment(
-    studentId: number,
-    attachmentId: number,
-    requester: JwtPayloadUser,
-  ) {
+  async deleteAttachment(studentId: number, attachmentId: number, requester: JwtPayloadUser) {
     await this.assertStudentAccess(studentId, requester, 'update');
     const attachment = await this.prisma.studentAttachment.findFirst({
       where: { id: attachmentId, studentId },
@@ -431,12 +472,34 @@ export class StudentService {
       throw new BadRequestException('该附件不是学生管理页上传的归档附件');
     }
 
-    await this.prisma.studentAttachment.delete({ where: { id: attachmentId } });
-
     const uploadsRoot = path.resolve(this.getUploadsRoot());
     const filePath = path.resolve(uploadsRoot, attachment.storagePath);
-    if (filePath.startsWith(`${uploadsRoot}${path.sep}`)) {
+    if (!filePath.startsWith(`${uploadsRoot}${path.sep}`)) {
+      throw new BadRequestException('附件存储路径不正确');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (attachment.category === 'admission_proof') {
+        await tx.studentAdmissionResult.updateMany({
+          where: { studentId, proofAttachmentId: attachmentId },
+          data: { proofAttachmentId: null },
+        });
+      }
+      await tx.studentAttachment.delete({ where: { id: attachmentId } });
+    });
+
+    try {
       await fs.promises.rm(filePath, { force: true });
+    } catch (error) {
+      this.logger.error(
+        `附件记录已删除，但物理文件清理失败: ${filePath}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      return {
+        deleted: true,
+        fileDeleted: false,
+        cleanupPending: true,
+      };
     }
 
     return { deleted: true };
@@ -449,22 +512,25 @@ export class StudentService {
     });
   }
 
-  async saveAdmissionResult(
-    studentId: number,
-    dto: SaveAdmissionResultInput,
-    requester: JwtPayloadUser,
-  ) {
+  async saveAdmissionResult(studentId: number, dto: SaveAdmissionResultDto, requester: JwtPayloadUser) {
     await this.assertStudentAccess(studentId, requester, 'update');
 
-    const admittedUniName = this.normalizeOptionalString(dto.admittedUniName);
+    const admittedUniName = this.normalizeOptionalString(dto.admittedUniName, '录取院校', 200);
     if (!admittedUniName) {
       throw new BadRequestException('请填写录取院校');
     }
 
-    const proofAttachmentId = this.normalizeOptionalInt(dto.proofAttachmentId, '录取截图');
+    const proofAttachmentId = this.normalizeOptionalInt(dto.proofAttachmentId, '录取截图', {
+      min: 1,
+      max: 2_147_483_647,
+    });
     if (proofAttachmentId != null) {
       const proof = await this.prisma.studentAttachment.findFirst({
-        where: { id: proofAttachmentId, studentId, category: 'admission_proof' },
+        where: {
+          id: proofAttachmentId,
+          studentId,
+          category: 'admission_proof',
+        },
         select: { id: true },
       });
       if (!proof) {
@@ -478,25 +544,26 @@ export class StudentService {
     });
     if (!student) throw new NotFoundException('学生不存在');
 
-    const admittedMinScore = this.normalizeOptionalInt(dto.admittedMinScore, '录取最低分');
+    const admittedMinScore = this.normalizeOptionalInt(dto.admittedMinScore, '录取最低分', { min: 0, max: 750 });
     const scoreDiff =
-      student.totalScore != null && admittedMinScore != null
-        ? student.totalScore - admittedMinScore
-        : null;
+      student.totalScore != null && admittedMinScore != null ? student.totalScore - admittedMinScore : null;
 
     const data = {
       admittedUniName,
-      admittedUniId: this.normalizeOptionalInt(dto.admittedUniId, '录取院校ID'),
+      admittedUniId: this.normalizeOptionalInt(dto.admittedUniId, '录取院校ID', { min: 1, max: 2_147_483_647 }),
       admittedMinScore,
-      admittedMinRank: this.normalizeOptionalInt(dto.admittedMinRank, '录取最低位次'),
+      admittedMinRank: this.normalizeOptionalInt(dto.admittedMinRank, '录取最低位次', { min: 1, max: 100_000_000 }),
       scoreDiff,
-      sequenceNo: this.normalizeOptionalInt(dto.sequenceNo, '录取志愿顺序'),
+      sequenceNo: this.normalizeOptionalInt(dto.sequenceNo, '录取志愿顺序', {
+        min: 1,
+        max: 1_000,
+      }),
       proofAttachmentId,
-      batchName: this.normalizeOptionalString(dto.batchName),
-      admittedMajorGroupCode: this.normalizeOptionalString(dto.admittedMajorGroupCode),
-      admittedMajorCode: this.normalizeOptionalString(dto.admittedMajorCode),
-      admittedMajorName: this.normalizeOptionalString(dto.admittedMajorName),
-      admittedMajorId: this.normalizeOptionalInt(dto.admittedMajorId, '录取专业ID'),
+      batchName: this.normalizeOptionalString(dto.batchName, '录取批次', 100),
+      admittedMajorGroupCode: this.normalizeOptionalString(dto.admittedMajorGroupCode, '录取院校专业组代码', 10),
+      admittedMajorCode: this.normalizeOptionalString(dto.admittedMajorCode, '录取专业代码', 10),
+      admittedMajorName: this.normalizeOptionalString(dto.admittedMajorName, '录取专业名称', 200),
+      admittedMajorId: this.normalizeOptionalInt(dto.admittedMajorId, '录取专业ID', { min: 1, max: 2_147_483_647 }),
     };
 
     return this.prisma.studentAdmissionResult.upsert({
@@ -509,35 +576,50 @@ export class StudentService {
   async archiveStudent(studentId: number, requester: JwtPayloadUser) {
     await this.assertStudentAccess(studentId, requester, 'update');
 
-    const profile = await this.prisma.studentProfile.findUnique({
-      where: { id: studentId },
-      include: { admissionResult: true },
-    });
-    if (!profile) throw new NotFoundException('学生不存在');
-    if (!profile.admissionResult?.admittedUniName) {
-      throw new BadRequestException('请先填写录取院校和录取结果');
-    }
-
-    const publishedPlan = await this.prisma.volunteerPlan.findFirst({
-      where: { studentId, status: 'PUBLISHED' },
-      orderBy: { versionNo: 'desc' },
-      select: { id: true },
-    });
-    if (!publishedPlan) {
-      throw new BadRequestException('请先确认终稿已提交考试院');
-    }
-
-    const admissionProof = await this.prisma.studentAttachment.findFirst({
-      where: { studentId, category: 'admission_proof' },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    });
-    if (!admissionProof) {
-      throw new BadRequestException('请先上传录取截图');
-    }
-
     return this.prisma.$transaction(async (tx) => {
-      if (profile.admissionResult?.proofAttachmentId == null) {
+      const admissionResult = await tx.studentAdmissionResult.findUnique({
+        where: { studentId },
+        select: {
+          admittedUniName: true,
+          proofAttachmentId: true,
+        },
+      });
+      if (!admissionResult?.admittedUniName?.trim()) {
+        throw new BadRequestException('请先填写录取院校和录取结果');
+      }
+
+      const publishedPlan = await tx.volunteerPlan.findFirst({
+        where: { studentId, status: 'PUBLISHED' },
+        orderBy: { versionNo: 'desc' },
+        select: { id: true },
+      });
+      if (!publishedPlan) {
+        throw new BadRequestException('请先确认终稿已提交考试院');
+      }
+
+      let admissionProof =
+        admissionResult.proofAttachmentId == null
+          ? null
+          : await tx.studentAttachment.findFirst({
+              where: {
+                id: admissionResult.proofAttachmentId,
+                studentId,
+                category: 'admission_proof',
+              },
+              select: { id: true },
+            });
+      if (!admissionProof) {
+        admissionProof = await tx.studentAttachment.findFirst({
+          where: { studentId, category: 'admission_proof' },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        });
+      }
+      if (!admissionProof) {
+        throw new BadRequestException('请先上传录取截图');
+      }
+
+      if (admissionResult.proofAttachmentId !== admissionProof.id) {
         await tx.studentAdmissionResult.update({
           where: { studentId },
           data: { proofAttachmentId: admissionProof.id },
@@ -621,10 +703,7 @@ export class StudentService {
    * Paginated query for students belonging to a teacher.
    * Admin callers pass teacherProfileId = undefined to see all.
    */
-  async findByTeacher(
-    teacherProfileId: number | undefined,
-    query: QueryStudentDto,
-  ) {
+  async findByTeacher(teacherProfileId: number | undefined, query: QueryStudentDto) {
     const {
       status,
       keyword,
@@ -653,10 +732,7 @@ export class StudentService {
 
     if (keyword) {
       where.user = {
-        OR: [
-          { realName: { contains: keyword } },
-          { username: { contains: keyword } },
-        ],
+        OR: [{ realName: { contains: keyword } }, { username: { contains: keyword } }],
       };
     }
 
@@ -694,7 +770,13 @@ export class StudentService {
             where: { isHistorical: false, status: { not: 'OUTDATED' } },
             orderBy: { versionNo: 'desc' },
             take: 8,
-            select: { id: true, status: true, updatedAt: true, versionNo: true, batchName: true },
+            select: {
+              id: true,
+              status: true,
+              updatedAt: true,
+              versionNo: true,
+              batchName: true,
+            },
           },
           _count: {
             select: { volunteerPlans: true },
@@ -710,9 +792,8 @@ export class StudentService {
     // 列表也需要 progress 显示双进度列 + 筛选
     const dataWithProgress = data.map((p) => {
       const latestPlan =
-        p.volunteerPlans?.find((plan) =>
-          plan.status === 'PENDING_REVIEW' || plan.status === 'REVIEWING',
-        ) ?? p.volunteerPlans?.[0];
+        p.volunteerPlans?.find((plan) => plan.status === 'PENDING_REVIEW' || plan.status === 'REVIEWING') ??
+        p.volunteerPlans?.[0];
       return {
         ...p,
         progress: this.progressService.compute({
@@ -768,7 +849,13 @@ export class StudentService {
           // 同上: 取最新版本(versionNo)而非最近改动, 避免被置 OUTDATED 的初稿盖过新版。
           orderBy: { versionNo: 'desc' },
           take: 1,
-          select: { id: true, status: true, updatedAt: true, versionNo: true, batchName: true },
+          select: {
+            id: true,
+            status: true,
+            updatedAt: true,
+            versionNo: true,
+            batchName: true,
+          },
         },
         admissionResult: true,
         _count: {
@@ -820,9 +907,7 @@ export class StudentService {
   }): Promise<'本科' | '专科' | null> {
     if (profile.totalScore == null) return null;
     const examTypeAliases =
-      profile.examType === 'PHYSICS' ? ['物理', '物理类']
-      : profile.examType === 'HISTORY' ? ['历史', '历史类']
-      : null;
+      profile.examType === 'PHYSICS' ? ['物理', '物理类'] : profile.examType === 'HISTORY' ? ['历史', '历史类'] : null;
     if (!examTypeAliases) return null;
     // 本科线按"高考报名省"查(随迁子女户籍≠报名省, 用户籍会查不到线→eligibleLevel 误判 null)
     const province = profile.examLocationProvince ?? profile.province ?? '四川';
@@ -830,7 +915,12 @@ export class StudentService {
     const batchAliases = ['本科批次', '本科批', '本科'];
     const findLine = async (year: number) => {
       const row = await this.prisma.batchLine.findFirst({
-        where: { year, province, batch: { in: batchAliases }, examType: { in: examTypeAliases } },
+        where: {
+          year,
+          province,
+          batch: { in: batchAliases },
+          examType: { in: examTypeAliases },
+        },
         select: { score: true },
       });
       return row?.score ?? null;
@@ -843,10 +933,7 @@ export class StudentService {
    * Compute provenance updates to merge into a PATCH payload.
    * Maps incoming fields to {hukou,bonus,examLocation}UpdatedBy/At pairs.
    */
-  private computeProvenanceUpdates(
-    dto: Record<string, any>,
-    actor: 'student' | 'teacher',
-  ): Record<string, any> {
+  private computeProvenanceUpdates(dto: Record<string, any>, actor: 'student' | 'teacher'): Record<string, any> {
     const groups = new Set<string>();
     for (const key of Object.keys(dto)) {
       const group = (FIELD_TO_PROVENANCE_GROUP as Record<string, string>)[key];
@@ -890,8 +977,7 @@ export class StudentService {
     ownerTeacherProfileId?: number,
   ) {
     const { dataVersion, ...rawUpdateData } = dto as Record<string, any>;
-    const { profileUpdates: updateData, userUpdates } =
-      this.splitUserLevelUpdates(rawUpdateData);
+    const { profileUpdates: updateData, userUpdates } = this.splitUserLevelUpdates(rawUpdateData);
 
     // Optimistic lock: only update if dataVersion matches
     const current = await this.prisma.studentProfile.findUnique({
@@ -942,9 +1028,7 @@ export class StudentService {
 
     // dataVersion 缺失（auto-save 单字段保存）时跳过乐观锁；显式传入时严格校验
     if (dataVersion !== undefined && current.dataVersion !== dataVersion) {
-      throw new ConflictException(
-        '数据已被其他人修改，请刷新后重试',
-      );
+      throw new ConflictException('数据已被其他人修改，请刷新后重试');
     }
 
     // Merge current + incoming to calculate completeness on the resulting state
@@ -971,16 +1055,10 @@ export class StudentService {
     const rankUpdate: { provincialRank?: number | null } = {};
     let rankCheck = await this.computeRankCheck(merged);
     const scoreOrTypeChanged =
-      updateData.totalScore !== undefined ||
-      updateData.examType !== undefined ||
-      updateData.examYear !== undefined;
+      updateData.totalScore !== undefined || updateData.examType !== undefined || updateData.examYear !== undefined;
     const rankSubmitted = updateData.provincialRank !== undefined;
     if (scoreOrTypeChanged && !rankSubmitted) {
-      const computed = await this.tryComputeRank(
-        merged.examType,
-        merged.examYear,
-        merged.totalScore,
-      );
+      const computed = await this.tryComputeRank(merged.examType, merged.examYear, merged.totalScore);
       // 查到 → 写回；查不到 → 不动 provincialRank（保留老师可能已手填的值）。
       // 选项 a：若需要"分数缺失即清空位次"，可改为 rankUpdate.provincialRank = computed;
       if (computed !== null) {
@@ -1000,48 +1078,48 @@ export class StudentService {
 
     const runUpdate = async () =>
       this.prisma.$transaction(async (tx) => {
-      const result = await tx.studentProfile.update({
-        where: { id },
-        // bonusItems / preferredBatches 是 Json 列，DTO 用 class 做嵌套校验，
-        // Prisma 期望 InputJsonValue — 在边界做一次断言交给 Prisma
-        data: {
-          ...(updateData as Prisma.StudentProfileUpdateInput),
-          ...(hasUserUpdates ? { user: { update: userUpdates } } : {}),
-          ...statusUpdate,
-          ...rankUpdate,
-          ...provenance,
-          dataVersion: { increment: 1 },
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              realName: true,
-              phone: true,
-              gender: true,
-              ethnicity: true,
-              birthDate: true,
+        const result = await tx.studentProfile.update({
+          where: { id },
+          // bonusItems / preferredBatches 是 Json 列，DTO 用 class 做嵌套校验，
+          // Prisma 期望 InputJsonValue — 在边界做一次断言交给 Prisma
+          data: {
+            ...(updateData as Prisma.StudentProfileUpdateInput),
+            ...(hasUserUpdates ? { user: { update: userUpdates } } : {}),
+            ...statusUpdate,
+            ...rankUpdate,
+            ...provenance,
+            dataVersion: { increment: 1 },
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                realName: true,
+                phone: true,
+                gender: true,
+                ethnicity: true,
+                birthDate: true,
+              },
             },
           },
-        },
-      });
-
-      if (changeLogEntries.length > 0 && changedById !== undefined) {
-        await tx.studentFieldChangeLog.createMany({
-          data: changeLogEntries.map((e) => ({
-            studentId: id,
-            changedById,
-            actor,
-            fieldKey: e.fieldKey,
-            oldValue: e.oldValue,
-            newValue: e.newValue,
-          })),
         });
-      }
 
-      return result;
-    });
+        if (changeLogEntries.length > 0 && changedById !== undefined) {
+          await tx.studentFieldChangeLog.createMany({
+            data: changeLogEntries.map((e) => ({
+              studentId: id,
+              changedById,
+              actor,
+              fieldKey: e.fieldKey,
+              oldValue: e.oldValue,
+              newValue: e.newValue,
+            })),
+          });
+        }
+
+        return result;
+      });
 
     // 唯一约束冲突（手机号/邮箱/用户名重复）转成友好 400，避免冒成 500 Internal server error
     let updated;
@@ -1131,8 +1209,7 @@ export class StudentService {
     const isAdmin = requester.role === Role.ADMIN;
     const isOwnerTeacher =
       requester.role === Role.TEACHER &&
-      (requester.isSupervisor === true ||
-        profile.teacherId === requester.teacherProfileId);
+      (requester.isSupervisor === true || profile.teacherId === requester.teacherProfileId);
     if (!isAdmin && !isOwnerTeacher) {
       throw new ForbiddenException('无权删除该学生');
     }
@@ -1327,7 +1404,9 @@ export class StudentService {
     }
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
-      include: { user: { select: { birthDate: true, ethnicity: true, gender: true } } },
+      include: {
+        user: { select: { birthDate: true, ethnicity: true, gender: true } },
+      },
     });
     if (!student) throw new NotFoundException('学生不存在');
     if (opts.teacherProfileId !== undefined && student.teacherId !== opts.teacherProfileId) {
@@ -1344,9 +1423,14 @@ export class StudentService {
     // 批次名校验: 必须都在该生可见的 batchConfig 批次集合内 (与 batch-recommendations 页同口径).
     // 真值源是 batch_configs 表 — 旧实现用硬编码白名单(仅 6 批次), 把强基/专项/艺体等真实批次误判为"未知".
     const examTypeLabel =
-      ({ PHYSICS: '物理', HISTORY: '历史', COMPREHENSIVE_LIBERAL: '文科', COMPREHENSIVE_SCIENCE: '理科' } as Record<string, string>)[
-        String(student.examType ?? 'PHYSICS')
-      ] || '物理';
+      (
+        {
+          PHYSICS: '物理',
+          HISTORY: '历史',
+          COMPREHENSIVE_LIBERAL: '文科',
+          COMPREHENSIVE_SCIENCE: '理科',
+        } as Record<string, string>
+      )[String(student.examType ?? 'PHYSICS')] || '物理';
     const validBatchRows = await this.prisma.batchConfig.findMany({
       where: {
         year: student.examYear ?? 2026,
@@ -1408,10 +1492,7 @@ export class StudentService {
     });
   }
 
-  async getChangeLogs(
-    studentId: number,
-    query: { limit?: number; offset?: number; fieldKey?: string } = {},
-  ) {
+  async getChangeLogs(studentId: number, query: { limit?: number; offset?: number; fieldKey?: string } = {}) {
     const limit = Math.min(query.limit ?? 50, 200);
     const offset = query.offset ?? 0;
     const where: { studentId: number; fieldKey?: string } = { studentId };

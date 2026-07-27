@@ -3,7 +3,6 @@ import {
   Get,
   Param,
   Query,
-  Request,
   Res,
   UseGuards,
   ParseIntPipe,
@@ -15,6 +14,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { HistoricalCasesService } from './historical-cases.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '@common/decorators/current-user.decorator';
+import type { JwtPayloadUser } from '../casl/types';
 
 @ApiTags('历史案例')
 @Controller('historical-cases')
@@ -79,34 +80,38 @@ export class HistoricalCasesController {
   @ApiOperation({ summary: '下载附件 (强制保存到本地)' })
   async downloadAttachment(
     @Param('id', ParseIntPipe) id: number,
-    @Request() req: any,
+    @CurrentUser() user: JwtPayloadUser,
     @Res() res: Response,
   ) {
-    return this.streamAttachment(id, req.user.id, res, 'attachment');
+    return this.streamAttachment(id, user, res, 'attachment');
   }
 
   @Get('attachments/:id/preview')
   @ApiOperation({ summary: '预览附件 (浏览器内打开, 图片直接渲染, PDF 用内置 viewer)' })
   async previewAttachment(
     @Param('id', ParseIntPipe) id: number,
-    @Request() req: any,
+    @CurrentUser() user: JwtPayloadUser,
     @Res() res: Response,
   ) {
-    return this.streamAttachment(id, req.user.id, res, 'inline');
+    return this.streamAttachment(id, user, res, 'inline');
   }
 
   private async streamAttachment(
     id: number,
-    userId: number,
+    requester: JwtPayloadUser,
     res: Response,
     disposition: 'attachment' | 'inline',
   ) {
-    const att = await this.service.getAttachmentForDownload(id, userId);
-    const uploadsRoot =
-      process.env.UPLOADS_ROOT || path.join(process.cwd(), 'uploads');
-    const filePath = path.join(uploadsRoot, att.storagePath);
-    if (!fs.existsSync(filePath)) {
-      throw new NotFoundException(`文件丢失: ${att.storagePath}`);
+    const att = await this.service.getAttachmentForDownload(id, requester);
+    const uploadsRoot = path.resolve(
+      process.env.UPLOADS_ROOT || path.join(process.cwd(), 'uploads'),
+    );
+    const filePath = path.resolve(uploadsRoot, att.storagePath);
+    if (
+      !filePath.startsWith(`${uploadsRoot}${path.sep}`) ||
+      !fs.existsSync(filePath)
+    ) {
+      throw new NotFoundException('文件不存在');
     }
     res.set({
       'Content-Type': att.mimeType ?? 'application/octet-stream',

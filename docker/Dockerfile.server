@@ -36,6 +36,8 @@ COPY --from=builder /app/apps/server/node_modules ./node_modules
 COPY --from=builder /app/apps/server/prisma ./prisma
 COPY --from=builder /app/apps/server/package.json ./
 
+RUN mkdir -p /app/uploads && chown nestjs:nodejs /app/uploads
+
 USER nestjs
 
 EXPOSE 3001

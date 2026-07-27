@@ -60,9 +60,12 @@ services:
       JWT_EXPIRES_IN: 30m
       JWT_REFRESH_EXPIRES_IN: 7d
       CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
+      UPLOADS_ROOT: /app/uploads
       PORT: 3001
     ports:
       - "3001:3001"
+    volumes:
+      - server_uploads:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -107,6 +110,7 @@ services:
 volumes:
   mysql_data:
   redis_data:
+  server_uploads:
 
 networks:
   vh-network:

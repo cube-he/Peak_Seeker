@@ -49,6 +49,11 @@ import {
 } from '@/components/student/stage1-score-mapping';
 import { ETHNICITY_OPTIONS } from '@/data/student-options';
 import { scoreSegmentApi, type ExamType as RankExamType } from '@/services/score-segment';
+import {
+  getAdmissionProofAfterDelete,
+  getAdmissionProofToAutoSelect,
+  keepUntouchedAdmissionFields,
+} from './admission-proof-selection';
 
 type SelectOption = { label: string; value: string };
 
@@ -2770,7 +2775,16 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
   const uploadMutation = useMutation({
     mutationFn: ({ category, file }: { category: StudentAttachmentCategory; file: File }) =>
       studentApi.uploadAttachment(studentId, category, file),
-    onSuccess: () => {
+    onSuccess: (attachment, { category }) => {
+      if (category === 'admission_proof') {
+        admissionForm.setFields([
+          {
+            name: 'proofAttachmentId',
+            value: attachment.id,
+            touched: true,
+          },
+        ]);
+      }
       queryClient.invalidateQueries({ queryKey: ['student-attachments', studentId] });
       message.success('附件已上传');
     },
@@ -2782,7 +2796,22 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
 
   const deleteAttachmentMutation = useMutation({
     mutationFn: (attachmentId: number) => studentApi.deleteAttachment(studentId, attachmentId),
-    onSuccess: () => {
+    onSuccess: (_data, attachmentId) => {
+      queryClient.setQueryData<StudentAdmissionResult | null>(
+        ['student-admission-result', studentId],
+        (current) =>
+          current?.proofAttachmentId === attachmentId
+            ? { ...current, proofAttachmentId: null }
+            : current,
+      );
+      const currentProofAttachmentId = admissionForm.getFieldValue('proofAttachmentId');
+      const nextProofAttachmentId = getAdmissionProofAfterDelete(
+        currentProofAttachmentId,
+        attachmentId,
+      );
+      if (nextProofAttachmentId !== currentProofAttachmentId) {
+        admissionForm.setFieldValue('proofAttachmentId', nextProofAttachmentId);
+      }
       queryClient.invalidateQueries({ queryKey: ['student-attachments', studentId] });
       message.success('附件已删除');
     },
@@ -2860,20 +2889,35 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
     : '截图已上传，可确认提交';
 
   useEffect(() => {
-    admissionForm.setFieldsValue({
+    const admissionValues = {
       admittedUniName: admissionResult?.admittedUniName ?? undefined,
       admittedUniId: admissionResult?.admittedUniId ?? undefined,
       admittedMinScore: admissionResult?.admittedMinScore ?? undefined,
       admittedMinRank: admissionResult?.admittedMinRank ?? undefined,
       sequenceNo: admissionResult?.sequenceNo ?? undefined,
-      proofAttachmentId: admissionResult?.proofAttachmentId ?? firstAdmissionProofId,
+      proofAttachmentId: admissionResult?.proofAttachmentId ?? undefined,
       batchName: admissionResult?.batchName ?? latestPlan?.batchName ?? undefined,
       admittedMajorGroupCode: admissionResult?.admittedMajorGroupCode ?? undefined,
       admittedMajorCode: admissionResult?.admittedMajorCode ?? undefined,
       admittedMajorName: admissionResult?.admittedMajorName ?? undefined,
       admittedMajorId: admissionResult?.admittedMajorId ?? undefined,
-    });
-  }, [admissionForm, admissionResult, firstAdmissionProofId, latestPlan?.batchName]);
+    };
+    admissionForm.setFieldsValue(
+      keepUntouchedAdmissionFields(admissionValues, (field) =>
+        admissionForm.isFieldTouched(field),
+      ),
+    );
+  }, [admissionForm, admissionResult, latestPlan?.batchName]);
+
+  useEffect(() => {
+    const proofAttachmentId = getAdmissionProofToAutoSelect(
+      admissionForm.getFieldValue('proofAttachmentId'),
+      firstAdmissionProofId,
+    );
+    if (proofAttachmentId !== undefined) {
+      admissionForm.setFieldValue('proofAttachmentId', proofAttachmentId);
+    }
+  }, [admissionForm, firstAdmissionProofId]);
 
   const handleArchiveFileChange = (
     category: StudentAttachmentCategory,
@@ -3079,10 +3123,10 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
             <input
               ref={(node) => {
                 archiveInputRefs.current[item.category] = node;
-              }}
-              type="file"
-              accept=".pdf,image/*"
-              style={{ display: 'none' }}
+                }}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.jpe,.jfif,.png,.webp,.gif"
+                style={{ display: 'none' }}
               onChange={(event) => handleArchiveFileChange(item.category, event)}
             />
             <button

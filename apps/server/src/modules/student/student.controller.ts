@@ -23,11 +23,15 @@ import * as path from 'path';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsInt, IsOptional, Min } from 'class-validator';
-import { StudentService } from './student.service';
+import {
+  MAX_STUDENT_ATTACHMENT_SIZE_BYTES,
+  StudentService,
+} from './student.service';
 import { IntakeExportService } from './intake-export.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
+import { SaveAdmissionResultDto } from './dto/save-admission-result.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PoliciesGuard, CheckPolicies } from '../casl';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
@@ -40,8 +44,6 @@ class AssignStudentTeacherDto {
   @Min(1)
   teacherProfileId?: number | null;
 }
-
-const MAX_STUDENT_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024;
 
 @ApiTags('学生管理')
 @Controller('students')
@@ -201,9 +203,9 @@ export class StudentController {
   async saveAdmissionResult(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: JwtPayloadUser,
-    @Body() body: Record<string, unknown>,
+    @Body() body: SaveAdmissionResultDto,
   ) {
-    return this.studentService.saveAdmissionResult(id, body as any, user);
+    return this.studentService.saveAdmissionResult(id, body, user);
   }
 
   @Post(':id/archive')
