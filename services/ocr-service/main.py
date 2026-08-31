@@ -55,6 +55,14 @@ _volunteer_request_semaphore = asyncio.Semaphore(1)
 MAX_VOLUNTEER_UPLOAD_BYTES = 20 * 1024 * 1024
 MAX_VOLUNTEER_PDF_PAGES = 20
 MAX_VOLUNTEER_RENDER_DIMENSION = 3000
+# OCR column boundaries below are expressed in the reference layout produced
+# by the original 180-DPI renderer (1489 x 2105 for the common A4 volunteer
+# form).  Production rendering uses ``-scale-to 3000``, so the actual image is
+# usually about 2122 x 3000.  Normalize OCR boxes back to this reference before
+# applying the layout parser; otherwise the group/major columns move outside
+# the hard-coded boundaries and every row is silently discarded.
+VOLUNTEER_LAYOUT_REFERENCE_WIDTH = 1489.0
+VOLUNTEER_LAYOUT_REFERENCE_HEIGHT = 2105.0
 PDF_INFO_TIMEOUT_SECONDS = 10
 PDF_RENDER_TIMEOUT_SECONDS = 60
 # Includes spawned-worker startup, PDF rendering and all page OCR calls. The
@@ -2356,11 +2364,31 @@ def _collect_volunteer_ocr_items(image_paths: List[str]) -> List[Dict]:
         # Volunteer forms contain the candidate's name, exam number and masked
         # identity number. Never route this endpoint through configurable cloud
         # engines, even if the generic OCR_ENGINE environment is misconfigured.
+        try:
+            from PIL import Image, UnidentifiedImageError
+
+            with Image.open(image_path) as image:
+                image_width, image_height = image.size
+        except (OSError, ValueError, UnidentifiedImageError):
+            # Keep the helper usable with mocked OCR inputs and let the OCR
+            # engine remain the source of truth for image validation.
+            image_width = VOLUNTEER_LAYOUT_REFERENCE_WIDTH
+            image_height = VOLUNTEER_LAYOUT_REFERENCE_HEIGHT
+
+        x_scale = VOLUNTEER_LAYOUT_REFERENCE_WIDTH / max(float(image_width), 1.0)
+        y_scale = VOLUNTEER_LAYOUT_REFERENCE_HEIGHT / max(float(image_height), 1.0)
         for box, text, confidence in run_sensitive_local_ocr(image_path):
             clean = _norm_text(text)
             if not clean:
                 continue
             x1, y1, x2, y2 = _ocr_bounds(box)
+            # Normalize every page to the same coordinate system.  This is
+            # important for PDFs rendered with ``-scale-to 3000`` as well as
+            # uploaded images with a different resolution.
+            x1 *= x_scale
+            x2 *= x_scale
+            y1 *= y_scale
+            y2 *= y_scale
             items.append({
                 "page": page_no,
                 "x1": x1,

@@ -185,6 +185,49 @@ class OcrUploadSafetyTest(unittest.TestCase):
         configurable_ocr.assert_not_called()
         cloud_ocr.assert_not_called()
 
+    def test_scale_to_3000_coordinates_are_normalized_before_layout_parse(self):
+        # Production pdftoppm renders the same A4 form at roughly 2122 x 3000,
+        # while the layout parser's column thresholds use the 1489 x 2105
+        # reference coordinate system.
+        from PIL import Image
+
+        width, height = 2122, 3000
+        x_scale = width / main.VOLUNTEER_LAYOUT_REFERENCE_WIDTH
+        y_scale = height / main.VOLUNTEER_LAYOUT_REFERENCE_HEIGHT
+
+        def box(x1, y1, x2, y2):
+            return [
+                [x1 * x_scale, y1 * y_scale],
+                [x2 * x_scale, y1 * y_scale],
+                [x2 * x_scale, y2 * y_scale],
+                [x1 * x_scale, y2 * y_scale],
+            ]
+
+        local_result = [
+            (box(10, 100, 160, 125), "第一志愿18", 0.99),
+            (box(200, 115, 470, 140), "5122西华师范大学", 0.99),
+            (box(500, 115, 550, 140), "105", 0.99),
+            (
+                box(600, 100, 1300, 125),
+                "31数学与应用数学;32物理学;33汉语言文学;34计算机科学与技术;35英语;36教育学",
+                0.99,
+            ),
+            (box(1390, 115, 1450, 140), "是", 0.99),
+        ]
+
+        with tempfile.TemporaryDirectory() as work_dir:
+            image_path = os.path.join(work_dir, "scaled.png")
+            Image.new("RGB", (width, height), "white").save(image_path)
+            with patch.object(main, "run_sensitive_local_ocr", return_value=local_result):
+                items = main._collect_volunteer_ocr_items([image_path])
+
+        volunteers = main._parse_ocr_volunteer_rows(items)
+        self.assertEqual(len(volunteers), 1)
+        self.assertEqual(volunteers[0].seq, 18)
+        self.assertEqual(volunteers[0].schoolCode, "5122")
+        self.assertEqual(volunteers[0].groupCode, "105")
+        self.assertEqual([major.originalOrder for major in volunteers[0].majors], [1, 2, 3, 4, 5, 6])
+
     def test_low_confidence_sequence_marker_cannot_lock_a_volunteer_order(self):
         items = self._volunteer_row_items(marker_confidence=0.60)
 
