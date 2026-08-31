@@ -119,6 +119,8 @@ function normalizeCode(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFKC")
     .toUpperCase()
+    // OCR may confuse the digit 0 with the letter O in Sichuan major codes (for example 0C).
+    .replace(/O/g, "0")
     .replace(/[\s\[\]【】()（）]/g, "");
 }
 

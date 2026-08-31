@@ -1189,6 +1189,8 @@ export class AdmissionMatchService {
     return (value ?? "")
       .normalize("NFKC")
       .toUpperCase()
+      // Keep admission OCR code matching consistent with the core matcher.
+      .replace(/O/g, "0")
       .replace(/[\s\[\]【】()（）]/g, "");
   }
 

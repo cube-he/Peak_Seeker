@@ -49,6 +49,43 @@ const recognized: RecognizedAdmission = {
 };
 
 describe("matchAdmissionToVolunteerForm", () => {
+  it("normalizes an OCR letter O to the digit 0 in admission major codes", () => {
+    const schoolName = "\u5357\u4eac\u90ae\u7535\u5927\u5b66\u901a\u8fbe\u5b66\u9662";
+    const result = matchAdmissionToVolunteerForm(
+      {
+        ...recognized,
+        universityCode: "3290",
+        universityName: schoolName,
+        groupCode: "102",
+        majorCode: "OC",
+        majorName: "\u901a\u4fe1\u5de5\u7a0b",
+      },
+      form([
+        volunteer({
+          seq: 22,
+          schoolCode: "3290",
+          schoolName,
+          groupCode: "102",
+          majors: [
+            { code: "05", name: "\u8ba1\u7b97\u673a\u79d1\u5b66\u4e0e\u6280\u672f", originalOrder: 1 },
+            { code: "0H", name: "\u7535\u6c14\u5de5\u7a0b\u53ca\u5176\u81ea\u52a8\u5316", originalOrder: 2 },
+            { code: "0C", name: "\u901a\u4fe1\u5de5\u7a0b", originalOrder: 3 },
+            { code: "0G", name: "\u81ea\u52a8\u5316", originalOrder: 4 },
+            { code: "08", name: "\u6570\u636e\u79d1\u5b66\u4e0e\u5927\u6570\u636e\u6280\u672f", originalOrder: 5 },
+            { code: "0A", name: "\u7269\u8054\u7f51\u5de5\u7a0b", originalOrder: 6 },
+          ],
+        }),
+      ]),
+    );
+
+    expect(result.status).toBe(AdmissionMatchStatus.EXACT);
+    expect(result.sequenceNo).toBe(22);
+    expect(result.majorSequenceNo).toBe(3);
+    expect(result.methods).toEqual([
+      "UNIVERSITY_CODE_AND_GROUP_CODE",
+      "MAJOR_CODE",
+    ]);
+  });
   it("样例 5122/105/32 精确定位第 18 志愿、第 1 专业，名称师范后缀差异只警告", () => {
     const result = matchAdmissionToVolunteerForm(recognized, form());
 
