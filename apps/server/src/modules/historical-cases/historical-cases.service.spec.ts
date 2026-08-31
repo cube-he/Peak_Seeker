@@ -92,3 +92,44 @@ describe('HistoricalCasesService attachment access', () => {
     ).rejects.toThrow(NotFoundException);
   });
 });
+
+describe('HistoricalCasesService stats', () => {
+  it('returns only exam years that exist in historical cases', async () => {
+    const prisma = {
+      studentProfile: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            examYear: 2026,
+            examType: 'PHYSICS',
+            admissionResult: {
+              batchName: '本科批',
+              scoreDiff: null,
+              admittedMinScore: null,
+              admittedUniName: '测试大学',
+            },
+          },
+          {
+            examYear: 2024,
+            examType: 'HISTORY',
+            admissionResult: {
+              batchName: '本科批',
+              scoreDiff: null,
+              admittedMinScore: null,
+              admittedUniName: '测试大学',
+            },
+          },
+          {
+            examYear: null,
+            examType: null,
+            admissionResult: null,
+          },
+        ]),
+      },
+    };
+    const service = new HistoricalCasesService(prisma as any);
+
+    const stats = await service.stats();
+
+    expect(stats.byExamYear).toEqual({ '2026': 1, '2024': 1 });
+  });
+});

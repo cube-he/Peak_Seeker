@@ -64,9 +64,12 @@ export default function HistoricalCasesPage() {
   }, [stats]);
 
   const years: (string | number)[] = useMemo(() => {
-    const byYear = (stats as any)?.byExamYear ?? {};
-    const ys = Object.keys(byYear).map(Number).sort((a, b) => b - a);
-    return ['all', ...(ys.length ? ys : [2025, 2024, 2023, 2022])];
+    const byYear = stats?.byExamYear ?? {};
+    const ys = Object.keys(byYear)
+      .map(Number)
+      .filter((value) => Number.isInteger(value))
+      .sort((a, b) => b - a);
+    return ['all', ...ys];
   }, [stats]);
 
   return (

@@ -103,11 +103,16 @@ export class HistoricalCasesService {
     });
 
     const byExamType: Record<string, number> = { PHYSICS: 0, HISTORY: 0 };
+    const byExamYear: Record<string, number> = {};
     const byBatch: Record<string, number> = {};
     const scoreDiffs: number[] = [];
     const uniNameCounts: Record<string, number> = {};
 
     for (const s of all) {
+      if (s.examYear != null) {
+        const year = String(s.examYear);
+        byExamYear[year] = (byExamYear[year] ?? 0) + 1;
+      }
       if (s.examType) byExamType[s.examType] = (byExamType[s.examType] ?? 0) + 1;
       const batch = s.admissionResult?.batchName ?? '未填';
       byBatch[batch] = (byBatch[batch] ?? 0) + 1;
@@ -135,6 +140,7 @@ export class HistoricalCasesService {
     return {
       total: all.length,
       byExamType,
+      byExamYear,
       byBatch,
       avgScoreDiff,
       sampleSize: scoreDiffs.length,

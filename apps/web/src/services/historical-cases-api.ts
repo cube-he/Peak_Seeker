@@ -55,6 +55,7 @@ export interface HistoricalCaseDetail extends HistoricalCaseListItem {
 export interface HistoricalStats {
   total: number;
   byExamType: { PHYSICS?: number; HISTORY?: number };
+  byExamYear: Record<string, number>;
   byBatch: Record<string, number>;
   avgScoreDiff: number | null;
   sampleSize: number;
