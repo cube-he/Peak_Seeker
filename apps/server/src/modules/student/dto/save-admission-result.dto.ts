@@ -1,5 +1,6 @@
 import { Transform, type TransformFnParams } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -45,6 +46,10 @@ function normalizeNullableNumber({ value, obj, key }: TransformFnParams) {
   return value;
 }
 
+function preserveBooleanValue({ obj, key }: TransformFnParams) {
+  return obj?.[key];
+}
+
 export class SaveAdmissionResultDto {
   @ApiProperty({ description: '录取院校名称', maxLength: 200 })
   @Transform(trimString)
@@ -52,6 +57,17 @@ export class SaveAdmissionResultDto {
   @IsNotEmpty({ message: '请填写录取院校' })
   @MaxLength(200, { message: '录取院校不能超过 200 个字符' })
   admittedUniName!: string;
+
+  @ApiPropertyOptional({
+    description: '录取院校代码（字符串，保留前导零）',
+    maxLength: 20,
+    nullable: true,
+  })
+  @Transform(normalizeNullableString)
+  @IsOptional()
+  @IsString({ message: '录取院校代码必须是字符串' })
+  @MaxLength(20, { message: '录取院校代码不能超过 20 个字符' })
+  admittedUniCode?: string | null;
 
   @ApiPropertyOptional({ description: '录取院校 ID', nullable: true })
   @Transform(normalizeNullableNumber)
@@ -89,6 +105,20 @@ export class SaveAdmissionResultDto {
   @Min(1, { message: '录取志愿顺序必须是正整数' })
   @Max(MAX_ADMISSION_SEQUENCE, { message: '录取志愿顺序超出有效范围' })
   sequenceNo?: number | null;
+
+  @ApiPropertyOptional({ description: '院校专业组内录取专业顺序', nullable: true })
+  @Transform(normalizeNullableNumber)
+  @IsOptional()
+  @IsInt({ message: '录取专业顺序必须是整数' })
+  @Min(1, { message: '录取专业顺序必须是正整数' })
+  @Max(6, { message: '录取专业顺序不能超过 6' })
+  majorSequenceNo?: number | null;
+
+  @ApiPropertyOptional({ description: '是否为院校专业组内调剂', nullable: true })
+  @Transform(preserveBooleanValue)
+  @IsOptional()
+  @IsBoolean({ message: '调剂状态必须是布尔值' })
+  isAdjusted?: boolean | null;
 
   @ApiPropertyOptional({ description: '录取凭证附件 ID', nullable: true })
   @Transform(normalizeNullableNumber)

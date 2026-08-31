@@ -59,6 +59,8 @@ export class PlanItemService {
     }
 
     const existingRanking = item.fullMajorRanking as any;
+    const acceptAdjust =
+      dto.acceptAdjust ?? item.acceptAdjust ?? existingRanking?.acceptAdjust ?? true;
     const candidateMajorRanking = dto.candidateMajorRanking
       ?? existingRanking?.candidateMajorRanking;
     if (!Array.isArray(candidateMajorRanking) || candidateMajorRanking.length === 0) {
@@ -88,11 +90,11 @@ export class PlanItemService {
       recommendedOrder: selectedMajors.map((major) => major.majorName).join('、'),
       fullMajorRanking: {
         strategyVersion: 'major-group-manual-v1',
-        acceptAdjust: true,
+        acceptAdjust,
         selectedMajors,
         candidateMajorRanking: normalizedCandidateMajorRanking,
       },
-      acceptAdjust: true,
+      acceptAdjust,
       isManuallyModified: true,
     };
   }
@@ -179,10 +181,11 @@ export class PlanItemService {
     const gradient = dto.gradient ?? (historyMin ? calcGradient(studentRank, historyMin) : 'CHONG');
     const groupMajorsList = (ep.groupMajors ?? '').split(/[,，、/]/).filter(Boolean);
     const selectedMajors = (dto.selectedMajors ?? []).slice(0, 6);
+    const acceptAdjust = dto.acceptAdjust ?? true;
     const fullMajorRanking = selectedMajors.length > 0
       ? {
           strategyVersion: 'major-group-fill-v1',
-          acceptAdjust: true,
+          acceptAdjust,
           selectedMajors,
           candidateMajorRanking: dto.candidateMajorRanking ?? selectedMajors,
         }
@@ -216,7 +219,7 @@ export class PlanItemService {
           : undefined,
         fullMajorRanking: fullMajorRanking as any,
         subjectRequirement: ep.subjectRequirements,
-        acceptAdjust: selectedMajors.length > 0 ? true : dto.acceptAdjust ?? true,
+        acceptAdjust,
         score25Group: arGroup?.groupMinScore ?? null,
         rank25Group: arGroup?.groupMinRank ?? null,
         score25Major: arExact?.majorMinScore ?? null,

@@ -32,6 +32,8 @@ import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { QueryStudentDto } from './dto/query-student.dto';
 import { SaveAdmissionResultDto } from './dto/save-admission-result.dto';
+import { AnalyzeAdmissionResultDto } from './dto/analyze-admission-result.dto';
+import { AdmissionMatchService } from './admission-match.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PoliciesGuard, CheckPolicies } from '../casl';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
@@ -53,6 +55,7 @@ export class StudentController {
   constructor(
     private studentService: StudentService,
     private intakeExportService: IntakeExportService,
+    private admissionMatchService: AdmissionMatchService,
   ) {}
 
   @Post()
@@ -195,6 +198,17 @@ export class StudentController {
     @CurrentUser() user: JwtPayloadUser,
   ) {
     return this.studentService.getAdmissionResult(id, user);
+  }
+
+  @Post(':id/admission-result/analyze')
+  @ApiOperation({ summary: '识别录取截图并与志愿填报 PDF 自动匹配' })
+  @CheckPolicies((ability) => ability.can('update', 'StudentProfile'))
+  async analyzeAdmissionResult(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayloadUser,
+    @Body() body: AnalyzeAdmissionResultDto,
+  ) {
+    return this.admissionMatchService.analyze(id, body, user);
   }
 
   @Put(':id/admission-result')

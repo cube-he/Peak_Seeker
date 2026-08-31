@@ -159,6 +159,53 @@ export interface StudentAttachment {
   uploadedById: number | null;
 }
 
+export type AdmissionMatchStatus =
+  | 'EXACT'
+  | 'ADJUSTED'
+  | 'REVIEW_REQUIRED'
+  | 'GROUP_NOT_FOUND'
+  | 'FORM_NOT_FOUND'
+  | 'PARSE_FAILED';
+
+export type AdmissionResultMatchStatus = AdmissionMatchStatus | 'MANUAL_CONFIRMED';
+
+export interface AdmissionMatchCandidate {
+  submissionAttachmentId: number;
+  submissionAttachmentName: string;
+  sequenceNo: number;
+  schoolCode: string;
+  schoolName: string;
+  groupCode: string;
+  batchName: string;
+  reason: string;
+}
+
+export interface AdmissionAnalysisResponse {
+  proofAttachmentId: number;
+  submissionAttachmentId: number | null;
+  submissionAttachmentName: string | null;
+  matchStatus: AdmissionMatchStatus;
+  message: string;
+  confidence: number;
+  recognized: {
+    batchName: string | null;
+    admittedUniName: string | null;
+    admittedUniCode: string | null;
+    admittedMajorGroupCode: string | null;
+    admittedMajorCode: string | null;
+    admittedMajorName: string | null;
+  };
+  matched: {
+    sequenceNo: number | null;
+    majorSequenceNo: number | null;
+    isAdjusted: boolean;
+  };
+  candidates: AdmissionMatchCandidate[];
+  warnings: string[];
+  superseded?: boolean;
+  admissionResult: StudentAdmissionResult | null;
+}
+
 export interface StudentAdmissionResult {
   id: number;
   studentId: number;
@@ -168,12 +215,22 @@ export interface StudentAdmissionResult {
   admittedMinRank: number | null;
   scoreDiff: number | null;
   sequenceNo: number | null;
+  majorSequenceNo: number | null;
   proofAttachmentId: number | null;
   batchName: string | null;
+  admittedUniCode: string | null;
   admittedMajorGroupCode: string | null;
   admittedMajorCode: string | null;
   admittedMajorName: string | null;
   admittedMajorId: number | null;
+  isAdjusted: boolean;
+  matchStatus: AdmissionResultMatchStatus | null;
+  submissionAttachmentId: number | null;
+  matchConfidence: number | null;
+  matchEvidence: Record<string, unknown> | null;
+  recognizedAt: string | null;
+  matchConfirmedAt: string | null;
+  matchConfirmedById: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -186,12 +243,15 @@ export type SaveAdmissionResultDto = Partial<
     | 'admittedMinScore'
     | 'admittedMinRank'
     | 'sequenceNo'
+    | 'majorSequenceNo'
     | 'proofAttachmentId'
     | 'batchName'
+    | 'admittedUniCode'
     | 'admittedMajorGroupCode'
     | 'admittedMajorCode'
     | 'admittedMajorName'
     | 'admittedMajorId'
+    | 'isAdjusted'
   >
 >;
 
@@ -266,6 +326,19 @@ export const studentApi = {
 
   getAdmissionResult(id: string | number): Promise<StudentAdmissionResult | null> {
     return api.get(`/students/${id}/admission-result`) as unknown as Promise<StudentAdmissionResult | null>;
+  },
+
+  analyzeAdmissionResult(
+    id: string | number,
+    data: { proofAttachmentId: number; submissionAttachmentId?: number },
+  ): Promise<AdmissionAnalysisResponse> {
+    // Admission screenshots and scanned volunteer PDFs can require two local
+    // OCR stages plus a bounded text-layer parse. Keep the browser below
+    // Nginx's 300-second API ceiling while leaving enough room for the full
+    // server-side budget and response serialization.
+    return api.post(`/students/${id}/admission-result/analyze`, data, {
+      timeout: 280_000,
+    }) as unknown as Promise<AdmissionAnalysisResponse>;
   },
 
   saveAdmissionResult(

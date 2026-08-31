@@ -44,6 +44,7 @@ module.exports = {
       watch: false,
       max_memory_restart: '700M',
       env: {
+        OCR_SERVICE_HOST: '127.0.0.1',
         OCR_SERVICE_PORT: 8100,
         OCR_ENGINE: 'rapid',
         PYTHONUNBUFFERED: '1'

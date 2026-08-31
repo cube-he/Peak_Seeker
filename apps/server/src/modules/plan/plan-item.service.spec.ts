@@ -209,10 +209,10 @@ describe('PlanItemService.add', () => {
     } as any);
 
     expect(result.recommendedOrder).toBe('M、A');
-    expect(result.acceptAdjust).toBe(true);
+    expect(result.acceptAdjust).toBe(false);
     expect(result.fullMajorRanking).toEqual({
       strategyVersion: 'major-group-fill-v1',
-      acceptAdjust: true,
+      acceptAdjust: false,
       selectedMajors,
       candidateMajorRanking,
     });

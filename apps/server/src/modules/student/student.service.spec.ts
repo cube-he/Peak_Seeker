@@ -1,10 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { StudentService } from './student.service';
 import { ProgressService } from './progress.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -152,8 +147,7 @@ describe('StudentService', () => {
           },
         },
         {
-          provide: require('../score-segment/score-segment.service')
-            .ScoreSegmentService,
+          provide: require('../score-segment/score-segment.service').ScoreSegmentService,
           useValue: scoreSegmentService,
         },
       ],
@@ -225,9 +219,15 @@ describe('StudentService', () => {
     const teacher = { id: 20, role: 'TEACHER', teacherProfileId: 5 } as any;
 
     it('saves admission result and calculates scoreDiff from student total score', async () => {
-      prisma.studentProfile.findUnique
-        .mockResolvedValueOnce({ id: 10, teacherId: 5, userId: 100 })
-        .mockResolvedValueOnce({ totalScore: 520 });
+      prisma.studentProfile.findUnique.mockResolvedValueOnce({ id: 10, teacherId: 5, userId: 100 });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        totalScore: 520,
+        isArchived: false,
+        admissionAnalysisRevision: 1,
+      });
       prisma.studentAttachment.findFirst.mockResolvedValue({ id: 7 });
       prisma.studentAdmissionResult.upsert.mockResolvedValue({
         id: 1,
@@ -251,24 +251,368 @@ describe('StudentService', () => {
       expect(prisma.studentAdmissionResult.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { studentId: 10 },
-          create: expect.objectContaining({ scoreDiff: 20 }),
+          create: expect.objectContaining({
+            scoreDiff: 20,
+            matchStatus: 'MANUAL_CONFIRMED',
+            matchConfirmedAt: expect.any(Date),
+            matchConfirmedById: 20,
+          }),
           update: expect.objectContaining({ scoreDiff: 20 }),
         }),
       );
       expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       });
+      expect(prisma.studentProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 10 },
+          data: { admissionAnalysisRevision: { increment: 1 } },
+        }),
+      );
     });
 
-    it('archives a submitted student and marks the published plan as historical', async () => {
-      prisma.studentProfile.findUnique.mockResolvedValueOnce({
+    it('confirms an unchanged automatic match without dropping server-resolved IDs', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValueOnce({ id: 10, teacherId: 5, userId: 100 });
+      prisma.studentProfile.update.mockResolvedValue({
         id: 10,
         teacherId: 5,
         userId: 100,
+        totalScore: 520,
+        isArchived: false,
+        admissionAnalysisRevision: 1,
+      });
+      prisma.studentAttachment.findFirst.mockResolvedValue({ id: 7 });
+      prisma.studentAdmissionResult.findUnique.mockResolvedValue({
+        studentId: 10,
+        admittedUniName: '西华师范大学',
+        admittedUniCode: '5122',
+        admittedUniId: 5122,
+        batchName: '本科批次B段',
+        admittedMajorGroupCode: '105',
+        admittedMajorCode: '32',
+        admittedMajorName: '数学与应用数学',
+        admittedMajorId: 3200,
+        proofAttachmentId: 7,
+        sequenceNo: 18,
+        majorSequenceNo: 1,
+        isAdjusted: false,
+        matchStatus: 'EXACT',
+      });
+      prisma.studentAdmissionResult.upsert.mockImplementation((args: any) => ({
+        id: 1,
+        ...args.update,
+        matchStatus: 'EXACT',
+      }));
+
+      await service.saveAdmissionResult(
+        10,
+        {
+          admittedUniName: '西华师范大学',
+          admittedUniCode: '5122',
+          batchName: '本科批次B段',
+          admittedMajorGroupCode: '105',
+          admittedMajorName: '数学与应用数学',
+          proofAttachmentId: 7,
+          sequenceNo: 18,
+          majorSequenceNo: 1,
+          isAdjusted: false,
+        },
+        teacher,
+      );
+
+      const update = prisma.studentAdmissionResult.upsert.mock.calls[0][0].update;
+      expect(update).toMatchObject({
+        admittedUniId: 5122,
+        admittedMajorCode: '32',
+        admittedMajorId: 3200,
+        sequenceNo: 18,
+        majorSequenceNo: 1,
+        matchConfirmedById: 20,
+        matchConfirmedAt: expect.any(Date),
+      });
+      expect(update.matchStatus).toBeUndefined();
+      expect(update.submissionAttachmentId).toBeUndefined();
+    });
+
+    it('clears stale resolved IDs when a teacher changes university or major identity fields', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        isArchived: false,
+      });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        totalScore: 520,
+        isArchived: false,
+        admissionAnalysisRevision: 1,
+      });
+      prisma.studentAdmissionResult.findUnique.mockResolvedValue({
+        studentId: 10,
+        admittedUniName: '西华师范大学',
+        admittedUniCode: '5122',
+        admittedUniId: 5122,
+        admittedMajorCode: '32',
+        admittedMajorName: '数学与应用数学',
+        admittedMajorId: 3200,
+        proofAttachmentId: null,
+        sequenceNo: 18,
+        majorSequenceNo: 1,
+        isAdjusted: false,
+        matchStatus: 'EXACT',
+      });
+
+      await service.saveAdmissionResult(
+        10,
+        {
+          admittedUniName: '四川大学',
+          admittedUniCode: '1061',
+          admittedMajorCode: '01',
+          admittedMajorName: '临床医学',
+          sequenceNo: 2,
+          majorSequenceNo: 1,
+        },
+        teacher,
+      );
+
+      const update = prisma.studentAdmissionResult.upsert.mock.calls[0][0].update;
+      expect(update).toMatchObject({
+        admittedUniCode: '1061',
+        admittedUniId: null,
+        admittedMajorCode: '01',
+        admittedMajorId: null,
+        matchStatus: 'MANUAL_CONFIRMED',
+      });
+    });
+
+    it.each([
+      {
+        label: '院校名称改变但隐藏院校代码仍是旧值',
+        dtoPatch: { admittedUniName: '四川大学' },
+        expected: { admittedUniCode: null, admittedUniId: null },
+      },
+      {
+        label: '专业名称改变但隐藏专业代码仍是旧值',
+        dtoPatch: { admittedMajorName: '统计学', admittedMajorCode: undefined },
+        expected: { admittedMajorCode: null, admittedMajorId: null },
+      },
+    ])('$label 时清除陈旧代码和关联 ID', async (scenario) => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        isArchived: false,
+      });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        totalScore: 520,
+        isArchived: false,
+        admissionAnalysisRevision: 1,
+      });
+      prisma.studentAdmissionResult.findUnique.mockResolvedValue({
+        studentId: 10,
+        admittedUniName: '西华师范大学',
+        admittedUniCode: '5122',
+        admittedUniId: 5122,
+        batchName: '本科批次B段',
+        admittedMajorGroupCode: '105',
+        admittedMajorCode: '32',
+        admittedMajorName: '数学与应用数学',
+        admittedMajorId: 3200,
+        proofAttachmentId: 7,
+        submissionAttachmentId: 20,
+        sequenceNo: 18,
+        majorSequenceNo: 1,
+        isAdjusted: false,
+        matchStatus: 'EXACT',
+      });
+      prisma.studentAttachment.findFirst.mockImplementation(({ where }: any) => Promise.resolve({ id: where.id }));
+
+      await service.saveAdmissionResult(
+        10,
+        {
+          admittedUniName: '西华师范大学',
+          admittedUniCode: '5122',
+          batchName: '本科批次B段',
+          admittedMajorGroupCode: '105',
+          admittedMajorCode: '32',
+          admittedMajorName: '数学与应用数学',
+          proofAttachmentId: 7,
+          sequenceNo: 18,
+          majorSequenceNo: 1,
+          isAdjusted: false,
+          ...scenario.dtoPatch,
+        },
+        teacher,
+      );
+
+      expect(prisma.studentAdmissionResult.upsert.mock.calls[0][0].update).toMatchObject(scenario.expected);
+    });
+
+    it('rejects saving an admission result after the student is archived', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        isArchived: true,
+      });
+
+      await expect(service.saveAdmissionResult(10, { admittedUniName: '四川大学' }, teacher)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rechecks archive state inside the save transaction before writing', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        isArchived: false,
+      });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        totalScore: 520,
+        isArchived: true,
+        admissionAnalysisRevision: 1,
+      });
+
+      await expect(service.saveAdmissionResult(10, { admittedUniName: '四川大学' }, teacher)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.studentAdmissionResult.upsert).not.toHaveBeenCalled();
+    });
+
+    it('rechecks teacher ownership inside the save transaction before writing', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        isArchived: false,
+      });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 10,
+        teacherId: 9,
+        userId: 100,
+        totalScore: 520,
+        isArchived: false,
+        admissionAnalysisRevision: 1,
+      });
+
+      await expect(service.saveAdmissionResult(10, { admittedUniName: '四川大学' }, teacher)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.studentAdmissionResult.upsert).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      {
+        label: '同一录取截图且原志愿 PDF 仍存在',
+        proofAttachmentId: 7,
+        sourceExists: true,
+        expectedSourceId: 20,
+      },
+      {
+        label: '老师更换录取截图',
+        proofAttachmentId: 8,
+        sourceExists: true,
+        expectedSourceId: null,
+      },
+      {
+        label: '原志愿 PDF 已不存在',
+        proofAttachmentId: 7,
+        sourceExists: false,
+        expectedSourceId: null,
+      },
+    ])('人工修改自动匹配序号时：$label → 来源为 $expectedSourceId', async (scenario) => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        isArchived: false,
+      });
+      prisma.studentProfile.update.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        totalScore: 520,
+        isArchived: false,
+        admissionAnalysisRevision: 1,
+      });
+      prisma.studentAdmissionResult.findUnique.mockResolvedValue({
+        studentId: 10,
+        admittedUniName: '西华师范大学',
+        admittedUniCode: '5122',
+        admittedUniId: 5122,
+        batchName: '本科批次B段',
+        admittedMajorGroupCode: '105',
+        admittedMajorCode: '32',
+        admittedMajorName: '数学与应用数学',
+        admittedMajorId: 3200,
+        proofAttachmentId: 7,
+        submissionAttachmentId: 20,
+        sequenceNo: 18,
+        majorSequenceNo: 1,
+        isAdjusted: false,
+        matchStatus: 'EXACT',
+      });
+      prisma.studentAttachment.findFirst.mockImplementation(({ where }: any) => {
+        if (where.category === 'admission_proof') return Promise.resolve({ id: scenario.proofAttachmentId });
+        return Promise.resolve(scenario.sourceExists ? { id: 20 } : null);
+      });
+      prisma.studentAdmissionResult.upsert.mockImplementation((args: any) => ({ id: 1, ...args.update }));
+
+      await service.saveAdmissionResult(
+        10,
+        {
+          admittedUniName: '西华师范大学',
+          admittedUniCode: '5122',
+          batchName: '本科批次B段',
+          admittedMajorGroupCode: '105',
+          admittedMajorCode: '32',
+          admittedMajorName: '数学与应用数学',
+          proofAttachmentId: scenario.proofAttachmentId,
+          sequenceNo: 19,
+          majorSequenceNo: 1,
+          isAdjusted: false,
+        },
+        teacher,
+      );
+
+      const update = prisma.studentAdmissionResult.upsert.mock.calls[0][0].update;
+      expect(update).toMatchObject({
+        matchStatus: 'MANUAL_CONFIRMED',
+        submissionAttachmentId: scenario.expectedSourceId,
+        matchEvidence: {
+          version: 'admission-match-v1',
+          source: 'manual-confirmation',
+          previousAutomaticMatch: expect.objectContaining({
+            matchStatus: 'EXACT',
+            submissionAttachmentId: scenario.expectedSourceId,
+          }),
+        },
+      });
+      expect(JSON.stringify(update.matchEvidence)).not.toContain('.pdf');
+      expect(JSON.stringify(update.matchEvidence)).not.toContain('originalName');
+    });
+
+    it('archives a submitted student and marks the published plan as historical', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        isArchived: false,
       });
       prisma.studentAdmissionResult.findUnique.mockResolvedValue({
         admittedUniName: '四川大学',
-        proofAttachmentId: null,
+        proofAttachmentId: 7,
+        matchConfirmedAt: new Date('2026-08-31T08:00:00.000Z'),
       });
       prisma.volunteerPlan.findFirst.mockResolvedValue({ id: 99 });
       prisma.studentAttachment.findFirst.mockResolvedValue({ id: 7 });
@@ -292,10 +636,7 @@ describe('StudentService', () => {
         where: { id: 99 },
         data: { isHistorical: true },
       });
-      expect(prisma.studentAdmissionResult.update).toHaveBeenCalledWith({
-        where: { studentId: 10 },
-        data: { proofAttachmentId: 7 },
-      });
+      expect(prisma.studentAdmissionResult.update).not.toHaveBeenCalled();
       expect(prisma.studentProfile.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 10 },
@@ -304,7 +645,7 @@ describe('StudentService', () => {
       );
     });
 
-    it('replaces a stale or foreign proof reference with the latest valid admission proof', async () => {
+    it('rejects a stale proof reference instead of silently replacing the evidence', async () => {
       prisma.studentProfile.findUnique.mockResolvedValue({
         id: 10,
         teacherId: 5,
@@ -313,19 +654,14 @@ describe('StudentService', () => {
       prisma.studentAdmissionResult.findUnique.mockResolvedValue({
         admittedUniName: '四川大学',
         proofAttachmentId: 999,
+        matchConfirmedAt: new Date('2026-08-31T08:00:00.000Z'),
       });
       prisma.volunteerPlan.findFirst.mockResolvedValue({ id: 99 });
-      prisma.studentAttachment.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 7 });
-      prisma.studentProfile.update.mockResolvedValue({
-        id: 10,
-        isArchived: true,
-      });
+      prisma.studentAttachment.findFirst.mockResolvedValue(null);
 
-      await service.archiveStudent(10, teacher);
+      await expect(service.archiveStudent(10, teacher)).rejects.toThrow('录取凭证已失效，请重新选择截图并保存确认');
 
-      expect(prisma.studentAttachment.findFirst).toHaveBeenNthCalledWith(1, {
+      expect(prisma.studentAttachment.findFirst).toHaveBeenCalledWith({
         where: {
           id: 999,
           studentId: 10,
@@ -333,15 +669,24 @@ describe('StudentService', () => {
         },
         select: { id: true },
       });
-      expect(prisma.studentAttachment.findFirst).toHaveBeenNthCalledWith(2, {
-        where: { studentId: 10, category: 'admission_proof' },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
+      expect(prisma.volunteerPlan.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects archiving an OCR result until a teacher saves and confirms it', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        isArchived: false,
       });
-      expect(prisma.studentAdmissionResult.update).toHaveBeenCalledWith({
-        where: { studentId: 10 },
-        data: { proofAttachmentId: 7 },
+      prisma.studentAdmissionResult.findUnique.mockResolvedValue({
+        admittedUniName: '西华师范大学',
+        proofAttachmentId: 7,
+        matchConfirmedAt: null,
       });
+
+      await expect(service.archiveStudent(10, teacher)).rejects.toThrow('请先保存并人工确认录取结果');
+      expect(prisma.volunteerPlan.findFirst).not.toHaveBeenCalled();
     });
   });
 
@@ -350,11 +695,7 @@ describe('StudentService', () => {
     let uploadsRoot: string;
     let previousUploadsRoot: string | undefined;
 
-    function uploadFile(
-      originalname: string,
-      mimetype: string,
-      buffer: Buffer,
-    ): Express.Multer.File {
+    function uploadFile(originalname: string, mimetype: string, buffer: Buffer): Express.Multer.File {
       return {
         fieldname: 'file',
         originalname,
@@ -373,17 +714,12 @@ describe('StudentService', () => {
     }
 
     function jpegBuffer() {
-      return Buffer.concat([
-        Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
-        Buffer.from('test-payload'),
-      ]);
+      return Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('test-payload')]);
     }
 
     beforeEach(async () => {
       previousUploadsRoot = process.env.UPLOADS_ROOT;
-      uploadsRoot = await fs.promises.mkdtemp(
-        path.join(os.tmpdir(), 'volunteer-helper-attachments-'),
-      );
+      uploadsRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'volunteer-helper-attachments-'));
       process.env.UPLOADS_ROOT = uploadsRoot;
       prisma.studentProfile.findUnique.mockResolvedValue({
         id: 10,
@@ -427,11 +763,56 @@ describe('StudentService', () => {
         }),
       );
       expect(result.originalName).toBe('录取通知书.png');
-      const storagePath =
-        prisma.studentAttachment.create.mock.calls[0][0].data.storagePath;
+      const storagePath = prisma.studentAttachment.create.mock.calls[0][0].data.storagePath;
+      await expect(fs.promises.readFile(path.join(uploadsRoot, storagePath))).resolves.toEqual(pngBuffer());
+    });
+
+    it('rejects uploading or deleting attachments after the student is archived', async () => {
+      prisma.studentProfile.findUnique.mockResolvedValue({
+        id: 10,
+        teacherId: 5,
+        userId: 100,
+        isArchived: true,
+      });
+
       await expect(
-        fs.promises.readFile(path.join(uploadsRoot, storagePath)),
-      ).resolves.toEqual(pngBuffer());
+        service.uploadAttachment(
+          10,
+          'admission_proof',
+          uploadFile('录取通知书.png', 'image/png', pngBuffer()),
+          teacher,
+        ),
+      ).rejects.toThrow(ConflictException);
+      await expect(service.deleteAttachment(10, 7, teacher)).rejects.toThrow(ConflictException);
+      expect(prisma.studentAttachment.create).not.toHaveBeenCalled();
+      expect(prisma.studentAttachment.delete).not.toHaveBeenCalled();
+    });
+
+    it('rechecks archive state before attachment create and removes the staged file on conflict', async () => {
+      prisma.studentProfile.findUnique
+        .mockResolvedValueOnce({
+          id: 10,
+          teacherId: 5,
+          userId: 100,
+          isArchived: false,
+        })
+        .mockResolvedValueOnce({
+          id: 10,
+          teacherId: 5,
+          userId: 100,
+          isArchived: true,
+        });
+
+      await expect(
+        service.uploadAttachment(
+          10,
+          'admission_proof',
+          uploadFile('录取通知书.png', 'image/png', pngBuffer()),
+          teacher,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.studentAttachment.create).not.toHaveBeenCalled();
+      await expect(fs.promises.readdir(path.join(uploadsRoot, 'students', '10'))).resolves.toEqual([]);
     });
 
     it('accepts the common JFIF filename extension as JPEG content', async () => {
@@ -481,9 +862,7 @@ describe('StudentService', () => {
     });
 
     it('removes the physical file when creating its database record fails', async () => {
-      prisma.studentAttachment.create.mockRejectedValue(
-        new Error('database unavailable'),
-      );
+      prisma.studentAttachment.create.mockRejectedValue(new Error('database unavailable'));
 
       await expect(
         service.uploadAttachment(
@@ -494,11 +873,8 @@ describe('StudentService', () => {
         ),
       ).rejects.toThrow('database unavailable');
 
-      const storagePath =
-        prisma.studentAttachment.create.mock.calls[0][0].data.storagePath;
-      await expect(
-        fs.promises.access(path.join(uploadsRoot, storagePath)),
-      ).rejects.toThrow();
+      const storagePath = prisma.studentAttachment.create.mock.calls[0][0].data.storagePath;
+      await expect(fs.promises.access(path.join(uploadsRoot, storagePath))).rejects.toThrow();
     });
 
     it('clears an admission result proof reference transactionally before deleting the record', async () => {
@@ -519,12 +895,48 @@ describe('StudentService', () => {
 
       expect(prisma.studentAdmissionResult.updateMany).toHaveBeenCalledWith({
         where: { studentId: 10, proofAttachmentId: 7 },
-        data: { proofAttachmentId: null },
+        data: expect.objectContaining({
+          proofAttachmentId: null,
+          sequenceNo: null,
+          majorSequenceNo: null,
+          isAdjusted: false,
+          matchStatus: null,
+        }),
       });
       expect(prisma.studentAttachment.delete).toHaveBeenCalledWith({
         where: { id: 7 },
       });
       await expect(fs.promises.access(filePath)).rejects.toThrow();
+    });
+
+    it('rechecks archive state inside delete transaction and restores quarantined evidence', async () => {
+      const storagePath = 'students/10/admission_proof.png';
+      const filePath = path.join(uploadsRoot, storagePath);
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.promises.writeFile(filePath, pngBuffer());
+      prisma.studentProfile.findUnique
+        .mockResolvedValueOnce({
+          id: 10,
+          teacherId: 5,
+          userId: 100,
+          isArchived: false,
+        })
+        .mockResolvedValueOnce({
+          id: 10,
+          teacherId: 5,
+          userId: 100,
+          isArchived: true,
+        });
+      prisma.studentAttachment.findFirst.mockResolvedValue({
+        id: 7,
+        studentId: 10,
+        category: 'admission_proof',
+        storagePath,
+      });
+
+      await expect(service.deleteAttachment(10, 7, teacher)).rejects.toThrow(ConflictException);
+      await expect(fs.promises.readFile(filePath)).resolves.toEqual(pngBuffer());
+      expect(prisma.studentAttachment.delete).not.toHaveBeenCalled();
     });
 
     it('keeps logical deletion successful when physical cleanup must be retried', async () => {
@@ -548,9 +960,7 @@ describe('StudentService', () => {
           category: 'other',
           storagePath: secondStoragePath,
         });
-      const removeSpy = jest
-        .spyOn(fs.promises, 'rm')
-        .mockRejectedValueOnce(new Error('file locked'));
+      const removeSpy = jest.spyOn(fs.promises, 'rm').mockRejectedValueOnce(new Error('file locked'));
 
       await expect(service.deleteAttachment(10, 7, teacher)).resolves.toEqual({
         deleted: true,
@@ -564,11 +974,7 @@ describe('StudentService', () => {
       await expect(service.deleteAttachment(10, 8, teacher)).resolves.toEqual({
         deleted: true,
       });
-      const pendingDirectory = path.join(
-        uploadsRoot,
-        '.student-attachment-quarantine',
-        'pending',
-      );
+      const pendingDirectory = path.join(uploadsRoot, '.student-attachment-quarantine', 'pending');
       await expect(fs.promises.readdir(pendingDirectory)).resolves.toEqual([]);
     });
 
@@ -583,26 +989,15 @@ describe('StudentService', () => {
         category: 'admission_proof',
         storagePath,
       });
-      prisma.$transaction.mockRejectedValueOnce(
-        new Error('database unavailable'),
-      );
+      prisma.$transaction.mockRejectedValueOnce(new Error('database unavailable'));
 
-      await expect(service.deleteAttachment(10, 7, teacher)).rejects.toThrow(
-        'database unavailable',
-      );
+      await expect(service.deleteAttachment(10, 7, teacher)).rejects.toThrow('database unavailable');
 
-      await expect(fs.promises.readFile(filePath)).resolves.toEqual(
-        pngBuffer(),
-      );
+      await expect(fs.promises.readFile(filePath)).resolves.toEqual(pngBuffer());
     });
 
     it('rejects traversal into another student directory without touching that file', async () => {
-      const otherStudentPath = path.join(
-        uploadsRoot,
-        'students',
-        '11',
-        'private.png',
-      );
+      const otherStudentPath = path.join(uploadsRoot, 'students', '11', 'private.png');
       await fs.promises.mkdir(path.dirname(otherStudentPath), {
         recursive: true,
       });
@@ -614,39 +1009,16 @@ describe('StudentService', () => {
         storagePath: 'students/10/../11/private.png',
       });
 
-      await expect(service.deleteAttachment(10, 7, teacher)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(fs.promises.readFile(otherStudentPath)).resolves.toEqual(
-        pngBuffer(),
-      );
+      await expect(service.deleteAttachment(10, 7, teacher)).rejects.toThrow(BadRequestException);
+      await expect(fs.promises.readFile(otherStudentPath)).resolves.toEqual(pngBuffer());
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('permanently deletes the student directory and safe referenced files only', async () => {
-      const studentFilePath = path.join(
-        uploadsRoot,
-        'students',
-        '10',
-        'orphan.png',
-      );
-      const historicalFilePath = path.join(
-        uploadsRoot,
-        'historical',
-        '10',
-        'admission.png',
-      );
-      const otherStudentPath = path.join(
-        uploadsRoot,
-        'students',
-        '11',
-        'private.png',
-      );
-      for (const filePath of [
-        studentFilePath,
-        historicalFilePath,
-        otherStudentPath,
-      ]) {
+      const studentFilePath = path.join(uploadsRoot, 'students', '10', 'orphan.png');
+      const historicalFilePath = path.join(uploadsRoot, 'historical', '10', 'admission.png');
+      const otherStudentPath = path.join(uploadsRoot, 'students', '11', 'private.png');
+      for (const filePath of [studentFilePath, historicalFilePath, otherStudentPath]) {
         await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
         await fs.promises.writeFile(filePath, pngBuffer());
       }
@@ -656,19 +1028,13 @@ describe('StudentService', () => {
       ]);
       prisma.$transaction.mockResolvedValueOnce(undefined);
 
-      await expect(
-        service.deleteStudentPermanently(10, teacher),
-      ).resolves.toEqual({
+      await expect(service.deleteStudentPermanently(10, teacher)).resolves.toEqual({
         message: '学生已彻底删除',
       });
 
-      await expect(
-        fs.promises.access(path.join(uploadsRoot, 'students', '10')),
-      ).rejects.toThrow();
+      await expect(fs.promises.access(path.join(uploadsRoot, 'students', '10'))).rejects.toThrow();
       await expect(fs.promises.access(historicalFilePath)).rejects.toThrow();
-      await expect(fs.promises.readFile(otherStudentPath)).resolves.toEqual(
-        pngBuffer(),
-      );
+      await expect(fs.promises.readFile(otherStudentPath)).resolves.toEqual(pngBuffer());
       expect(prisma.studentAttachment.findMany).toHaveBeenCalledWith({
         where: { studentId: 10 },
         select: { storagePath: true },
@@ -676,38 +1042,18 @@ describe('StudentService', () => {
     });
 
     it('restores all student files when permanent deletion transaction fails', async () => {
-      const studentFilePath = path.join(
-        uploadsRoot,
-        'students',
-        '10',
-        'orphan.png',
-      );
-      const historicalFilePath = path.join(
-        uploadsRoot,
-        'historical',
-        '10',
-        'admission.png',
-      );
+      const studentFilePath = path.join(uploadsRoot, 'students', '10', 'orphan.png');
+      const historicalFilePath = path.join(uploadsRoot, 'historical', '10', 'admission.png');
       for (const filePath of [studentFilePath, historicalFilePath]) {
         await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
         await fs.promises.writeFile(filePath, pngBuffer());
       }
-      prisma.studentAttachment.findMany.mockResolvedValue([
-        { storagePath: 'historical/10/admission.png' },
-      ]);
-      prisma.$transaction.mockRejectedValueOnce(
-        new Error('database unavailable'),
-      );
+      prisma.studentAttachment.findMany.mockResolvedValue([{ storagePath: 'historical/10/admission.png' }]);
+      prisma.$transaction.mockRejectedValueOnce(new Error('database unavailable'));
 
-      await expect(
-        service.deleteStudentPermanently(10, teacher),
-      ).rejects.toThrow('database unavailable');
-      await expect(fs.promises.readFile(studentFilePath)).resolves.toEqual(
-        pngBuffer(),
-      );
-      await expect(fs.promises.readFile(historicalFilePath)).resolves.toEqual(
-        pngBuffer(),
-      );
+      await expect(service.deleteStudentPermanently(10, teacher)).rejects.toThrow('database unavailable');
+      await expect(fs.promises.readFile(studentFilePath)).resolves.toEqual(pngBuffer());
+      await expect(fs.promises.readFile(historicalFilePath)).resolves.toEqual(pngBuffer());
     });
   });
 
@@ -781,10 +1127,7 @@ describe('StudentService', () => {
             teacherId: 5,
             status: StudentStatus.ACTIVE,
             user: {
-              OR: [
-                { realName: { contains: '张' } },
-                { username: { contains: '张' } },
-              ],
+              OR: [{ realName: { contains: '张' } }, { username: { contains: '张' } }],
             },
           }),
         }),
@@ -874,11 +1217,7 @@ describe('StudentService', () => {
 
       const result = (await service.findById(10)) as any;
 
-      expect(scoreSegmentService.scoreToRank).toHaveBeenCalledWith(
-        2026,
-        '物理',
-        600,
-      );
+      expect(scoreSegmentService.scoreToRank).toHaveBeenCalledWith(2026, '物理', 600);
       expect(result.rankCheck).toEqual(
         expect.objectContaining({
           calculatedRank: 28500,
@@ -889,20 +1228,18 @@ describe('StudentService', () => {
     });
 
     it('uses 2025 score segment data as the temporary source for 2026 rank checks', async () => {
-      scoreSegmentService.scoreToRank.mockImplementation(
-        async (year: number) => {
-          if (year === 2026) {
-            throw new Error('2026 score segment data not found');
-          }
-          return {
-            year: 2025,
-            examType: '物理',
-            score: 479,
-            rank: 156000,
-            percentile: 0.55,
-          };
-        },
-      );
+      scoreSegmentService.scoreToRank.mockImplementation(async (year: number) => {
+        if (year === 2026) {
+          throw new Error('2026 score segment data not found');
+        }
+        return {
+          year: 2025,
+          examType: '物理',
+          score: 479,
+          rank: 156000,
+          percentile: 0.55,
+        };
+      });
       prisma.studentProfile.findUnique.mockResolvedValue({
         id: 10,
         dataVersion: 1,
@@ -925,18 +1262,8 @@ describe('StudentService', () => {
 
       const result = (await service.findById(10)) as any;
 
-      expect(scoreSegmentService.scoreToRank).toHaveBeenNthCalledWith(
-        1,
-        2026,
-        '物理',
-        479,
-      );
-      expect(scoreSegmentService.scoreToRank).toHaveBeenNthCalledWith(
-        2,
-        2025,
-        '物理',
-        479,
-      );
+      expect(scoreSegmentService.scoreToRank).toHaveBeenNthCalledWith(1, 2026, '物理', 479);
+      expect(scoreSegmentService.scoreToRank).toHaveBeenNthCalledWith(2, 2025, '物理', 479);
       expect(result.rankCheck).toEqual(
         expect.objectContaining({
           calculatedRank: 156000,
@@ -995,17 +1322,13 @@ describe('StudentService', () => {
         dataVersion: 5,
       });
 
-      await expect(
-        service.updateProfile(10, { dataVersion: 3, city: '成都' }),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.updateProfile(10, { dataVersion: 3, city: '成都' })).rejects.toThrow(ConflictException);
     });
 
     it('should throw NotFoundException if student does not exist', async () => {
       prisma.studentProfile.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.updateProfile(999, { dataVersion: 0 }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.updateProfile(999, { dataVersion: 0 })).rejects.toThrow(NotFoundException);
     });
 
     // 手机号唯一约束冲突应转成友好 400，而不是冒成 500（Internal server error）
@@ -1032,9 +1355,9 @@ describe('StudentService', () => {
       );
       prisma.studentProfile.update.mockRejectedValue(p2002);
 
-      await expect(
-        service.updateProfile(10, { dataVersion: 3, phone: '13800138000' }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.updateProfile(10, { dataVersion: 3, phone: '13800138000' })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     // 自动保存场景：前端 PATCH 单字段时不发 dataVersion，应跳过乐观锁正常更新（last-write-wins）
@@ -1057,9 +1380,7 @@ describe('StudentService', () => {
         dataVersion: 8,
       });
 
-      await expect(
-        service.updateProfile(10, { totalScore: 750 } as any),
-      ).resolves.toBeDefined();
+      await expect(service.updateProfile(10, { totalScore: 750 } as any)).resolves.toBeDefined();
 
       expect(prisma.studentProfile.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1100,11 +1421,7 @@ describe('StudentService', () => {
         provincialRank: 1,
       } as any)) as any;
 
-      expect(scoreSegmentService.scoreToRank).toHaveBeenCalledWith(
-        2026,
-        '物理',
-        600,
-      );
+      expect(scoreSegmentService.scoreToRank).toHaveBeenCalledWith(2026, '物理', 600);
       const call = prisma.studentProfile.update.mock.calls[0][0] as any;
       expect(call.data.provincialRank).toBe(1);
       expect(result.rankCheck).toEqual(
@@ -1218,9 +1535,7 @@ describe('StudentService', () => {
       prisma.studentProfile.findUnique.mockResolvedValue({ id: 1 });
       prisma.teacherProfile.findUnique.mockResolvedValue(null);
 
-      await expect(service.assignTeacher(1, 99)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.assignTeacher(1, 99)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -1288,18 +1603,14 @@ describe('StudentService', () => {
 
       const result = await service.getMyProfile(100);
       expect(result).toHaveProperty('progress');
-      expect((result as any).progress).toHaveProperty(
-        'studentSelfCompleteness',
-      );
+      expect((result as any).progress).toHaveProperty('studentSelfCompleteness');
       expect((result as any).progress).toHaveProperty('stageProgress');
       expect((result as any).progress).toHaveProperty('isRecommendable');
     });
 
     it('找不到时抛 NotFoundException', async () => {
       prisma.studentProfile.findUnique.mockResolvedValue(null);
-      await expect(service.getMyProfile(999)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.getMyProfile(999)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -1558,9 +1869,7 @@ describe('StudentService', () => {
         teacherId: 5,
         batchesConfirmedAt: new Date('2026-06-01'),
       });
-      await expect((service as any).unlockBatches(1, 30, 99)).rejects.toThrow(
-        /无权/,
-      );
+      await expect((service as any).unlockBatches(1, 30, 99)).rejects.toThrow(/无权/);
       expect(prisma.studentProfile.update).not.toHaveBeenCalled();
     });
 
@@ -1662,9 +1971,7 @@ describe('StudentService', () => {
     });
 
     it('still rejects provincialRank from student PATCH', async () => {
-      await expect(
-        service.updateMyProfile(1, { provincialRank: 12345 } as any),
-      ).rejects.toThrow('仅老师可修改');
+      await expect(service.updateMyProfile(1, { provincialRank: 12345 } as any)).rejects.toThrow('仅老师可修改');
     });
 
     it('does NOT write provenance when no STUDENT_NEWLY_WRITABLE field is in dto', async () => {
@@ -1701,9 +2008,7 @@ describe('StudentService', () => {
         // ① teacher-only field
         provincialRank: 1000,
       };
-      await expect(service.updateMyProfile(100, dto as any)).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(service.updateMyProfile(100, dto as any)).rejects.toThrow(ForbiddenException);
     });
 
     it('包含 province 字段时正常通过（2026-05-06 重新放权给学生）', async () => {
@@ -1770,9 +2075,7 @@ describe('StudentService', () => {
 
     it('档案不存在时抛 NotFoundException', async () => {
       prisma.studentProfile.findUnique.mockResolvedValue(null);
-      await expect(
-        service.updateMyProfile(999, { dataVersion: 0 } as any),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.updateMyProfile(999, { dataVersion: 0 } as any)).rejects.toThrow(NotFoundException);
     });
   });
 });

@@ -9,9 +9,11 @@ OCR 数据导入微服务
   pip install -r requirements.txt
   python main.py
   # 或
-  uvicorn main:app --host 0.0.0.0 --port 8100
+  uvicorn main:app --host 127.0.0.1 --port 8100
 """
 
+import asyncio
+import multiprocessing
 import os
 import re
 import json
@@ -19,6 +21,7 @@ import hashlib
 import logging
 import subprocess
 import tempfile
+import threading
 import unicodedata
 from typing import Optional, List, Tuple, Dict
 from enum import Enum
@@ -30,14 +33,58 @@ load_dotenv()
 
 import requests as http_requests
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
 import mysql.connector
+
+from admission_result_parser import (
+    MAX_ADMISSION_UPLOAD_BYTES,
+    detect_supported_upload_suffix,
+    parse_admission_result_ocr,
+)
 
 # OCR 延迟导入（模型加载较慢）
 _ocr_instance = None
 _ocr_engine = None  # "paddle" or "rapid"
+_admission_ocr_instance = None
+_local_ocr_lock = threading.RLock()
+_admission_ocr_lock = threading.Lock()
+_admission_request_semaphore = asyncio.Semaphore(1)
+_volunteer_request_semaphore = asyncio.Semaphore(1)
+
+MAX_VOLUNTEER_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_VOLUNTEER_PDF_PAGES = 20
+MAX_VOLUNTEER_RENDER_DIMENSION = 3000
+PDF_INFO_TIMEOUT_SECONDS = 10
+PDF_RENDER_TIMEOUT_SECONDS = 60
+# Includes spawned-worker startup, PDF rendering and all page OCR calls. The
+# NestJS caller waits 120 seconds, leaving enough time to return a controlled
+# error after this worker is terminated.
+OCR_JOB_TIMEOUT_SECONDS = 105
+OCR_SUPERVISOR_TIMEOUT_SECONDS = 115
+SENSITIVE_OCR_CONFIDENCE_THRESHOLD = 0.75
+_ocr_service_restart_scheduled = threading.Event()
+
+
+class OcrJobTimeoutError(RuntimeError):
+    pass
+
+
+class OcrJobProcessError(RuntimeError):
+    def __init__(self, kind: str):
+        super().__init__(kind)
+        self.kind = kind
+
+
+def _schedule_ocr_service_restart() -> None:
+    """Last-resort recovery when even the process supervisor cannot return."""
+    if _ocr_service_restart_scheduled.is_set():
+        return
+    _ocr_service_restart_scheduled.set()
+    logger.critical("OCR 作业监督器失去响应，进程将退出并由 PM2 自动恢复")
+    timer = threading.Timer(0.5, os._exit, args=(70,))
+    timer.daemon = True
+    timer.start()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -107,6 +154,13 @@ class OcrRequest(BaseModel):
 class VolunteerFormMajor(BaseModel):
     code: str
     name: str
+    # One-based slot in the submitted form. Keep this even when OCR cannot
+    # parse a slot so downstream matching never compresses "第 2 专业" into
+    # "第 1 专业".
+    # 0 means OCR saw a major but could not prove that all six original slots
+    # were preserved. Downstream matching treats 0 as explicit review-only
+    # evidence and never turns it into a professional sequence number.
+    originalOrder: int = Field(..., ge=0, le=6)
 
 
 class VolunteerFormVolunteer(BaseModel):
@@ -130,6 +184,23 @@ class VolunteerFormParseResponse(BaseModel):
     batch: str = ""
     examTypeHint: str = ""
     volunteers: List[VolunteerFormVolunteer]
+    source: str = "ocr"
+
+
+class AdmissionResultParseResponse(BaseModel):
+    batchName: str = ""
+    examType: str = ""
+    levelName: str = ""
+    universityCode: str = ""
+    universityName: str = ""
+    groupCode: str = ""
+    majorCode: str = ""
+    majorName: str = ""
+    queryTime: str = ""
+    identityMatch: Optional[bool] = None
+    confidence: float = Field(0.0, ge=0.0, le=1.0)
+    fieldConfidences: Dict[str, float] = Field(default_factory=dict)
+    warnings: List[str] = Field(default_factory=list)
     source: str = "ocr"
 
 class ScoreRow(BaseModel):
@@ -340,8 +411,10 @@ def run_baidu_ocr(img_path: str) -> List[Tuple]:
     result = response.json()
 
     if "error_code" in result:
-        logger.error(f"百度 OCR 错误: {result}")
-        raise ValueError(f"百度 OCR 错误: {result.get('error_msg', 'Unknown error')}")
+        # Provider payloads can echo request-derived data. Log only the status
+        # code so admission screenshots never leak identity text into logs.
+        logger.error("百度 OCR 返回错误（code=%s）", result.get("error_code"))
+        raise ValueError("百度 OCR 返回错误")
 
     # 解析结果
     items = []
@@ -462,7 +535,7 @@ def run_paddleocr_vl(img_path: str) -> List[Tuple]:
     response = http_requests.post(url, headers=headers, json=payload, timeout=120)
 
     if response.status_code != 200:
-        logger.error(f"PaddleOCR-VL API 错误: {response.status_code} {response.text[:500]}")
+        logger.error("PaddleOCR-VL API 错误: %s", response.status_code)
         raise ValueError(f"PaddleOCR-VL API 错误: {response.status_code}")
 
     result = response.json()
@@ -600,7 +673,7 @@ def run_aistudio_layout_parsing(img_path: str) -> List[Tuple]:
     response = http_requests.post(AISTUDIO_API_URL, headers=headers, json=payload, timeout=120)
 
     if response.status_code != 200:
-        logger.error(f"AIStudio API 错误: {response.status_code} {response.text[:500]}")
+        logger.error("AIStudio API 错误: %s", response.status_code)
         raise ValueError(f"AIStudio API 错误: {response.status_code}")
 
     result = response.json()
@@ -710,8 +783,8 @@ def run_aistudio_layout_parsing(img_path: str) -> List[Tuple]:
             logger.info(f"AIStudio 识别完成 (parsing_res_list): {len(items)} 行")
             return items
 
-    # 如果没有解析到数据，记录原始响应用于调试
-    logger.warning(f"AIStudio 返回格式未知，原始响应: {str(result)[:500]}")
+    # 原始响应可能包含考生身份信息，不写入日志。
+    logger.warning("AIStudio 返回格式未知")
     logger.info(f"AIStudio 识别完成: {len(items)} 行")
     return items
 
@@ -724,28 +797,62 @@ def get_ocr():
     """
     global _ocr_instance, _ocr_engine
 
-    if _ocr_instance is None:
-        if OCR_ENGINE == "paddle":
-            try:
-                logger.info("正在加载 ppocr-onnx 模型...")
-                from ppocronnx import TextSystem
-                _ocr_instance = TextSystem()
-                _ocr_engine = "paddle"
-                logger.info("ppocr-onnx 模型加载完成")
-                return _ocr_instance
-            except ImportError:
-                logger.warning("ppocr-onnx 未安装，回退到 RapidOCR")
-            except Exception as e:
-                logger.warning(f"ppocr-onnx 加载失败: {e}，回退到 RapidOCR")
+    # Uvicorn's thread pool can receive several first requests together. Guard
+    # lazy model construction so a single worker never loads duplicate models.
+    with _local_ocr_lock:
+        if _ocr_instance is None:
+            if OCR_ENGINE == "paddle":
+                try:
+                    logger.info("正在加载 ppocr-onnx 模型...")
+                    from ppocronnx import TextSystem
+                    _ocr_instance = TextSystem()
+                    _ocr_engine = "paddle"
+                    logger.info("ppocr-onnx 模型加载完成")
+                    return _ocr_instance
+                except ImportError:
+                    logger.warning("ppocr-onnx 未安装，回退到 RapidOCR")
+                except Exception as e:
+                    logger.warning(f"ppocr-onnx 加载失败: {e}，回退到 RapidOCR")
 
-        # 回退到 RapidOCR
-        logger.info("正在加载 RapidOCR 模型...")
-        from rapidocr_onnxruntime import RapidOCR
-        _ocr_instance = RapidOCR()
-        _ocr_engine = "rapid"
-        logger.info("RapidOCR 模型加载完成")
+            # 回退到 RapidOCR
+            logger.info("正在加载 RapidOCR 模型...")
+            from rapidocr_onnxruntime import RapidOCR
+            _ocr_instance = RapidOCR()
+            _ocr_engine = "rapid"
+            logger.info("RapidOCR 模型加载完成")
 
     return _ocr_instance
+
+
+def get_admission_ocr():
+    """Return a local RapidOCR instance dedicated to sensitive admission proofs."""
+    global _admission_ocr_instance
+
+    with _local_ocr_lock:
+        # Reuse the generic local model when it is already RapidOCR. If another
+        # local engine was selected for bulk imports, keep a separate RapidOCR
+        # instance so admission screenshots can never fall through to cloud OCR.
+        if _ocr_engine == "rapid" and _ocr_instance is not None:
+            return _ocr_instance
+        if _admission_ocr_instance is None:
+            logger.info("正在加载录取凭证专用本地 RapidOCR 模型...")
+            from rapidocr_onnxruntime import RapidOCR
+
+            _admission_ocr_instance = RapidOCR()
+            logger.info("录取凭证专用本地 RapidOCR 模型加载完成")
+        return _admission_ocr_instance
+
+
+def run_sensitive_local_ocr(img_path: str) -> List[Tuple]:
+    """Run PII-bearing documents only through the dedicated local RapidOCR."""
+    ocr = get_admission_ocr()
+    with _local_ocr_lock:
+        result, _ = ocr(img_path)
+    return result if result else []
+
+
+def run_admission_ocr(img_path: str) -> List[Tuple]:
+    return run_sensitive_local_ocr(img_path)
 
 
 def run_ocr(img_path: str) -> List[Tuple]:
@@ -797,7 +904,8 @@ def run_ocr(img_path: str) -> List[Tuple]:
             logger.error(f"无法读取图片: {img_path}")
             return []
 
-        result = ocr.detect_and_ocr(img)
+        with _local_ocr_lock:
+            result = ocr.detect_and_ocr(img)
         if not result:
             return []
 
@@ -810,7 +918,8 @@ def run_ocr(img_path: str) -> List[Tuple]:
         return items
     else:
         # RapidOCR
-        result, _ = ocr(img_path)
+        with _local_ocr_lock:
+            result, _ = ocr(img_path)
         return result if result else []
 
 
@@ -853,7 +962,8 @@ def run_ocr_with_engine(img_path: str, engine: str = "") -> List[Tuple]:
 
     elif engine == "rapid":
         ocr = get_ocr()
-        result, _ = ocr(img_path)
+        with _local_ocr_lock:
+            result, _ = ocr(img_path)
         return result if result else []
 
     else:
@@ -2114,35 +2224,139 @@ def _ocr_bounds(box) -> Tuple[float, float, float, float]:
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def _render_pdf_pages(pdf_path: str, work_dir: str) -> List[str]:
-    prefix = os.path.join(work_dir, "volunteer-page")
-    subprocess.run(
-        ["pdftoppm", "-png", "-r", "180", pdf_path, prefix],
+def _pdf_page_count(pdf_path: str, max_pages: int) -> int:
+    with open(pdf_path, "rb") as source:
+        header = source.read(1024)
+    if detect_supported_upload_suffix(header) != ".pdf":
+        raise ValueError("文件内容不是有效的 PDF")
+
+    completed = subprocess.run(
+        ["pdfinfo", pdf_path],
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        timeout=90,
+        timeout=PDF_INFO_TIMEOUT_SECONDS,
+        env={**os.environ, "LC_ALL": "C", "LANG": "C"},
     )
-    return [
+    output = completed.stdout.decode("utf-8", errors="replace")
+    match = re.search(r"^Pages:\s*(\d+)\s*$", output, re.MULTILINE | re.IGNORECASE)
+    if not match:
+        raise ValueError("无法读取 PDF 页数")
+    page_count = int(match.group(1))
+    if page_count < 1:
+        raise ValueError("PDF 没有可解析页面")
+    if page_count > max_pages:
+        raise ValueError(f"志愿填报 PDF 不能超过 {max_pages} 页")
+    return page_count
+
+
+def _render_pdf_pages(
+    pdf_path: str,
+    work_dir: str,
+    max_pages: int,
+    max_dimension: int,
+) -> List[str]:
+    page_count = _pdf_page_count(pdf_path, max_pages)
+    prefix = os.path.join(work_dir, "volunteer-page")
+    command = [
+        "pdftoppm",
+        "-png",
+        "-r",
+        "180",
+        "-f",
+        "1",
+        "-l",
+        str(page_count),
+        "-scale-to",
+        str(max_dimension),
+    ]
+    command.extend([pdf_path, prefix])
+    subprocess.run(
+        command,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=PDF_RENDER_TIMEOUT_SECONDS,
+        env={**os.environ, "LC_ALL": "C", "LANG": "C"},
+    )
+    image_paths = [
         os.path.join(work_dir, name)
-        for name in sorted(os.listdir(work_dir))
+        for name in os.listdir(work_dir)
         if name.startswith("volunteer-page-") and name.endswith(".png")
     ]
+    image_paths.sort(
+        key=lambda path: int((re.search(r"-(\d+)\.png$", path) or ["", "0"])[1])
+    )
+    if len(image_paths) != page_count:
+        raise ValueError("PDF 渲染页数不完整")
+    return image_paths
+
+
+def _validate_image_file(file_path: str) -> None:
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(file_path) as image:
+            width, height = image.size
+            if width <= 0 or height <= 0 or width * height > 40_000_000:
+                raise HTTPException(status_code=400, detail="图片尺寸过大，最多支持 4000 万像素")
+            image.verify()
+    except HTTPException:
+        raise
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError):
+        raise HTTPException(status_code=400, detail="图片文件已损坏或格式无效") from None
 
 
 def _volunteer_images_from_upload(file_path: str, work_dir: str) -> List[str]:
     ext = os.path.splitext(file_path)[1].lower()
     if ext == ".pdf":
-        return _render_pdf_pages(file_path, work_dir)
+        return _render_pdf_pages(
+            file_path,
+            work_dir,
+            max_pages=MAX_VOLUNTEER_PDF_PAGES,
+            max_dimension=MAX_VOLUNTEER_RENDER_DIMENSION,
+        )
     if ext in (".png", ".jpg", ".jpeg", ".webp", ".bmp"):
+        _validate_image_file(file_path)
         return [file_path]
     raise ValueError("仅支持 PDF 或图片文件")
 
 
-def _collect_volunteer_ocr_items(image_paths: List[str], engine: str = "") -> List[Dict]:
+def _admission_images_from_upload(file_path: str, work_dir: str) -> List[str]:
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == ".pdf":
+        # 录取凭证通常只有一页；限制页数与渲染尺寸，避免异常 PDF
+        # 长时间占用 OCR 或因超大页面耗尽内存。
+        return _render_pdf_pages(file_path, work_dir, max_pages=5, max_dimension=3000)
+    if ext in (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"):
+        _validate_image_file(file_path)
+        return [file_path]
+    raise ValueError("仅支持 PDF 或图片文件")
+
+
+def _parse_admission_upload(
+    file_path: str,
+    work_dir: str,
+    expected_name: str,
+) -> Dict:
+    # OCR engines are CPU/memory intensive, and the shared local model is not
+    # guaranteed to be re-entrant. Queue admission jobs within this worker.
+    with _admission_ocr_lock:
+        image_paths = _admission_images_from_upload(file_path, work_dir)
+        # Admission proofs can contain names, exam numbers and identity-card
+        # numbers. Always keep this endpoint on the local RapidOCR engine,
+        # regardless of the generic OCR_ENGINE setting used by other routes.
+        ocr_pages = [run_admission_ocr(image_path) for image_path in image_paths]
+        return parse_admission_result_ocr(ocr_pages, expected_name=expected_name)
+
+
+def _collect_volunteer_ocr_items(image_paths: List[str]) -> List[Dict]:
     items: List[Dict] = []
     for page_no, image_path in enumerate(image_paths, start=1):
-        for box, text, confidence in run_ocr_with_engine(image_path, engine):
+        # Volunteer forms contain the candidate's name, exam number and masked
+        # identity number. Never route this endpoint through configurable cloud
+        # engines, even if the generic OCR_ENGINE environment is misconfigured.
+        for box, text, confidence in run_sensitive_local_ocr(image_path):
             clean = _norm_text(text)
             if not clean:
                 continue
@@ -2167,7 +2381,11 @@ def _match_after(label: str, joined_text: str) -> str:
 
 
 def _parse_volunteer_identity(items: List[Dict]) -> VolunteerFormIdentity:
-    joined = " ".join(item["text"] for item in items)
+    joined = " ".join(
+        item["text"]
+        for item in items
+        if _has_trusted_ocr_confidence([item])
+    )
     return VolunteerFormIdentity(
         name=_match_after("考生姓名", joined),
         examNumber=_match_after("考生号", joined),
@@ -2178,6 +2396,8 @@ def _parse_volunteer_identity(items: List[Dict]) -> VolunteerFormIdentity:
 
 def _parse_volunteer_batch(items: List[Dict]) -> str:
     for item in items:
+        if not _has_trusted_ocr_confidence([item]):
+            continue
         text = item["text"]
         if "批次" in text and "志愿" not in text and len(text) <= 30:
             return text
@@ -2185,7 +2405,11 @@ def _parse_volunteer_batch(items: List[Dict]) -> str:
 
 
 def _parse_volunteer_exam_type(items: List[Dict]) -> str:
-    joined = " ".join(item["text"] for item in items)
+    joined = " ".join(
+        item["text"]
+        for item in items
+        if _has_trusted_ocr_confidence([item])
+    )
     subjects = _match_after("选科组合", joined)
     if "物理" in subjects:
         return "PHYSICS"
@@ -2205,34 +2429,91 @@ def _seq_from_text(text: str) -> Optional[int]:
     return int(m.group(1)) if m else None
 
 
-def _text_by_position(items: List[Dict], left: float, right: float) -> str:
-    parts = [
-        item["text"]
+def _items_by_position(items: List[Dict], left: float, right: float) -> List[Dict]:
+    return [
+        item
         for item in sorted(items, key=lambda item: (item["y1"], item["x1"]))
         if left <= item["xc"] < right
     ]
-    return "".join(parts)
 
 
-def _parse_major_list(text: str) -> List[VolunteerFormMajor]:
+def _has_trusted_ocr_confidence(items: List[Dict]) -> bool:
+    if not items:
+        return False
+    try:
+        return all(
+            float(item.get("confidence", 0)) >= SENSITIVE_OCR_CONFIDENCE_THRESHOLD
+            for item in items
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _parse_major_list(
+    text: str,
+    slots_trusted: bool = True,
+) -> List[VolunteerFormMajor]:
     compact = _norm_text(text).replace(" ", "")
     majors: List[VolunteerFormMajor] = []
-    for entry in re.split(r"[;；]", compact):
+    entries = re.split(r"[;；]", compact)
+    # A trailing delimiter is formatting, not a seventh empty major slot.
+    while entries and not entries[-1].strip(" ,，、"):
+        entries.pop()
+    raw_entry_count = len(entries)
+    for original_order, entry in enumerate(entries[:6], start=1):
         entry = entry.strip(" ,，、")
         if not entry:
+            majors.append(
+                VolunteerFormMajor(code="", name="", originalOrder=original_order)
+            )
             continue
         m = re.match(r"^([0-9A-Z]{1,3})(.+)$", entry)
         if not m:
+            majors.append(
+                VolunteerFormMajor(code="", name=entry, originalOrder=original_order)
+            )
             continue
-        majors.append(VolunteerFormMajor(code=m.group(1), name=m.group(2)))
-    return majors
+        majors.append(
+            VolunteerFormMajor(
+                code=m.group(1),
+                name=m.group(2),
+                originalOrder=original_order,
+            )
+        )
+
+    normalized_codes = [
+        re.sub(r"\s+", "", _norm_text(major.code)).upper() for major in majors
+    ]
+    normalized_names = [
+        re.sub(r"\s+", "", _norm_text(major.name)) for major in majors
+    ]
+    has_proven_six_slots = (
+        slots_trusted
+        and raw_entry_count == 6
+        and len(majors) == 6
+        and all(normalized_codes)
+        and all(normalized_names)
+        and len(set(normalized_codes)) == 6
+        and len(set(normalized_names)) == 6
+    )
+    if has_proven_six_slots:
+        return majors
+
+    # OCR delimiters can disappear and compress later majors into earlier array
+    # indexes. Preserve the recognized values for teacher review, but explicitly
+    # mark every position as unproven so downstream matching may lock the group
+    # only and can never invent "第几个专业".
+    return [
+        VolunteerFormMajor(code=major.code, name=major.name, originalOrder=0)
+        for major in majors
+    ]
 
 
 def _parse_ocr_volunteer_rows(items: List[Dict]) -> List[VolunteerFormVolunteer]:
     seq_markers = []
     for item in items:
         seq = _seq_from_text(item["text"])
-        if seq is not None:
+        if seq is not None and _has_trusted_ocr_confidence([item]):
             seq_markers.append({**item, "seq": seq})
 
     volunteers: List[VolunteerFormVolunteer] = []
@@ -2251,29 +2532,51 @@ def _parse_ocr_volunteer_rows(items: List[Dict]) -> List[VolunteerFormVolunteer]
                 continue
             row_items.append(item)
 
-        school_text = _text_by_position(row_items, 180, 490)
+        school_items = _items_by_position(row_items, 180, 490)
+        if not _has_trusted_ocr_confidence(school_items):
+            continue
+        school_text = "".join(item["text"] for item in school_items)
         school_match = re.match(r"^(\d{4})(.+)$", school_text)
         if not school_match:
             continue
 
-        group_texts = [
-            item["text"]
-            for item in sorted(row_items, key=lambda item: (item["y1"], item["x1"]))
-            if 480 <= item["xc"] < 570 and re.fullmatch(r"\d{3}", item["text"])
+        group_items = [
+            item
+            for item in _items_by_position(row_items, 480, 570)
+            if re.fullmatch(r"\d{3}", item["text"])
         ]
-        if not group_texts:
+        group_codes = {item["text"] for item in group_items}
+        if (
+            not _has_trusted_ocr_confidence(group_items)
+            or len(group_codes) != 1
+        ):
             continue
+        group_code = next(iter(group_codes))
 
-        major_text = _text_by_position(row_items, 560, 1365)
-        accept_text = _text_by_position(row_items, 1365, 1500)
-        accept_adjust = "否" not in accept_text
+        major_items = _items_by_position(row_items, 560, 1365)
+        major_text = "".join(item["text"] for item in major_items)
+        major_slots_trusted = _has_trusted_ocr_confidence(major_items)
+        accept_items = _items_by_position(row_items, 1365, 1500)
+        accept_text = "".join(item["text"] for item in accept_items)
+        accept_confident = _has_trusted_ocr_confidence(accept_items)
+        # 未识别到调剂栏时必须按“不确定/不自动调剂”的安全方向处理，
+        # 不能再用“没看见否 = 服从”推断，否则会把 OCR 漏字误判为调剂。
+        accept_adjust = (
+            accept_confident
+            and ("是" in accept_text or "服从" in accept_text)
+            and "否" not in accept_text
+            and "不服从" not in accept_text
+        )
 
         volunteers.append(VolunteerFormVolunteer(
             seq=marker["seq"],
             schoolCode=school_match.group(1),
             schoolName=school_match.group(2),
-            groupCode=group_texts[0],
-            majors=_parse_major_list(major_text),
+            groupCode=group_code,
+            majors=_parse_major_list(
+                major_text,
+                slots_trusted=major_slots_trusted,
+            ),
             acceptAdjust=accept_adjust,
         ))
 
@@ -2283,10 +2586,10 @@ def _parse_ocr_volunteer_rows(items: List[Dict]) -> List[VolunteerFormVolunteer]
     return [deduped[seq] for seq in sorted(deduped)]
 
 
-def parse_volunteer_form_file(file_path: str, engine: str = "") -> VolunteerFormParseResponse:
+def parse_volunteer_form_file(file_path: str) -> VolunteerFormParseResponse:
     with tempfile.TemporaryDirectory(prefix="vh-volunteer-ocr-") as work_dir:
         image_paths = _volunteer_images_from_upload(file_path, work_dir)
-        items = _collect_volunteer_ocr_items(image_paths, engine)
+        items = _collect_volunteer_ocr_items(image_paths)
         volunteers = _parse_ocr_volunteer_rows(items)
         return VolunteerFormParseResponse(
             identity=_parse_volunteer_identity(items),
@@ -2295,6 +2598,112 @@ def parse_volunteer_form_file(file_path: str, engine: str = "") -> VolunteerForm
             volunteers=volunteers,
             source="ocr",
         )
+
+
+def _ocr_job_process_entry(job_kind: str, args: tuple, connection) -> None:
+    """Run one sensitive/blocking OCR job in an independently killable process."""
+    try:
+        if job_kind == "admission":
+            result = _parse_admission_upload(*args)
+        elif job_kind == "volunteer":
+            result = parse_volunteer_form_file(*args)
+        else:
+            raise ValueError("未知 OCR 作业")
+
+        if isinstance(result, BaseModel):
+            if hasattr(result, "model_dump"):
+                result = result.model_dump()
+            else:  # Pydantic v1 compatibility for older maintenance hosts.
+                result = result.dict()
+        connection.send({"ok": True, "result": result})
+    except subprocess.TimeoutExpired:
+        connection.send({"ok": False, "kind": "PDF_TIMEOUT"})
+    except subprocess.CalledProcessError:
+        connection.send({"ok": False, "kind": "PDF_RENDER_FAILED"})
+    except FileNotFoundError:
+        connection.send({"ok": False, "kind": "DEPENDENCY_MISSING"})
+    except (HTTPException, ValueError):
+        connection.send({"ok": False, "kind": "BAD_INPUT"})
+    except Exception:
+        # Do not send exception text: it can contain a temporary filename,
+        # provider payload or OCR-derived identity data.
+        connection.send({"ok": False, "kind": "INTERNAL"})
+    finally:
+        connection.close()
+
+
+def _terminate_ocr_job_process(process) -> None:
+    if not process.is_alive():
+        process.join(timeout=0.2)
+        return
+    process.terminate()
+    process.join(timeout=2)
+    if process.is_alive():
+        # terminate() is cooperative on some platforms. kill() is the final
+        # guard against a native ONNX/RapidOCR call that cannot unwind.
+        if hasattr(process, "kill"):
+            process.kill()
+        process.join(timeout=2)
+
+
+def _run_ocr_job_in_process(
+    job_kind: str,
+    args: tuple,
+    timeout_seconds: int = OCR_JOB_TIMEOUT_SECONDS,
+) -> Dict:
+    # spawn avoids forking an already-initialized ONNX runtime. It costs a model
+    # load per proof, but keeps a native hang isolated and safely recoverable.
+    context = multiprocessing.get_context("spawn")
+    receive_connection, send_connection = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_ocr_job_process_entry,
+        args=(job_kind, args, send_connection),
+        daemon=True,
+        name=f"vh-{job_kind}-ocr-job",
+    )
+    process.start()
+    send_connection.close()
+    try:
+        if not receive_connection.poll(timeout_seconds):
+            _terminate_ocr_job_process(process)
+            raise OcrJobTimeoutError(f"{job_kind} OCR timed out")
+        try:
+            message = receive_connection.recv()
+        except EOFError:
+            raise OcrJobProcessError("INTERNAL") from None
+        if not isinstance(message, dict) or message.get("ok") is not True:
+            kind = message.get("kind") if isinstance(message, dict) else "INTERNAL"
+            raise OcrJobProcessError(str(kind or "INTERNAL"))
+        result = message.get("result")
+        if not isinstance(result, dict):
+            raise OcrJobProcessError("INTERNAL")
+        return result
+    finally:
+        receive_connection.close()
+        if process.is_alive():
+            process.join(timeout=1)
+        if process.is_alive():
+            _terminate_ocr_job_process(process)
+        if not process.is_alive() and hasattr(process, "close"):
+            process.close()
+
+
+async def _run_ocr_job_with_supervisor(job_kind: str, args: tuple) -> Dict:
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                _run_ocr_job_in_process,
+                job_kind,
+                args,
+            ),
+            timeout=OCR_SUPERVISOR_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        # The normal timeout is enforced inside _run_ocr_job_in_process and
+        # kills its child. Reaching this branch means the supervisor itself is
+        # wedged; exiting is the only reliable way to discard that thread.
+        _schedule_ocr_service_restart()
+        raise OcrJobTimeoutError(f"{job_kind} OCR supervisor timed out") from None
 
 
 def fetch_page_images(url: str) -> Tuple[str, List[str]]:
@@ -2489,14 +2898,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 @app.get("/health")
 def health():
     engine = OCR_ENGINE
@@ -2524,28 +2925,107 @@ def health():
     }
 
 
+@app.post("/parse-admission-result", response_model=AdmissionResultParseResponse)
+async def parse_admission_result(
+    file: UploadFile = File(...),
+    expected_name: str = Form(""),
+):
+    """从录取截图或 PDF 中提取不含考生身份信息的结构化录取字段。"""
+    # Queue before reading the upload into memory. Starlette spools multipart
+    # files to disk, so concurrent requests wait without each retaining 20MB.
+    async with _admission_request_semaphore:
+        content = await file.read(MAX_ADMISSION_UPLOAD_BYTES + 1)
+        if not content:
+            raise HTTPException(status_code=400, detail="上传文件为空")
+        if len(content) > MAX_ADMISSION_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="录取凭证不能超过 20MB")
+
+        suffix = detect_supported_upload_suffix(content)
+        if suffix is None:
+            raise HTTPException(status_code=400, detail="仅支持有效的 PDF、JPG、PNG、WEBP、GIF 或 BMP 文件")
+        expected_name = expected_name.strip()
+        if len(expected_name) > 50:
+            raise HTTPException(status_code=400, detail="姓名长度无效")
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="vh-admission-upload-") as work_dir:
+                upload_path = os.path.join(work_dir, f"upload{suffix}")
+                with open(upload_path, "wb") as target:
+                    target.write(content)
+
+                # The entire render + RapidOCR path runs in a spawned process.
+                # A native runtime hang can therefore be terminated, rather
+                # than leaving this API worker and its model lock wedged.
+                return await _run_ocr_job_with_supervisor(
+                    "admission",
+                    (upload_path, work_dir, expected_name),
+                )
+        except OcrJobTimeoutError:
+            logger.error("录取结果 OCR 隔离进程超时并已终止")
+            raise HTTPException(status_code=503, detail="录取结果识别超时，请稍后重试") from None
+        except OcrJobProcessError as error:
+            if error.kind == "PDF_TIMEOUT":
+                raise HTTPException(status_code=400, detail="PDF 页数过多或渲染超时") from None
+            if error.kind == "PDF_RENDER_FAILED":
+                raise HTTPException(status_code=400, detail="PDF 无法渲染，请确认文件未损坏") from None
+            if error.kind == "DEPENDENCY_MISSING":
+                raise HTTPException(status_code=503, detail="PDF 解析组件暂不可用") from None
+            if error.kind == "BAD_INPUT":
+                raise HTTPException(status_code=400, detail="录取凭证格式或内容无效") from None
+            raise HTTPException(status_code=500, detail="录取结果 OCR 解析失败") from None
+        except HTTPException:
+            raise
+        except Exception as error:
+            # 不记录异常消息、文件名或 OCR 原文，避免日志意外包含考生隐私。
+            logger.error("录取结果 OCR 解析失败（%s）", type(error).__name__)
+            raise HTTPException(status_code=500, detail="录取结果 OCR 解析失败") from None
+
+
 @app.post("/parse-volunteer-form", response_model=VolunteerFormParseResponse)
 async def parse_volunteer_form(file: UploadFile = File(...), engine: str = ""):
     """解析四川省考生志愿表 PDF/图片，优先用于图片型 PDF 兜底。"""
-    suffix = os.path.splitext(file.filename or "")[1].lower() or ".pdf"
-    try:
-        with tempfile.TemporaryDirectory(prefix="vh-volunteer-upload-") as work_dir:
-            upload_path = os.path.join(work_dir, f"upload{suffix}")
-            content = await file.read()
-            with open(upload_path, "wb") as f:
-                f.write(content)
-            result = parse_volunteer_form_file(upload_path, engine)
-            if not result.volunteers:
-                raise HTTPException(status_code=400, detail="OCR 未识别到志愿条目")
-            return result
-    except HTTPException:
-        raise
-    except subprocess.CalledProcessError as e:
-        logger.error(f"志愿表 PDF 渲染失败: {e.stderr.decode('utf-8', errors='ignore') if e.stderr else e}", exc_info=True)
-        raise HTTPException(status_code=400, detail="PDF 渲染失败，无法进行 OCR")
-    except Exception as e:
-        logger.error(f"志愿表 OCR 解析失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"志愿表 OCR 解析失败: {str(e)}")
+    async with _volunteer_request_semaphore:
+        if engine:
+            raise HTTPException(status_code=400, detail="志愿表仅允许使用本地 OCR 引擎")
+        content = await file.read(MAX_VOLUNTEER_UPLOAD_BYTES + 1)
+        if not content:
+            raise HTTPException(status_code=400, detail="上传文件为空")
+        if len(content) > MAX_VOLUNTEER_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="志愿填报文件不能超过 20MB")
+        suffix = detect_supported_upload_suffix(content)
+        if suffix not in (".pdf", ".png", ".jpg", ".webp", ".bmp"):
+            raise HTTPException(status_code=400, detail="仅支持有效的 PDF、JPG、PNG、WEBP 或 BMP 文件")
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="vh-volunteer-upload-") as work_dir:
+                upload_path = os.path.join(work_dir, f"upload{suffix}")
+                with open(upload_path, "wb") as target:
+                    target.write(content)
+                result = await _run_ocr_job_with_supervisor(
+                    "volunteer",
+                    (upload_path,),
+                )
+                if not result.get("volunteers"):
+                    raise HTTPException(status_code=400, detail="OCR 未识别到志愿条目")
+                return result
+        except OcrJobTimeoutError:
+            logger.error("志愿表 OCR 隔离进程超时并已终止")
+            raise HTTPException(status_code=503, detail="志愿表识别超时，请稍后重试") from None
+        except OcrJobProcessError as error:
+            if error.kind == "PDF_TIMEOUT":
+                raise HTTPException(status_code=400, detail="PDF 页数过多或渲染超时") from None
+            if error.kind == "PDF_RENDER_FAILED":
+                raise HTTPException(status_code=400, detail="PDF 渲染失败，无法进行 OCR") from None
+            if error.kind == "DEPENDENCY_MISSING":
+                raise HTTPException(status_code=503, detail="PDF 解析组件暂不可用") from None
+            if error.kind == "BAD_INPUT":
+                raise HTTPException(status_code=400, detail="志愿填报文件格式或内容无效") from None
+            raise HTTPException(status_code=500, detail="志愿表 OCR 解析失败") from None
+        except HTTPException:
+            raise
+        except Exception as error:
+            logger.error("志愿表 OCR 解析失败（%s）", type(error).__name__)
+            raise HTTPException(status_code=500, detail="志愿表 OCR 解析失败") from None
 
 
 @app.post("/fetch", response_model=FetchResponse)
@@ -3772,4 +4252,5 @@ async def validate_single_image(
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("OCR_SERVICE_PORT", 8100))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    host = os.environ.get("OCR_SERVICE_HOST", "127.0.0.1")
+    uvicorn.run(app, host=host, port=port)

@@ -984,7 +984,8 @@ model StudentProfile {
   // --- 历史档案标记 (2026-05-28 新增) ---
   // 历史届学生 (如 25 届已录取) 不进活跃学生列表, 但保留作参考案例.
   // 列表 / dashboard 默认过滤 isArchived=false; 历史案例页 isArchived=true.
-  isArchived  Boolean @default(false) @map("is_archived")
+  isArchived               Boolean @default(false) @map("is_archived")
+  admissionAnalysisRevision Int     @default(0) @map("admission_analysis_revision")
 
   // --- 填表元信息（V1 新增）---
   formFiller        FormFiller? @map("form_filler")
@@ -1141,6 +1142,8 @@ model StudentAdmissionResult {
 
   // 录取大学 - 文本 + 可选 link 到 University 表
   admittedUniName String  @map("admitted_uni_name") @db.VarChar(200)
+  // 录取结果页展示的院校代码（按字符串保存，避免丢失前导零）
+  admittedUniCode String? @map("admitted_uni_code") @db.VarChar(20)
   admittedUniId   Int?    @map("admitted_uni_id")
 
   // 录取分数线信息 (从历史 Excel 来; 在读学生录取后由老师填)
@@ -1150,6 +1153,10 @@ model StudentAdmissionResult {
   scoreDiff        Int?    @map("score_diff") @db.SmallInt
   // 第几志愿被录取 (从录取凭证 / 用户填)
   sequenceNo       Int?    @map("sequence_no") @db.SmallInt
+  // 同一院校专业组中第几个已填专业；调剂时必须为 null
+  majorSequenceNo  Int?    @map("major_sequence_no") @db.SmallInt
+  // 是否被同一院校专业组调剂到未填专业
+  isAdjusted       Boolean @default(false) @map("is_adjusted")
 
   // 录取凭证文件 (路径见 StudentAttachment, 这里冗余存一份方便快速展示)
   proofAttachmentId Int? @map("proof_attachment_id")
@@ -1167,8 +1174,18 @@ model StudentAdmissionResult {
   // link to majors 表 (按 name 匹配); 用于前端跳专业详情页
   admittedMajorId        Int?    @map("admitted_major_id")
 
+  // 录取截图与实际志愿 PDF 的自动匹配审计信息。状态和证据只由服务端分析写入。
+  matchStatus             String?   @map("match_status") @db.VarChar(30)
+  submissionAttachmentId Int?      @map("submission_attachment_id")
+  matchConfidence         Int?      @map("match_confidence") @db.SmallInt
+  matchEvidence           Json?     @map("match_evidence")
+  recognizedAt            DateTime? @map("recognized_at")
+  matchConfirmedAt        DateTime? @map("match_confirmed_at")
+  matchConfirmedById      Int?      @map("match_confirmed_by_id")
+
   @@index([admittedUniId])
   @@index([batchName])
+  @@index([matchStatus])
   @@map("student_admission_results")
 }
 

@@ -40,6 +40,8 @@ const mockBaseStudentData = {
   },
 };
 let mockStudentData = mockBaseStudentData;
+let mockAttachmentsData: any[] = [];
+let mockAdmissionResultData: any = null;
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -80,10 +82,15 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({
-    data: mockStudentData,
-    isLoading: false,
-  }),
+  useQuery: ({ queryKey }: { queryKey?: unknown[] }) => {
+    if (queryKey?.[0] === 'student-attachments') {
+      return { data: mockAttachmentsData, isLoading: false };
+    }
+    if (queryKey?.[0] === 'student-admission-result') {
+      return { data: mockAdmissionResultData, isLoading: false };
+    }
+    return { data: mockStudentData, isLoading: false };
+  },
   useMutation: () => ({ mutate: mockMutate, isPending: false }),
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
@@ -154,6 +161,8 @@ describe('StudentDetailPage', () => {
       rankCheck: { ...mockBaseStudentData.rankCheck },
       progress: { ...mockBaseStudentData.progress },
     };
+    mockAttachmentsData = [];
+    mockAdmissionResultData = null;
   });
 
   // 该 jest 配置未启用 RTL 自动清理, 显式卸载避免跨测试 DOM 累积导致多元素匹配
@@ -269,6 +278,158 @@ describe('StudentDetailPage', () => {
         }),
       );
     });
+  });
+
+  it('selects a volunteer PDF for matching and supports manual group adjustment', async () => {
+    mockAttachmentsData = [
+      {
+        id: 11,
+        studentId: 1,
+        category: 'submission_screenshot',
+        originalName: '旧志愿.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 100,
+        createdAt: '2026-06-01T00:00:00.000Z',
+        updatedAt: '2026-06-01T00:00:00.000Z',
+        uploadedById: 1,
+      },
+      {
+        id: 13,
+        studentId: 1,
+        category: 'submission_screenshot',
+        originalName: '新志愿.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 100,
+        createdAt: '2026-06-02T00:00:00.000Z',
+        updatedAt: '2026-06-02T00:00:00.000Z',
+        uploadedById: 1,
+      },
+      {
+        id: 14,
+        studentId: 1,
+        category: 'submission_screenshot',
+        originalName: '志愿照片.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 100,
+        createdAt: '2026-06-03T00:00:00.000Z',
+        updatedAt: '2026-06-03T00:00:00.000Z',
+        uploadedById: 1,
+      },
+      {
+        id: 21,
+        studentId: 1,
+        category: 'admission_proof',
+        originalName: '录取截图.png',
+        mimeType: 'image/png',
+        fileSize: 100,
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+        uploadedById: 1,
+      },
+      {
+        id: 22,
+        studentId: 1,
+        category: 'admission_proof',
+        originalName: '第二张录取截图.png',
+        mimeType: 'image/png',
+        fileSize: 100,
+        createdAt: '2026-07-02T00:00:00.000Z',
+        updatedAt: '2026-07-02T00:00:00.000Z',
+        uploadedById: 1,
+      },
+    ];
+
+    const user = userEvent.setup();
+    const { container } = render(<StudentDetailPage />);
+    await user.click(screen.getByRole('button', { name: '材料归档' }));
+
+    expect(await screen.findByText('匹配志愿 PDF')).toBeInTheDocument();
+    expect(screen.getByText('新志愿.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('志愿照片.jpg')).not.toBeInTheDocument();
+
+    await openSelect(container, user, 'admissionSubmissionAttachmentId');
+    await user.click(await screen.findByText('旧志愿.pdf'));
+    await waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          proofAttachmentId: 21,
+          submissionAttachmentId: 11,
+        }),
+      );
+    });
+
+    const majorSequenceInput = screen.getByLabelText('录取专业顺序');
+    await user.type(majorSequenceInput, '3');
+    await user.click(screen.getByRole('checkbox', { name: '同院校专业组内调剂' }));
+    expect(majorSequenceInput).toBeDisabled();
+    expect(majorSequenceInput).toHaveValue('');
+
+    await user.click(screen.getByRole('checkbox', { name: '同院校专业组内调剂' }));
+    await user.type(screen.getByLabelText('录取志愿顺序'), '2');
+    await user.type(majorSequenceInput, '4');
+
+    // Manual positions belong to the selected volunteer PDF. Switching from
+    // A to B must discard them before the B analysis starts.
+    await openSelect(container, user, 'admissionSubmissionAttachmentId');
+    const newPdfOption = Array.from(
+      document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option'),
+    ).find((option) => option.textContent?.includes('新志愿.pdf'));
+    expect(newPdfOption).toBeTruthy();
+    await user.click(newPdfOption as HTMLElement);
+    expect(screen.getByLabelText('录取志愿顺序')).toHaveValue('');
+    expect(majorSequenceInput).toHaveValue('');
+    expect(screen.getByRole('checkbox', { name: '同院校专业组内调剂' })).not.toBeChecked();
+    await waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          proofAttachmentId: 21,
+          submissionAttachmentId: 13,
+        }),
+      );
+    });
+
+    // Clearing the source has the same invalidation semantics.
+    await openSelect(container, user, 'admissionSubmissionAttachmentId');
+    const oldPdfOption = Array.from(
+      document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option'),
+    ).find((option) => option.textContent?.includes('旧志愿.pdf'));
+    expect(oldPdfOption).toBeTruthy();
+    await user.click(oldPdfOption as HTMLElement);
+    await user.type(screen.getByLabelText('录取志愿顺序'), '2');
+    await user.type(majorSequenceInput, '4');
+    const submissionSelector = container
+      .querySelector('#admissionSubmissionAttachmentId')
+      ?.closest('.ant-select');
+    expect(submissionSelector).toBeTruthy();
+    await user.hover(submissionSelector as HTMLElement);
+    await user.click(submissionSelector?.querySelector('.ant-select-clear') as HTMLElement);
+    expect(screen.getByLabelText('录取志愿顺序')).toHaveValue('');
+    expect(majorSequenceInput).toHaveValue('');
+    expect(screen.getByRole('checkbox', { name: '同院校专业组内调剂' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /保存录取结果/ })).toBeDisabled();
+
+    await openSelect(container, user, 'admissionSubmissionAttachmentId');
+    await user.click(await screen.findByText('旧志愿.pdf'));
+    await user.type(screen.getByLabelText('录取院校'), '上一张院校');
+    await user.type(screen.getByLabelText('录取专业'), '上一张专业');
+    await user.type(screen.getByLabelText('录取最低分'), '500');
+
+    await openSelect(container, user, 'proofAttachmentId');
+    const secondProofOption = Array.from(
+      document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option'),
+    ).find((option) => option.textContent?.includes('第二张录取截图.png'));
+    expect(secondProofOption).toBeTruthy();
+    await user.click(secondProofOption as HTMLElement);
+    await waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ proofAttachmentId: 22 }),
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('录取院校')).toHaveValue('');
+      expect(screen.getByLabelText('录取专业')).toHaveValue('');
+    });
+    expect(screen.getByLabelText('录取最低分')).toHaveValue('500');
   });
 });
 

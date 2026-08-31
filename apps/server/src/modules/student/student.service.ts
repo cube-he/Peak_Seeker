@@ -516,6 +516,12 @@ export class StudentService {
     return parsed;
   }
 
+  private sameAdmissionCode(left: string | null | undefined, right: string | null | undefined) {
+    const normalize = (value: string | null | undefined) =>
+      (value ?? '').normalize('NFKC').toUpperCase().replace(/\s+/g, '');
+    return normalize(left) === normalize(right);
+  }
+
   private detectAttachmentMimeType(buffer: Buffer): string | null {
     if (buffer.length >= 5 && buffer.subarray(0, 5).equals(Buffer.from('%PDF-', 'ascii'))) {
       return 'application/pdf';
@@ -587,22 +593,49 @@ export class StudentService {
   private async assertStudentAccess(studentId: number, requester: JwtPayloadUser, action: 'read' | 'update') {
     const profile = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
-      select: { id: true, teacherId: true, userId: true },
+      select: { id: true, teacherId: true, userId: true, isArchived: true },
     });
     if (!profile) throw new NotFoundException('学生不存在');
 
+    this.assertStudentProfileAccess(profile, requester, action);
+    return profile;
+  }
+
+  private assertStudentProfileAccess(
+    profile: { id: number; teacherId: number | null; userId: number },
+    requester: JwtPayloadUser,
+    action: 'read' | 'update',
+  ) {
     const isAdmin = requester.role === 'ADMIN';
     const isOwnerTeacher =
       requester.role === 'TEACHER' &&
       requester.teacherProfileId != null &&
       profile.teacherId === requester.teacherProfileId;
-    const isStudentSelf = action === 'read' && requester.role === 'STUDENT' && requester.studentProfileId === studentId;
+    const isStudentSelf =
+      action === 'read' && requester.role === 'STUDENT' && requester.studentProfileId === profile.id;
 
     if (!isAdmin && !isOwnerTeacher && !isStudentSelf) {
       throw new ForbiddenException(action === 'read' ? '无权查看该学生资料' : '无权修改不属于自己的学生资料');
     }
+  }
 
-    return profile;
+  private assertStudentArchiveMutable(profile: { isArchived: boolean }) {
+    if (profile.isArchived) {
+      throw new ConflictException('学生已归档，不能再修改录取材料或录取结果');
+    }
+  }
+
+  /**
+   * Re-check a write authorization snapshot inside the caller's transaction.
+   * Long-running OCR and filesystem operations must not rely only on the
+   * authorization state observed before they started.
+   */
+  assertStudentMutationWritable(
+    profile: { id: number; teacherId: number | null; userId: number; isArchived: boolean },
+    requester: JwtPayloadUser,
+  ) {
+    this.assertStudentProfileAccess(profile, requester, 'update');
+    this.assertStudentArchiveMutable(profile);
   }
 
   async listAttachments(studentId: number, requester: JwtPayloadUser) {
@@ -629,7 +662,8 @@ export class StudentService {
   }
 
   async uploadAttachment(studentId: number, category: string, file: Express.Multer.File, requester: JwtPayloadUser) {
-    await this.assertStudentAccess(studentId, requester, 'update');
+    const profile = await this.assertStudentAccess(studentId, requester, 'update');
+    this.assertStudentArchiveMutable(profile);
     const normalizedCategory = this.normalizeStudentAttachmentCategory(category);
     const validatedFormat = this.validateAttachmentFile(file);
 
@@ -653,28 +687,39 @@ export class StudentService {
 
     try {
       await fs.promises.writeFile(targetPath, file.buffer);
-      const created = await this.prisma.studentAttachment.create({
-        data: {
-          studentId,
-          category: normalizedCategory,
-          originalName,
-          storagePath,
-          mimeType: validatedFormat.mimeType,
-          fileSize: file.buffer.length,
-          uploadedById: requester.id,
+      const created = await this.prisma.$transaction(
+        async (tx) => {
+          const currentStudent = await tx.studentProfile.findUnique({
+            where: { id: studentId },
+            select: { id: true, teacherId: true, userId: true, isArchived: true },
+          });
+          if (!currentStudent) throw new NotFoundException('学生不存在');
+          this.assertStudentMutationWritable(currentStudent, requester);
+          return tx.studentAttachment.create({
+            data: {
+              studentId,
+              category: normalizedCategory,
+              originalName,
+              storagePath,
+              mimeType: validatedFormat.mimeType,
+              fileSize: file.buffer.length,
+              uploadedById: requester.id,
+            },
+            select: {
+              id: true,
+              studentId: true,
+              category: true,
+              originalName: true,
+              mimeType: true,
+              fileSize: true,
+              createdAt: true,
+              updatedAt: true,
+              uploadedById: true,
+            },
+          });
         },
-        select: {
-          id: true,
-          studentId: true,
-          category: true,
-          originalName: true,
-          mimeType: true,
-          fileSize: true,
-          createdAt: true,
-          updatedAt: true,
-          uploadedById: true,
-        },
-      });
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
 
       return {
         ...created,
@@ -705,8 +750,52 @@ export class StudentService {
     };
   }
 
+  /**
+   * 供服务端 OCR/文档解析使用。始终复用学生归属校验与托管路径校验，
+   * 不把 storagePath 暴露给浏览器，也不允许读取本项目上传目录之外的文件。
+   */
+  async readAttachmentForAnalysis(
+    studentId: number,
+    attachmentId: number,
+    expectedCategory: StudentAttachmentCategory,
+    requester: JwtPayloadUser,
+  ) {
+    const profile = await this.assertStudentAccess(studentId, requester, 'update');
+    this.assertStudentArchiveMutable(profile);
+    const attachment = await this.prisma.studentAttachment.findFirst({
+      where: { id: attachmentId, studentId, category: expectedCategory },
+    });
+    if (!attachment) {
+      throw new BadRequestException(
+        expectedCategory === 'admission_proof' ? '请选择该学生名下的录取截图' : '请选择该学生名下的志愿填报 PDF',
+      );
+    }
+
+    const uploadsRoot = path.resolve(this.getUploadsRoot());
+    const filePath = this.resolveManagedAttachmentPath(uploadsRoot, studentId, attachment.storagePath);
+    if (!filePath) throw new BadRequestException('附件存储路径无效');
+
+    let buffer: Buffer;
+    try {
+      buffer = await fs.promises.readFile(filePath);
+    } catch (error: any) {
+      if (error?.code === 'ENOENT') throw new NotFoundException('附件文件不存在');
+      throw error;
+    }
+    if (buffer.length > MAX_STUDENT_ATTACHMENT_SIZE_BYTES) {
+      throw new BadRequestException('单个附件不能超过 20MB');
+    }
+
+    return {
+      ...attachment,
+      originalName: this.normalizeAttachmentOriginalName(attachment.originalName),
+      buffer,
+    };
+  }
+
   async deleteAttachment(studentId: number, attachmentId: number, requester: JwtPayloadUser) {
-    await this.assertStudentAccess(studentId, requester, 'update');
+    const profile = await this.assertStudentAccess(studentId, requester, 'update');
+    this.assertStudentArchiveMutable(profile);
     const uploadsRoot = path.resolve(this.getUploadsRoot());
     await this.retryPendingAttachmentCleanup(uploadsRoot);
 
@@ -725,15 +814,53 @@ export class StudentService {
     ]);
 
     try {
-      await this.prisma.$transaction(async (tx) => {
-        if (attachment.category === 'admission_proof') {
-          await tx.studentAdmissionResult.updateMany({
-            where: { studentId, proofAttachmentId: attachmentId },
-            data: { proofAttachmentId: null },
+      await this.prisma.$transaction(
+        async (tx) => {
+          const currentStudent = await tx.studentProfile.findUnique({
+            where: { id: studentId },
+            select: { id: true, teacherId: true, userId: true, isArchived: true },
           });
-        }
-        await tx.studentAttachment.delete({ where: { id: attachmentId } });
-      });
+          if (!currentStudent) throw new NotFoundException('学生不存在');
+          this.assertStudentMutationWritable(currentStudent, requester);
+          if (attachment.category === 'admission_proof') {
+            await tx.studentAdmissionResult.updateMany({
+              where: { studentId, proofAttachmentId: attachmentId },
+              data: {
+                proofAttachmentId: null,
+                sequenceNo: null,
+                majorSequenceNo: null,
+                isAdjusted: false,
+                matchStatus: null,
+                submissionAttachmentId: null,
+                matchConfidence: null,
+                matchEvidence: Prisma.DbNull,
+                recognizedAt: null,
+                matchConfirmedAt: null,
+                matchConfirmedById: null,
+              },
+            });
+          }
+          if (attachment.category === 'submission_screenshot') {
+            await tx.studentAdmissionResult.updateMany({
+              where: { studentId, submissionAttachmentId: attachmentId },
+              data: {
+                sequenceNo: null,
+                majorSequenceNo: null,
+                isAdjusted: false,
+                matchStatus: 'FORM_NOT_FOUND',
+                submissionAttachmentId: null,
+                matchConfidence: null,
+                matchEvidence: Prisma.DbNull,
+                recognizedAt: null,
+                matchConfirmedAt: null,
+                matchConfirmedById: null,
+              },
+            });
+          }
+          await tx.studentAttachment.delete({ where: { id: attachmentId } });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
     } catch (error) {
       await this.restoreAttachmentQuarantine(quarantine);
       throw error;
@@ -759,7 +886,8 @@ export class StudentService {
   }
 
   async saveAdmissionResult(studentId: number, dto: SaveAdmissionResultDto, requester: JwtPayloadUser) {
-    await this.assertStudentAccess(studentId, requester, 'update');
+    const profile = await this.assertStudentAccess(studentId, requester, 'update');
+    this.assertStudentArchiveMutable(profile);
 
     const admittedUniName = this.normalizeOptionalString(dto.admittedUniName, '录取院校', 200);
     if (!admittedUniName) {
@@ -771,11 +899,30 @@ export class StudentService {
       max: 2_147_483_647,
     });
     const admittedMinScore = this.normalizeOptionalInt(dto.admittedMinScore, '录取最低分', { min: 0, max: 750 });
+    const sequenceNo = this.normalizeOptionalInt(dto.sequenceNo, '录取志愿顺序', {
+      min: 1,
+      max: 1_000,
+    });
+    const requestedMajorSequenceNo = this.normalizeOptionalInt(dto.majorSequenceNo, '录取专业顺序', { min: 1, max: 6 });
 
     return this.prisma.$transaction(
       async (tx) => {
         // SERIALIZABLE 让“校验凭证存在”和“写入凭证 ID”成为一个原子操作。
         // 与删除附件事务并发时，删除或保存至多一个成功，不会写回已删除附件 ID。
+        const student = await tx.studentProfile.update({
+          where: { id: studentId },
+          data: { admissionAnalysisRevision: { increment: 1 } },
+          select: {
+            id: true,
+            teacherId: true,
+            userId: true,
+            totalScore: true,
+            isArchived: true,
+            admissionAnalysisRevision: true,
+          },
+        });
+        this.assertStudentMutationWritable(student, requester);
+
         if (proofAttachmentId != null) {
           const proof = await tx.studentAttachment.findFirst({
             where: {
@@ -790,45 +937,175 @@ export class StudentService {
           }
         }
 
-        const student = await tx.studentProfile.findUnique({
-          where: { id: studentId },
-          select: { totalScore: true },
+        const existing = await tx.studentAdmissionResult.findUnique({
+          where: { studentId },
         });
-        if (!student) throw new NotFoundException('学生不存在');
+
+        let admittedUniCode =
+          dto.admittedUniCode === undefined
+            ? (existing?.admittedUniCode ?? null)
+            : this.normalizeOptionalString(dto.admittedUniCode, '录取院校代码', 20);
+        const batchName = this.normalizeOptionalString(dto.batchName, '录取批次', 100);
+        const admittedMajorGroupCode = this.normalizeOptionalString(
+          dto.admittedMajorGroupCode,
+          '录取院校专业组代码',
+          10,
+        );
+        let admittedMajorCode =
+          dto.admittedMajorCode === undefined
+            ? (existing?.admittedMajorCode ?? null)
+            : this.normalizeOptionalString(dto.admittedMajorCode, '录取专业代码', 10);
+        const admittedMajorName = this.normalizeOptionalString(dto.admittedMajorName, '录取专业名称', 200);
+        if (
+          existing &&
+          existing.admittedUniName !== admittedUniName &&
+          this.sameAdmissionCode(admittedUniCode, existing.admittedUniCode)
+        ) {
+          admittedUniCode = null;
+        }
+        if (
+          existing &&
+          existing.admittedMajorName !== admittedMajorName &&
+          this.sameAdmissionCode(admittedMajorCode, existing.admittedMajorCode)
+        ) {
+          admittedMajorCode = null;
+        }
+        const universityIdentityChanged =
+          existing != null &&
+          (existing.admittedUniName !== admittedUniName || existing.admittedUniCode !== admittedUniCode);
+        const majorIdentityChanged =
+          existing != null &&
+          (existing.admittedMajorCode !== admittedMajorCode || existing.admittedMajorName !== admittedMajorName);
+        const admittedUniId =
+          dto.admittedUniId === undefined
+            ? universityIdentityChanged
+              ? null
+              : (existing?.admittedUniId ?? null)
+            : this.normalizeOptionalInt(dto.admittedUniId, '录取院校ID', {
+                min: 1,
+                max: 2_147_483_647,
+              });
+        const admittedMajorId =
+          dto.admittedMajorId === undefined
+            ? majorIdentityChanged
+              ? null
+              : (existing?.admittedMajorId ?? null)
+            : this.normalizeOptionalInt(dto.admittedMajorId, '录取专业ID', {
+                min: 1,
+                max: 2_147_483_647,
+              });
+        const majorSequenceNo =
+          dto.majorSequenceNo === undefined ? (existing?.majorSequenceNo ?? null) : requestedMajorSequenceNo;
+        const isAdjusted =
+          dto.isAdjusted === undefined || dto.isAdjusted === null ? (existing?.isAdjusted ?? false) : dto.isAdjusted;
+
+        if (isAdjusted && majorSequenceNo != null) {
+          throw new BadRequestException('组内专业调剂不能填写第几个专业');
+        }
 
         const scoreDiff =
           student.totalScore != null && admittedMinScore != null ? student.totalScore - admittedMinScore : null;
-        const data = {
+        const baseData = {
           admittedUniName,
-          admittedUniId: this.normalizeOptionalInt(dto.admittedUniId, '录取院校ID', {
-            min: 1,
-            max: 2_147_483_647,
-          }),
+          admittedUniCode,
+          admittedUniId,
           admittedMinScore,
           admittedMinRank: this.normalizeOptionalInt(dto.admittedMinRank, '录取最低位次', {
             min: 1,
             max: 100_000_000,
           }),
           scoreDiff,
-          sequenceNo: this.normalizeOptionalInt(dto.sequenceNo, '录取志愿顺序', {
-            min: 1,
-            max: 1_000,
-          }),
+          sequenceNo,
+          majorSequenceNo,
+          isAdjusted,
           proofAttachmentId,
-          batchName: this.normalizeOptionalString(dto.batchName, '录取批次', 100),
-          admittedMajorGroupCode: this.normalizeOptionalString(dto.admittedMajorGroupCode, '录取院校专业组代码', 10),
-          admittedMajorCode: this.normalizeOptionalString(dto.admittedMajorCode, '录取专业代码', 10),
-          admittedMajorName: this.normalizeOptionalString(dto.admittedMajorName, '录取专业名称', 200),
-          admittedMajorId: this.normalizeOptionalInt(dto.admittedMajorId, '录取专业ID', {
-            min: 1,
-            max: 2_147_483_647,
-          }),
+          batchName,
+          admittedMajorGroupCode,
+          admittedMajorCode,
+          admittedMajorName,
+          admittedMajorId,
+        };
+
+        const matchingFieldsChanged =
+          existing != null &&
+          (existing.admittedUniName !== admittedUniName ||
+            existing.admittedUniCode !== admittedUniCode ||
+            existing.admittedUniId !== admittedUniId ||
+            existing.batchName !== batchName ||
+            existing.admittedMajorGroupCode !== admittedMajorGroupCode ||
+            existing.admittedMajorCode !== admittedMajorCode ||
+            existing.admittedMajorName !== admittedMajorName ||
+            existing.admittedMajorId !== admittedMajorId ||
+            existing.proofAttachmentId !== proofAttachmentId ||
+            existing.sequenceNo !== sequenceNo ||
+            existing.majorSequenceNo !== majorSequenceNo ||
+            existing.isAdjusted !== isAdjusted);
+        const uncertainStatus = new Set(['REVIEW_REQUIRED', 'GROUP_NOT_FOUND', 'FORM_NOT_FOUND', 'PARSE_FAILED']).has(
+          existing?.matchStatus ?? '',
+        );
+        const becomesManual =
+          matchingFieldsChanged || (sequenceNo != null && (existing?.matchStatus == null || uncertainStatus));
+        let preservedSubmissionAttachmentId: number | null = null;
+        if (
+          becomesManual &&
+          existing?.submissionAttachmentId != null &&
+          existing.proofAttachmentId === proofAttachmentId
+        ) {
+          const submission = await tx.studentAttachment.findFirst({
+            where: {
+              id: existing.submissionAttachmentId,
+              studentId,
+              category: 'submission_screenshot',
+              OR: [
+                { mimeType: 'application/pdf' },
+                { originalName: { endsWith: '.pdf' } },
+                { originalName: { endsWith: '.PDF' } },
+              ],
+            },
+            select: { id: true },
+          });
+          preservedSubmissionAttachmentId = submission?.id ?? null;
+        }
+        const confirmationData = {
+          matchConfirmedAt: new Date(),
+          matchConfirmedById: requester.id,
+          ...(becomesManual
+            ? {
+                matchStatus: sequenceNo != null ? 'MANUAL_CONFIRMED' : 'REVIEW_REQUIRED',
+                submissionAttachmentId: preservedSubmissionAttachmentId,
+                matchConfidence: null,
+                matchEvidence: {
+                  version: 'admission-match-v1',
+                  source: 'manual-confirmation',
+                  reason: '老师修改或人工确认了自动匹配字段',
+                  previousAutomaticMatch:
+                    existing?.submissionAttachmentId != null
+                      ? {
+                          matchStatus: existing.matchStatus ?? null,
+                          sequenceNo: existing.sequenceNo ?? null,
+                          majorSequenceNo: existing.majorSequenceNo ?? null,
+                          isAdjusted: existing.isAdjusted ?? false,
+                          submissionAttachmentId: preservedSubmissionAttachmentId,
+                        }
+                      : null,
+                },
+                recognizedAt: null,
+              }
+            : {}),
         };
 
         return tx.studentAdmissionResult.upsert({
           where: { studentId },
-          create: { studentId, ...data },
-          update: data,
+          create: {
+            studentId,
+            ...baseData,
+            // A brand-new record reaches this path only through an explicit
+            // teacher save, even when the original volunteer sequence is
+            // unknown. Keep that confirmation visible and auditable.
+            matchStatus: 'MANUAL_CONFIRMED',
+            ...confirmationData,
+          },
+          update: { ...baseData, ...confirmationData },
         });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -838,67 +1115,67 @@ export class StudentService {
   async archiveStudent(studentId: number, requester: JwtPayloadUser) {
     await this.assertStudentAccess(studentId, requester, 'update');
 
-    return this.prisma.$transaction(async (tx) => {
-      const admissionResult = await tx.studentAdmissionResult.findUnique({
-        where: { studentId },
-        select: {
-          admittedUniName: true,
-          proofAttachmentId: true,
-        },
-      });
-      if (!admissionResult?.admittedUniName?.trim()) {
-        throw new BadRequestException('请先填写录取院校和录取结果');
-      }
+    return this.prisma.$transaction(
+      async (tx) => {
+        const currentStudent = await tx.studentProfile.findUnique({
+          where: { id: studentId },
+          select: { id: true, teacherId: true, userId: true, isArchived: true },
+        });
+        if (!currentStudent) throw new NotFoundException('学生不存在');
+        this.assertStudentMutationWritable(currentStudent, requester);
 
-      const publishedPlan = await tx.volunteerPlan.findFirst({
-        where: { studentId, status: 'PUBLISHED' },
-        orderBy: { versionNo: 'desc' },
-        select: { id: true },
-      });
-      if (!publishedPlan) {
-        throw new BadRequestException('请先确认终稿已提交考试院');
-      }
+        const admissionResult = await tx.studentAdmissionResult.findUnique({
+          where: { studentId },
+          select: {
+            admittedUniName: true,
+            proofAttachmentId: true,
+            matchConfirmedAt: true,
+          },
+        });
+        if (!admissionResult?.admittedUniName?.trim()) {
+          throw new BadRequestException('请先填写录取院校和录取结果');
+        }
+        if (!admissionResult.matchConfirmedAt) {
+          throw new BadRequestException('请先保存并人工确认录取结果');
+        }
 
-      let admissionProof =
-        admissionResult.proofAttachmentId == null
-          ? null
-          : await tx.studentAttachment.findFirst({
-              where: {
-                id: admissionResult.proofAttachmentId,
-                studentId,
-                category: 'admission_proof',
-              },
-              select: { id: true },
-            });
-      if (!admissionProof) {
-        admissionProof = await tx.studentAttachment.findFirst({
-          where: { studentId, category: 'admission_proof' },
-          orderBy: { createdAt: 'desc' },
+        const publishedPlan = await tx.volunteerPlan.findFirst({
+          where: { studentId, status: 'PUBLISHED' },
+          orderBy: { versionNo: 'desc' },
           select: { id: true },
         });
-      }
-      if (!admissionProof) {
-        throw new BadRequestException('请先上传录取截图');
-      }
+        if (!publishedPlan) {
+          throw new BadRequestException('请先确认终稿已提交考试院');
+        }
 
-      if (admissionResult.proofAttachmentId !== admissionProof.id) {
-        await tx.studentAdmissionResult.update({
-          where: { studentId },
-          data: { proofAttachmentId: admissionProof.id },
+        const admissionProof =
+          admissionResult.proofAttachmentId == null
+            ? null
+            : await tx.studentAttachment.findFirst({
+                where: {
+                  id: admissionResult.proofAttachmentId,
+                  studentId,
+                  category: 'admission_proof',
+                },
+                select: { id: true },
+              });
+        if (!admissionProof) {
+          throw new BadRequestException('录取凭证已失效，请重新选择截图并保存确认');
+        }
+
+        await tx.volunteerPlan.update({
+          where: { id: publishedPlan.id },
+          data: { isHistorical: true },
         });
-      }
 
-      await tx.volunteerPlan.update({
-        where: { id: publishedPlan.id },
-        data: { isHistorical: true },
-      });
-
-      return tx.studentProfile.update({
-        where: { id: studentId },
-        data: { isArchived: true },
-        include: { admissionResult: true },
-      });
-    });
+        return tx.studentProfile.update({
+          where: { id: studentId },
+          data: { isArchived: true },
+          include: { admissionResult: true },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 
   /**

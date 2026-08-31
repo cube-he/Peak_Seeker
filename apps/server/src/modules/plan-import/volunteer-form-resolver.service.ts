@@ -38,10 +38,12 @@ export class VolunteerFormResolverService {
       if (eps.length === 0) { groups.push(this.unmatched(v, '该批次无此专业组')); continue; }
 
       const selected: ResolvedSelectedMajor[] = [];
-      for (const m of v.majors) {
+      for (const [majorIndex, m] of v.majors.entries()) {
         const ep = this.matchMajor(eps, m);
         if (ep) {
-          selected.push({ order: selected.length + 1, enrollmentPlanId: ep.id, majorId: ep.majorId, majorName: ep.majorName, majorCode: ep.majorCode || null });
+          // 专业顺序必须来自志愿 PDF 的原始下标；前面的专业即使数据库未对齐，
+          // 也不能把后续专业错误前移成“第 1 专业”。
+          selected.push({ order: majorIndex + 1, enrollmentPlanId: ep.id, majorId: ep.majorId, majorName: ep.majorName, majorCode: ep.majorCode || null });
         }
       }
       groups.push({

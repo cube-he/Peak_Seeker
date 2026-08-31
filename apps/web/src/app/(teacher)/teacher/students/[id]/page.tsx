@@ -9,6 +9,7 @@ import dayjs from 'dayjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   studentApi,
+  type AdmissionAnalysisResponse,
   type BonusItem,
   type SaveAdmissionResultDto,
   type StudentAdmissionResult,
@@ -54,6 +55,18 @@ import {
   getAdmissionProofToAutoSelect,
   keepUntouchedAdmissionFields,
 } from './admission-proof-selection';
+import {
+  getAdmissionAnalysisFieldUpdates,
+  getAdmissionAnalysisFieldsToClear,
+  getDefaultAdmissionSubmissionAttachmentId,
+  getAdmissionIdentityResetUpdates,
+  getAdmissionMatchPositionResetUpdates,
+  getAdmissionMatchTitle,
+  isSubmissionPdfAttachment,
+  isCurrentAdmissionAnalysis,
+  shouldInvalidateAdmissionSubmissionMatch,
+  type AdmissionDraftField,
+} from './admission-match-draft';
 
 type SelectOption = { label: string; value: string };
 
@@ -2752,8 +2765,22 @@ function AttachmentPreviewModal({
 function ExternalMaterialsTabContent({ student }: { student: any }) {
   const [exporting, setExporting] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+  const [admissionAnalysis, setAdmissionAnalysis] = useState<AdmissionAnalysisResponse | null>(null);
+  const [admissionAnalysisError, setAdmissionAnalysisError] = useState<string | null>(null);
+  const [activeAdmissionAnalysisRequestId, setActiveAdmissionAnalysisRequestId] = useState<number | null>(null);
+  const [selectedSubmissionAttachmentId, setSelectedSubmissionAttachmentId] = useState<number | undefined>();
   const [admissionForm] = Form.useForm<SaveAdmissionResultDto>();
+  const selectedProofAttachmentId = Form.useWatch('proofAttachmentId', admissionForm);
+  const selectedIsAdjusted = Form.useWatch('isAdjusted', admissionForm) ?? false;
   const archiveInputRefs = useRef<Partial<Record<StudentAttachmentCategory, HTMLInputElement | null>>>({});
+  const latestAdmissionAnalysisRequestId = useRef(0);
+  const latestAdmissionAnalysisPayload = useRef<{
+    proofAttachmentId: number;
+    submissionAttachmentId?: number;
+  } | null>(null);
+  const hasExplicitSubmissionSelection = useRef(false);
+  const manuallyEditedAdmissionFields = useRef<Set<AdmissionDraftField>>(new Set());
+  const machineOwnedAdmissionFields = useRef<Set<AdmissionDraftField>>(new Set());
   const router = useRouter();
   const queryClient = useQueryClient();
   const studentId = Number(student?.id);
@@ -2772,6 +2799,126 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
     initialData: (student?.admissionResult ?? null) as StudentAdmissionResult | null,
   });
 
+  const clearAdmissionMachineDraft = () => {
+    const fields = getAdmissionAnalysisFieldsToClear(manuallyEditedAdmissionFields.current);
+    admissionForm.setFields(
+      fields.map((field) => ({ name: field, value: undefined, touched: false })),
+    );
+    machineOwnedAdmissionFields.current.clear();
+  };
+
+  const discardAdmissionAnalysisRequest = () => {
+    latestAdmissionAnalysisRequestId.current += 1;
+    setActiveAdmissionAnalysisRequestId(null);
+    latestAdmissionAnalysisPayload.current = null;
+  };
+
+  const clearAdmissionMatchPositionDraft = (preserveManualFields = true) => {
+    const updates = getAdmissionMatchPositionResetUpdates(
+      preserveManualFields ? manuallyEditedAdmissionFields.current : new Set(),
+    );
+    admissionForm.setFields(
+      updates.map(({ field, value }) => ({ name: field, value, touched: false })),
+    );
+    for (const { field } of updates) {
+      machineOwnedAdmissionFields.current.delete(field);
+      if (!preserveManualFields) {
+        manuallyEditedAdmissionFields.current.delete(field);
+      }
+    }
+  };
+
+  const resetAdmissionAnalysis = () => {
+    discardAdmissionAnalysisRequest();
+    setAdmissionAnalysis(null);
+    setAdmissionAnalysisError(null);
+    const updates = getAdmissionIdentityResetUpdates();
+    admissionForm.setFields(
+      updates.map(({ field, value }) => ({ name: field, value, touched: false })),
+    );
+    for (const { field } of updates) {
+      manuallyEditedAdmissionFields.current.delete(field);
+      machineOwnedAdmissionFields.current.delete(field);
+    }
+  };
+
+  const invalidateSubmissionMatch = (preserveManualPositionFields = true) => {
+    discardAdmissionAnalysisRequest();
+    setAdmissionAnalysis(null);
+    setAdmissionAnalysisError(null);
+    clearAdmissionMatchPositionDraft(preserveManualPositionFields);
+  };
+
+  const admissionAnalysisMutation = useMutation({
+    mutationFn: (variables: {
+      requestId: number;
+      proofAttachmentId: number;
+      submissionAttachmentId?: number;
+    }) => studentApi.analyzeAdmissionResult(studentId, {
+      proofAttachmentId: variables.proofAttachmentId,
+      submissionAttachmentId: variables.submissionAttachmentId,
+    }),
+    onSuccess: (analysis, variables) => {
+      if (!isCurrentAdmissionAnalysis(
+        variables.requestId,
+        latestAdmissionAnalysisRequestId.current,
+        analysis.proofAttachmentId,
+        admissionForm.getFieldValue('proofAttachmentId'),
+      )) {
+        return;
+      }
+      if (analysis.superseded) {
+        setAdmissionAnalysis(null);
+        setAdmissionAnalysisError(analysis.message || '识别结果已过期，请使用最新录取截图重试');
+        setActiveAdmissionAnalysisRequestId(null);
+        return;
+      }
+
+      const updates = getAdmissionAnalysisFieldUpdates(
+        analysis,
+        manuallyEditedAdmissionFields.current,
+      );
+      admissionForm.setFields(
+        updates.map(({ field, value }) => ({ name: field, value, touched: false })),
+      );
+      machineOwnedAdmissionFields.current = new Set(updates.map(({ field }) => field));
+      if (analysis.submissionAttachmentId != null) {
+        setSelectedSubmissionAttachmentId(analysis.submissionAttachmentId);
+      }
+      setAdmissionAnalysis(analysis);
+      setAdmissionAnalysisError(null);
+      setActiveAdmissionAnalysisRequestId(null);
+      if (analysis.admissionResult) {
+        queryClient.setQueryData(['student-admission-result', studentId], analysis.admissionResult);
+      }
+    },
+    onError: (e: any, variables) => {
+      if (variables.requestId !== latestAdmissionAnalysisRequestId.current) {
+        return;
+      }
+      const raw = e?.response?.data?.message;
+      setAdmissionAnalysis(null);
+      setAdmissionAnalysisError(
+        Array.isArray(raw) ? raw.join('、') : raw ?? '录取截图识别失败，请重试或手工填写',
+      );
+      setActiveAdmissionAnalysisRequestId(null);
+    },
+  });
+
+  const startAdmissionAnalysis = (
+    proofAttachmentId: number,
+    submissionAttachmentId?: number,
+  ) => {
+    clearAdmissionMachineDraft();
+    const requestId = latestAdmissionAnalysisRequestId.current + 1;
+    latestAdmissionAnalysisRequestId.current = requestId;
+    setAdmissionAnalysis(null);
+    setAdmissionAnalysisError(null);
+    setActiveAdmissionAnalysisRequestId(requestId);
+    latestAdmissionAnalysisPayload.current = { proofAttachmentId, submissionAttachmentId };
+    admissionAnalysisMutation.mutate({ requestId, proofAttachmentId, submissionAttachmentId });
+  };
+
   const uploadMutation = useMutation({
     mutationFn: ({ category, file }: { category: StudentAttachmentCategory; file: File }) =>
       studentApi.uploadAttachment(studentId, category, file),
@@ -2784,6 +2931,25 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
             touched: true,
           },
         ]);
+        resetAdmissionAnalysis();
+        startAdmissionAnalysis(attachment.id, selectedSubmissionAttachmentId);
+      } else if (
+        category === 'submission_screenshot' &&
+        (attachment.mimeType === 'application/pdf' || /\.pdf$/i.test(attachment.originalName))
+      ) {
+        if (selectedSubmissionAttachmentId !== attachment.id) {
+          // Position and adjustment fields belong to one concrete submitted
+          // PDF. A newly uploaded source must never inherit manual values from
+          // the previously selected document.
+          clearAdmissionMatchPositionDraft(false);
+        }
+        hasExplicitSubmissionSelection.current = true;
+        setSelectedSubmissionAttachmentId(attachment.id);
+        const proofAttachmentId =
+          admissionForm.getFieldValue('proofAttachmentId') ?? admissionResultData?.proofAttachmentId;
+        if (proofAttachmentId) {
+          startAdmissionAnalysis(proofAttachmentId, attachment.id);
+        }
       }
       queryClient.invalidateQueries({ queryKey: ['student-attachments', studentId] });
       message.success('附件已上传');
@@ -2797,13 +2963,54 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
   const deleteAttachmentMutation = useMutation({
     mutationFn: (attachmentId: number) => studentApi.deleteAttachment(studentId, attachmentId),
     onSuccess: (_data, attachmentId) => {
+      const deletedAttachment = attachments.find((item) => item.id === attachmentId);
+      const inFlightPayload = latestAdmissionAnalysisPayload.current;
+      const invalidatesSubmissionMatch = shouldInvalidateAdmissionSubmissionMatch(
+        attachmentId,
+        [
+          admissionAnalysis?.submissionAttachmentId,
+          admissionResultData?.submissionAttachmentId,
+          inFlightPayload?.submissionAttachmentId,
+        ],
+        {
+          isSubmissionAttachment: deletedAttachment?.category === 'submission_screenshot',
+          isDefaultSourceAnalysisInFlight:
+            activeAdmissionAnalysisRequestId != null &&
+            inFlightPayload != null &&
+            inFlightPayload.submissionAttachmentId == null,
+        },
+      );
       queryClient.setQueryData<StudentAdmissionResult | null>(
         ['student-admission-result', studentId],
-        (current) =>
-          current?.proofAttachmentId === attachmentId
-            ? { ...current, proofAttachmentId: null }
-            : current,
+        (current) => {
+          if (current?.proofAttachmentId === attachmentId) {
+            return { ...current, proofAttachmentId: null };
+          }
+          if (current?.submissionAttachmentId === attachmentId) {
+            return {
+              ...current,
+              sequenceNo: null,
+              majorSequenceNo: null,
+              isAdjusted: false,
+              matchStatus: 'FORM_NOT_FOUND',
+              submissionAttachmentId: null,
+              matchConfidence: null,
+              matchEvidence: null,
+              recognizedAt: null,
+              matchConfirmedAt: null,
+              matchConfirmedById: null,
+            };
+          }
+          return current;
+        },
       );
+      if (invalidatesSubmissionMatch) {
+        invalidateSubmissionMatch(false);
+      }
+      if (selectedSubmissionAttachmentId === attachmentId) {
+        hasExplicitSubmissionSelection.current = false;
+        setSelectedSubmissionAttachmentId(undefined);
+      }
       const currentProofAttachmentId = admissionForm.getFieldValue('proofAttachmentId');
       const nextProofAttachmentId = getAdmissionProofAfterDelete(
         currentProofAttachmentId,
@@ -2811,8 +3018,10 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
       );
       if (nextProofAttachmentId !== currentProofAttachmentId) {
         admissionForm.setFieldValue('proofAttachmentId', nextProofAttachmentId);
+        resetAdmissionAnalysis();
       }
       queryClient.invalidateQueries({ queryKey: ['student-attachments', studentId] });
+      queryClient.invalidateQueries({ queryKey: ['student-admission-result', studentId] });
       message.success('附件已删除');
     },
     onError: (e: any) => {
@@ -2836,6 +3045,11 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
   const saveAdmissionMutation = useMutation({
     mutationFn: (values: SaveAdmissionResultDto) => studentApi.saveAdmissionResult(studentId, values),
     onSuccess: (data) => {
+      manuallyEditedAdmissionFields.current.clear();
+      machineOwnedAdmissionFields.current.clear();
+      setAdmissionAnalysis(null);
+      setAdmissionAnalysisError(null);
+      latestAdmissionAnalysisPayload.current = null;
       queryClient.setQueryData(['student-admission-result', studentId], data);
       queryClient.invalidateQueries({ queryKey: ['student-detail', String(studentId)] });
       message.success('录取结果已保存');
@@ -2876,11 +3090,24 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
   const latestPlan = plans[0];
   const admissionResult = (admissionResultData ?? student?.admissionResult ?? null) as StudentAdmissionResult | null;
   const submissionScreenshots = attachments.filter((item) => item.category === 'submission_screenshot');
+  const submissionPdfAttachments = submissionScreenshots.filter(isSubmissionPdfAttachment);
   const admissionProofs = attachments.filter((item) => item.category === 'admission_proof');
   const firstAdmissionProofId = admissionProofs[0]?.id;
   const isSubmitted = latestPlan?.status === 'PUBLISHED';
   const canPublish = latestPlan?.status === 'FINALIZED' && submissionScreenshots.length > 0;
-  const canArchive = isSubmitted && !!admissionResult?.admittedUniName && admissionProofs.length > 0;
+  const isAdmissionAnalyzing = activeAdmissionAnalysisRequestId != null;
+  const hasConfirmedAdmissionResult =
+    admissionResult?.proofAttachmentId === selectedProofAttachmentId &&
+    admissionResult?.submissionAttachmentId === (selectedSubmissionAttachmentId ?? null) &&
+    !!admissionResult?.matchConfirmedAt;
+  const hasClearedAvailableSubmissionPdf =
+    submissionPdfAttachments.length > 0 && selectedSubmissionAttachmentId == null;
+  const canArchive =
+    isSubmitted &&
+    !!admissionResult?.admittedUniName &&
+    admissionProofs.length > 0 &&
+    hasConfirmedAdmissionResult &&
+    !isAdmissionAnalyzing;
   const publishHint =
     !latestPlan ? '暂无可提交方案'
     : latestPlan.status === 'PUBLISHED' ? '已确认提交考试院'
@@ -2895,16 +3122,21 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
       admittedMinScore: admissionResult?.admittedMinScore ?? undefined,
       admittedMinRank: admissionResult?.admittedMinRank ?? undefined,
       sequenceNo: admissionResult?.sequenceNo ?? undefined,
+      majorSequenceNo: admissionResult?.majorSequenceNo ?? undefined,
       proofAttachmentId: admissionResult?.proofAttachmentId ?? undefined,
       batchName: admissionResult?.batchName ?? latestPlan?.batchName ?? undefined,
+      admittedUniCode: admissionResult?.admittedUniCode ?? undefined,
       admittedMajorGroupCode: admissionResult?.admittedMajorGroupCode ?? undefined,
       admittedMajorCode: admissionResult?.admittedMajorCode ?? undefined,
       admittedMajorName: admissionResult?.admittedMajorName ?? undefined,
       admittedMajorId: admissionResult?.admittedMajorId ?? undefined,
+      isAdjusted: admissionResult?.isAdjusted ?? false,
     };
     admissionForm.setFieldsValue(
       keepUntouchedAdmissionFields(admissionValues, (field) =>
-        admissionForm.isFieldTouched(field),
+        admissionForm.isFieldTouched(field) ||
+        manuallyEditedAdmissionFields.current.has(field) ||
+        machineOwnedAdmissionFields.current.has(field),
       ),
     );
   }, [admissionForm, admissionResult, latestPlan?.batchName]);
@@ -2918,6 +3150,28 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
       admissionForm.setFieldValue('proofAttachmentId', proofAttachmentId);
     }
   }, [admissionForm, firstAdmissionProofId]);
+
+  useEffect(() => {
+    setSelectedSubmissionAttachmentId((currentAttachmentId) => {
+      if (
+        hasExplicitSubmissionSelection.current &&
+        (
+          currentAttachmentId == null ||
+          submissionPdfAttachments.some((attachment) => attachment.id === currentAttachmentId)
+        )
+      ) {
+        return currentAttachmentId;
+      }
+      return getDefaultAdmissionSubmissionAttachmentId(
+        submissionPdfAttachments,
+        [admissionAnalysis?.submissionAttachmentId, admissionResult?.submissionAttachmentId],
+      );
+    });
+  }, [
+    attachmentsData,
+    admissionAnalysis?.submissionAttachmentId,
+    admissionResult?.submissionAttachmentId,
+  ]);
 
   const handleArchiveFileChange = (
     category: StudentAttachmentCategory,
@@ -2934,6 +3188,111 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
     }
     uploadMutation.mutate({ category, file });
   };
+
+  const handleAdmissionValuesChange = (changedValues: Partial<SaveAdmissionResultDto>) => {
+    for (const field of Object.keys(changedValues) as AdmissionDraftField[]) {
+      manuallyEditedAdmissionFields.current.add(field);
+      machineOwnedAdmissionFields.current.delete(field);
+    }
+    if (Object.prototype.hasOwnProperty.call(changedValues, 'admittedUniName')) {
+      // The university code is intentionally hidden in the compact UI. Once a
+      // teacher changes the visible name, never submit the previous OCR code as
+      // if it still identified that university.
+      admissionForm.setFields([
+        { name: 'admittedUniCode', value: undefined, touched: false },
+        { name: 'admittedUniId', value: undefined, touched: false },
+      ]);
+      manuallyEditedAdmissionFields.current.add('admittedUniCode');
+      manuallyEditedAdmissionFields.current.add('admittedUniId');
+      machineOwnedAdmissionFields.current.delete('admittedUniCode');
+      machineOwnedAdmissionFields.current.delete('admittedUniId');
+    }
+    if (changedValues.isAdjusted === true) {
+      admissionForm.setFields([{ name: 'majorSequenceNo', value: undefined, touched: true }]);
+      manuallyEditedAdmissionFields.current.add('majorSequenceNo');
+      machineOwnedAdmissionFields.current.delete('majorSequenceNo');
+    }
+  };
+
+  const handleProofAttachmentChange = (proofAttachmentId?: number) => {
+    resetAdmissionAnalysis();
+    if (proofAttachmentId == null) {
+      return;
+    }
+    startAdmissionAnalysis(proofAttachmentId, selectedSubmissionAttachmentId);
+  };
+
+  const handleSubmissionAttachmentChange = (submissionAttachmentId?: number) => {
+    const sourceChanged = selectedSubmissionAttachmentId !== submissionAttachmentId;
+    hasExplicitSubmissionSelection.current = true;
+    setSelectedSubmissionAttachmentId(submissionAttachmentId);
+    const proofAttachmentId = admissionForm.getFieldValue('proofAttachmentId');
+    if (submissionAttachmentId == null) {
+      invalidateSubmissionMatch(false);
+      setAdmissionAnalysisError('已清除匹配志愿 PDF，请重新选择后识别');
+      return;
+    }
+    if (sourceChanged) {
+      clearAdmissionMatchPositionDraft(false);
+    }
+    if (!proofAttachmentId) {
+      return;
+    }
+    startAdmissionAnalysis(proofAttachmentId, submissionAttachmentId);
+  };
+
+  const retryAdmissionAnalysis = () => {
+    const proofAttachmentId = admissionForm.getFieldValue('proofAttachmentId');
+    if (!proofAttachmentId) {
+      message.warning('请先选择录取截图');
+      return;
+    }
+    startAdmissionAnalysis(proofAttachmentId, selectedSubmissionAttachmentId);
+  };
+
+  const currentAnalysis =
+    admissionAnalysis != null &&
+    admissionAnalysis.proofAttachmentId === selectedProofAttachmentId &&
+    admissionAnalysis.submissionAttachmentId === (selectedSubmissionAttachmentId ?? null)
+      ? admissionAnalysis
+      : null;
+  const hasCurrentPersistedMatch =
+    admissionResult != null &&
+    admissionResult.proofAttachmentId === selectedProofAttachmentId &&
+    admissionResult.submissionAttachmentId === (selectedSubmissionAttachmentId ?? null);
+  const persistedMatchStatus = hasCurrentPersistedMatch
+    ? admissionResult.matchStatus
+    : null;
+  const displayedMatchStatus = currentAnalysis?.matchStatus ?? persistedMatchStatus ?? null;
+  const displayedSequenceNo =
+    currentAnalysis != null
+      ? currentAnalysis.matched.sequenceNo
+      : hasCurrentPersistedMatch
+        ? admissionResult?.sequenceNo
+        : undefined;
+  const displayedMajorSequenceNo =
+    currentAnalysis != null
+      ? currentAnalysis.matched.majorSequenceNo
+      : hasCurrentPersistedMatch
+        ? admissionResult?.majorSequenceNo
+        : undefined;
+  const displayedSubmissionName =
+    currentAnalysis?.submissionAttachmentName ??
+    (hasCurrentPersistedMatch
+      ? submissionScreenshots.find((item) => item.id === admissionResult?.submissionAttachmentId)?.originalName
+      : undefined);
+  const displayedConfidence =
+    currentAnalysis?.confidence ?? (hasCurrentPersistedMatch ? admissionResult?.matchConfidence : undefined);
+  const confidencePercent =
+    displayedConfidence == null
+      ? null
+      : Math.round(displayedConfidence <= 1 ? displayedConfidence * 100 : displayedConfidence);
+  const matchAlertType =
+    displayedMatchStatus === 'EXACT' || displayedMatchStatus === 'MANUAL_CONFIRMED'
+      ? 'success'
+      : displayedMatchStatus === 'PARSE_FAILED'
+        ? 'error'
+        : 'warning';
 
   const statPill = (label: string, value: string | number, tone: 'blue' | 'green' | 'gold' = 'blue') => {
     const color =
@@ -3034,7 +3393,14 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
             {statPill('录取截图', admissionProofs.length, admissionProofs.length > 0 ? 'green' : 'gold')}
           </div>
 
-          <Form form={admissionForm} layout="vertical" size="small" onFinish={(values) => saveAdmissionMutation.mutate(values)}>
+          <Form
+            form={admissionForm}
+            layout="vertical"
+            size="small"
+            onValuesChange={handleAdmissionValuesChange}
+            onFinish={(values) => saveAdmissionMutation.mutate(values)}
+          >
+            <Form.Item name="admittedUniCode" hidden><Input /></Form.Item>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0 12px' }}>
               <Form.Item name="batchName" label="录取批次">
                 <Input placeholder="如：本科批" />
@@ -3058,6 +3424,18 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
               <Form.Item name="sequenceNo" label="录取志愿顺序">
                 <InputNumber min={1} precision={0} style={{ width: '100%' }} placeholder="第几个志愿" />
               </Form.Item>
+              <Form.Item name="majorSequenceNo" label="录取专业顺序">
+                <InputNumber
+                  min={1}
+                  precision={0}
+                  disabled={selectedIsAdjusted}
+                  style={{ width: '100%' }}
+                  placeholder={selectedIsAdjusted ? '组内调剂' : '第几个专业'}
+                />
+              </Form.Item>
+              <Form.Item name="isAdjusted" valuePropName="checked" style={{ alignSelf: 'end' }}>
+                <Checkbox>同院校专业组内调剂</Checkbox>
+              </Form.Item>
               <Form.Item name="admittedMinScore" label="录取最低分">
                 <InputNumber min={0} precision={0} style={{ width: '100%' }} />
               </Form.Item>
@@ -3068,13 +3446,85 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
                 <Select
                   allowClear
                   placeholder={admissionProofs.length > 0 ? '选择录取截图' : '先上传录取截图'}
+                  onChange={handleProofAttachmentChange}
                   options={admissionProofs.map((item) => ({
                     value: item.id,
                     label: normalizeAttachmentDisplayName(item.originalName),
                   }))}
                 />
               </Form.Item>
+              <Form.Item label="匹配志愿 PDF">
+                <Select
+                  id="admissionSubmissionAttachmentId"
+                  allowClear
+                  value={selectedSubmissionAttachmentId}
+                  placeholder={submissionPdfAttachments.length > 0 ? '选择志愿填报 PDF' : '请先上传志愿填报 PDF'}
+                  onChange={handleSubmissionAttachmentChange}
+                  options={submissionPdfAttachments.map((item) => ({
+                    value: item.id,
+                    label: normalizeAttachmentDisplayName(item.originalName),
+                  }))}
+                />
+              </Form.Item>
             </div>
+
+            {isAdmissionAnalyzing ? (
+              <Alert
+                showIcon
+                type="info"
+                style={{ marginBottom: 12 }}
+                message="正在识别录取截图并匹配志愿填报 PDF…"
+                description="识别完成前暂不能保存，请稍候。"
+              />
+            ) : admissionAnalysisError ? (
+              <Alert
+                showIcon
+                type="error"
+                style={{ marginBottom: 12 }}
+                message="录取信息识别失败"
+                description={admissionAnalysisError}
+                action={<button type="button" className="qa" onClick={retryAdmissionAnalysis}>重新识别</button>}
+              />
+            ) : displayedMatchStatus ? (
+              <Alert
+                showIcon
+                type={matchAlertType}
+                style={{ marginBottom: 12 }}
+                message={getAdmissionMatchTitle(
+                  displayedMatchStatus,
+                  displayedSequenceNo,
+                  displayedMajorSequenceNo,
+                )}
+                description={(
+                  <div style={{ display: 'grid', gap: 4 }}>
+                    {currentAnalysis?.message ? <span>{currentAnalysis.message}</span> : null}
+                    {hasConfirmedAdmissionResult ? <span>老师已人工确认并保存该结果。</span> : null}
+                    {displayedSubmissionName ? (
+                      <span>匹配依据：{normalizeAttachmentDisplayName(displayedSubmissionName)}</span>
+                    ) : null}
+                    {confidencePercent != null ? <span>识别置信度：{confidencePercent}%</span> : null}
+                    {currentAnalysis?.warnings.map((warning) => (
+                      <span key={warning}>提示：{warning}</span>
+                    ))}
+                    {currentAnalysis?.candidates.slice(0, 3).map((candidate) => (
+                      <span key={`${candidate.submissionAttachmentId}-${candidate.sequenceNo}-${candidate.groupCode}`}>
+                        候选：第 {candidate.sequenceNo} 志愿，{candidate.schoolName}
+                        {candidate.schoolCode ? ` [${candidate.schoolCode}]` : ''}
+                        {candidate.groupCode ? `，专业组 ${candidate.groupCode}` : ''}
+                        {candidate.reason ? `（${candidate.reason}）` : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                action={
+                  displayedMatchStatus === 'EXACT' ||
+                  displayedMatchStatus === 'ADJUSTED' ||
+                  displayedMatchStatus === 'MANUAL_CONFIRMED'
+                    ? undefined
+                    : <button type="button" className="qa" onClick={retryAdmissionAnalysis}>重新识别</button>
+                }
+              />
+            ) : null}
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -3087,7 +3537,9 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
                   className="qa"
                   disabled={
                     saveAdmissionMutation.isPending ||
-                    deleteAttachmentMutation.isPending
+                    deleteAttachmentMutation.isPending ||
+                    isAdmissionAnalyzing ||
+                    hasClearedAvailableSubmissionPdf
                   }
                 >
                   <TIcon.save /> 保存录取结果
@@ -3105,7 +3557,8 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
                       !canArchive ||
                       archiveMutation.isPending ||
                       saveAdmissionMutation.isPending ||
-                      deleteAttachmentMutation.isPending
+                      deleteAttachmentMutation.isPending ||
+                      isAdmissionAnalyzing
                     }
                   >
                     <TIcon.check /> 完成归档
@@ -3115,7 +3568,7 @@ function ExternalMaterialsTabContent({ student }: { student: any }) {
             </div>
             {!canArchive ? (
               <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-tertiary)' }}>
-                归档条件：已确认提交、已保存录取院校、已上传录取截图。
+                归档条件：已确认提交、已保存并人工确认录取结果、已上传录取截图。
               </div>
             ) : null}
           </Form>

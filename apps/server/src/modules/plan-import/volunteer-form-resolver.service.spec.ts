@@ -58,6 +58,30 @@ describe('VolunteerFormResolverService.resolveGroups', () => {
     expect(r.groups[0].acceptAdjust).toBe(true);
   });
 
+  it('前一个专业未对齐时保留后续专业在 PDF 中的原始顺序', async () => {
+    prisma.university.findMany.mockResolvedValue([{ id: 11, code: '5120', name: '四川师范大学' }]);
+    prisma.enrollmentPlan.findMany.mockResolvedValue([
+      { id: 902, majorId: 2, majorCode: '0G', majorName: '数学与应用数学' },
+    ]);
+    const v: ParsedVolunteer = {
+      seq: 1,
+      schoolCode: '5120',
+      schoolName: '四川师范大学',
+      groupCode: '111',
+      acceptAdjust: true,
+      majors: [
+        { code: 'ZZ', name: '未对齐专业' },
+        { code: '0G', name: '数学与应用数学' },
+      ],
+    };
+
+    const result = await service.resolveGroups([v], opts);
+
+    expect(result.groups[0].selectedMajors).toEqual([
+      expect.objectContaining({ enrollmentPlanId: 902, order: 2 }),
+    ]);
+  });
+
   it('高职批按招生计划实名高职(专科)批查询, 避免误报该批次无此专业组', async () => {
     prisma.university.findMany.mockResolvedValue([{ id: 10714, code: '5156', name: '四川电力职业技术学院' }]);
     prisma.enrollmentPlan.findMany.mockResolvedValue([

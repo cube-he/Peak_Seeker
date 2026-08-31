@@ -15,13 +15,19 @@ describe('StudentController', () => {
     updateProfile: jest.Mock;
     saveAdmissionResult: jest.Mock;
   };
+  let admissionMatchService: { analyze: jest.Mock };
 
   beforeEach(() => {
     studentService = {
       updateProfile: jest.fn(),
       saveAdmissionResult: jest.fn(),
     };
-    controller = new StudentController(studentService as any, {} as any);
+    admissionMatchService = { analyze: jest.fn() };
+    controller = new StudentController(
+      studentService as any,
+      {} as any,
+      admissionMatchService as any,
+    );
   });
 
   function getPutRoutes() {
@@ -59,6 +65,20 @@ describe('StudentController', () => {
     expect(studentService.saveAdmissionResult).toHaveBeenCalledWith(
       10,
       dto,
+      mockUser,
+    );
+  });
+
+  it('passes admission screenshot analysis to the dedicated service', async () => {
+    const body = { proofAttachmentId: 7 } as any;
+    const mockUser = { id: 42, role: 'TEACHER', teacherProfileId: 5 } as any;
+    admissionMatchService.analyze.mockResolvedValue({ matchStatus: 'EXACT' });
+
+    await controller.analyzeAdmissionResult(10, mockUser, body);
+
+    expect(admissionMatchService.analyze).toHaveBeenCalledWith(
+      10,
+      body,
       mockUser,
     );
   });

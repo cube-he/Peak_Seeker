@@ -1,4 +1,9 @@
-export interface ParsedMajor { code: string; name: string; }
+export interface ParsedMajor {
+  code: string;
+  name: string;
+  /** One-based slot in the submitted form; preserves gaps from failed OCR. */
+  originalOrder?: number;
+}
 export interface ParsedVolunteer {
   seq: number;
   schoolCode: string;
@@ -39,5 +44,12 @@ export interface ResolvedGroup {
   unmatchedReason?: string;
   note?: string;
 }
-export interface ResolveSummary { total: number; matched: number; unmatched: number; }
-export interface ResolveResult { groups: ResolvedGroup[]; summary: ResolveSummary; }
+export interface ResolveSummary {
+  total: number;
+  matched: number;
+  unmatched: number;
+}
+export interface ResolveResult {
+  groups: ResolvedGroup[];
+  summary: ResolveSummary;
+}

@@ -18,6 +18,25 @@ if ! command -v python3 &> /dev/null; then
     sudo apt-get install -y python3 python3-pip python3-venv
 fi
 
+# 有些 Ubuntu 镜像预装 python3，但没有单独打包的 venv/ensurepip。
+if ! python3 -c 'import ensurepip, venv' &> /dev/null; then
+    echo "安装 Python venv..."
+    sudo apt-get update
+    sudo apt-get install -y python3-venv
+fi
+
+# 扫描版志愿表和录取结果 PDF 需要 Poppler 渲染为图片。
+if ! command -v pdftoppm &> /dev/null || ! pdftoppm -v &> /dev/null; then
+    echo "安装 PDF 渲染工具 Poppler..."
+    sudo apt-get update
+    sudo apt-get install -y poppler-utils
+fi
+
+if ! pdftoppm -v &> /dev/null; then
+    echo "错误: pdftoppm 安装后仍不可用"
+    exit 1
+fi
+
 # 创建虚拟环境
 if [ ! -d "venv" ]; then
     echo "创建 Python 虚拟环境..."
@@ -29,6 +48,9 @@ echo "安装 Python 依赖..."
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+
+echo "检查 OCR 运行依赖..."
+python -c 'import fastapi, multipart, PIL, cv2, onnxruntime, rapidocr_onnxruntime, mysql.connector'
 
 echo ""
 echo "=========================================="

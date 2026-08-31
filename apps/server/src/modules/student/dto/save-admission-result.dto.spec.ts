@@ -17,10 +17,13 @@ describe('SaveAdmissionResultDto', () => {
   it('accepts and normalizes a complete valid admission result', async () => {
     const { dto, errors } = await transformAndValidate({
       admittedUniName: '  四川大学  ',
+      admittedUniCode: ' 0512 ',
       admittedUniId: '12',
       admittedMinScore: '620',
       admittedMinRank: '12345',
       sequenceNo: '3',
+      majorSequenceNo: '2',
+      isAdjusted: false,
       proofAttachmentId: '7',
       batchName: '  本科批  ',
       admittedMajorGroupCode: ' 101 ',
@@ -32,10 +35,13 @@ describe('SaveAdmissionResultDto', () => {
     expect(errors).toHaveLength(0);
     expect(dto).toMatchObject({
       admittedUniName: '四川大学',
+      admittedUniCode: '0512',
       admittedUniId: 12,
       admittedMinScore: 620,
       admittedMinRank: 12345,
       sequenceNo: 3,
+      majorSequenceNo: 2,
+      isAdjusted: false,
       proofAttachmentId: 7,
       batchName: '本科批',
       admittedMajorGroupCode: '101',
@@ -82,6 +88,11 @@ describe('SaveAdmissionResultDto', () => {
     [{ admittedUniName: '四川大学', admittedMinRank: 0 }, 'admittedMinRank'],
     [{ admittedUniName: '四川大学', sequenceNo: 0 }, 'sequenceNo'],
     [
+      { admittedUniName: '四川大学', majorSequenceNo: 7 },
+      'majorSequenceNo',
+    ],
+    [{ admittedUniName: '四川大学', isAdjusted: 'yes' }, 'isAdjusted'],
+    [
       { admittedUniName: '四川大学', proofAttachmentId: 0 },
       'proofAttachmentId',
     ],
@@ -94,6 +105,7 @@ describe('SaveAdmissionResultDto', () => {
   it('enforces database-backed string lengths and the strict whitelist', async () => {
     const { errors } = await transformAndValidate({
       admittedUniName: '川'.repeat(201),
+      admittedUniCode: '1'.repeat(21),
       batchName: '批'.repeat(101),
       admittedMajorGroupCode: '1'.repeat(11),
       admittedMajorCode: '2'.repeat(11),
@@ -104,6 +116,7 @@ describe('SaveAdmissionResultDto', () => {
     expect(errors.map((error) => error.property)).toEqual(
       expect.arrayContaining([
         'admittedUniName',
+        'admittedUniCode',
         'batchName',
         'admittedMajorGroupCode',
         'admittedMajorCode',
